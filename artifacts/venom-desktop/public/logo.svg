@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 48" role="img" aria-labelledby="title">
+  <title id="title">Venom</title>
+  <rect width="48" height="48" fill="#fff"/>
+  <path d="M10 9h8l6 18 6-18h8L26 39h-4L10 9Z" fill="#000"/>
+  <path d="M64 10h8l6 19 6-19h8L81 39h-6L64 10Zm34 0h23v6h-15v5h13v6h-13v6h15v6H98V10Zm31 0h7l12 17V10h7v29h-7l-12-17v17h-7V10Zm34 0h8v29h-8V10Z" fill="#fff"/>
+</svg>

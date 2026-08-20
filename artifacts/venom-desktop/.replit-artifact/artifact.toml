@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/venom/"
+title = "Venom Desktop"
+description = "A wide-screen Venom workspace for working across projects, conversations, tasks, and knowledge without losing continuity with the mobile app."
+version = "1.0.0"
+id = "artifacts/venom-desktop"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/venom/" ]
+localPort = 23990
+
+[services.development]
+run = "pnpm --filter @workspace/venom-desktop run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/venom-desktop", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/venom-desktop/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23990"
+BASE_PATH = "/venom/"
