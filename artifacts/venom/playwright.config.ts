@@ -18,9 +18,7 @@ export default defineConfig({
   },
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
-    ...devices["Pixel 7"],
     baseURL,
-    viewport: { width: 400, height: 720 },
     launchOptions: {
       executablePath:
         process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
@@ -28,6 +26,19 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
+  projects: [
+    {
+      name: "mobile-chromium",
+      use: {
+        ...devices["Pixel 7"],
+        viewport: { width: 400, height: 720 },
+      },
+    },
+    {
+      name: "desktop-chromium",
+      use: devices["Desktop Chrome"],
+    },
+  ],
   webServer: usesExternalTarget
     ? undefined
     : {

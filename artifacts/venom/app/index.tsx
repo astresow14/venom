@@ -61,6 +61,7 @@ import {
 } from "@/context/VenomContext";
 import { extractVenomKnowledge } from "@workspace/api-client-react";
 import { BrainNoteComposer } from "@/components/BrainNoteComposer";
+
 let messageCounter = 0;
 function generateUniqueId(): string {
   messageCounter++;
@@ -3705,6 +3706,8 @@ export default function WorkspaceScreen() {
   } = useVenom();
 
   const [activeIndex, setActiveIndex] = useState(0);
+  const [focusedTabIndex, setFocusedTabIndex] = useState<number | null>(null);
+  const tabRefs = useRef<Array<WorkspaceTabHandle | null>>([]);
   const activeProject =
     state.projects.find((p) => p.id === state.activeProjectId) ||
     state.projects[0];
@@ -3715,6 +3718,57 @@ export default function WorkspaceScreen() {
       Haptics.selectionAsync();
     }
   }, []);
+
+  const focusTab = useCallback((index: number) => {
+    tabRefs.current[index]?.focus?.();
+  }, []);
+
+  const handleTabKeyDown = useCallback(
+    (event: WebKeyboardEvent, index: number) => {
+      const key = event.nativeEvent?.key ?? event.key;
+      let nextIndex: number | null = null;
+
+      if (key === "ArrowRight") {
+        nextIndex = (index + 1) % WORKSPACE_TABS.length;
+      } else if (key === "ArrowLeft") {
+        nextIndex =
+          (index - 1 + WORKSPACE_TABS.length) % WORKSPACE_TABS.length;
+      } else if (key === "Home") {
+        nextIndex = 0;
+      } else if (key === "End") {
+        nextIndex = WORKSPACE_TABS.length - 1;
+      } else if (key === "Enter" || key === " ") {
+        event.preventDefault?.();
+        handleTabPress(index);
+        return;
+      } else {
+        return;
+      }
+
+      event.preventDefault?.();
+      focusTab(nextIndex);
+    },
+    [focusTab, handleTabPress],
+  );
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || !isReady || hasPendingLegacyImport) {
+      return;
+    }
+
+    const listeners = tabRefs.current.map((element, index) => {
+      const listener = (event: WebKeyboardEvent) =>
+        handleTabKeyDown(event, index);
+      element?.addEventListener?.("keydown", listener);
+      return { element, listener };
+    });
+
+    return () => {
+      listeners.forEach(({ element, listener }) => {
+        element?.removeEventListener?.("keydown", listener);
+      });
+    };
+  }, [handleTabKeyDown, hasPendingLegacyImport, isReady]);
 
   const workspaceSwipeResponder = useMemo(
     () =>
@@ -3859,19 +3913,42 @@ export default function WorkspaceScreen() {
         ]}
       >
         <View accessibilityRole="tablist" style={styles.navTabs}>
-          {["Chat", "Feed", "Brain", "To-Do"].map((title, i) => {
+          {WORKSPACE_TABS.map((title, i) => {
             const isActive = activeIndex === i;
+            const isFocused = focusedTabIndex === i;
             return (
               <TouchableOpacity
                 key={title}
+                ref={(element) => {
+                  tabRefs.current[i] =
+                    element as unknown as WorkspaceTabHandle | null;
+                }}
                 onPress={() => handleTabPress(i)}
-                style={styles.navTab}
+                onFocus={() => setFocusedTabIndex(i)}
+                onBlur={() =>
+                  setFocusedTabIndex((currentIndex) =>
+                    currentIndex === i ? null : currentIndex,
+                  )
+                }
+                style={[styles.navTab, isFocused && styles.navTabFocused]}
                 hitSlop={10}
                 testID={`workspace-tab-${title.toLowerCase().replace("-", "")}`}
                 accessibilityRole="tab"
                 accessibilityLabel={`Open ${title} workspace`}
                 accessibilityState={{ selected: isActive }}
                 aria-selected={isActive}
+                {...(Platform.OS === "web"
+                  ? {
+                      tabIndex:
+                        focusedTabIndex === null
+                          ? isActive
+                            ? 0
+                            : -1
+                          : isFocused
+                            ? 0
+                            : -1,
+                    }
+                  : {})}
               >
                 <Text
                   style={[
@@ -4097,6 +4174,10 @@ const styles = StyleSheet.create({
   navTab: {
     paddingVertical: 12,
     position: "relative",
+    borderRadius: 6,
+  },
+  navTabFocused: {
+    backgroundColor: "rgba(128, 128, 128, 0.2)",
   },
   navTabText: {
     fontSize: 15,
@@ -5280,3 +5361,23 @@ function isValidCardDate(value: string) {
     date.getUTCDate() === day
   );
 }
+
+const WORKSPACE_TABS = ["Chat", "Feed", "Brain", "To-Do"] as const;
+
+type WorkspaceTabHandle = {
+  focus?: () => void;
+  addEventListener?: (
+    type: "keydown",
+    listener: (event: WebKeyboardEvent) => void,
+  ) => void;
+  removeEventListener?: (
+    type: "keydown",
+    listener: (event: WebKeyboardEvent) => void,
+  ) => void;
+};
+
+type WebKeyboardEvent = {
+  key?: string;
+  nativeEvent?: { key?: string };
+  preventDefault?: () => void;
+};
