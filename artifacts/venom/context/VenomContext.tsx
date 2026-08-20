@@ -7,82 +7,31 @@ import React, {
   useCallback,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  applyKnowledgeInsightsToState,
+  clearConversationKnowledge,
+  deleteProjectKnowledge,
+  hydrateVenomState,
+  initialVenomState,
+  type Conversation,
+  type KnowledgeInsight,
+  type Message,
+  type Project,
+  type Task,
+  type TaskStatus,
+  type VenomState,
+} from "./knowledgeState";
 
-export type TaskStatus = "todo" | "in_progress" | "done";
-
-export type Task = {
-  id: string;
-  title: string;
-  status: TaskStatus;
-  createdAt: number;
-};
-
-export type Project = {
-  id: string;
-  name: string;
-  description: string;
-  accent: string;
-  sourceCount: number;
-  updatedAt: number;
-  tasks: Task[];
-};
-
-export type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  createdAt: number;
-  status: "sending" | "sent" | "error";
-};
-
-export type Conversation = {
-  id: string;
-  title: string;
-  projectId: string | null;
-  updatedAt: number;
-  messages: Message[];
-};
-
-export type KnowledgeCluster = {
-  id: string;
-  projectId: string | null;
-  label: string;
-  category: string;
-  strength: number;
-  x: number;
-  y: number;
-  links: string[];
-  summary: string;
-  mentionCount: number;
-  lastUpdatedAt: number;
-  sources: KnowledgeSource[];
-};
-
-export type KnowledgeSource = {
-  conversationId: string;
-  projectId: string | null;
-  conversationTitle: string;
-  messageIds: string[];
-  excerpt: string;
-  updatedAt: number;
-};
-
-export type KnowledgeInsight = {
-  label: string;
-  category: string;
-  confidence: number;
-  summary: string;
-  sourceMessageIds: string[];
-  relatedLabels: string[];
-};
-
-type VenomState = {
-  projects: Project[];
-  conversations: Conversation[];
-  clusters: KnowledgeCluster[];
-  activeProjectId: string | null;
-  activeConversationId: string | null;
-};
+export type {
+  Conversation,
+  KnowledgeCluster,
+  KnowledgeInsight,
+  KnowledgeSource,
+  Message,
+  Project,
+  Task,
+  TaskStatus,
+} from "./knowledgeState";
 
 type VenomContextType = {
   state: VenomState;
@@ -118,178 +67,13 @@ type VenomContextType = {
   ) => void;
 };
 
-const initialState: VenomState = {
-  projects: [],
-  conversations: [],
-  clusters: [],
-  activeProjectId: null,
-  activeConversationId: null,
-};
-
 const VenomContext = createContext<VenomContextType | null>(null);
 
 const STORAGE_KEY = "@venom_state_v3";
 const LEGACY_STORAGE_KEY = "@venom_state_v1";
-const normalizeLabel = (label: string) => label.trim().toLocaleLowerCase();
-
-function positionForLabel(label: string, index: number) {
-  const hash = [...label].reduce(
-    (value, char) => (value * 31 + char.charCodeAt(0)) >>> 0,
-    17,
-  );
-  const angle = (hash % 360) * (Math.PI / 180);
-  const radius = 80 + ((hash >>> 8) % 4) * 42 + (index % 3) * 18;
-  return {
-    x: Math.round(Math.cos(angle) * radius),
-    y: Math.round(Math.sin(angle) * radius),
-  };
-}
-
-function pruneKnowledgeSources(
-  clusters: KnowledgeCluster[],
-  shouldRemove: (source: KnowledgeSource) => boolean,
-) {
-  const withLiveSources = clusters
-    .map((cluster) => ({
-      ...cluster,
-      sources: cluster.sources.filter((source) => !shouldRemove(source)),
-    }))
-    .filter((cluster) => cluster.sources.length > 0);
-  const liveClusterIds = new Set(
-    withLiveSources.map((cluster) => cluster.id),
-  );
-  return withLiveSources.map((cluster) => ({
-    ...cluster,
-    links: cluster.links.filter((linkId) => liveClusterIds.has(linkId)),
-  }));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function migrateKnowledgeClusters(
-  rawClusters: unknown,
-  conversations: Conversation[],
-) {
-  if (!Array.isArray(rawClusters)) return [];
-
-  const conversationById = new Map(
-    conversations.map((conversation) => [conversation.id, conversation]),
-  );
-  const migrated: KnowledgeCluster[] = [];
-
-  for (const rawCluster of rawClusters) {
-    if (
-      !isRecord(rawCluster) ||
-      typeof rawCluster.id !== "string" ||
-      typeof rawCluster.label !== "string" ||
-      !Array.isArray(rawCluster.sources)
-    ) {
-      continue;
-    }
-
-    const hasCurrentScope =
-      Object.prototype.hasOwnProperty.call(rawCluster, "projectId") &&
-      rawCluster.sources.every(
-        (source) =>
-          isRecord(source) &&
-          Object.prototype.hasOwnProperty.call(source, "projectId"),
-      );
-    const sourceGroups = new Map<string, KnowledgeSource[]>();
-
-    for (const rawSource of rawCluster.sources) {
-      if (
-        !isRecord(rawSource) ||
-        typeof rawSource.conversationId !== "string"
-      ) {
-        continue;
-      }
-      const liveConversation = conversationById.get(rawSource.conversationId);
-      if (!liveConversation) continue;
-
-      const liveMessageIds = new Set(
-        liveConversation.messages.map((message) => message.id),
-      );
-      const messageIds = Array.isArray(rawSource.messageIds)
-        ? rawSource.messageIds.filter(
-            (messageId): messageId is string =>
-              typeof messageId === "string" &&
-              liveMessageIds.has(messageId),
-          )
-        : [];
-      if (!messageIds.length) continue;
-
-      const projectKey = liveConversation.projectId ?? "__unassigned__";
-      const group = sourceGroups.get(projectKey) ?? [];
-      group.push({
-        conversationId: liveConversation.id,
-        projectId: liveConversation.projectId,
-        conversationTitle: liveConversation.title,
-        messageIds,
-        excerpt:
-          typeof rawSource.excerpt === "string"
-            ? rawSource.excerpt
-            : typeof rawCluster.summary === "string"
-              ? rawCluster.summary
-              : rawCluster.label,
-        updatedAt:
-          typeof rawSource.updatedAt === "number"
-            ? rawSource.updatedAt
-            : liveConversation.updatedAt,
-      });
-      sourceGroups.set(projectKey, group);
-    }
-
-    let groupIndex = 0;
-    for (const sources of sourceGroups.values()) {
-      const position = positionForLabel(rawCluster.label, migrated.length);
-      migrated.push({
-        id:
-          groupIndex === 0
-            ? rawCluster.id
-            : `${rawCluster.id}_${groupIndex}`,
-        projectId: sources[0].projectId,
-        label: rawCluster.label,
-        category:
-          typeof rawCluster.category === "string"
-            ? rawCluster.category
-            : "topic",
-        strength:
-          typeof rawCluster.strength === "number"
-            ? rawCluster.strength
-            : 0.5,
-        x: typeof rawCluster.x === "number" ? rawCluster.x : position.x,
-        y: typeof rawCluster.y === "number" ? rawCluster.y : position.y,
-        links:
-          hasCurrentScope && Array.isArray(rawCluster.links)
-            ? rawCluster.links.filter(
-                (link): link is string => typeof link === "string",
-              )
-            : [],
-        summary:
-          typeof rawCluster.summary === "string"
-            ? rawCluster.summary
-            : sources[0].excerpt,
-        mentionCount:
-          typeof rawCluster.mentionCount === "number"
-            ? rawCluster.mentionCount
-            : sources.length,
-        lastUpdatedAt:
-          typeof rawCluster.lastUpdatedAt === "number"
-            ? rawCluster.lastUpdatedAt
-            : Math.max(...sources.map((source) => source.updatedAt)),
-        sources,
-      });
-      groupIndex += 1;
-    }
-  }
-
-  return pruneKnowledgeSources(migrated, () => false);
-}
 
 export function VenomProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<VenomState>(initialState);
+  const [state, setState] = useState<VenomState>(initialVenomState);
   const [isReady, setIsReady] = useState(false);
   const persistenceQueue = useRef<Promise<void>>(Promise.resolve());
 
@@ -302,26 +86,10 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
       if (data) {
         try {
-          const parsed = JSON.parse(data) as Partial<VenomState>;
-          const migratedProjects = Array.isArray(parsed.projects)
-            ? parsed.projects.map((project) => ({
-                ...project,
-                tasks: Array.isArray(project.tasks) ? project.tasks : [],
-              }))
-            : [];
-          const conversations = Array.isArray(parsed.conversations)
-            ? parsed.conversations
-            : [];
-          const clusters = migrateKnowledgeClusters(
-            parsed.clusters,
-            conversations,
-          );
+          const hydratedState = hydrateVenomState(JSON.parse(data));
           setState((prev) => ({
             ...prev,
-            ...parsed,
-            projects: migratedProjects,
-            conversations,
-            clusters,
+            ...hydratedState,
           }));
         } catch (e) {
           console.error("Failed to parse venom state", e);
@@ -415,27 +183,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteProject = useCallback((id: string) => {
-    setState((s) => {
-      const removedConversationIds = new Set(
-        s.conversations
-          .filter((conversation) => conversation.projectId === id)
-          .map((conversation) => conversation.id),
-      );
-      return {
-        ...s,
-        projects: s.projects.filter((project) => project.id !== id),
-        activeProjectId: s.activeProjectId === id ? null : s.activeProjectId,
-        conversations: s.conversations.filter(
-          (conversation) => conversation.projectId !== id,
-        ),
-        clusters: pruneKnowledgeSources(
-          s.clusters,
-          (source) =>
-            source.projectId === id ||
-            removedConversationIds.has(source.conversationId),
-        ),
-      };
-    });
+    setState((state) => deleteProjectKnowledge(state, id));
   }, []);
 
   const setActiveProject = useCallback((id: string | null) => {
@@ -597,16 +345,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
   );
 
   const clearConversation = useCallback((id: string) => {
-    setState((s) => ({
-      ...s,
-      conversations: s.conversations.map((c) =>
-        c.id === id ? { ...c, messages: [] } : c,
-      ),
-      clusters: pruneKnowledgeSources(
-        s.clusters,
-        (source) => source.conversationId === id,
-      ),
-    }));
+    setState((state) => clearConversationKnowledge(state, id));
   }, []);
 
   const applyKnowledgeInsights = useCallback(
@@ -614,158 +353,16 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       conversation: Pick<Conversation, "id" | "title" | "projectId">,
       insights: KnowledgeInsight[],
     ) => {
-      if (!insights.length) return;
-
       const now = Date.now();
-      setState((s) => {
-        const liveConversation = s.conversations.find(
-          (item) => item.id === conversation.id,
-        );
-        if (
-          !liveConversation ||
-          liveConversation.projectId !== conversation.projectId
-        ) {
-          return s;
-        }
-
-        const liveMessageIds = new Set(
-          liveConversation.messages.map((message) => message.id),
-        );
-        const applicableInsights = insights
-          .map((insight) => ({
-            ...insight,
-            sourceMessageIds: insight.sourceMessageIds.filter((messageId) =>
-              liveMessageIds.has(messageId),
-            ),
-          }))
-          .filter((insight) => insight.sourceMessageIds.length > 0);
-        if (!applicableInsights.length) return s;
-
-        const clusters = s.clusters.map((cluster) => ({
-          ...cluster,
-          strength:
-            cluster.projectId === liveConversation.projectId
-              ? Math.max(0.12, cluster.strength * 0.96)
-              : cluster.strength,
-        }));
-        const clusterByLabel = new Map(
-          clusters
-            .filter(
-              (cluster) =>
-                cluster.projectId === liveConversation.projectId,
-            )
-            .map((cluster) => [normalizeLabel(cluster.label), cluster]),
-        );
-
-        for (const insight of applicableInsights) {
-          const label = insight.label.trim();
-          const normalizedLabel = normalizeLabel(label);
-          if (!label || !normalizedLabel) continue;
-
-          const confidence = Math.max(
-            0,
-            Math.min(1, insight.confidence),
-          );
-          const source: KnowledgeSource = {
-            conversationId: liveConversation.id,
-            projectId: liveConversation.projectId,
-            conversationTitle: liveConversation.title,
-            messageIds: [...new Set(insight.sourceMessageIds)].slice(0, 12),
-            excerpt: insight.summary.trim(),
-            updatedAt: now,
-          };
-          const existing = clusterByLabel.get(normalizedLabel);
-
-          if (existing) {
-            const priorSource = existing.sources.find(
-              (item) => item.conversationId === conversation.id,
-            );
-            existing.category =
-              insight.category.trim() || existing.category;
-            existing.summary = insight.summary.trim() || existing.summary;
-            existing.mentionCount += 1;
-            existing.lastUpdatedAt = now;
-            existing.strength = Math.min(
-              1,
-              existing.strength + 0.12 + confidence * 0.2,
-            );
-            existing.sources = [
-              {
-                ...source,
-                messageIds: [
-                  ...new Set([
-                    ...(priorSource?.messageIds ?? []),
-                    ...source.messageIds,
-                  ]),
-                ].slice(0, 12),
-              },
-              ...existing.sources.filter(
-                (item) => item.conversationId !== conversation.id,
-              ),
-            ].slice(0, 8);
-          } else {
-            const position = positionForLabel(label, clusters.length);
-            const created: KnowledgeCluster = {
-              id: generateId("cluster"),
-              projectId: liveConversation.projectId,
-              label,
-              category: insight.category.trim() || "topic",
-              summary: insight.summary.trim(),
-              strength: Math.min(1, 0.34 + confidence * 0.42),
-              mentionCount: 1,
-              lastUpdatedAt: now,
-              sources: [source],
-              x: position.x,
-              y: position.y,
-              links: [],
-            };
-            clusters.push(created);
-            clusterByLabel.set(normalizedLabel, created);
-          }
-        }
-
-        for (const insight of applicableInsights) {
-          const source = clusterByLabel.get(
-            normalizeLabel(insight.label),
-          );
-          if (!source) continue;
-
-          for (const relatedLabel of insight.relatedLabels) {
-            const target = clusterByLabel.get(
-              normalizeLabel(relatedLabel),
-            );
-            if (!target || target.id === source.id) continue;
-            if (!source.links.includes(target.id)) {
-              source.links.push(target.id);
-            }
-            if (!target.links.includes(source.id)) {
-              target.links.push(source.id);
-            }
-          }
-        }
-
-        const projectConversationIds = new Set(
-          clusters
-            .filter(
-              (cluster) =>
-                cluster.projectId === liveConversation.projectId,
-            )
-            .flatMap((cluster) =>
-              cluster.sources.map((source) => source.conversationId),
-            ),
-        );
-        const projects = s.projects.map((project) =>
-          project.id === liveConversation.projectId
-            ? {
-                ...project,
-                sourceCount: projectConversationIds.size,
-                updatedAt: now,
-              }
-            : project,
-        );
-
-        return { ...s, clusters, projects };
-      });
+      setState((state) =>
+        applyKnowledgeInsightsToState({
+          state,
+          conversation,
+          insights,
+          now,
+          generateId,
+        }),
+      );
     },
     [generateId],
   );
