@@ -29,6 +29,9 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [focusedButton, setFocusedButton] = useState<
+    'resend' | 'submit' | 'verify' | null
+  >(null);
   const [focusedField, setFocusedField] = useState<
     'email' | 'password' | 'code' | null
   >(null);
@@ -95,11 +98,14 @@ export default function SignUpScreen() {
           : 'One secure account keeps your intelligence workspace available on every device.'
       }
       footer={
-        <Text style={[styles.footerText, { color: colors.mutedForeground }]}>
+        <Text style={[styles.footerText, { color: colors.symbioteMuted }]}>
           Already have an account?{' '}
           <Link
             href={'/(auth)/sign-in' as Href}
-            style={[styles.footerLink, { color: colors.primary }]}
+            style={[
+              styles.footerLink,
+              { color: colors.symbioteHighlight },
+            ]}
           >
             Sign in
           </Link>
@@ -142,8 +148,12 @@ export default function SignUpScreen() {
               { backgroundColor: colors.primary },
               pressed && styles.pressed,
               (!code || isBusy) && styles.disabled,
+              focusedButton === 'verify' && styles.buttonFocused,
+              focusedButton === 'verify' && { outlineColor: colors.foreground },
             ]}
             onPress={handleVerify}
+            onFocus={() => setFocusedButton('verify')}
+            onBlur={() => setFocusedButton(null)}
             disabled={!code || isBusy}
           >
             {isBusy ? (
@@ -160,10 +170,16 @@ export default function SignUpScreen() {
             )}
           </Pressable>
           <Pressable
-            style={styles.resendButton}
+            style={[
+              styles.resendButton,
+              focusedButton === 'resend' && styles.buttonFocused,
+              focusedButton === 'resend' && { outlineColor: colors.foreground },
+            ]}
             accessibilityRole="button"
             accessibilityLabel="Send a new verification code"
             onPress={() => void signUp.verifications.sendEmailCode()}
+            onFocus={() => setFocusedButton('resend')}
+            onBlur={() => setFocusedButton(null)}
           >
             <Text
               style={[styles.resendText, { color: colors.mutedForeground }]}
@@ -236,8 +252,12 @@ export default function SignUpScreen() {
               { backgroundColor: colors.primary },
               pressed && styles.pressed,
               (!emailAddress || !password || isBusy) && styles.disabled,
+              focusedButton === 'submit' && styles.buttonFocused,
+              focusedButton === 'submit' && { outlineColor: colors.foreground },
             ]}
             onPress={handleSubmit}
+            onFocus={() => setFocusedButton('submit')}
+            onBlur={() => setFocusedButton(null)}
             disabled={!emailAddress || !password || isBusy}
           >
             {isBusy ? (
@@ -325,6 +345,7 @@ const styles = StyleSheet.create({
   },
   footerLink: {
     fontFamily: 'Inter_600SemiBold',
+    textDecorationLine: 'underline',
   },
   pressed: {
     opacity: 0.82,
@@ -332,5 +353,10 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.45,
+  },
+  buttonFocused: {
+    outlineStyle: 'solid',
+    outlineWidth: 3,
+    outlineOffset: 3,
   },
 });

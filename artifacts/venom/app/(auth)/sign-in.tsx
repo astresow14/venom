@@ -47,6 +47,9 @@ export default function SignInScreen() {
   const [code, setCode] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [focusedButton, setFocusedButton] = useState<
+    'google' | 'reset' | 'submit' | 'verify' | null
+  >(null);
   const [focusedField, setFocusedField] = useState<
     'email' | 'password' | 'code' | null
   >(null);
@@ -158,11 +161,14 @@ export default function SignInScreen() {
           : 'Sign in to restore projects, conversations, and your knowledge map on this device.'
       }
       footer={
-        <Text style={[styles.footerText, { color: colors.mutedForeground }]}>
+        <Text style={[styles.footerText, { color: colors.symbioteMuted }]}>
           New to Venom?{' '}
              <Link
                href={'/(auth)/sign-up' as Href}
-               style={[styles.footerLink, { color: colors.primary }]}
+               style={[
+                 styles.footerLink,
+                 { color: colors.symbioteHighlight },
+               ]}
              >
             Create an account
           </Link>
@@ -205,8 +211,12 @@ export default function SignInScreen() {
               { backgroundColor: colors.primary },
               pressed && styles.pressed,
               (!code || isBusy) && styles.disabled,
+              focusedButton === 'verify' && styles.buttonFocused,
+              focusedButton === 'verify' && { outlineColor: colors.foreground },
             ]}
             onPress={handleVerify}
+            onFocus={() => setFocusedButton('verify')}
+            onBlur={() => setFocusedButton(null)}
             disabled={!code || isBusy}
           >
             {isBusy ? (
@@ -223,7 +233,11 @@ export default function SignInScreen() {
             )}
           </Pressable>
           <Pressable
-            style={styles.resetButton}
+            style={[
+              styles.resetButton,
+              focusedButton === 'reset' && styles.buttonFocused,
+              focusedButton === 'reset' && { outlineColor: colors.foreground },
+            ]}
             accessibilityRole="button"
             accessibilityLabel="Start sign-in over"
             onPress={() => {
@@ -231,6 +245,8 @@ export default function SignInScreen() {
               setCode('');
               setFormError(null);
             }}
+            onFocus={() => setFocusedButton('reset')}
+            onBlur={() => setFocusedButton(null)}
           >
             <Text style={[styles.resetText, { color: colors.mutedForeground }]}>
               Start over
@@ -301,8 +317,12 @@ export default function SignInScreen() {
               { backgroundColor: colors.primary },
               pressed && styles.pressed,
               (!emailAddress || !password || isBusy) && styles.disabled,
+              focusedButton === 'submit' && styles.buttonFocused,
+              focusedButton === 'submit' && { outlineColor: colors.foreground },
             ]}
             onPress={handleSubmit}
+            onFocus={() => setFocusedButton('submit')}
+            onBlur={() => setFocusedButton(null)}
             disabled={!emailAddress || !password || isBusy}
           >
             {fetchStatus === 'fetching' ? (
@@ -340,8 +360,12 @@ export default function SignInScreen() {
               { borderColor: colors.border, backgroundColor: colors.accent },
               pressed && styles.pressed,
               isBusy && styles.disabled,
+              focusedButton === 'google' && styles.buttonFocused,
+              focusedButton === 'google' && { outlineColor: colors.foreground },
             ]}
             onPress={handleGoogle}
+            onFocus={() => setFocusedButton('google')}
+            onBlur={() => setFocusedButton(null)}
             disabled={isBusy}
           >
             {isGoogleLoading ? (
@@ -464,6 +488,7 @@ const styles = StyleSheet.create({
   },
   footerLink: {
     fontFamily: 'Inter_600SemiBold',
+    textDecorationLine: 'underline',
   },
   pressed: {
     opacity: 0.82,
@@ -471,5 +496,10 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.45,
+  },
+  buttonFocused: {
+    outlineStyle: 'solid',
+    outlineWidth: 3,
+    outlineOffset: 3,
   },
 });

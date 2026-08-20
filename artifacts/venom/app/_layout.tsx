@@ -53,10 +53,10 @@ function AppLoading() {
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: colors.background,
+        backgroundColor: colors.symbioteBackdrop,
       }}
     >
-      <ActivityIndicator size="small" color={colors.primary} />
+      <ActivityIndicator size="small" color={colors.symbioteHighlight} />
     </View>
   );
 }
@@ -86,17 +86,25 @@ function RootLayoutNav() {
   }, [effectiveUserId]);
 
   useEffect(() => {
-    void SystemUI.setBackgroundColorAsync(colors.background);
-  }, [colors.background]);
+    void SystemUI.setBackgroundColorAsync(
+      canOpenWorkspace ? colors.background : colors.symbioteBackdrop,
+    );
+  }, [canOpenWorkspace, colors.background, colors.symbioteBackdrop]);
 
   return (
     <>
-      <StatusBar style={theme === "dark" ? "light" : "dark"} />
+      <StatusBar
+        style={canOpenWorkspace ? (theme === "dark" ? "light" : "dark") : "light"}
+      />
       <VenomProvider>
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: colors.background },
+            contentStyle: {
+              backgroundColor: canOpenWorkspace
+                ? colors.background
+                : colors.symbioteBackdrop,
+            },
             animation: "fade",
           }}
         >

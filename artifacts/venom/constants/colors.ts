@@ -25,6 +25,7 @@ const colors = {
     symbioteMuted: "#a8a8a8",
     symbioteHighlight: "#f7f7f7",
     symbioteGlow: "rgba(255, 255, 255, 0.14)",
+    authPanel: "rgba(252, 252, 250, 0.95)",
   },
   dark: {
     text: "#f5f5f2",
@@ -52,6 +53,7 @@ const colors = {
     symbioteMuted: "#a8a8a8",
     symbioteHighlight: "#f7f7f7",
     symbioteGlow: "rgba(255, 255, 255, 0.16)",
+    authPanel: "rgba(21, 21, 20, 0.95)",
   },
   radius: 18,
 };

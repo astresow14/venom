@@ -2,6 +2,10 @@ import React from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import {
+  SymbioteAuthBackdrop,
+  useSymbioteInteraction,
+} from '@/components/SymbioteAuthBackdrop';
 import { VenomMark } from '@/components/VenomMark';
 import { useColors } from '@/hooks/useColors';
 
@@ -22,29 +26,26 @@ export function AuthScreenShell({
 }: AuthScreenShellProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { onPointerMove, onTouchEnd, onTouchMove, pointerX, pointerY } =
+    useSymbioteInteraction();
+  const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
+  const bottomInset =
+    Platform.OS === 'web' ? Math.max(insets.bottom, 34) : insets.bottom;
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.atmosphere,
-          styles.atmosphereTop,
-          { backgroundColor: colors.secondary },
-        ]}
-      />
-      <View
-        style={[
-          styles.atmosphere,
-          styles.atmosphereBottom,
-          { backgroundColor: colors.muted },
-        ]}
-      />
+    <View
+      style={[styles.screen, { backgroundColor: colors.symbioteBackdrop }]}
+      onPointerMove={onPointerMove}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
+      <SymbioteAuthBackdrop pointerX={pointerX} pointerY={pointerY} />
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 28,
-            paddingBottom: insets.bottom + 28,
+            paddingTop: topInset + 28,
+            paddingBottom: bottomInset + 28,
           },
         ]}
         bottomOffset={24}
@@ -52,8 +53,8 @@ export function AuthScreenShell({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.brand}>
-          <VenomMark color={colors.foreground} size={42} />
-          <Text style={[styles.wordmark, { color: colors.foreground }]}>
+          <VenomMark color={colors.symbioteHighlight} size={42} />
+          <Text style={[styles.wordmark, { color: colors.symbioteHighlight }]}>
             Venom
           </Text>
         </View>
@@ -62,7 +63,8 @@ export function AuthScreenShell({
           style={[
             styles.panel,
             {
-              backgroundColor: colors.card,
+              backgroundColor:
+                Platform.OS === 'web' ? colors.authPanel : colors.card,
               borderColor: colors.border,
               shadowColor: colors.foreground,
             },
@@ -91,25 +93,6 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  atmosphere: {
-    position: 'absolute',
-    borderRadius: 999,
-    opacity: 0.58,
-  },
-  atmosphereTop: {
-    width: 420,
-    height: 270,
-    top: -150,
-    right: -190,
-    transform: [{ rotate: '-18deg' }],
-  },
-  atmosphereBottom: {
-    width: 320,
-    height: 220,
-    bottom: -145,
-    left: -150,
-    transform: [{ rotate: '16deg' }],
-  },
   content: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -133,12 +116,12 @@ const styles = StyleSheet.create({
   panel: {
     borderWidth: 1,
     borderRadius: 28,
-    paddingHorizontal: 22,
-    paddingVertical: 26,
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: Platform.OS === 'web' ? 0.08 : 0.12,
-    shadowRadius: 32,
-    elevation: 4,
+    paddingHorizontal: 26,
+    paddingVertical: 30,
+    shadowOffset: { width: 0, height: 24 },
+    shadowOpacity: Platform.OS === 'web' ? 0.06 : 0.1,
+    shadowRadius: 48,
+    elevation: 6,
   },
   eyebrow: {
     fontFamily: 'Inter_600SemiBold',
