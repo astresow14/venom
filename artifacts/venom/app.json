@@ -4,21 +4,21 @@
     "slug": "venom",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon_2.png",
+    "icon": "./assets/images/venom-mark-monochrome.png",
     "scheme": "venom",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/icon_2.png",
+      "image": "./assets/images/venom-mark-monochrome.png",
       "resizeMode": "contain",
-      "backgroundColor": "#f9f9f8"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": false
     },
     "android": {},
     "web": {
-      "favicon": "./assets/images/icon_2.png"
+      "favicon": "./assets/images/venom-mark-monochrome.png"
     },
     "plugins": [
       [

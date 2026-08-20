@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
   Platform,
   Keyboard,
+  Linking,
   Modal,
   AccessibilityInfo,
   findNodeHandle,
@@ -50,15 +51,24 @@ import { useTheme } from "@/context/ThemeContext";
 import {
   useVenom,
   IS_READ_ONLY_UI_TEST,
+  IS_UI_TEST,
+  UI_TEST_USER_ID,
   Message,
   KnowledgeCluster,
   Task,
   KanbanField,
   KanbanFieldType,
   KanbanStage,
+  type ProjectSource,
 } from "@/context/VenomContext";
 import { extractVenomKnowledge } from "@workspace/api-client-react";
 import { BrainNoteComposer } from "@/components/BrainNoteComposer";
+import { buildChatProjectContextBundle } from "@/context/sourceContext";
+import { messageCitationSegments } from "@/context/messageCitations";
+
+// Browser UI tests run without a Clerk session, so chat uses a stand-in
+// identity and token that only exist in the development UI-test bundle.
+const UI_TEST_CHAT_TOKEN = "venom-ui-test-chat-token";
 
 let messageCounter = 0;
 function generateUniqueId(): string {
@@ -75,7 +85,10 @@ function ChatWorkspace({
   isActive: boolean;
   activeProject: any;
 }) {
-  const { getToken, userId } = useAuth();
+  const { getToken, userId: authenticatedUserId } = useAuth();
+  const userId = IS_UI_TEST
+    ? UI_TEST_USER_ID
+    : (authenticatedUserId ?? null);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const {
@@ -112,6 +125,15 @@ function ChatWorkspace({
     (c) => c.id === state.activeConversationId,
   );
   const contextMessages = activeConv?.messages || [];
+  const projectSources = (state.sources ?? []).filter(
+    (source: ProjectSource) =>
+      source.projectId === activeProject?.id && source.status === "connected",
+  );
+  const citationsById = new Map(
+    projectSources.flatMap((source: ProjectSource) =>
+      source.citations.map((citation) => [citation.id, citation] as const),
+    ),
+  );
 
   const displayMessages = localStreamingMessage
     ? [...contextMessages, localStreamingMessage]
@@ -172,7 +194,7 @@ function ChatWorkspace({
     try {
       const domain = process.env.EXPO_PUBLIC_DOMAIN;
       if (!domain) throw new Error("API domain is unavailable");
-      const token = await getToken();
+      const token = IS_UI_TEST ? UI_TEST_CHAT_TOKEN : await getToken();
       if (
         !token ||
         activeUserIdRef.current !== initiatingUserId ||
@@ -188,6 +210,15 @@ function ChatWorkspace({
           .map((m) => ({ role: m.role, content: m.content })),
         { role: "user", content: trimmed },
       ];
+      const {
+        context: projectContext,
+        citationIds: sourceCitationIds,
+        sourceSnapshots,
+      } = buildChatProjectContextBundle({
+        projectName: activeProject?.name,
+        projectDescription: activeProject?.description,
+        sources: projectSources,
+      });
 
       const response = await fetch(`${baseUrl}/api/venom/respond`, {
         method: "POST",
@@ -198,9 +229,10 @@ function ChatWorkspace({
         },
         body: JSON.stringify({
           messages: chatHistory,
-          projectContext: activeProject
-            ? `Project: ${activeProject.name}\n${activeProject.description}`
-            : undefined,
+          projectId: initiatingProjectId,
+          projectContext,
+          sourceCitationIds,
+          sourceSnapshots,
         }),
         signal: abortController.signal,
       });
@@ -344,6 +376,38 @@ function ChatWorkspace({
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
+    const content = !isUser
+      ? messageCitationSegments(item.content, citationsById).map(
+          (segment, index) => {
+            if (segment.kind === "text") return segment.text;
+            if (segment.kind === "citation") {
+              return (
+                <Text
+                  key={`${segment.citation.id}-${index}`}
+                  onPress={() => Linking.openURL(segment.citation.url)}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Open source: ${segment.citation.title}`}
+                  style={[styles.citationLink, { color: colors.primary }]}
+                >
+                  {segment.citation.title}
+                </Text>
+              );
+            }
+            return (
+              <Text
+                key={`${segment.citationId}-${index}`}
+                accessibilityLabel="Archived source, no longer connected"
+                style={[
+                  styles.citationArchived,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                {segment.label}
+              </Text>
+            );
+          },
+        )
+      : item.content;
     return (
       <View
         style={[
@@ -369,7 +433,7 @@ function ChatWorkspace({
               { color: isUser ? colors.foreground : colors.foreground },
             ]}
           >
-            {item.content}
+            {content}
           </Text>
         </View>
       </View>
@@ -1121,7 +1185,7 @@ function KnowledgeWorkspace({
                     { color: colors.symbioteMuted },
                   ]}
                 >
-                  LIVE ONTOLOGY
+                  Live knowledge
                 </Text>
                 <Text
                   style={[
@@ -1153,7 +1217,7 @@ function KnowledgeWorkspace({
                     { color: colors.symbioteMuted },
                   ]}
                 >
-                  {reduceMotion ? "STABLE" : "EVOLVING"}
+                  {reduceMotion ? "Stable" : "Evolving"}
                 </Text>
               </View>
             </View>
@@ -3947,7 +4011,13 @@ export default function WorkspaceScreen() {
                     currentIndex === i ? null : currentIndex,
                   )
                 }
-                style={[styles.navTab, isFocused && styles.navTabFocused]}
+                style={[
+                  styles.navTab,
+                  isFocused && [
+                    styles.navTabFocused,
+                    { outlineColor: colors.foreground },
+                  ],
+                ]}
                 hitSlop={10}
                 testID={`workspace-tab-${title.toLowerCase().replace("-", "")}`}
                 accessibilityRole="tab"
@@ -4037,6 +4107,8 @@ export default function WorkspaceScreen() {
             activeOpacity={0.7}
             onPress={() => router.push("/projects")}
             testID="open-projects"
+            accessibilityRole="button"
+            accessibilityLabel={`Open projects. Current project: ${activeProject?.name || "Workspace"}.`}
           >
             <Text
               style={[styles.navProjectText, { color: colors.foreground }]}
@@ -4195,6 +4267,9 @@ const styles = StyleSheet.create({
   },
   navTabFocused: {
     backgroundColor: "rgba(128, 128, 128, 0.2)",
+    outlineStyle: "solid",
+    outlineWidth: 2,
+    outlineOffset: 2,
   },
   navTabText: {
     fontSize: 15,
@@ -4267,8 +4342,7 @@ const styles = StyleSheet.create({
   feedEyebrow: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+    letterSpacing: 0,
     marginBottom: 6,
   },
   feedTitle: {
@@ -4307,8 +4381,7 @@ const styles = StyleSheet.create({
   feedCardLabel: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
+    letterSpacing: 0,
   },
   feedCardTime: {
     fontSize: 11,
@@ -4385,6 +4458,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     lineHeight: 24,
+  },
+  citationLink: {
+    fontFamily: "Inter_600SemiBold",
+    textDecorationLine: "underline",
+  },
+  citationArchived: {
+    fontStyle: "italic",
   },
   typingContainer: {
     paddingVertical: 12,
@@ -4510,9 +4590,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   symbioteEyebrow: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-    letterSpacing: 1.4,
+    letterSpacing: 0,
     marginBottom: 4,
   },
   symbioteTitle: {
@@ -4535,9 +4615,9 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   symbioteStatusText: {
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: "Inter_600SemiBold",
-    letterSpacing: 1,
+    letterSpacing: 0,
   },
   symbioteViewport: {
     flex: 1,
@@ -4824,9 +4904,8 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 6,
     fontFamily: "Inter_600SemiBold",
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
+    fontSize: 12,
+    letterSpacing: 0,
   },
   knowledgeSourcesList: {
     flexShrink: 1,
@@ -5087,8 +5166,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   boardColumnCount: {
     fontSize: 11,

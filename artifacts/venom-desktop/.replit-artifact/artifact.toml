@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/venom/"
+previewPath = "/"
 title = "Venom Desktop"
 description = "A wide-screen Venom workspace for working across projects, conversations, tasks, and knowledge without losing continuity with the mobile app."
 version = "1.0.0"
@@ -8,7 +8,7 @@ router = "path"
 
 [[services]]
 name = "web"
-paths = [ "/venom/" ]
+paths = [ "/" ]
 localPort = 23990
 
 [services.development]
@@ -25,4 +25,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "23990"
-BASE_PATH = "/venom/"
+BASE_PATH = "/"

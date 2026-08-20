@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AttestedSourceSnapshot } from './attestedSourceSnapshot';
 import type { VenomChatMessage } from './venomChatMessage';
 
 export interface VenomChatRequest {
@@ -13,6 +14,18 @@ export interface VenomChatRequest {
      * @maxItems 24
      */
   messages: VenomChatMessage[];
-  /** @maxLength 1000 */
+  /** @maxLength 8000 */
   projectContext?: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  projectId: string;
+  /**
+     * @maxItems 200
+     * @items.pattern ^[A-Za-z0-9_-]{1,160}$
+     */
+  sourceCitationIds?: string[];
+  /** @maxItems 32 */
+  sourceSnapshots?: AttestedSourceSnapshot[];
 }

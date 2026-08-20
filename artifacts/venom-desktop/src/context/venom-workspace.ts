@@ -3,20 +3,21 @@
  * App.tsx imports from this path.
  */
 export {
+  IS_UI_TEST,
   VenomWorkspaceProvider,
   useVenomWorkspace,
 } from './VenomWorkspaceContext';
 
 export type {
   VenomWorkspaceContextType,
+} from './VenomWorkspaceContext';
+
+export type {
   Conversation,
   KnowledgeCluster,
   KnowledgeInsight,
   KnowledgeSource,
-  Message,
   Project,
   SyncStatus,
-  Task,
-  TaskStatus,
   WorkspaceState,
-} from './VenomWorkspaceContext';
+} from '@/lib/workspaceState';

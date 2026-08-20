@@ -5,6 +5,284 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type VenomAppStatus = typeof VenomAppStatus[keyof typeof VenomAppStatus];
+
+
+export const VenomAppStatus = {
+  draft: 'draft',
+  importing: 'importing',
+  ready: 'ready',
+  attention: 'attention',
+} as const;
+
+export type VenomImportStatus = typeof VenomImportStatus[keyof typeof VenomImportStatus];
+
+
+export const VenomImportStatus = {
+  awaiting_upload: 'awaiting_upload',
+  uploading: 'uploading',
+  validating: 'validating',
+  inspecting: 'inspecting',
+  complete: 'complete',
+  failed: 'failed',
+} as const;
+
+export type VenomAppSourceType = typeof VenomAppSourceType[keyof typeof VenomAppSourceType];
+
+
+export const VenomAppSourceType = {
+  none: 'none',
+  zip: 'zip',
+} as const;
+
+export interface VenomApp {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  purpose: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  brand: string;
+  status: VenomAppStatus;
+  /**
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 60
+     */
+  detectedStack: string[];
+  sourceType: VenomAppSourceType;
+  /** @minimum 0 */
+  sourceVersion: number;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  deploymentUrl: string | null;
+  importStatus: VenomImportStatus | null;
+  /** @nullable */
+  sourceUpdatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VenomAppInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  purpose: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  brand: string;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  deploymentUrl?: string | null;
+}
+
+export interface VenomAppUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name?: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  purpose?: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  brand?: string;
+  status?: VenomAppStatus;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  deploymentUrl?: string | null;
+}
+
+export type VenomSourceManifestRootKind = typeof VenomSourceManifestRootKind[keyof typeof VenomSourceManifestRootKind];
+
+
+export const VenomSourceManifestRootKind = {
+  'single-project': 'single-project',
+  monorepo: 'monorepo',
+} as const;
+
+export interface VenomSourceManifest {
+  formatVersion: 1;
+  rootKind: VenomSourceManifestRootKind;
+  /**
+     * @minimum 1
+     * @maximum 5000
+     */
+  totalEntries: number;
+  /**
+     * @minimum 0
+     * @maximum 5000
+     */
+  safeFileCount: number;
+  /**
+     * @minimum 0
+     * @maximum 5000
+     */
+  excludedSensitiveFileCount: number;
+  /**
+     * @maxItems 200
+     * @items.maxLength 240
+     */
+  files: string[];
+  /**
+     * @maxItems 40
+     * @items.maxLength 240
+     */
+  projectFiles: string[];
+  /**
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 60
+     */
+  detectedStack: string[];
+}
+
+export type VenomSourceVersionSourceType = typeof VenomSourceVersionSourceType[keyof typeof VenomSourceVersionSourceType];
+
+
+export const VenomSourceVersionSourceType = {
+  zip: 'zip',
+} as const;
+
+export interface VenomSourceVersion {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  /** @minimum 1 */
+  versionNumber: number;
+  sourceType: VenomSourceVersionSourceType;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  archiveFilename: string;
+  /** @minimum 1 */
+  archiveBytes: number;
+  /** @pattern ^[a-f0-9]{64}$ */
+  checksumSha256: string;
+  manifest: VenomSourceManifest;
+  createdAt: string;
+}
+
+export interface VenomImportJob {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  appId: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  archiveFilename: string;
+  /** @minimum 1 */
+  declaredBytes: number;
+  status: VenomImportStatus;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  progress: number;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  failureCode: string | null;
+  /**
+     * @maxLength 240
+     * @nullable
+     */
+  failureMessage: string | null;
+  /**
+     * @nullable
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  sourceVersionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  completedAt: string | null;
+}
+
+export interface VenomDeploymentLink {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  label: string;
+  /** @maxLength 2048 */
+  url: string;
+  isPrimary: boolean;
+  createdAt: string;
+}
+
+export interface VenomAppDetail {
+  app: VenomApp;
+  /** @maxItems 500 */
+  versions: VenomSourceVersion[];
+  /** @maxItems 100 */
+  importJobs: VenomImportJob[];
+  /** @maxItems 20 */
+  deploymentLinks: VenomDeploymentLink[];
+}
+
+export interface VenomImportInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     * @pattern ^.*\.[zZ][iI][pP]$
+     */
+  filename: string;
+  /**
+     * @minimum 1
+     * @maximum 52428800
+     */
+  size: number;
+  /**
+     * @minLength 16
+     * @maxLength 120
+     * @pattern ^[A-Za-z0-9_-]+$
+     */
+  idempotencyKey: string;
+}
+
+export interface VenomImportUploadTicket {
+  job: VenomImportJob;
+  /** @maxLength 8192 */
+  uploadUrl: string;
+  maxBytes: 52428800;
+  requiredContentType: 'application/zip';
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -22,14 +300,98 @@ export interface VenomChatMessage {
   content: string;
 }
 
+export type SourceCitationProvider = typeof SourceCitationProvider[keyof typeof SourceCitationProvider];
+
+
+export const SourceCitationProvider = {
+  github: 'github',
+  website: 'website',
+} as const;
+
+export type SourceCitationKind = typeof SourceCitationKind[keyof typeof SourceCitationKind];
+
+
+export const SourceCitationKind = {
+  repository: 'repository',
+  issue: 'issue',
+  pull_request: 'pull_request',
+  website: 'website',
+} as const;
+
+export interface SourceCitation {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     * @pattern ^[A-Za-z0-9_-]{1,160}$
+     */
+  id: string;
+  provider: SourceCitationProvider;
+  kind: SourceCitationKind;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  title: string;
+  /** @maxLength 2048 */
+  url: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  excerpt: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     * @nullable
+     */
+  reference: string | null;
+}
+
+export interface AttestedSourceSnapshot {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     * @pattern ^[A-Za-z0-9_-]{1,160}$
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  context: string;
+  /**
+     * @minItems 1
+     * @maxItems 50
+     */
+  citations: SourceCitation[];
+  /**
+     * @minLength 1
+     * @maxLength 2048
+     * @pattern ^v1\.[A-Za-z0-9_-]{2,214}\.[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$
+     */
+  attestation: string;
+}
+
 export interface VenomChatRequest {
   /**
      * @minItems 1
      * @maxItems 24
      */
   messages: VenomChatMessage[];
-  /** @maxLength 1000 */
+  /** @maxLength 8000 */
   projectContext?: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  projectId: string;
+  /**
+     * @maxItems 200
+     * @items.pattern ^[A-Za-z0-9_-]{1,160}$
+     */
+  sourceCitationIds?: string[];
+  /** @maxItems 32 */
+  sourceSnapshots?: AttestedSourceSnapshot[];
 }
 
 export interface KnowledgeConversation {
@@ -142,6 +504,103 @@ export interface VenomNoteImprovement {
      * @items.maxLength 160
      */
   changeNotes: string[];
+}
+
+export interface GitHubRepository {
+  fullName: string;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  url: string;
+  updatedAt: string;
+}
+
+export interface GitHubSourceInput {
+  /**
+     * @minLength 3
+     * @maxLength 200
+     */
+  repository: string;
+}
+
+export interface WebsiteSourceInput {
+  /** @maxLength 2048 */
+  url: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name?: string;
+}
+
+export interface SourceCluster {
+  id: string;
+  label: string;
+  category: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  strength: number;
+  citationIds: string[];
+}
+
+export type ProjectSourceProvider = typeof ProjectSourceProvider[keyof typeof ProjectSourceProvider];
+
+
+export const ProjectSourceProvider = {
+  github: 'github',
+  website: 'website',
+} as const;
+
+export type ProjectSourceStatus = typeof ProjectSourceStatus[keyof typeof ProjectSourceStatus];
+
+
+export const ProjectSourceStatus = {
+  connected: 'connected',
+  error: 'error',
+} as const;
+
+export interface ProjectSource {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  projectId: string;
+  provider: ProjectSourceProvider;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  name: string;
+  /** @maxLength 2048 */
+  url: string;
+  status: ProjectSourceStatus;
+  syncedAt: string;
+  /** @maxLength 1000 */
+  summary: string;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  context: string;
+  /**
+     * @minItems 1
+     * @maxItems 50
+     */
+  citations: SourceCitation[];
+  clusters: SourceCluster[];
+  /**
+     * @minLength 1
+     * @maxLength 2048
+     * @pattern ^v1\.[A-Za-z0-9_-]{2,214}\.[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$
+     */
+  attestation?: string;
 }
 
 /**
@@ -424,6 +883,8 @@ export interface VenomWorkspaceTombstones {
   stages: VenomDeletionMarker[];
   /** @maxItems 20000 */
   fields: VenomDeletionMarker[];
+  /** @maxItems 2000 */
+  sources: VenomDeletionMarker[];
 }
 
 export interface VenomWorkspaceState {
@@ -433,6 +894,8 @@ export interface VenomWorkspaceState {
   conversations: VenomConversation[];
   /** @maxItems 1000 */
   clusters: VenomKnowledgeCluster[];
+  /** @maxItems 500 */
+  sources: ProjectSource[];
   /**
      * @maxLength 120
      * @nullable

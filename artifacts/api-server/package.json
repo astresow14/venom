@@ -8,11 +8,16 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test --experimental-strip-types src/**/*.test.mjs"
+    "test": "node --test --experimental-strip-types src/**/*.test.mjs",
+    "test:website-safety": "esbuild ./src/lib/website-safety.test.ts --bundle --platform=node --format=esm --outfile=/tmp/venom-website-safety.test.mjs && node --test /tmp/venom-website-safety.test.mjs",
+    "test:source-security": "pnpm exec esbuild ./src/lib/website-safety.test.ts --bundle --platform=node --format=esm --outfile=/tmp/venom-website-safety.test.mjs && node --test /tmp/venom-website-safety.test.mjs && pnpm exec esbuild ./src/lib/source-membership.test.ts --bundle --platform=node --format=esm --outfile=/tmp/venom-source-membership.test.mjs && node --test /tmp/venom-source-membership.test.mjs && pnpm exec esbuild ./src/lib/source-citations.test.ts --bundle --platform=node --format=esm --outfile=/tmp/venom-source-citations.test.mjs && node --test /tmp/venom-source-citations.test.mjs && pnpm exec esbuild ./src/lib/source-attestations.test.ts --bundle --platform=node --format=esm --outfile=/tmp/venom-source-attestations.test.mjs && node --test /tmp/venom-source-attestations.test.mjs && pnpm exec esbuild ./src/lib/portfolio-zip.test.ts --bundle --platform=node --format=esm --outfile=/tmp/venom-portfolio-zip.test.mjs && node --test /tmp/venom-portfolio-zip.test.mjs && pnpm exec esbuild ./src/routes/venom-sources-router.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/venom-sources-router.test.cjs && node --test /tmp/venom-sources-router.test.cjs",
+    "test:portfolio-zip": "pnpm exec esbuild ./src/lib/portfolio-zip.test.ts --bundle --platform=node --format=esm --outfile=/tmp/venom-portfolio-zip.test.mjs && node --test /tmp/venom-portfolio-zip.test.mjs",
+    "test:project-sources": "pnpm exec esbuild ./src/routes/venom-sources-router.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/venom-sources-router.test.cjs && node --test /tmp/venom-sources-router.test.cjs"
   },
   "dependencies": {
     "@clerk/express": "^2.1.59",
     "@clerk/shared": "^4.29.2",
+    "@replit/connectors-sdk": "^0.4.1",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/integrations-openai-ai-server": "workspace:*",

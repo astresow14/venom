@@ -1,0 +1,83 @@
+name: Venom Desktop E2E
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect Venom Desktop changes
+    runs-on: ubuntu-latest
+    outputs:
+      desktop: ${{ steps.filter.outputs.desktop }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            desktop:
+              - "artifacts/venom-desktop/**"
+              - "lib/api-client-react/**"
+              - "lib/api-spec/**"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - "tsconfig.base.json"
+              - ".github/workflows/venom-desktop-e2e.yml"
+
+  desktop-regression:
+    name: Desktop workspace browser regression
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: "true"
+      # Playwright starts the Vite dev server itself; these are the values its
+      # webServer command expands.
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verify CI configuration
+        run: |
+          if [ -z "$CLERK_PUBLISHABLE_KEY" ]; then
+            echo "::error::Set the CLERK_PUBLISHABLE_KEY GitHub Actions secret before running Venom Desktop E2E."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium dependencies
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Venom Desktop E2E
+        run: pnpm test:e2e:venom-desktop
+
+      - name: Upload Playwright failure artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: venom-desktop-playwright-failures
+          path: |
+            artifacts/venom-desktop/test-results/
+            artifacts/venom-desktop/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14

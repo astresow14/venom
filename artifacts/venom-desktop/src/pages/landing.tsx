@@ -1,95 +1,136 @@
-import React from 'react';
-import { Link } from 'wouter';
-import { Button } from '@/components/ui/button';
-import { Hexagon, ArrowRight, Zap, Database, Brain, Workflow } from 'lucide-react';
+import React, { useRef, useState } from "react";
+import { Link, useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
+import { VenomMark } from "@/components/venom-mark";
+import { ArrowUp } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { stashPendingPrompt } from "@/lib/pending-prompt";
+import { motion } from "framer-motion";
+
+const prompts = [
+  "Summarise where my project stands",
+  "What did I decide last week?",
+  "Draft the next steps for launch",
+];
 
 export default function LandingPage() {
+  const [, setLocation] = useLocation();
+  const [value, setValue] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const start = (prompt: string) => {
+    if (!prompt.trim()) return;
+    stashPendingPrompt(prompt);
+    setLocation("/sign-in");
+  };
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    start(value);
+  };
+
+  const useSuggestion = (prompt: string) => {
+    setValue(prompt);
+    inputRef.current?.focus();
+  };
+
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col selection:bg-foreground selection:text-background">
-      <header className="px-6 py-4 flex items-center justify-between border-b border-border">
-        <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
-          <Hexagon className="w-6 h-6 fill-foreground" />
-          VENOM
-        </div>
-        <nav className="flex items-center gap-6 text-sm font-medium">
-          <Link href="/sign-in" className="hover:text-muted-foreground transition-colors">Sign In</Link>
+    <div className="flex h-[100dvh] flex-col bg-background text-foreground">
+      <header className="flex items-center justify-between px-5 py-4 sm:px-8">
+        <span className="flex items-center gap-2.5 text-[15px] font-semibold tracking-tight">
+          <VenomMark className="h-5 w-5" />
+          Venom
+        </span>
+        <nav className="flex items-center gap-1.5">
+          <Link href="/sign-in">
+            <Button
+              variant="ghost"
+              className="h-9 rounded-full px-4 text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Sign in
+            </Button>
+          </Link>
           <Link href="/sign-up">
-            <Button className="font-mono uppercase tracking-wider text-xs">Access Workspace</Button>
+            <Button className="h-9 rounded-full px-4 text-sm font-medium">
+              Sign up
+            </Button>
           </Link>
         </nav>
       </header>
 
-      <main className="flex-1 flex flex-col">
-        {/* Hero Section */}
-        <section className="px-6 py-32 flex flex-col items-center justify-center text-center border-b border-border relative overflow-hidden">
-          {/* Brutalist geometric decoration */}
-          <div className="absolute top-10 left-10 w-32 h-32 border border-border opacity-50 rotate-12 pointer-events-none" aria-hidden="true" />
-          <div className="absolute bottom-20 right-20 w-64 h-64 border border-foreground/10 rotate-45 pointer-events-none" aria-hidden="true" />
-          
-          <h1 className="text-6xl md:text-8xl font-black uppercase tracking-tighter max-w-4xl leading-[0.9]">
-            The Living Project <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-foreground to-muted-foreground">Context</span>
+      <main className="flex flex-1 items-center justify-center overflow-y-auto px-5 pb-16">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="flex w-full max-w-2xl flex-col items-center"
+        >
+          <VenomMark className="h-14 w-14" title="Venom" />
+          <h1 className="mt-6 text-2xl font-medium tracking-tight sm:text-[28px]">
+            What are you working on?
           </h1>
-          <p className="mt-8 text-xl text-muted-foreground max-w-2xl font-mono">
-            A desktop companion to your mobile AI workspace. Converse with your context and let Venom synthesize your knowledge automatically.
-          </p>
-          <div className="mt-12 flex items-center gap-4">
-            <Link href="/sign-up">
-              <Button size="lg" className="h-14 px-8 text-lg font-bold">
-                Open Venom <ArrowRight className="ml-2 w-5 h-5" aria-hidden="true" />
-              </Button>
-            </Link>
-          </div>
-        </section>
 
-        {/* Features Matrix */}
-        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 border-b border-border">
-          <div className="p-10 border-b md:border-b-0 md:border-r border-border flex flex-col items-start hover:bg-muted/50 transition-colors">
-            <Zap className="w-8 h-8 mb-6" aria-hidden="true" />
-            <h3 className="text-xl font-bold mb-3">Live Feed</h3>
-            <p className="text-muted-foreground font-mono text-sm leading-relaxed">
-              Real-time activity stream of your conversations, tasks, and knowledge extraction. Never lose track of recent changes.
-            </p>
-          </div>
-          <div className="p-10 border-b md:border-b-0 md:border-r border-border flex flex-col items-start hover:bg-muted/50 transition-colors">
-            <Brain className="w-8 h-8 mb-6" aria-hidden="true" />
-            <h3 className="text-xl font-bold mb-3">Knowledge Brain</h3>
-            <p className="text-muted-foreground font-mono text-sm leading-relaxed">
-              Auto-extracted insights map your mental model into an interactive ontology of connected concepts and sources.
-            </p>
-          </div>
-          <div className="p-10 border-b lg:border-b-0 lg:border-r border-border flex flex-col items-start hover:bg-muted/50 transition-colors">
-            <Database className="w-8 h-8 mb-6" aria-hidden="true" />
-            <h3 className="text-xl font-bold mb-3">Continuous Context</h3>
-            <p className="text-muted-foreground font-mono text-sm leading-relaxed">
-              Cross-device synchronization ensures your desktop workspace always reflects your latest mobile interactions.
-            </p>
-          </div>
-          <div className="p-10 flex flex-col items-start hover:bg-muted/50 transition-colors">
-            <Workflow className="w-8 h-8 mb-6" aria-hidden="true" />
-            <h3 className="text-xl font-bold mb-3">Project Tasks</h3>
-            <p className="text-muted-foreground font-mono text-sm leading-relaxed">
-              A practical board for tracking work inside the project context you already share with Venom mobile.
-            </p>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section className="px-6 py-24 flex flex-col items-center justify-center text-center bg-foreground text-background">
-          <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tight mb-8">
-            Stop Searching. Start Working.
-          </h2>
-          <Link href="/sign-up">
-            <Button variant="outline" size="lg" className="h-14 px-8 text-lg font-bold bg-background text-foreground border-transparent hover:bg-background/90 hover:text-foreground">
-              Open Your Workspace
+          <form
+            onSubmit={handleSubmit}
+            className={cn(
+              "mt-8 flex w-full items-end rounded-[1.75rem] border bg-card p-2 transition-colors duration-200",
+              isFocused ? "border-foreground/60" : "border-border",
+            )}
+          >
+            <label htmlFor="landing-prompt" className="sr-only">
+              Ask Venom
+            </label>
+            <textarea
+              id="landing-prompt"
+              ref={inputRef}
+              rows={1}
+              value={value}
+              onChange={(event) => {
+                setValue(event.target.value);
+                event.target.style.height = "auto";
+                event.target.style.height = `${Math.min(event.target.scrollHeight, 160)}px`;
+              }}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  start(value);
+                }
+              }}
+              placeholder="Ask Venom anything about your projects"
+              className="max-h-40 min-h-[44px] w-full resize-none border-0 bg-transparent px-4 py-3 text-base outline-none placeholder:text-muted-foreground"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!value.trim()}
+              aria-label="Send"
+              className="mb-0.5 mr-0.5 h-11 w-11 shrink-0 rounded-full"
+            >
+              <ArrowUp className="h-5 w-5" />
             </Button>
-          </Link>
-        </section>
+          </form>
+
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {prompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => useSuggestion(prompt)}
+                className="rounded-full border border-border px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+
+          <p className="mt-8 text-sm text-muted-foreground">
+            Sign in to keep your conversations, tasks, and knowledge in sync.
+          </p>
+        </motion.div>
       </main>
-      
-      <footer className="px-6 py-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-mono text-muted-foreground">
-        <div>&copy; {new Date().getFullYear()} Venom · Desktop workspace</div>
-      </footer>
     </div>
   );
 }

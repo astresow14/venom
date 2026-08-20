@@ -1,197 +1,371 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+  Modal,
+  Pressable,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
-import { useColors } from '@/hooks/useColors';
-import { useVenom, Project } from '@/context/VenomContext';
-import { Header } from '@/components/Header';
+import { useColors } from "@/hooks/useColors";
+import { useVenom, type Project } from "@/context/VenomContext";
+import { Header } from "@/components/Header";
 
 export default function ProjectsScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { state, setActiveProject, addProject, deleteProject } = useVenom();
   const insets = useSafeAreaInsets();
+  const { state, setActiveProject, addProject, deleteProject } = useVenom();
 
   const [isCreating, setIsCreating] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newDesc, setNewDesc] = useState('');
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const projectAccents = [
+    colors.foreground,
+    colors.mutedForeground,
+    colors.border,
+    colors.secondaryForeground,
+  ];
 
-  const handleSelect = (id: string) => {
-    setActiveProject(id);
+  const chooseProject = (projectId: string) => {
+    setActiveProject(projectId);
     router.back();
   };
 
-  const handleCreate = () => {
-    if (!newTitle.trim()) return;
-    addProject({
-      name: newTitle.trim(),
-      description: newDesc.trim() || 'New intelligence container',
-      accent: colors.primary,
-      sourceCount: 0
+  const createProject = () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+    const projectId = addProject({
+      name: trimmedName,
+      description: description.trim() || "Project workspace",
+      accent: projectAccents[state.projects.length % projectAccents.length],
+      sourceCount: 0,
     });
-    setNewTitle('');
-    setNewDesc('');
+    setActiveProject(projectId);
+    setName("");
+    setDescription("");
     setIsCreating(false);
-  };
-
-  const renderItem = ({ item }: { item: Project }) => {
-    const isActive = state.activeProjectId === item.id;
-    return (
-      <TouchableOpacity 
-        style={[
-          styles.projectCard, 
-          { backgroundColor: colors.card, borderColor: isActive ? colors.primary : colors.border }
-        ]}
-        onPress={() => handleSelect(item.id)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.cardHeader}>
-          <Text style={[styles.projectName, { color: isActive ? colors.primary : colors.foreground }]}>{item.name}</Text>
-          {isActive && <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />}
-        </View>
-        <Text style={[styles.projectDesc, { color: colors.mutedForeground }]} numberOfLines={2}>
-          {item.description}
-        </Text>
-        <View style={styles.cardFooter}>
-          <View style={styles.badge}>
-            <Feather name="database" size={12} color={colors.mutedForeground} />
-            <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>{item.sourceCount} SOURCES</Text>
-          </View>
-          <TouchableOpacity onPress={() => deleteProject(item.id)} hitSlop={12}>
-            <Feather name="trash-2" size={16} color={colors.destructive} style={{ opacity: 0.7 }} />
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
-    );
+    router.back();
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header 
-        title="PROJECTS"
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <Header
+        title="Projects"
         showBack
-        rightIcon={isCreating ? "x" : "plus"}
-        onRightPress={() => setIsCreating(!isCreating)}
+        rightIcon="grid"
+        rightAccessibilityLabel="Open app portfolio"
+        onRightPress={() => router.push("/apps" as never)}
       />
-
-      {isCreating ? (
-        <View style={[styles.createContainer, { paddingBottom: insets.bottom + 20 }]}>
-          <Text style={[styles.sectionTitle, { color: colors.primary }]}>NEW WORKSPACE</Text>
-          <TextInput
-            style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
-            placeholder="Project Designation"
-            placeholderTextColor={colors.mutedForeground}
-            value={newTitle}
-            onChangeText={setNewTitle}
-            autoFocus
-          />
-          <TextInput
-            style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, height: 80 }]}
-            placeholder="Operational parameters (Optional)"
-            placeholderTextColor={colors.mutedForeground}
-            value={newDesc}
-            onChangeText={setNewDesc}
-            multiline
-          />
-          <TouchableOpacity 
-            style={[styles.createBtn, { backgroundColor: newTitle.trim() ? colors.primary : colors.accent }]}
-            onPress={handleCreate}
-            disabled={!newTitle.trim()}
-          >
-            <Text style={[styles.createBtnText, { color: newTitle.trim() ? colors.primaryForeground : colors.mutedForeground }]}>
-              INITIALIZE
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 40 },
+        ]}
+      >
+        <View style={styles.heading}>
+          <View>
+            <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>
+              Your workspaces
             </Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>
+              Choose where you work
+            </Text>
+          </View>
+          <TouchableOpacity
+            accessibilityLabel="Create project"
+            onPress={() => setIsCreating(true)}
+            style={[styles.createButton, { backgroundColor: colors.foreground }]}
+            testID="create-project"
+          >
+            <Feather name="plus" color={colors.background} size={18} />
           </TouchableOpacity>
         </View>
-      ) : (
-        <FlatList
-          data={[...state.projects].sort((a,b) => b.updatedAt - a.updatedAt)}
-          keyExtractor={item => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+
+        <View style={styles.list}>
+          {[...state.projects]
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .map((project: Project) => {
+              const selected = project.id === state.activeProjectId;
+              return (
+                <TouchableOpacity
+                  key={project.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`Switch to ${project.name}`}
+                  onPress={() => chooseProject(project.id)}
+                  style={[
+                    styles.projectCard,
+                    {
+                      backgroundColor: selected
+                        ? colors.foreground
+                        : colors.card,
+                      borderColor: selected ? colors.foreground : colors.border,
+                    },
+                  ]}
+                  testID={`select-project-${project.id}`}
+                >
+                  <View
+                    style={[
+                      styles.projectMark,
+                      {
+                        backgroundColor: selected
+                          ? colors.background
+                          : project.accent,
+                      },
+                    ]}
+                  />
+                  <View style={styles.projectCopy}>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.projectName,
+                        {
+                          color: selected
+                            ? colors.background
+                            : colors.foreground,
+                        },
+                      ]}
+                    >
+                      {project.name}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.projectDescription,
+                        {
+                          color: selected
+                            ? colors.background
+                            : colors.mutedForeground,
+                        },
+                      ]}
+                    >
+                      {project.description}
+                    </Text>
+                  </View>
+                  <View style={styles.projectMeta}>
+                    <Text
+                      style={[
+                        styles.metaText,
+                        {
+                          color: selected
+                            ? colors.background
+                            : colors.mutedForeground,
+                        },
+                      ]}
+                    >
+                      {state.sources.filter(
+                        (s) => s.projectId === project.id,
+                      ).length}{" "}
+                      sources
+                    </Text>
+                    {selected ? (
+                      <Feather
+                        name="check"
+                        color={colors.background}
+                        size={17}
+                      />
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => deleteProject(project.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Delete ${project.name}`}
+                        style={styles.deleteButton}
+                        hitSlop={12}
+                        testID={`delete-project-${project.id}`}
+                      >
+                        <Feather
+                          name="trash-2"
+                          size={15}
+                          color={colors.destructive}
+                          style={{ opacity: 0.7 }}
+                        />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+        </View>
+      </ScrollView>
+
+      <Modal
+        transparent
+        visible={isCreating}
+        animationType="fade"
+        onRequestClose={() => setIsCreating(false)}
+      >
+        <Pressable
+          onPress={() => setIsCreating(false)}
+          style={styles.modalBackdrop}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={[styles.modalCard, { backgroundColor: colors.card }]}
+            accessibilityViewIsModal
+          >
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+              New project
+            </Text>
+            <TextInput
+              autoFocus
+              value={name}
+              onChangeText={setName}
+              placeholder="Project name"
+              placeholderTextColor={colors.mutedForeground}
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.border,
+                  color: colors.foreground,
+                  backgroundColor: colors.background,
+                },
+              ]}
+              testID="new-project-name"
+            />
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="What is this project about? (optional)"
+              placeholderTextColor={colors.mutedForeground}
+              style={[
+                styles.input,
+                styles.descriptionInput,
+                {
+                  borderColor: colors.border,
+                  color: colors.foreground,
+                  backgroundColor: colors.background,
+                },
+              ]}
+              multiline
+              testID="new-project-description"
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity onPress={() => setIsCreating(false)}>
+                <Text
+                  style={[styles.cancel, { color: colors.mutedForeground }]}
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                disabled={!name.trim()}
+                onPress={createProject}
+                style={[
+                  styles.saveButton,
+                  {
+                    backgroundColor: name.trim()
+                      ? colors.foreground
+                      : colors.secondary,
+                  },
+                ]}
+                testID="save-project"
+              >
+                <Text
+                  style={[styles.saveText, { color: colors.background }]}
+                >
+                  Create
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  listContent: {
-    padding: 16,
-    gap: 16,
+  screen: { flex: 1 },
+  content: { padding: 20 },
+  heading: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 24,
   },
-  projectCard: {
-    borderWidth: 1,
-    padding: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  projectName: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  projectDesc: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  badgeText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    letterSpacing: 1,
-  },
-  createContainer: {
-    padding: 16,
-  },
-  sectionTitle: {
-    fontFamily: 'Inter_700Bold',
+  eyebrow: {
+    fontFamily: "Inter_600SemiBold",
     fontSize: 12,
-    letterSpacing: 2,
-    marginBottom: 16,
+    letterSpacing: 0,
+    marginBottom: 7,
+  },
+  title: { fontFamily: "Inter_600SemiBold", fontSize: 24, letterSpacing: -0.7 },
+  createButton: {
+    alignItems: "center",
+    borderRadius: 22,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  list: { gap: 10 },
+  projectCard: {
+    alignItems: "center",
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: "row",
+    minHeight: 84,
+    padding: 17,
+  },
+  projectMark: { borderRadius: 8, height: 16, marginRight: 13, width: 16 },
+  projectCopy: { flex: 1 },
+  projectName: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  projectDescription: { fontFamily: "Inter_400Regular", fontSize: 13 },
+  projectMeta: { alignItems: "flex-end", gap: 7, marginLeft: 12 },
+  deleteButton: {
+    width: 44,
+    height: 44,
+    marginRight: -12,
+    marginBottom: -12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  metaText: { fontFamily: "Inter_500Medium", fontSize: 11 },
+  modalBackdrop: {
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.58)",
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalCard: { borderRadius: 26, padding: 22, width: "100%", maxWidth: 440 },
+  modalTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 20,
+    marginBottom: 18,
   },
   input: {
+    borderRadius: 14,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     fontSize: 15,
+    marginBottom: 12,
+    padding: 13,
   },
-  createBtn: {
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+  descriptionInput: { minHeight: 84, textAlignVertical: "top" },
+  modalActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "flex-end",
     marginTop: 8,
+    gap: 22,
   },
-  createBtnText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    letterSpacing: 2,
-  }
+  cancel: { fontFamily: "Inter_500Medium", fontSize: 14 },
+  saveButton: {
+    borderRadius: 14,
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+  saveText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
 });

@@ -92,7 +92,8 @@ async function withWorkspaceServer(run) {
   app.use(
     "/api",
     createVenomWorkspaceRouter({
-      resolveUserId: () => "integration-user",
+      resolveUserId: (request) =>
+        request.header("x-test-user") ?? "integration-user",
       parseBody: (value) =>
         value &&
         typeof value === "object" &&
@@ -145,6 +146,90 @@ test("saves and restores workspace histories well above 100 KB", async () => {
       restored.state.conversations[0].messages[5].content,
       state.conversations[0].messages[5].content,
     );
+  });
+});
+
+test("allows only one of two devices to save from the same revision", async () => {
+  await withWorkspaceServer(async (baseUrl) => {
+    const initialState = createWorkspace(1, 100);
+    const initialResponse = await fetch(`${baseUrl}/venom/workspace`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state: initialState, baseRevision: 0 }),
+    });
+    assert.equal(initialResponse.status, 200);
+
+    const deviceAState = structuredClone(initialState);
+    deviceAState.projects[0].name = "Saved from device A";
+    const deviceBState = structuredClone(initialState);
+    deviceBState.projects[0].name = "Saved from device B";
+
+    const responses = await Promise.all(
+      [deviceAState, deviceBState].map(async (state) => {
+        const response = await fetch(`${baseUrl}/venom/workspace`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state, baseRevision: 1 }),
+        });
+        return { status: response.status, body: await response.json() };
+      }),
+    );
+    assert.deepEqual(
+      responses.map(({ status }) => status).sort(),
+      [200, 409],
+    );
+
+    const winner = responses.find(({ status }) => status === 200);
+    const conflict = responses.find(({ status }) => status === 409);
+    assert.ok(winner);
+    assert.ok(conflict);
+    assert.equal(winner.body.revision, 2);
+    assert.equal(conflict.body.revision, 2);
+    assert.deepEqual(conflict.body.state, winner.body.state);
+
+    const restoreResponse = await fetch(`${baseUrl}/venom/workspace`);
+    assert.equal(restoreResponse.status, 200);
+    const restored = await restoreResponse.json();
+    assert.equal(restored.revision, 2);
+    assert.deepEqual(restored.state, winner.body.state);
+  });
+});
+
+test("keeps workspace revisions and state isolated by account", async () => {
+  await withWorkspaceServer(async (baseUrl) => {
+    const accountAState = createWorkspace(1, 100);
+    accountAState.projects[0].name = "Account A workspace";
+    const accountBState = createWorkspace(1, 100);
+    accountBState.projects[0].name = "Account B workspace";
+
+    for (const [userId, state] of [
+      ["account-a", accountAState],
+      ["account-b", accountBState],
+    ]) {
+      const response = await fetch(`${baseUrl}/venom/workspace`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-test-user": userId,
+        },
+        body: JSON.stringify({ state, baseRevision: 0 }),
+      });
+      assert.equal(response.status, 200);
+    }
+
+    const [accountAResponse, accountBResponse] = await Promise.all(
+      ["account-a", "account-b"].map(async (userId) => {
+        const response = await fetch(`${baseUrl}/venom/workspace`, {
+          headers: { "x-test-user": userId },
+        });
+        return response.json();
+      }),
+    );
+
+    assert.equal(accountAResponse.revision, 1);
+    assert.equal(accountBResponse.revision, 1);
+    assert.equal(accountAResponse.state.projects[0].name, "Account A workspace");
+    assert.equal(accountBResponse.state.projects[0].name, "Account B workspace");
   });
 });
 
@@ -276,6 +361,7 @@ function createBoardWorkspace() {
     ],
     conversations: [],
     clusters: [],
+    sources: [],
     activeProjectId: "project-board",
     activeConversationId: null,
     tombstones: {
@@ -286,6 +372,7 @@ function createBoardWorkspace() {
       clusters: [],
       stages: [],
       fields: [],
+      sources: [],
     },
   };
 }

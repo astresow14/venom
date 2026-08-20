@@ -22,4 +22,6 @@ export interface VenomWorkspaceTombstones {
   stages: VenomDeletionMarker[];
   /** @maxItems 20000 */
   fields: VenomDeletionMarker[];
+  /** @maxItems 2000 */
+  sources: VenomDeletionMarker[];
 }

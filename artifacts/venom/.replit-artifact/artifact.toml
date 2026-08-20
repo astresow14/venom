@@ -1,5 +1,5 @@
 kind = "mobile"
-previewPath = "/"
+previewPath = "/mobile-preview/"
 title = "Venom"
 description = "A mobile-first AI workspace that combines an intelligent chat assistant with visual knowledge clusters and project context, designed to expand into connected databases and operational tools."
 version = "1.0.0"
@@ -9,7 +9,7 @@ router = "expo-domain"
 [[services]]
 name = "expo"
 ensurePreviewReachable = "/status"
-paths = [ "/" ]
+paths = [ "/mobile-preview/" ]
 localPort = 22166
 
 [services.development]
@@ -21,4 +21,4 @@ run = [ "pnpm", "--filter", "@workspace/venom", "run", "serve" ]
 
 [services.env]
 PORT = "22166"
-BASE_PATH = "/"
+BASE_PATH = "/mobile-preview/"

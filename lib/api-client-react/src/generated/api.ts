@@ -20,15 +20,27 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  GitHubRepository,
+  GitHubSourceInput,
   HealthStatus,
   KnowledgeExtraction,
   KnowledgeExtractionInput,
+  ProjectSource,
   SaveVenomWorkspace413,
+  VenomApp,
+  VenomAppDetail,
+  VenomAppInput,
+  VenomAppUpdate,
   VenomChatRequest,
+  VenomImportInput,
+  VenomImportJob,
+  VenomImportUploadTicket,
   VenomNoteImprovement,
   VenomNoteInput,
+  VenomSourceVersion,
   VenomWorkspaceSaveInput,
-  VenomWorkspaceSnapshot
+  VenomWorkspaceSnapshot,
+  WebsiteSourceInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -349,6 +361,227 @@ export const useImproveVenomNote = <TError = ErrorType<void>,
       return useMutation(getImproveVenomNoteMutationOptions(options));
     }
 
+export const getGetGitHubRepositoriesUrl = () => {
+
+
+
+
+  return `/api/venom/github/repositories`
+}
+
+/**
+ * @summary List repositories available through the connected GitHub account
+ */
+export const getGitHubRepositories = async ( options?: Parameters<typeof customFetch>[1]): Promise<GitHubRepository[]> => {
+
+  return customFetch<GitHubRepository[]>(getGetGitHubRepositoriesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGitHubRepositoriesQueryKey = () => {
+    return [
+    `/api/venom/github/repositories`
+    ] as const;
+    }
+
+
+export const getGetGitHubRepositoriesQueryOptions = <TData = Awaited<ReturnType<typeof getGitHubRepositories>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGitHubRepositories>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGitHubRepositoriesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGitHubRepositories>>> = ({ signal }) => getGitHubRepositories({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGitHubRepositories>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGitHubRepositoriesQueryResult = NonNullable<Awaited<ReturnType<typeof getGitHubRepositories>>>
+export type GetGitHubRepositoriesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List repositories available through the connected GitHub account
+ */
+
+export function useGetGitHubRepositories<TData = Awaited<ReturnType<typeof getGitHubRepositories>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGitHubRepositories>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGitHubRepositoriesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getConnectGitHubSourceUrl = (projectId: string,) => {
+
+
+
+
+  return `/api/venom/projects/${projectId}/sources/github`
+}
+
+/**
+ * @summary Sync selected GitHub repository context into a project source
+ */
+export const connectGitHubSource = async (projectId: string,
+    gitHubSourceInput: GitHubSourceInput, options?: Parameters<typeof customFetch>[1]): Promise<ProjectSource> => {
+
+  return customFetch<ProjectSource>(getConnectGitHubSourceUrl(projectId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(gitHubSourceInput)
+  }
+);}
+
+
+
+
+
+export const getConnectGitHubSourceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectGitHubSource>>, TError,{projectId: string;data: BodyType<GitHubSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof connectGitHubSource>>, TError,{projectId: string;data: BodyType<GitHubSourceInput>}, TContext> => {
+
+const mutationKey = ['connectGitHubSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof connectGitHubSource>>, {projectId: string;data: BodyType<GitHubSourceInput>}> = (props) => {
+          const {projectId,data} = props ?? {};
+
+          return  connectGitHubSource(projectId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConnectGitHubSourceMutationResult = NonNullable<Awaited<ReturnType<typeof connectGitHubSource>>>
+    export type ConnectGitHubSourceMutationBody = BodyType<GitHubSourceInput>
+    export type ConnectGitHubSourceMutationError = ErrorType<void>
+
+    /**
+ * @summary Sync selected GitHub repository context into a project source
+ */
+export const useConnectGitHubSource = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectGitHubSource>>, TError,{projectId: string;data: BodyType<GitHubSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof connectGitHubSource>>,
+        TError,
+        {projectId: string;data: BodyType<GitHubSourceInput>},
+        TContext
+      > => {
+      return useMutation(getConnectGitHubSourceMutationOptions(options));
+    }
+
+export const getConnectWebsiteSourceUrl = (projectId: string,) => {
+
+
+
+
+  return `/api/venom/projects/${projectId}/sources/website`
+}
+
+/**
+ * @summary Add publicly available website context to a project source
+ */
+export const connectWebsiteSource = async (projectId: string,
+    websiteSourceInput: WebsiteSourceInput, options?: Parameters<typeof customFetch>[1]): Promise<ProjectSource> => {
+
+  return customFetch<ProjectSource>(getConnectWebsiteSourceUrl(projectId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(websiteSourceInput)
+  }
+);}
+
+
+
+
+
+export const getConnectWebsiteSourceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectWebsiteSource>>, TError,{projectId: string;data: BodyType<WebsiteSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof connectWebsiteSource>>, TError,{projectId: string;data: BodyType<WebsiteSourceInput>}, TContext> => {
+
+const mutationKey = ['connectWebsiteSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof connectWebsiteSource>>, {projectId: string;data: BodyType<WebsiteSourceInput>}> = (props) => {
+          const {projectId,data} = props ?? {};
+
+          return  connectWebsiteSource(projectId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConnectWebsiteSourceMutationResult = NonNullable<Awaited<ReturnType<typeof connectWebsiteSource>>>
+    export type ConnectWebsiteSourceMutationBody = BodyType<WebsiteSourceInput>
+    export type ConnectWebsiteSourceMutationError = ErrorType<void>
+
+    /**
+ * @summary Add publicly available website context to a project source
+ */
+export const useConnectWebsiteSource = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectWebsiteSource>>, TError,{projectId: string;data: BodyType<WebsiteSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof connectWebsiteSource>>,
+        TError,
+        {projectId: string;data: BodyType<WebsiteSourceInput>},
+        TContext
+      > => {
+      return useMutation(getConnectWebsiteSourceMutationOptions(options));
+    }
+
 export const getGetVenomWorkspaceUrl = () => {
 
 
@@ -497,3 +730,747 @@ export const useSaveVenomWorkspace = <TError = ErrorType<void | VenomWorkspaceSn
       return useMutation(getSaveVenomWorkspaceMutationOptions(options));
     }
 
+export const getListVenomAppsUrl = () => {
+
+
+
+
+  return `/api/venom/apps`
+}
+
+/**
+ * @summary List the signed-in user's portfolio apps
+ */
+export const listVenomApps = async ( options?: Parameters<typeof customFetch>[1]): Promise<VenomApp[]> => {
+
+  return customFetch<VenomApp[]>(getListVenomAppsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVenomAppsQueryKey = () => {
+    return [
+    `/api/venom/apps`
+    ] as const;
+    }
+
+
+export const getListVenomAppsQueryOptions = <TData = Awaited<ReturnType<typeof listVenomApps>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVenomAppsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVenomApps>>> = ({ signal }) => listVenomApps({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVenomApps>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVenomAppsQueryResult = NonNullable<Awaited<ReturnType<typeof listVenomApps>>>
+export type ListVenomAppsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List the signed-in user's portfolio apps
+ */
+
+export function useListVenomApps<TData = Awaited<ReturnType<typeof listVenomApps>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomApps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVenomAppsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVenomAppUrl = () => {
+
+
+
+
+  return `/api/venom/apps`
+}
+
+/**
+ * @summary Create an app portfolio record
+ */
+export const createVenomApp = async (venomAppInput: VenomAppInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomApp> => {
+
+  return customFetch<VenomApp>(getCreateVenomAppUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomAppInput)
+  }
+);}
+
+
+
+
+
+export const getCreateVenomAppMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomApp>>, TError,{data: BodyType<VenomAppInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVenomApp>>, TError,{data: BodyType<VenomAppInput>}, TContext> => {
+
+const mutationKey = ['createVenomApp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVenomApp>>, {data: BodyType<VenomAppInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createVenomApp(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVenomAppMutationResult = NonNullable<Awaited<ReturnType<typeof createVenomApp>>>
+    export type CreateVenomAppMutationBody = BodyType<VenomAppInput>
+    export type CreateVenomAppMutationError = ErrorType<void>
+
+    /**
+ * @summary Create an app portfolio record
+ */
+export const useCreateVenomApp = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomApp>>, TError,{data: BodyType<VenomAppInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVenomApp>>,
+        TError,
+        {data: BodyType<VenomAppInput>},
+        TContext
+      > => {
+      return useMutation(getCreateVenomAppMutationOptions(options));
+    }
+
+export const getGetVenomAppUrl = (appId: string,) => {
+
+
+
+
+  return `/api/venom/apps/${appId}`
+}
+
+/**
+ * @summary Get an app and its source history
+ */
+export const getVenomApp = async (appId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomAppDetail> => {
+
+  return customFetch<VenomAppDetail>(getGetVenomAppUrl(appId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomAppQueryKey = (appId: string,) => {
+    return [
+    `/api/venom/apps/${appId}`
+    ] as const;
+    }
+
+
+export const getGetVenomAppQueryOptions = <TData = Awaited<ReturnType<typeof getVenomApp>>, TError = ErrorType<void>>(appId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomApp>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomAppQueryKey(appId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomApp>>> = ({ signal }) => getVenomApp(appId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: appId !== null && appId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomApp>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomAppQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomApp>>>
+export type GetVenomAppQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get an app and its source history
+ */
+
+export function useGetVenomApp<TData = Awaited<ReturnType<typeof getVenomApp>>, TError = ErrorType<void>>(
+ appId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomApp>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomAppQueryOptions(appId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateVenomAppUrl = (appId: string,) => {
+
+
+
+
+  return `/api/venom/apps/${appId}`
+}
+
+/**
+ * @summary Update app metadata
+ */
+export const updateVenomApp = async (appId: string,
+    venomAppUpdate: VenomAppUpdate, options?: Parameters<typeof customFetch>[1]): Promise<VenomApp> => {
+
+  return customFetch<VenomApp>(getUpdateVenomAppUrl(appId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomAppUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateVenomAppMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVenomApp>>, TError,{appId: string;data: BodyType<VenomAppUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateVenomApp>>, TError,{appId: string;data: BodyType<VenomAppUpdate>}, TContext> => {
+
+const mutationKey = ['updateVenomApp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateVenomApp>>, {appId: string;data: BodyType<VenomAppUpdate>}> = (props) => {
+          const {appId,data} = props ?? {};
+
+          return  updateVenomApp(appId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateVenomAppMutationResult = NonNullable<Awaited<ReturnType<typeof updateVenomApp>>>
+    export type UpdateVenomAppMutationBody = BodyType<VenomAppUpdate>
+    export type UpdateVenomAppMutationError = ErrorType<void>
+
+    /**
+ * @summary Update app metadata
+ */
+export const useUpdateVenomApp = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVenomApp>>, TError,{appId: string;data: BodyType<VenomAppUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateVenomApp>>,
+        TError,
+        {appId: string;data: BodyType<VenomAppUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateVenomAppMutationOptions(options));
+    }
+
+export const getDeleteVenomAppUrl = (appId: string,) => {
+
+
+
+
+  return `/api/venom/apps/${appId}`
+}
+
+/**
+ * @summary Delete an app record and its private source packages
+ */
+export const deleteVenomApp = async (appId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteVenomAppUrl(appId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteVenomAppMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVenomApp>>, TError,{appId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteVenomApp>>, TError,{appId: string}, TContext> => {
+
+const mutationKey = ['deleteVenomApp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteVenomApp>>, {appId: string}> = (props) => {
+          const {appId} = props ?? {};
+
+          return  deleteVenomApp(appId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteVenomAppMutationResult = NonNullable<Awaited<ReturnType<typeof deleteVenomApp>>>
+
+    export type DeleteVenomAppMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete an app record and its private source packages
+ */
+export const useDeleteVenomApp = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVenomApp>>, TError,{appId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteVenomApp>>,
+        TError,
+        {appId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteVenomAppMutationOptions(options));
+    }
+
+export const getListVenomAppVersionsUrl = (appId: string,) => {
+
+
+
+
+  return `/api/venom/apps/${appId}/versions`
+}
+
+/**
+ * @summary List immutable source versions for an app
+ */
+export const listVenomAppVersions = async (appId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomSourceVersion[]> => {
+
+  return customFetch<VenomSourceVersion[]>(getListVenomAppVersionsUrl(appId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVenomAppVersionsQueryKey = (appId: string,) => {
+    return [
+    `/api/venom/apps/${appId}/versions`
+    ] as const;
+    }
+
+
+export const getListVenomAppVersionsQueryOptions = <TData = Awaited<ReturnType<typeof listVenomAppVersions>>, TError = ErrorType<void>>(appId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomAppVersions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVenomAppVersionsQueryKey(appId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVenomAppVersions>>> = ({ signal }) => listVenomAppVersions(appId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: appId !== null && appId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVenomAppVersions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVenomAppVersionsQueryResult = NonNullable<Awaited<ReturnType<typeof listVenomAppVersions>>>
+export type ListVenomAppVersionsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List immutable source versions for an app
+ */
+
+export function useListVenomAppVersions<TData = Awaited<ReturnType<typeof listVenomAppVersions>>, TError = ErrorType<void>>(
+ appId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomAppVersions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVenomAppVersionsQueryOptions(appId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVenomAppImportUrl = (appId: string,) => {
+
+
+
+
+  return `/api/venom/apps/${appId}/imports`
+}
+
+/**
+ * @summary Start a private ZIP source import
+ */
+export const createVenomAppImport = async (appId: string,
+    venomImportInput: VenomImportInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomImportUploadTicket> => {
+
+  return customFetch<VenomImportUploadTicket>(getCreateVenomAppImportUrl(appId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomImportInput)
+  }
+);}
+
+
+
+
+
+export const getCreateVenomAppImportMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomAppImport>>, TError,{appId: string;data: BodyType<VenomImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVenomAppImport>>, TError,{appId: string;data: BodyType<VenomImportInput>}, TContext> => {
+
+const mutationKey = ['createVenomAppImport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVenomAppImport>>, {appId: string;data: BodyType<VenomImportInput>}> = (props) => {
+          const {appId,data} = props ?? {};
+
+          return  createVenomAppImport(appId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVenomAppImportMutationResult = NonNullable<Awaited<ReturnType<typeof createVenomAppImport>>>
+    export type CreateVenomAppImportMutationBody = BodyType<VenomImportInput>
+    export type CreateVenomAppImportMutationError = ErrorType<void>
+
+    /**
+ * @summary Start a private ZIP source import
+ */
+export const useCreateVenomAppImport = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomAppImport>>, TError,{appId: string;data: BodyType<VenomImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVenomAppImport>>,
+        TError,
+        {appId: string;data: BodyType<VenomImportInput>},
+        TContext
+      > => {
+      return useMutation(getCreateVenomAppImportMutationOptions(options));
+    }
+
+export const getGetVenomAppImportUrl = (appId: string,
+    importJobId: string,) => {
+
+
+
+
+  return `/api/venom/apps/${appId}/imports/${importJobId}`
+}
+
+/**
+ * @summary Get a ZIP import's observable status
+ */
+export const getVenomAppImport = async (appId: string,
+    importJobId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomImportJob> => {
+
+  return customFetch<VenomImportJob>(getGetVenomAppImportUrl(appId,importJobId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomAppImportQueryKey = (appId: string,
+    importJobId: string,) => {
+    return [
+    `/api/venom/apps/${appId}/imports/${importJobId}`
+    ] as const;
+    }
+
+
+export const getGetVenomAppImportQueryOptions = <TData = Awaited<ReturnType<typeof getVenomAppImport>>, TError = ErrorType<void>>(appId: string,
+    importJobId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomAppImport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomAppImportQueryKey(appId,importJobId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomAppImport>>> = ({ signal }) => getVenomAppImport(appId,importJobId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: appId !== null && appId !== undefined && importJobId !== null && importJobId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomAppImport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomAppImportQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomAppImport>>>
+export type GetVenomAppImportQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a ZIP import's observable status
+ */
+
+export function useGetVenomAppImport<TData = Awaited<ReturnType<typeof getVenomAppImport>>, TError = ErrorType<void>>(
+ appId: string,
+    importJobId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomAppImport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomAppImportQueryOptions(appId,importJobId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCompleteVenomAppImportUploadUrl = (appId: string,
+    importJobId: string,) => {
+
+
+
+
+  return `/api/venom/apps/${appId}/imports/${importJobId}/complete`
+}
+
+/**
+ * @summary Confirm upload and start bounded archive inspection
+ */
+export const completeVenomAppImportUpload = async (appId: string,
+    importJobId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomImportJob> => {
+
+  return customFetch<VenomImportJob>(getCompleteVenomAppImportUploadUrl(appId,importJobId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCompleteVenomAppImportUploadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeVenomAppImportUpload>>, TError,{appId: string;importJobId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeVenomAppImportUpload>>, TError,{appId: string;importJobId: string}, TContext> => {
+
+const mutationKey = ['completeVenomAppImportUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeVenomAppImportUpload>>, {appId: string;importJobId: string}> = (props) => {
+          const {appId,importJobId} = props ?? {};
+
+          return  completeVenomAppImportUpload(appId,importJobId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteVenomAppImportUploadMutationResult = NonNullable<Awaited<ReturnType<typeof completeVenomAppImportUpload>>>
+
+    export type CompleteVenomAppImportUploadMutationError = ErrorType<void>
+
+    /**
+ * @summary Confirm upload and start bounded archive inspection
+ */
+export const useCompleteVenomAppImportUpload = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeVenomAppImportUpload>>, TError,{appId: string;importJobId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeVenomAppImportUpload>>,
+        TError,
+        {appId: string;importJobId: string},
+        TContext
+      > => {
+      return useMutation(getCompleteVenomAppImportUploadMutationOptions(options));
+    }
+
+export const getRetryVenomAppImportUrl = (appId: string,
+    importJobId: string,) => {
+
+
+
+
+  return `/api/venom/apps/${appId}/imports/${importJobId}/retry`
+}
+
+/**
+ * @summary Create a fresh private upload target for a failed import
+ */
+export const retryVenomAppImport = async (appId: string,
+    importJobId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomImportUploadTicket> => {
+
+  return customFetch<VenomImportUploadTicket>(getRetryVenomAppImportUrl(appId,importJobId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryVenomAppImportMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryVenomAppImport>>, TError,{appId: string;importJobId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryVenomAppImport>>, TError,{appId: string;importJobId: string}, TContext> => {
+
+const mutationKey = ['retryVenomAppImport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryVenomAppImport>>, {appId: string;importJobId: string}> = (props) => {
+          const {appId,importJobId} = props ?? {};
+
+          return  retryVenomAppImport(appId,importJobId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryVenomAppImportMutationResult = NonNullable<Awaited<ReturnType<typeof retryVenomAppImport>>>
+
+    export type RetryVenomAppImportMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a fresh private upload target for a failed import
+ */
+export const useRetryVenomAppImport = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryVenomAppImport>>, TError,{appId: string;importJobId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryVenomAppImport>>,
+        TError,
+        {appId: string;importJobId: string},
+        TContext
+      > => {
+      return useMutation(getRetryVenomAppImportMutationOptions(options));
+    }

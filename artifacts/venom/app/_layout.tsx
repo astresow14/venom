@@ -43,6 +43,23 @@ if (!publishableKey) {
 }
 const clerkPublishableKey: string = publishableKey;
 
+function AppLoading() {
+  const colors = useColors();
+
+  return (
+    <View
+      accessibilityLabel="Loading Venom"
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: colors.symbioteBackdrop,
+      }}
+    >
+      <ActivityIndicator size="small" color={colors.symbioteHighlight} />
+    </View>
+  );
+}
 function RootLayoutNav() {
   const { getToken, isSignedIn, userId } = useAuth();
   const effectiveUserId = IS_UI_TEST ? UI_TEST_USER_ID : (userId ?? null);
@@ -69,17 +86,25 @@ function RootLayoutNav() {
   }, [effectiveUserId]);
 
   useEffect(() => {
-    void SystemUI.setBackgroundColorAsync(colors.background);
-  }, [colors.background]);
+    void SystemUI.setBackgroundColorAsync(
+      canOpenWorkspace ? colors.background : colors.symbioteBackdrop,
+    );
+  }, [canOpenWorkspace, colors.background, colors.symbioteBackdrop]);
 
   return (
     <>
-      <StatusBar style={theme === "dark" ? "light" : "dark"} />
+      <StatusBar
+        style={canOpenWorkspace ? (theme === "dark" ? "light" : "dark") : "light"}
+      />
       <VenomProvider>
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: colors.background },
+            contentStyle: {
+              backgroundColor: canOpenWorkspace
+                ? colors.background
+                : colors.symbioteBackdrop,
+            },
             animation: "fade",
           }}
         >
@@ -90,6 +115,8 @@ function RootLayoutNav() {
             <Stack.Screen name="index" />
             <Stack.Screen name="projects" />
             <Stack.Screen name="settings" />
+            <Stack.Screen name="knowledge" />
+            <Stack.Screen name="apps" />
           </Stack.Protected>
         </Stack>
       </VenomProvider>
@@ -124,16 +151,7 @@ export default function RootLayout() {
               proxyUrl={proxyUrl}
             >
               <ClerkLoading>
-                <View
-                  style={{
-                    flex: 1,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#050908",
-                  }}
-                >
-                  <ActivityIndicator size="small" color="#b4f536" />
-                </View>
+                <AppLoading />
               </ClerkLoading>
               <ClerkLoaded>
                 <GestureHandlerRootView style={{ flex: 1 }}>

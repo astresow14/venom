@@ -1,40 +1,41 @@
-import { type ReactNode, useEffect, useRef } from 'react';
-import {
-  ClerkProvider,
-  Show,
-  useAuth,
-  useClerk,
-} from '@clerk/react';
-import { publishableKeyFromHost } from '@clerk/react/internal';
-import { shadcn } from '@clerk/themes';
+import { type ReactNode, useEffect, useRef } from "react";
+import { ClerkProvider, Show, useAuth, useClerk } from "@clerk/react";
+import { publishableKeyFromHost } from "@clerk/react/internal";
+import { shadcn } from "@clerk/themes";
 import {
   QueryClient,
   QueryClientProvider,
   useQueryClient,
-} from '@tanstack/react-query';
-import { ErrorBoundary } from '@/components/error-boundary';
-import { Toaster } from '@/components/ui/toaster';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { VenomWorkspaceProvider } from '@/context/venom-workspace';
-import NotFound from '@/pages/not-found';
-import LandingPage from '@/pages/landing';
-import SignInPage from '@/pages/auth/sign-in';
-import SignUpPage from '@/pages/auth/sign-up';
-import WorkspaceLayout from '@/components/layout/Shell';
-import ChatPage from '@/pages/workspace/chat';
-import FeedPage from '@/pages/workspace/feed';
-import BrainPage from '@/pages/workspace/brain';
-import TasksPage from '@/pages/workspace/tasks';
-import { ThemeProvider } from '@/components/theme-provider';
+} from "@tanstack/react-query";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  IS_UI_TEST,
+  VenomWorkspaceProvider,
+} from "@/context/venom-workspace";
+import NotFound from "@/pages/not-found";
+import LandingPage from "@/pages/landing";
+import SignInPage from "@/pages/auth/sign-in";
+import SignUpPage from "@/pages/auth/sign-up";
+import WorkspaceLayout from "@/components/layout/Shell";
+import ChatPage from "@/pages/workspace/chat";
+import FeedPage from "@/pages/workspace/feed";
+import BrainPage from "@/pages/workspace/brain";
+import TasksPage from "@/pages/workspace/tasks";
+import AppsPage from "@/pages/workspace/apps";
+import AppDetailPage from "@/pages/workspace/apps/[id]";
+import { ThemeProvider } from "@/components/theme-provider";
+import { AnimatePresence } from "framer-motion";
 import {
   Route,
   Switch,
   useLocation,
   Router as WouterRouter,
   Redirect,
-} from 'wouter';
+} from "wouter";
 
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
@@ -42,7 +43,7 @@ const clerkPubKey = publishableKeyFromHost(
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 
 if (!clerkPubKey) {
-  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY');
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
 }
 
 const queryClient = new QueryClient({
@@ -56,61 +57,55 @@ const queryClient = new QueryClient({
 
 const clerkAppearance = {
   theme: shadcn,
-  cssLayerName: 'clerk',
+  cssLayerName: "clerk",
   options: {
-    logoPlacement: 'inside' as const,
-    logoLinkUrl: basePath || '/',
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
-    socialButtonsPlacement: 'top' as const,
+    // The page already shows the Venom mark; a bitmap logo inside the card
+    // cannot follow light/dark, so it is omitted.
+    logoPlacement: "none" as const,
+    socialButtonsPlacement: "top" as const,
   },
   variables: {
-    colorPrimary: '#ffffff',
-    colorForeground: '#ffffff',
-    colorMutedForeground: '#a3a3a3',
-    colorDanger: '#ef4444',
-    colorBackground: '#050505',
-    colorInput: '#111111',
-    colorInputForeground: '#ffffff',
-    colorNeutral: '#404040',
+    colorPrimary: "#0a0a0a",
+    colorBackground: "#ffffff",
+    colorInput: "#ffffff",
+    colorInputForeground: "#0a0a0a",
+    colorNeutral: "#525252",
     fontFamily: "'Outfit', sans-serif",
-    borderRadius: '0px',
+    borderRadius: "0.75rem",
   },
   elements: {
-    rootBox: 'w-full flex justify-center',
+    rootBox: "w-full flex justify-center",
     cardBox:
-      'bg-[#050505] border border-[#404040] w-[440px] max-w-full overflow-hidden shadow-2xl',
-    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    headerTitle: '!text-white !font-black !uppercase !tracking-tight',
-    headerSubtitle: '!text-neutral-400 !font-mono',
-    socialButtonsBlockButtonText: '!text-white !font-semibold',
-    formFieldLabel: '!text-neutral-200 !font-mono !uppercase !text-xs',
-    footerActionLink: '!text-white !font-bold',
-    footerActionText: '!text-neutral-400',
-    dividerText: '!text-neutral-500 !font-mono',
-    identityPreviewEditButton: '!text-white',
-    formFieldSuccessText: '!text-white',
-    alertText: '!text-white',
-    logoBox: '!h-10',
-    logoImage: '!h-10 !w-auto',
+      "bg-card border border-border w-[440px] max-w-full overflow-hidden shadow-2xl rounded-2xl",
+    card: "!shadow-none !border-0 !bg-transparent",
+    headerTitle: "!text-foreground !font-medium !tracking-tight",
+    headerSubtitle: "!text-muted-foreground",
+    socialButtonsBlockButtonText: "!text-foreground !font-medium",
+    formFieldLabel: "!text-foreground/80 !text-sm !font-medium",
+    footerActionLink: "!text-foreground !font-semibold hover:!text-foreground/80",
+    footerActionText: "!text-muted-foreground",
+    dividerText: "!text-muted-foreground",
+    formFieldSuccessText: "!text-foreground",
+    alertText: "!text-foreground",
     socialButtonsBlockButton:
-      '!border-neutral-700 !bg-neutral-950 hover:!bg-neutral-900 !rounded-none',
+      "!border-border !bg-background hover:!bg-muted !rounded-xl",
     formButtonPrimary:
-      '!bg-white !text-black hover:!bg-neutral-200 !font-black !uppercase !tracking-widest !rounded-none',
+      "!bg-foreground !text-background hover:!bg-foreground/90 !font-bold !tracking-wide !rounded-xl",
     formFieldInput:
-      '!border-neutral-700 !bg-neutral-950 !text-white !rounded-none focus:!border-white',
-    footerAction: '!bg-transparent',
-    dividerLine: '!bg-neutral-800',
-    alert: '!border-neutral-700 !bg-neutral-900 !rounded-none',
-    otpCodeFieldInput: '!border-neutral-700 !bg-neutral-950 !text-white !rounded-none',
-    formFieldRow: '!gap-3',
-    main: '!gap-5',
+      "!border-border !bg-background !text-foreground !rounded-xl focus:!border-foreground focus:!ring-1 focus:!ring-foreground",
+    footerAction: "!bg-transparent",
+    dividerLine: "!bg-border",
+    alert: "!border-border !bg-muted !rounded-xl",
+    otpCodeFieldInput:
+      "!border-border !bg-background !text-foreground !rounded-xl",
+    formFieldRow: "!gap-3",
+    main: "!gap-5",
   },
 };
 
 function stripBase(path: string) {
   return basePath && path.startsWith(basePath)
-    ? path.slice(basePath.length) || '/'
+    ? path.slice(basePath.length) || "/"
     : path;
 }
 
@@ -149,6 +144,8 @@ function HomeRedirect() {
 }
 
 function ProtectedWorkspace({ children }: { children: ReactNode }) {
+  if (IS_UI_TEST) return children;
+
   return (
     <>
       <Show when="signed-in">{children}</Show>
@@ -163,25 +160,31 @@ function AccountScopedWorkspace({ children }: { children: ReactNode }) {
   const { userId } = useAuth();
 
   return (
-    <VenomWorkspaceProvider key={userId ?? 'signed-out'}>
+    <VenomWorkspaceProvider key={userId ?? "signed-out"}>
       {children}
     </VenomWorkspaceProvider>
   );
 }
 
 function WorkspaceRouter() {
+  const [location] = useLocation();
+
   return (
     <WorkspaceLayout>
-      <Switch>
-        <Route path="/workspace">
-          <Redirect to="/workspace/chat" />
-        </Route>
-        <Route path="/workspace/chat" component={ChatPage} />
-        <Route path="/workspace/feed" component={FeedPage} />
-        <Route path="/workspace/brain" component={BrainPage} />
-        <Route path="/workspace/tasks" component={TasksPage} />
-        <Route component={NotFound} />
-      </Switch>
+      <AnimatePresence mode="wait" initial={false}>
+        <Switch location={location} key={location}>
+          <Route path="/workspace">
+            <Redirect to="/workspace/chat" />
+          </Route>
+          <Route path="/workspace/chat" component={ChatPage} />
+          <Route path="/workspace/feed" component={FeedPage} />
+          <Route path="/workspace/brain" component={BrainPage} />
+          <Route path="/workspace/tasks" component={TasksPage} />
+          <Route path="/workspace/apps" component={AppsPage} />
+          <Route path="/workspace/apps/:id" component={AppDetailPage} />
+          <Route component={NotFound} />
+        </Switch>
+      </AnimatePresence>
     </WorkspaceLayout>
   );
 }
@@ -224,21 +227,21 @@ function App() {
       localization={{
         signIn: {
           start: {
-            title: 'Return to Venom',
-            subtitle: 'Sign in to continue your workspace',
+            title: "Return to Venom",
+            subtitle: "Sign in to continue your workspace",
           },
         },
         signUp: {
           start: {
-            title: 'Create your Venom account',
-            subtitle: 'Your workspace stays with you across devices',
+            title: "Create your Venom account",
+            subtitle: "Your workspace stays with you across devices",
           },
         },
       }}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
-      <ThemeProvider defaultTheme="system" storageKey="venom-ui-theme">
+      <ThemeProvider defaultTheme="dark" storageKey="venom-ui-theme">
         <QueryClientProvider client={queryClient}>
           <ClerkQueryClientCacheInvalidator />
           <TooltipProvider>

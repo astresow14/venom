@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
     width: '100%',
-    maxWidth: 600,
+    maxWidth: 440,
   },
   title: {
     fontSize: 28,
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     right: 16,
     width: 44,
     height: 44,
-    borderRadius: 8,
+    borderRadius: 22,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
   },
   button: {
     paddingVertical: 16,
-    borderRadius: 8,
+    borderRadius: 16,
     paddingHorizontal: 24,
     minWidth: 200,
     shadowColor: '#000',
@@ -232,8 +232,8 @@ const styles = StyleSheet.create({
   modalContainer: {
     width: '100%',
     height: '90%',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     width: '100%',
-    borderRadius: 8,
+    borderRadius: 16,
     overflow: 'hidden',
     padding: 16,
   },

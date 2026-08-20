@@ -19,11 +19,33 @@ import {
 import {
   compactBoardPositions,
   createDefaultBoardStages,
-  mergeProjectBoardSnapshots,
   normalizeBoardValue,
   normalizeProjectBoard,
   type BoardValue,
 } from './boardState';
+import {
+  createDeletionMarkers,
+  createEmptyTombstones,
+  flushWorkspaceState,
+  isWorkspaceState,
+  mergeTombstones,
+  normalizeWorkspaceState,
+  reconcileKnowledgeLinks,
+  resolveSuccessfulWorkspaceHydration,
+  type SyncController,
+} from './workspaceSync';
+import { workspaceSyncRetryDelay } from './workspaceSyncRetry';
+import {
+  initializeWorkspaceSyncTestHarness,
+  IS_WORKSPACE_SYNC_UI_TEST,
+  saveWorkspaceForSyncTest,
+  WORKSPACE_SYNC_UI_TEST_USER_ID,
+} from './workspaceSyncTestHarness';
+import { mergeProjectSources, replaceRefreshedSource } from './sourceState';
+import {
+  remapConversationCitations,
+  retiredCitationRemap,
+} from './messageCitations';
 import {
   ApiError,
   getGetVenomWorkspaceQueryKey,
@@ -31,7 +53,6 @@ import {
   useGetVenomWorkspace,
   type KnowledgeCandidate,
   type VenomConversation,
-  type VenomDeletionMarker,
   type VenomKnowledgeCluster,
   type VenomKnowledgeSource,
   type VenomKanbanField,
@@ -39,12 +60,16 @@ import {
   type VenomKanbanStage,
   type VenomMessage,
   type VenomProject,
+  type ProjectSource,
+  type SourceCitation,
+  type SourceCluster,
   type VenomTask,
   type VenomTaskStatus,
   type VenomWorkspaceSnapshot,
   type VenomWorkspaceState,
-  type VenomWorkspaceTombstones,
 } from '@workspace/api-client-react';
+
+export type { ProjectSource, SourceCitation, SourceCluster };
 
 export type Project = VenomProject;
 export type Task = VenomTask;
@@ -57,8 +82,6 @@ export type KnowledgeCluster = VenomKnowledgeCluster;
 export type KnowledgeSource = VenomKnowledgeSource;
 export type KnowledgeInsight = KnowledgeCandidate;
 export type VenomState = VenomWorkspaceState;
-type WorkspaceTombstones = VenomWorkspaceTombstones;
-type TombstoneCollection = keyof WorkspaceTombstones;
 export type SyncStatus =
   | 'loading'
   | 'pending'
@@ -81,10 +104,13 @@ type VenomContextType = {
       Project,
       'id' | 'updatedAt' | 'tasks' | 'boardStages' | 'fieldDefinitions'
     >,
-  ) => void;
+  ) => string;
   updateProject: (id: string, project: Partial<Project>) => void;
   deleteProject: (id: string) => void;
   setActiveProject: (id: string | null) => void;
+  addSource: (source: ProjectSource) => void;
+  refreshSource: (previousSourceId: string, source: ProjectSource) => void;
+  removeSource: (sourceId: string) => void;
   addTask: (projectId: string, title: string, stageId?: string) => void;
   updateTask: (
     projectId: string,
@@ -252,6 +278,7 @@ const defaultClusters: KnowledgeCluster[] = [
 
 const LEGACY_STORAGE_KEYS = ['@venom_state_v3', '@venom_state_v1'] as const;
 const storageKeyFor = (userId: string) => `@venom_state_v2:${userId}`;
+const sourcesKeyFor = (userId: string) => `@venom_sources_v1:${userId}`;
 const generateId = (prefix: string) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 const normalizeLabel = (label: string) => label.trim().toLocaleLowerCase();
@@ -278,134 +305,6 @@ export const IS_UI_TEST =
     UI_TEST_QUERY_ENABLED);
 export const IS_READ_ONLY_UI_TEST = IS_UI_TEST;
 export const UI_TEST_USER_ID = 'venom-ui-test';
-
-const TOMBSTONE_LIMITS: Record<TombstoneCollection, number> = {
-  projects: 1000,
-  tasks: 5000,
-  conversations: 1000,
-  messages: 10000,
-  clusters: 2000,
-  stages: 15000,
-  fields: 20000,
-};
-
-function createEmptyTombstones(): WorkspaceTombstones {
-  return {
-    projects: [],
-    tasks: [],
-    conversations: [],
-    messages: [],
-    clusters: [],
-    stages: [],
-    fields: [],
-  };
-}
-
-function mergeDeletionMarkers(
-  limit: number,
-  ...markerLists: VenomDeletionMarker[][]
-) {
-  const merged = new Map<string, VenomDeletionMarker>();
-  for (const marker of markerLists.flat()) {
-    const existing = merged.get(marker.id);
-    if (!existing || marker.deletedAt > existing.deletedAt) {
-      merged.set(marker.id, marker);
-    }
-  }
-  return [...merged.values()]
-    .sort((left, right) => right.deletedAt - left.deletedAt)
-    .slice(0, limit);
-}
-
-function normalizeTombstones(
-  tombstones: VenomState['tombstones'],
-): WorkspaceTombstones {
-  const empty = createEmptyTombstones();
-  if (!tombstones) return empty;
-
-  return {
-    projects: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.projects,
-      tombstones.projects ?? [],
-    ),
-    tasks: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.tasks,
-      tombstones.tasks ?? [],
-    ),
-    conversations: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.conversations,
-      tombstones.conversations ?? [],
-    ),
-    messages: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.messages,
-      tombstones.messages ?? [],
-    ),
-    clusters: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.clusters,
-      tombstones.clusters ?? [],
-    ),
-    stages: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.stages,
-      tombstones.stages ?? [],
-    ),
-    fields: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.fields,
-      tombstones.fields ?? [],
-    ),
-  };
-}
-
-function mergeTombstones(
-  current: VenomState['tombstones'],
-  additions: Partial<WorkspaceTombstones>,
-): WorkspaceTombstones {
-  const normalized = normalizeTombstones(current);
-  return {
-    projects: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.projects,
-      normalized.projects,
-      additions.projects ?? [],
-    ),
-    tasks: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.tasks,
-      normalized.tasks,
-      additions.tasks ?? [],
-    ),
-    conversations: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.conversations,
-      normalized.conversations,
-      additions.conversations ?? [],
-    ),
-    messages: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.messages,
-      normalized.messages,
-      additions.messages ?? [],
-    ),
-    clusters: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.clusters,
-      normalized.clusters,
-      additions.clusters ?? [],
-    ),
-    stages: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.stages,
-      normalized.stages,
-      additions.stages ?? [],
-    ),
-    fields: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.fields,
-      normalized.fields,
-      additions.fields ?? [],
-    ),
-  };
-}
-
-function createDeletionMarkers(ids: string[], deletedAt: number) {
-  return [...new Set(ids)].map((id) => ({ id, deletedAt }));
-}
-
-function deletionTime(markers: VenomDeletionMarker[]) {
-  return new Map(markers.map((marker) => [marker.id, marker.deletedAt]));
-}
 
 function positionForLabel(label: string, index: number) {
   const hash = [...label].reduce(
@@ -445,13 +344,26 @@ function pruneKnowledgeSources(
 function createDefaultState(): VenomState {
   const now = Date.now();
   const boardStages = createDefaultBoardStages('proj_default', now);
+  const brainFixture =
+    IS_UI_TEST && typeof globalThis.location?.search === 'string'
+      ? new URLSearchParams(globalThis.location.search).get('brainFixture')
+      : null;
+  const fixtureClusters =
+    brainFixture === 'sparse'
+      ? defaultClusters.slice(0, 2).map((cluster) => ({
+          ...cluster,
+          links: cluster.links.filter((id) =>
+            defaultClusters.slice(0, 2).some((candidate) => candidate.id === id),
+          ),
+        }))
+      : defaultClusters;
   return {
     projects: [
       {
         id: 'proj_default',
         name: 'Global Workspace',
         description: 'Uncategorized intelligence',
-        accent: '#b4f536',
+        accent: '#73736f',
         sourceCount: 0,
         updatedAt: now,
         boardStages,
@@ -496,237 +408,44 @@ function createDefaultState(): VenomState {
         messages: [],
       },
     ],
-    clusters: defaultClusters,
+    clusters: fixtureClusters,
+    sources: [],
     activeProjectId: 'proj_default',
     activeConversationId: 'conv_default',
     tombstones: createEmptyTombstones(),
   };
 }
 
-function isWorkspaceState(value: unknown): value is VenomState {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<VenomState>;
-  return (
-    Array.isArray(candidate.projects) &&
-    Array.isArray(candidate.conversations) &&
-    Array.isArray(candidate.clusters)
-  );
-}
-
-function normalizeWorkspaceState(value: VenomState): VenomState {
+function createSyncController(userId: string | null): SyncController {
   return {
-    ...value,
-    projects: value.projects.map((project) => normalizeProjectBoard(project)),
-    clusters: value.clusters.map((cluster) => {
-      const legacyDescription =
-        typeof cluster.description === 'string'
-          ? cluster.description
-          : `${cluster.label} knowledge saved by Venom.`;
-      return {
-        ...cluster,
-        projectId:
-          typeof cluster.projectId === 'string' || cluster.projectId === null
-            ? cluster.projectId
-            : value.activeProjectId,
-        description: legacyDescription,
-        summary:
-          typeof cluster.summary === 'string'
-            ? cluster.summary
-            : legacyDescription,
-        mentionCount:
-          typeof cluster.mentionCount === 'number' ? cluster.mentionCount : 1,
-        lastUpdatedAt:
-          typeof cluster.lastUpdatedAt === 'number'
-            ? cluster.lastUpdatedAt
-            : 0,
-        sources: Array.isArray(cluster.sources) ? cluster.sources : [],
-      };
-    }),
-    tombstones: normalizeTombstones(value.tombstones),
+    userId,
+    inFlight: false,
+    queued: null,
+    retryAttempt: 0,
+    retryTimer: null,
   };
 }
 
-function mergeProjects(
-  cloudItems: Project[],
-  deviceItems: Project[],
-  tombstones: WorkspaceTombstones,
-): Project[] {
-  const projectDeletionTimes = deletionTime(tombstones.projects);
-  const taskDeletionTimes = deletionTime(tombstones.tasks);
-  const stageDeletionTimes = deletionTime(tombstones.stages);
-  const fieldDeletionTimes = deletionTime(tombstones.fields);
-  const cloudById = new Map(cloudItems.map((item) => [item.id, item]));
-  const deviceById = new Map(deviceItems.map((item) => [item.id, item]));
-  const projectIds = new Set([...cloudById.keys(), ...deviceById.keys()]);
-  const merged: Project[] = [];
-
-  for (const projectId of projectIds) {
-    const cloudItem = cloudById.get(projectId);
-    const deviceItem = deviceById.get(projectId);
-    const newest =
-      !cloudItem ||
-      (deviceItem && deviceItem.updatedAt >= cloudItem.updatedAt)
-        ? deviceItem
-        : cloudItem;
-    if (!newest) continue;
-    if (
-      (projectDeletionTimes.get(projectId) ?? -1) >= newest.updatedAt
-    ) {
-      continue;
-    }
-
-    merged.push(
-      mergeProjectBoardSnapshots(
-        cloudItem ?? newest,
-        deviceItem ?? newest,
-        {
-          tasks: taskDeletionTimes,
-          stages: stageDeletionTimes,
-          fields: fieldDeletionTimes,
-        },
-      ),
-    );
+function cancelSyncController(controller: SyncController) {
+  if (controller.retryTimer) {
+    clearTimeout(controller.retryTimer);
   }
-
-  return merged;
+  controller.retryTimer = null;
+  controller.queued = null;
 }
-
-function mergeConversations(
-  cloudItems: Conversation[],
-  deviceItems: Conversation[],
-  tombstones: WorkspaceTombstones,
-): Conversation[] {
-  const conversationDeletionTimes = deletionTime(tombstones.conversations);
-  const messageDeletionTimes = deletionTime(tombstones.messages);
-  const cloudById = new Map(cloudItems.map((item) => [item.id, item]));
-  const deviceById = new Map(deviceItems.map((item) => [item.id, item]));
-  const conversationIds = new Set([
-    ...cloudById.keys(),
-    ...deviceById.keys(),
-  ]);
-  const merged: Conversation[] = [];
-
-  for (const conversationId of conversationIds) {
-    const cloudItem = cloudById.get(conversationId);
-    const deviceItem = deviceById.get(conversationId);
-    const newest =
-      !cloudItem ||
-      (deviceItem && deviceItem.updatedAt >= cloudItem.updatedAt)
-        ? deviceItem
-        : cloudItem;
-    if (!newest) continue;
-    if (
-      (conversationDeletionTimes.get(conversationId) ?? -1) >=
-      newest.updatedAt
-    ) {
-      continue;
-    }
-
-    const older = newest === deviceItem ? cloudItem : deviceItem;
-    const messages = new Map(
-      (older?.messages ?? []).map((message) => [message.id, message]),
-    );
-    for (const message of newest.messages) {
-      messages.set(message.id, message);
-    }
-
-    merged.push({
-      ...newest,
-      messages: [...messages.values()]
-        .filter(
-          (message) =>
-            (messageDeletionTimes.get(message.id) ?? -1) <
-            message.createdAt,
-        )
-        .sort((left, right) => left.createdAt - right.createdAt),
-    });
-  }
-  return merged;
-}
-
-function mergeWorkspaceStates(
-  cloudState: VenomState,
-  deviceState: VenomState,
-): VenomState {
-  const tombstones = mergeTombstones(cloudState.tombstones, {
-    ...normalizeTombstones(deviceState.tombstones),
-  });
-  const projects = mergeProjects(
-    cloudState.projects,
-    deviceState.projects,
-    tombstones,
-  );
-  const conversations = mergeConversations(
-    cloudState.conversations,
-    deviceState.conversations,
-    tombstones,
-  );
-  const clusterDeletionTimes = deletionTime(tombstones.clusters);
-  const clusters = new Map(
-    cloudState.clusters.map((cluster) => [cluster.id, cluster]),
-  );
-  for (const cluster of deviceState.clusters) {
-    const existing = clusters.get(cluster.id);
-    if (!existing || cluster.lastUpdatedAt >= existing.lastUpdatedAt) {
-      clusters.set(cluster.id, cluster);
-    }
-  }
-
-  const projectIds = new Set(projects.map((project) => project.id));
-  const liveConversations = conversations.filter(
-    (conversation) =>
-      conversation.projectId === null ||
-      projectIds.has(conversation.projectId),
-  );
-  const conversationIds = new Set(
-    liveConversations.map((conversation) => conversation.id),
-  );
-  const liveClusters = reconcileKnowledgeLinks(
-    [...clusters.values()].filter(
-      (cluster) =>
-        (cluster.projectId === null || projectIds.has(cluster.projectId)) &&
-        (clusterDeletionTimes.get(cluster.id) ?? -1) <
-          cluster.lastUpdatedAt,
-    ),
-  );
-  const preferredProjectId =
-    deviceState.activeProjectId &&
-    projectIds.has(deviceState.activeProjectId)
-      ? deviceState.activeProjectId
-      : cloudState.activeProjectId &&
-          projectIds.has(cloudState.activeProjectId)
-        ? cloudState.activeProjectId
-        : null;
-  const preferredConversationId =
-    deviceState.activeConversationId &&
-    conversationIds.has(deviceState.activeConversationId)
-      ? deviceState.activeConversationId
-      : cloudState.activeConversationId &&
-          conversationIds.has(cloudState.activeConversationId)
-        ? cloudState.activeConversationId
-        : null;
-
-  return {
-    projects,
-    conversations: liveConversations,
-    clusters: liveClusters,
-    activeProjectId: preferredProjectId,
-    activeConversationId: preferredConversationId,
-    tombstones,
-  };
-}
-
-type SyncController = {
-  userId: string | null;
-  inFlight: boolean;
-  queued: VenomState | null;
-};
 
 const VenomContext = createContext<VenomContextType | null>(null);
 
 export function VenomProvider({ children }: { children: React.ReactNode }) {
   const { getToken, userId: authenticatedUserId } = useAuth();
-  const userId = IS_UI_TEST ? UI_TEST_USER_ID : authenticatedUserId;
+  const [workspaceSyncTestUserId, setWorkspaceSyncTestUserId] = useState(
+    WORKSPACE_SYNC_UI_TEST_USER_ID,
+  );
+  const userId = IS_WORKSPACE_SYNC_UI_TEST
+    ? workspaceSyncTestUserId
+    : IS_UI_TEST
+      ? UI_TEST_USER_ID
+      : authenticatedUserId;
   const [state, setState] = useState<VenomState>(() => createDefaultState());
   const [localState, setLocalState] = useState<VenomState | null>(null);
   const [legacyState, setLegacyState] = useState<VenomState | null>(null);
@@ -743,19 +462,38 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
   const hydratedUserRef = useRef<string | null>(null);
   const lastSerializedRef = useRef('');
   const activeUserIdRef = useRef<string | null>(userId ?? null);
-  const syncControllerRef = useRef<SyncController>({
-    userId: userId ?? null,
-    inFlight: false,
-    queued: null,
-  });
+  const syncControllerRef = useRef<SyncController>(
+    createSyncController(userId ?? null),
+  );
+  const flushCloudStateRef = useRef<(nextState: VenomState) => void>(() => {});
+
+  useEffect(() => {
+    if (!IS_WORKSPACE_SYNC_UI_TEST) return;
+
+    initializeWorkspaceSyncTestHarness();
+    const handleAccountChange = (event: Event) => {
+      const nextUserId = (event as CustomEvent<{ userId?: unknown }>).detail
+        ?.userId;
+      if (typeof nextUserId === 'string' && nextUserId) {
+        setWorkspaceSyncTestUserId(nextUserId);
+      }
+    };
+    globalThis.addEventListener(
+      'venom-workspace-sync-test-account-change',
+      handleAccountChange,
+    );
+    return () => {
+      globalThis.removeEventListener(
+        'venom-workspace-sync-test-account-change',
+        handleAccountChange,
+      );
+    };
+  }, []);
 
   if (activeUserIdRef.current !== (userId ?? null)) {
+    cancelSyncController(syncControllerRef.current);
     activeUserIdRef.current = userId ?? null;
-    syncControllerRef.current = {
-      userId: userId ?? null,
-      inFlight: false,
-      queued: null,
-    };
+    syncControllerRef.current = createSyncController(userId ?? null);
   }
 
   const workspaceQuery = useGetVenomWorkspace({
@@ -800,9 +538,10 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     lastSerializedRef.current = '';
 
     void (async () => {
-      const [scopedData, legacyEntries] = await Promise.all([
+      const [scopedData, legacyEntries, sourcesData] = await Promise.all([
         AsyncStorage.getItem(storageKeyFor(userId)),
         AsyncStorage.multiGet([...LEGACY_STORAGE_KEYS]),
+        AsyncStorage.getItem(sourcesKeyFor(userId)),
       ]);
       const legacyData =
         legacyEntries.find(([, storedValue]) => storedValue !== null)?.[1] ??
@@ -810,6 +549,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       let restored = createDefaultState();
       let restoredLegacy: VenomState | null = null;
       let scopedStateIsValid = false;
+      let migratedSources: ProjectSource[] = [];
 
       if (scopedData) {
         try {
@@ -819,7 +559,9 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
             scopedStateIsValid = true;
           }
         } catch {
-          setSyncStatus('error');
+          if (!cancelled && activeUserIdRef.current === userId) {
+            setSyncStatus('error');
+          }
         }
       }
 
@@ -830,12 +572,32 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
             restoredLegacy = normalizeWorkspaceState(parsed);
           }
         } catch {
-          setSyncStatus('error');
+          if (!cancelled && activeUserIdRef.current === userId) {
+            setSyncStatus('error');
+          }
+        }
+      }
+
+      if (sourcesData) {
+        try {
+          const parsedSources: unknown = JSON.parse(sourcesData);
+          if (Array.isArray(parsedSources)) {
+            migratedSources = parsedSources as ProjectSource[];
+          }
+        } catch {
+          // Legacy connected-source storage is optional.
         }
       }
 
       if (!cancelled) {
-        setLocalState(restored);
+        setLocalState({
+          ...restored,
+          sources: mergeProjectSources(
+            restored.sources,
+            migratedSources,
+            restored.tombstones?.sources ?? [],
+          ),
+        });
         setLegacyState(restoredLegacy);
         setHasScopedState(scopedStateIsValid);
         setLocalUserId(userId);
@@ -847,111 +609,126 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     };
   }, [userId]);
 
+  const scheduleCloudRetry = useCallback(
+    (controller: SyncController, syncUserId: string) => {
+      if (
+        controller.retryTimer ||
+        syncControllerRef.current !== controller ||
+        activeUserIdRef.current !== syncUserId
+      ) {
+        return;
+      }
+
+      const delay = workspaceSyncRetryDelay(controller.retryAttempt);
+      controller.retryAttempt += 1;
+      controller.retryTimer = setTimeout(() => {
+        controller.retryTimer = null;
+        if (
+          syncControllerRef.current !== controller ||
+          activeUserIdRef.current !== syncUserId ||
+          !controller.queued
+        ) {
+          return;
+        }
+        flushCloudStateRef.current(controller.queued);
+      }, delay);
+    },
+    [],
+  );
+
   const flushCloudState = useCallback(
     async (nextState: VenomState) => {
-      if (!userId || IS_UI_TEST) return;
+      if (!userId || (IS_UI_TEST && !IS_WORKSPACE_SYNC_UI_TEST)) return;
 
       const syncUserId = userId;
       const controller = syncControllerRef.current;
-      if (controller.userId !== syncUserId) return;
-
-      controller.queued = nextState;
-      if (controller.inFlight) return;
-
-      controller.inFlight = true;
-      try {
-        let candidate: VenomState | null = controller.queued;
-        controller.queued = null;
-        let conflictCount = 0;
-
-        while (
-          candidate &&
-          syncControllerRef.current === controller &&
-          activeUserIdRef.current === syncUserId
-        ) {
-          const stateToSave = candidate;
-          const serialized = JSON.stringify(stateToSave);
-          setSyncStatus('syncing');
-
-          try {
-            const token = await getToken();
-            if (
-              !token ||
-              syncControllerRef.current !== controller ||
-              activeUserIdRef.current !== syncUserId
-            ) {
-              return;
-            }
-
-            const saved = await saveVenomWorkspace(
-              {
-                state: stateToSave,
-                baseRevision: revisionRef.current,
-              },
-              {
-                headers: { Authorization: `Bearer ${token}` },
-              },
-            );
-            if (
-              syncControllerRef.current !== controller ||
-              activeUserIdRef.current !== syncUserId
-            ) {
-              return;
-            }
-
-            revisionRef.current = saved.revision;
-            lastSerializedRef.current = serialized;
-            setLastSyncedAt(saved.updatedAt);
-            setSyncStatus('synced');
-            await AsyncStorage.setItem(
-              storageKeyFor(syncUserId),
-              serialized,
-            );
-
-            const queued = controller.queued;
-            controller.queued = null;
-            if (queued) {
-              candidate = mergeWorkspaceStates(stateToSave, queued);
-            } else {
-              candidate = null;
-            }
-          } catch (error) {
-            if (error instanceof ApiError && error.status === 413) {
-              controller.queued = null;
-              setSyncStatus('too_large');
-              candidate = null;
-              continue;
-            }
-            if (error instanceof ApiError && error.status === 409) {
-              const latest = error.data as VenomWorkspaceSnapshot | null;
-              if (latest?.state && conflictCount < 4) {
-                conflictCount += 1;
-                const mostRecentDeviceState =
-                  controller.queued ?? latestStateRef.current;
-                controller.queued = null;
-                candidate = mergeWorkspaceStates(
-                  normalizeWorkspaceState(latest.state),
-                  mostRecentDeviceState,
-                );
-                revisionRef.current = latest.revision;
-                latestStateRef.current = candidate;
-                setState(candidate);
-                setLastSyncedAt(latest.updatedAt);
-                continue;
-              }
-            }
-
-            controller.queued = null;
-            setSyncStatus('error');
-            candidate = null;
+      await flushWorkspaceState({
+        nextState,
+        syncUserId,
+        controller,
+        getCurrentController: () => syncControllerRef.current,
+        getActiveUserId: () => activeUserIdRef.current,
+        getLatestState: () => latestStateRef.current,
+        getRevision: () => revisionRef.current,
+        setRevision: (revision) => {
+          revisionRef.current = revision;
+        },
+        getToken: IS_WORKSPACE_SYNC_UI_TEST
+          ? async () => 'workspace-sync-test-token'
+          : getToken,
+        saveState: (stateToSave, baseRevision, token) =>
+          IS_WORKSPACE_SYNC_UI_TEST
+            ? saveWorkspaceForSyncTest(
+                syncUserId,
+                stateToSave,
+                baseRevision,
+              )
+            : saveVenomWorkspace(
+                { state: stateToSave, baseRevision },
+                { headers: { Authorization: `Bearer ${token}` } },
+              ),
+        classifyFailure: (error) => {
+          if (error instanceof ApiError && error.status === 413) {
+            return { kind: 'too_large' };
           }
-        }
-      } finally {
-        controller.inFlight = false;
-      }
+          if (error instanceof ApiError && error.status === 409) {
+            return {
+              kind: 'conflict',
+              snapshot: error.data as VenomWorkspaceSnapshot | null,
+            };
+          }
+          return { kind: 'other' };
+        },
+        onSyncing: () => setSyncStatus('syncing'),
+        onSaved: async ({ serialized, snapshot }) => {
+          lastSerializedRef.current = serialized;
+          setLastSyncedAt(snapshot.updatedAt);
+          setSyncStatus('synced');
+          await AsyncStorage.setItem(
+            storageKeyFor(syncUserId),
+            serialized,
+          );
+        },
+        onConflictMerged: (candidate, snapshot) => {
+          latestStateRef.current = candidate;
+          setState(candidate);
+          setLastSyncedAt(snapshot.updatedAt);
+        },
+        onTooLarge: () => setSyncStatus('too_large'),
+        onError: () => setSyncStatus('error'),
+        onRetryableFailure: () =>
+          scheduleCloudRetry(controller, syncUserId),
+      });
     },
-    [getToken, userId],
+    [getToken, scheduleCloudRetry, userId],
   );
+
+  flushCloudStateRef.current = (nextState) => {
+    void flushCloudState(nextState);
+  };
+
+  useEffect(() => {
+    const effectUserId = userId ?? null;
+    if (
+      activeUserIdRef.current !== effectUserId ||
+      syncControllerRef.current.userId !== effectUserId
+    ) {
+      cancelSyncController(syncControllerRef.current);
+      activeUserIdRef.current = effectUserId;
+      syncControllerRef.current = createSyncController(effectUserId);
+    }
+    const controller = syncControllerRef.current;
+
+    return () => {
+      cancelSyncController(controller);
+      if (syncControllerRef.current === controller) {
+        syncControllerRef.current = createSyncController(null);
+      }
+      if (activeUserIdRef.current === effectUserId) {
+        activeUserIdRef.current = null;
+      }
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (
@@ -966,36 +743,37 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
     hydratedUserRef.current = userId;
 
+    if (IS_WORKSPACE_SYNC_UI_TEST) {
+      lastSerializedRef.current = JSON.stringify(localState);
+      latestStateRef.current = localState;
+      setState(localState);
+      setSyncStatus('synced');
+      setIsReady(true);
+      return;
+    }
+
     if (workspaceQuery.isSuccess) {
       const cloud = workspaceQuery.data;
       revisionRef.current = cloud.revision;
       setLastSyncedAt(cloud.updatedAt);
       setIsReady(true);
-
-      if (cloud.state) {
-        const restoredCloud = normalizeWorkspaceState(cloud.state);
-        lastSerializedRef.current = JSON.stringify(restoredCloud);
-        latestStateRef.current = restoredCloud;
-        setState(restoredCloud);
-        setSyncStatus('synced');
-        return;
+      const hydration = resolveSuccessfulWorkspaceHydration({
+        cloudState: cloud.state
+          ? normalizeWorkspaceState(cloud.state)
+          : null,
+        localState,
+        legacyState,
+        hasScopedState,
+        createFreshState: createDefaultState,
+      });
+      lastSerializedRef.current = JSON.stringify(hydration.state);
+      latestStateRef.current = hydration.state;
+      setState(hydration.state);
+      setHasPendingLegacyImport(hydration.pendingLegacyImport);
+      setSyncStatus(hydration.syncStatus);
+      if (hydration.shouldUpload) {
+        void flushCloudState(hydration.state);
       }
-
-      if (!hasScopedState && legacyState) {
-        const freshState = createDefaultState();
-        lastSerializedRef.current = JSON.stringify(freshState);
-        latestStateRef.current = freshState;
-        setState(freshState);
-        setHasPendingLegacyImport(true);
-        setSyncStatus('pending');
-        return;
-      }
-
-      lastSerializedRef.current = JSON.stringify(localState);
-      latestStateRef.current = localState;
-      setState(localState);
-      setSyncStatus('syncing');
-      void flushCloudState(localState);
       return;
     }
 
@@ -1034,7 +812,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     const serialized = JSON.stringify(state);
     void AsyncStorage.setItem(storageKeyFor(userId), serialized);
 
-    if (IS_UI_TEST) {
+    if (IS_UI_TEST && !IS_WORKSPACE_SYNC_UI_TEST) {
       lastSerializedRef.current = serialized;
       setSyncStatus('offline');
       return;
@@ -1114,6 +892,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         ...current,
         projects: [...current.projects, newProject],
       }));
+      return id;
     },
     [],
   );
@@ -1142,6 +921,9 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       const removedClusters = current.clusters.filter(
         (cluster) => cluster.projectId === id,
       );
+      const removedSources = current.sources.filter(
+        (source) => source.projectId === id,
+      );
       const conversations = current.conversations.filter(
         (conversation) => conversation.projectId !== id,
       );
@@ -1156,6 +938,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         clusters: current.clusters.filter(
           (cluster) => cluster.projectId !== id,
         ),
+        sources: current.sources.filter((source) => source.projectId !== id),
         activeProjectId:
           current.activeProjectId === id ? null : current.activeProjectId,
         activeConversationId: activeConversationExists
@@ -1189,6 +972,10 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
             project?.fieldDefinitions.map((field) => field.id) ?? [],
             deletedAt,
           ),
+          sources: createDeletionMarkers(
+            removedSources.map((source) => source.id),
+            deletedAt,
+          ),
         }),
       };
     });
@@ -1196,6 +983,112 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
   const setActiveProject = useCallback((id: string | null) => {
     setState((current) => ({ ...current, activeProjectId: id }));
+  }, []);
+
+  const addSource = useCallback((source: ProjectSource) => {
+    setState((current) => {
+      const sources = mergeProjectSources(
+        current.sources,
+        [source],
+        current.tombstones?.sources ?? [],
+      );
+      return {
+        ...current,
+        sources,
+        projects: current.projects.map((project) =>
+          project.id === source.projectId
+            ? {
+                ...project,
+                sourceCount: sources.filter(
+                  (item) => item.projectId === source.projectId,
+                ).length,
+                updatedAt: Date.now(),
+              }
+            : project,
+        ),
+      };
+    });
+  }, []);
+
+  const refreshSource = useCallback(
+    (previousSourceId: string, source: ProjectSource) => {
+      setState((current) => {
+        const previous = current.sources.find(
+          (item) => item.id === previousSourceId,
+        );
+        const replaced = replaceRefreshedSource(
+          current.sources,
+          previousSourceId,
+          source,
+        );
+        if (!replaced) return current;
+
+        const refreshedAt = Date.now();
+        // Answers saved before the refresh still carry the retired citation
+        // ids, so point them at the refreshed equivalent where one exists.
+        const citationRemap = retiredCitationRemap(
+          previous?.citations ?? [],
+          source.citations,
+        );
+        return {
+          ...current,
+          sources: replaced.sources,
+          conversations: remapConversationCitations(
+            current.conversations,
+            source.projectId,
+            citationRemap,
+          ),
+          projects: current.projects.map((project) =>
+            project.id === source.projectId
+              ? {
+                  ...project,
+                  sourceCount: replaced.sources.filter(
+                    (item) => item.projectId === source.projectId,
+                  ).length,
+                  updatedAt: refreshedAt,
+                }
+              : project,
+          ),
+          tombstones: replaced.retiredSourceId
+            ? mergeTombstones(current.tombstones, {
+                sources: createDeletionMarkers(
+                  [replaced.retiredSourceId],
+                  refreshedAt,
+                ),
+              })
+            : current.tombstones,
+        };
+      });
+    },
+    [],
+  );
+
+  const removeSource = useCallback((sourceId: string) => {
+    setState((current) => {
+      const removed = current.sources.find((source) => source.id === sourceId);
+      if (!removed) return current;
+
+      const deletedAt = Date.now();
+      const sources = current.sources.filter((source) => source.id !== sourceId);
+      return {
+        ...current,
+        sources,
+        projects: current.projects.map((project) =>
+          project.id === removed.projectId
+            ? {
+                ...project,
+                sourceCount: sources.filter(
+                  (source) => source.projectId === removed.projectId,
+                ).length,
+                updatedAt: deletedAt,
+              }
+            : project,
+        ),
+        tombstones: mergeTombstones(current.tombstones, {
+          sources: createDeletionMarkers([sourceId], deletedAt),
+        }),
+      };
+    });
   }, []);
 
   const addTask = useCallback(
@@ -1886,6 +1779,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         .map((cluster) => cluster.id);
 
       return {
+        ...current,
         ...cleared,
         conversations: cleared.conversations.map((item) =>
           item.id === id ? { ...item, updatedAt: deletedAt } : item,
@@ -1914,15 +1808,16 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       insights: KnowledgeInsight[],
     ) => {
       const now = Date.now();
-      setState((current) =>
-        applyKnowledgeInsightsToState({
+      setState((current) => ({
+        ...current,
+        ...applyKnowledgeInsightsToState({
           state: current,
           conversation,
           insights,
           now,
           generateId,
         }),
-      );
+      }));
     },
     [],
   );
@@ -1950,8 +1845,12 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         generateId,
       });
       if (result.status === 'filed') {
-        latestStateRef.current = result.state;
-        setState(result.state);
+        const filedState = {
+          ...latestStateRef.current,
+          ...result.state,
+        };
+        latestStateRef.current = filedState;
+        setState(filedState);
       }
       return result.status;
     },
@@ -2094,6 +1993,9 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       updateProject,
       deleteProject,
       setActiveProject,
+      addSource,
+      refreshSource,
+      removeSource,
       addTask,
       updateTask,
       moveTask,
@@ -2121,6 +2023,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       addMessage,
       addFieldDefinition,
       addProject,
+      addSource,
       addStage,
       addTask,
       applyKnowledgeInsights,
@@ -2135,8 +2038,10 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       fileKnowledgeNote,
       mergeKnowledgeClusters,
       moveTask,
+      refreshSource,
       renameKnowledgeCluster,
       removeFieldDefinition,
+      removeSource,
       removeStage,
       reorderFieldDefinition,
       reorderStage,
@@ -2184,33 +2089,6 @@ function updateProjectKnowledgeSourceCount(
         }
       : project,
   );
-}
-
-function reconcileKnowledgeLinks(clusters: KnowledgeCluster[]) {
-  const clusterById = new Map(clusters.map((cluster) => [cluster.id, cluster]));
-  const linkedIds = new Map(
-    clusters.map((cluster) => [cluster.id, new Set<string>()]),
-  );
-
-  for (const cluster of clusters) {
-    for (const linkId of cluster.links) {
-      const linkedCluster = clusterById.get(linkId);
-      if (
-        !linkedCluster ||
-        linkedCluster.id === cluster.id ||
-        linkedCluster.projectId !== cluster.projectId
-      ) {
-        continue;
-      }
-      linkedIds.get(cluster.id)?.add(linkedCluster.id);
-      linkedIds.get(linkedCluster.id)?.add(cluster.id);
-    }
-  }
-
-  return clusters.map((cluster) => ({
-    ...cluster,
-    links: [...(linkedIds.get(cluster.id) ?? [])],
-  }));
 }
 
 function mergeKnowledgeSources(

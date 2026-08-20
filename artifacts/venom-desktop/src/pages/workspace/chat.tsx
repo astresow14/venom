@@ -1,15 +1,22 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   extractVenomKnowledge,
   type VenomMessage,
-} from '@workspace/api-client-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Send, Hash, Trash2, Bot, User, RefreshCw, AlertTriangle, Plus } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useVenomWorkspace } from '@/context/venom-workspace';
-import { useUser } from '@clerk/react';
+} from "@workspace/api-client-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Trash2,
+  RefreshCw,
+  AlertTriangle,
+  SendHorizontal,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { takePendingPrompt } from "@/lib/pending-prompt";
+import { VenomMark } from "@/components/venom-mark";
+import { useVenomWorkspace } from "@/context/venom-workspace";
+import { useUser } from "@clerk/react";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function ChatPage() {
   const { user } = useUser();
@@ -19,39 +26,40 @@ export default function ChatPage() {
     createNewConversation,
     setActiveConversation,
     clearConversation,
-    applyKnowledgeInsights
+    applyKnowledgeInsights,
   } = useVenomWorkspace();
 
-  const [inputValue, setInputValue] = useState('');
-  
+  const [inputValue, setInputValue] = useState(takePendingPrompt);
+  const [isFocused, setIsFocused] = useState(false);
+
   // Local state for the message currently being streamed
   const [streaming, setStreaming] = useState<{
     convId: string;
     id: string;
     content: string;
-    status: 'sending' | 'sent' | 'error';
-    originalInput?: string; // used for retry
+    status: "sending" | "sent" | "error";
+    originalInput?: string;
   } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   const abortControllerRef = useRef<AbortController | null>(null);
   const extractionControllersRef = useRef<Set<AbortController>>(new Set());
   const activeUserIdRef = useRef<string | null>(null);
   const activeConvIdRef = useRef<string | null>(null);
 
   const activeConvId = state?.activeConversationId;
-  const activeConv = state?.conversations?.find(c => c.id === activeConvId);
+  const activeConv = state?.conversations?.find((c) => c.id === activeConvId);
 
   useEffect(() => {
     const nextUserId = user?.id || null;
-    if (
-      activeUserIdRef.current &&
-      activeUserIdRef.current !== nextUserId
-    ) {
+    if (activeUserIdRef.current && activeUserIdRef.current !== nextUserId) {
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
-      extractionControllersRef.current.forEach((controller) => controller.abort());
+      extractionControllersRef.current.forEach((controller) =>
+        controller.abort(),
+      );
       extractionControllersRef.current.clear();
       setStreaming(null);
     }
@@ -78,224 +86,236 @@ export default function ChatPage() {
 
   useEffect(() => {
     const reduceMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
+      "(prefers-reduced-motion: reduce)",
     ).matches;
-    messagesEndRef.current?.scrollIntoView({
-      behavior: reduceMotion ? 'auto' : 'smooth',
-    });
-  }, [activeConv?.messages, streaming]);
-
-  const handleFetchStream = useCallback(async (
-    convId: string,
-    userId: string,
-    messagesContext: VenomMessage[],
-    projectContext?: string,
-    originalInput?: string
-  ) => {
-    const streamId = `msg_${crypto.randomUUID()}`;
-    setStreaming({
-      convId,
-      id: streamId,
-      content: '',
-      status: 'sending',
-      originalInput
-    });
-
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "end",
+      });
     }
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
+  }, [activeConv?.messages?.length, streaming?.content]);
 
-    try {
-      const response = await fetch('/api/venom/respond', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream'
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          messages: messagesContext.slice(-24).map((message) => ({
-            role: message.role,
-            content: message.content,
-          })),
-          projectContext: projectContext?.slice(0, 1000),
-        }),
-        signal: abortController.signal
+  const handleFetchStream = useCallback(
+    async (
+      convId: string,
+      userId: string,
+      messagesContext: VenomMessage[],
+      projectContext?: string,
+      originalInput?: string,
+    ) => {
+      const streamId = `msg_${crypto.randomUUID()}`;
+      setStreaming({
+        convId,
+        id: streamId,
+        content: "",
+        status: "sending",
+        originalInput,
       });
 
-      if (!response.ok || !response.body) {
-        throw new Error(`HTTP ${response.status}`);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullContent = '';
-      let buffer = '';
-      let receivedDone = false;
+      try {
+        const response = await fetch("/api/venom/respond", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            messages: messagesContext.slice(-24).map((message) => ({
+              role: message.role,
+              content: message.content,
+            })),
+            projectContext: projectContext?.slice(0, 1000),
+          }),
+          signal: abortController.signal,
+        });
 
-      const consumeEvent = (event: string) => {
-        const dataString = event
-          .split(/\r?\n/)
-          .filter((line) => line.startsWith('data:'))
-          .map((line) => line.slice(5).trimStart())
-          .join('\n')
-          .trim();
-        if (!dataString || dataString === '[DONE]') return;
+        if (!response.ok || !response.body) {
+          throw new Error(`HTTP ${response.status}`);
+        }
 
-        const data = JSON.parse(dataString) as {
-          content?: string;
-          done?: boolean;
-          error?: string;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = "";
+        let buffer = "";
+        let receivedDone = false;
+
+        const consumeEvent = (event: string) => {
+          const dataString = event
+            .split(/\r?\n/)
+            .filter((line) => line.startsWith("data:"))
+            .map((line) => line.slice(5).trimStart())
+            .join("\n")
+            .trim();
+          if (!dataString || dataString === "[DONE]") return;
+
+          const data = JSON.parse(dataString) as {
+            content?: string;
+            done?: boolean;
+            error?: string;
+          };
+          if (data.error) throw new Error(data.error);
+          if (data.done) {
+            receivedDone = true;
+            return;
+          }
+          if (data.content) {
+            fullContent += data.content;
+            setStreaming((current) =>
+              current?.id === streamId
+                ? { ...current, content: fullContent }
+                : current,
+            );
+          }
         };
-        if (data.error) throw new Error(data.error);
-        if (data.done) {
-          receivedDone = true;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          if (
+            activeUserIdRef.current !== userId ||
+            activeConvIdRef.current !== convId
+          ) {
+            await reader.cancel();
+            return;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split(/\r?\n\r?\n/);
+          buffer = events.pop() ?? "";
+          for (const event of events) {
+            consumeEvent(event);
+          }
+        }
+
+        buffer += decoder.decode();
+        if (buffer.trim()) consumeEvent(buffer);
+        if (!receivedDone || !fullContent.trim()) {
+          throw new Error("The response stream ended before completion.");
+        }
+
+        if (
+          activeUserIdRef.current !== userId ||
+          activeConvIdRef.current !== convId
+        ) {
           return;
         }
-        if (data.content) {
-          fullContent += data.content;
+
+        addMessage(convId, {
+          id: streamId,
+          role: "assistant",
+          content: fullContent,
+          status: "sent",
+        });
+        setStreaming(null);
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null;
+        }
+
+        const conv = state.conversations.find((item) => item.id === convId);
+        if (conv) {
+          const conversationTitle =
+            conv.title === "New Session" && originalInput
+              ? `${originalInput.slice(0, 30)}${originalInput.length > 30 ? "…" : ""}`
+              : conv.title || "New Session";
+
+          const extractionController = new AbortController();
+          extractionControllersRef.current.add(extractionController);
+          try {
+            const result = await extractVenomKnowledge(
+              {
+                conversation: {
+                  id: convId,
+                  title: conversationTitle,
+                  projectId: conv.projectId,
+                },
+                messages: [
+                  ...messagesContext.slice(-47).map((message) => ({
+                    id: message.id,
+                    role: message.role,
+                    content: message.content.slice(0, 8000),
+                  })),
+                  {
+                    id: streamId,
+                    role: "assistant",
+                    content: fullContent.slice(0, 8000),
+                  },
+                ],
+              },
+              { signal: extractionController.signal },
+            );
+
+            if (activeUserIdRef.current === userId) {
+              applyKnowledgeInsights(
+                {
+                  id: convId,
+                  title: conversationTitle,
+                  projectId: conv.projectId,
+                },
+                result.clusters,
+              );
+            }
+          } catch {
+            // Background extraction fails silently
+          } finally {
+            extractionControllersRef.current.delete(extractionController);
+          }
+        }
+      } catch (error: unknown) {
+        if (error instanceof DOMException && error.name === "AbortError")
+          return;
+        if (
+          activeUserIdRef.current === userId &&
+          activeConvIdRef.current === convId
+        ) {
           setStreaming((current) =>
             current?.id === streamId
-              ? { ...current, content: fullContent }
+              ? { ...current, status: "error" }
               : current,
           );
         }
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        if (
-          activeUserIdRef.current !== userId || 
-          activeConvIdRef.current !== convId
-        ) {
-          await reader.cancel();
-          return;
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split(/\r?\n\r?\n/);
-        buffer = events.pop() ?? '';
-        for (const event of events) {
-          consumeEvent(event);
+      } finally {
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null;
         }
       }
-
-      buffer += decoder.decode();
-      if (buffer.trim()) consumeEvent(buffer);
-      if (!receivedDone || !fullContent.trim()) {
-        throw new Error('The response stream ended before completion.');
-      }
-
-      if (
-        activeUserIdRef.current !== userId ||
-        activeConvIdRef.current !== convId
-      ) {
-        return;
-      }
-
-      addMessage(convId, {
-        id: streamId,
-        role: 'assistant',
-        content: fullContent,
-        status: 'sent',
-      });
-      setStreaming(null);
-      if (abortControllerRef.current === abortController) {
-        abortControllerRef.current = null;
-      }
-
-      const conv = state.conversations.find((item) => item.id === convId);
-      if (conv) {
-        const conversationTitle =
-          conv.title === 'New Session' && originalInput
-            ? `${originalInput.slice(0, 30)}${originalInput.length > 30 ? '…' : ''}`
-            : conv.title || 'New Session';
-
-        const extractionController = new AbortController();
-        extractionControllersRef.current.add(extractionController);
-        try {
-          const result = await extractVenomKnowledge(
-            {
-              conversation: {
-                id: convId,
-                title: conversationTitle,
-                projectId: conv.projectId,
-              },
-              messages: [
-                ...messagesContext.slice(-47).map((message) => ({
-                  id: message.id,
-                  role: message.role,
-                  content: message.content.slice(0, 8000),
-                })),
-                {
-                  id: streamId,
-                  role: 'assistant',
-                  content: fullContent.slice(0, 8000),
-                },
-              ],
-            },
-            { signal: extractionController.signal },
-          );
-
-          if (activeUserIdRef.current === userId) {
-            applyKnowledgeInsights(
-              {
-                id: convId,
-                title: conversationTitle,
-                projectId: conv.projectId,
-              },
-              result.clusters,
-            );
-          }
-        } catch {
-          // The completed chat remains available when background extraction fails.
-        } finally {
-          extractionControllersRef.current.delete(extractionController);
-        }
-      }
-    } catch (error: unknown) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      if (activeUserIdRef.current === userId && activeConvIdRef.current === convId) {
-        setStreaming((current) =>
-          current?.id === streamId
-            ? { ...current, status: 'error' }
-            : current,
-        );
-      }
-    } finally {
-      if (abortControllerRef.current === abortController) {
-        abortControllerRef.current = null;
-      }
-    }
-  }, [addMessage, applyKnowledgeInsights, state.conversations]);
+    },
+    [addMessage, applyKnowledgeInsights, state.conversations],
+  );
 
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputValue.trim() || !activeConvId || !user?.id) return;
-    
+
     const input = inputValue.trim();
-    setInputValue('');
+    setInputValue("");
 
     const userMessageId = `msg_${crypto.randomUUID()}`;
     addMessage(activeConvId, {
       id: userMessageId,
-      role: 'user',
+      role: "user",
       content: input,
-      status: 'sent'
+      status: "sent",
     });
 
-    const activeProject = state?.projects?.find(p => p.id === activeConv?.projectId);
+    const activeProject = state?.projects?.find(
+      (p) => p.id === activeConv?.projectId,
+    );
     const contextMessages = [
       ...(activeConv?.messages || []),
       {
         id: userMessageId,
-        role: 'user' as const,
+        role: "user" as const,
         content: input,
-        status: 'sent' as const,
+        status: "sent" as const,
         createdAt: Date.now(),
       },
     ];
@@ -314,8 +334,10 @@ export default function ChatPage() {
 
   const handleRetry = () => {
     if (!streaming?.originalInput || !activeConvId || !user?.id) return;
-    
-    const activeProject = state?.projects?.find(p => p.id === activeConv?.projectId);
+
+    const activeProject = state?.projects?.find(
+      (p) => p.id === activeConv?.projectId,
+    );
     const projectContext = activeProject
       ? `Project: ${activeProject.name}\n${activeProject.description}`
       : undefined;
@@ -329,169 +351,224 @@ export default function ChatPage() {
   };
 
   if (!state) {
-    return <div className="flex-1 flex items-center justify-center"><Skeleton className="w-64 h-8" /></div>;
+    return (
+      <div className="flex-1 flex items-center justify-center h-full bg-background">
+        <Skeleton className="w-[300px] h-12 rounded-2xl bg-foreground/10" />
+      </div>
+    );
   }
 
   const messages = activeConv?.messages || [];
-  
-  // Combine real messages with streaming message if it belongs to this conversation
   const displayMessages = [...messages];
   if (streaming && streaming.convId === activeConvId) {
     displayMessages.push({
       id: streaming.id,
-      role: 'assistant',
+      role: "assistant",
       content: streaming.content,
       createdAt: Date.now(),
-      status: streaming.status
+      status: streaming.status,
     });
   }
 
   return (
-    <div className="flex-1 flex h-full overflow-hidden relative">
-      {/* Thread Sidebar - kept for specific Chat navigation if needed, but made collapse logic match */}
-      <div className="w-64 border-r border-border bg-sidebar hidden md:flex flex-col shrink-0">
-        <div className="p-4 border-b border-border font-bold uppercase tracking-widest text-xs flex items-center justify-between">
-          <span>Threads</span>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-6 w-6 rounded-none" 
-            onClick={() => {
-              const id = createNewConversation(state.activeProjectId);
-              setActiveConversation(id);
-            }}
-            title="New Thread"
-            aria-label="New Thread"
-          >
-            <Plus className="w-4 h-4" />
-          </Button>
+    <div className="flex-1 flex flex-col h-full bg-background relative z-0">
+      {/* Top Bar for Desktop */}
+      <div className="hidden md:flex h-16 shrink-0 items-center justify-between px-8 border-b border-border/40 bg-background/80 backdrop-blur-md z-10 sticky top-0">
+        <div className="truncate pr-4 text-sm font-bold tracking-widest text-muted-foreground">
+          {activeConv?.title || "New chat"}
         </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {state.conversations?.filter(c => c.projectId === state.activeProjectId || c.projectId === null)
-            .sort((a,b) => b.updatedAt - a.updatedAt)
-            .map((conv) => (
-            <button
-              key={conv.id}
-              onClick={() => setActiveConversation(conv.id)}
-              className={cn(
-                "w-full text-left px-3 py-2 text-sm font-mono truncate border-l-2 transition-colors",
-                activeConvId === conv.id
-                  ? "border-foreground bg-accent text-foreground font-bold"
-                  : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
+        {activeConvId && messages.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 rounded-2xl text-muted-foreground hover:text-background hover:bg-foreground font-bold tracking-widest text-[11px] transition-colors border-2 border-transparent hover:border-foreground"
+            onClick={() => {
+              if (window.confirm("Clear this thread? This cannot be undone.")) {
+                clearConversation(activeConvId);
+              }
+            }}
+            title="Clear Thread"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-2" /> Clear
+          </Button>
+        )}
+      </div>
+
+      {/* Mobile Top Bar */}
+      <div className="md:hidden absolute top-0 right-4 h-16 flex items-center z-40">
+        {activeConvId && messages.length > 0 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-full text-muted-foreground hover:text-background hover:bg-foreground border border-transparent"
+            onClick={() => {
+              if (window.confirm("Clear this thread?")) {
+                clearConversation(activeConvId);
+              }
+            }}
+            aria-label="Clear Thread"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Messages Area */}
+      <div
+        ref={scrollContainerRef}
+        className={cn(
+          "flex-1 overflow-y-auto px-4 pb-36 md:px-12 md:pb-40 md:pt-10 scroll-smooth",
+          activeConvId && messages.length > 0 ? "pt-20" : "pt-10",
+        )}
+        role="log"
+        aria-live="polite"
+      >
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 md:gap-10 min-h-full">
+          {displayMessages.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: "spring", stiffness: 200, damping: 20 }}
+              className="flex flex-1 flex-col items-center justify-center text-center pb-24"
             >
-              {conv.title || 'Untitled Thread'}
-            </button>
-          ))}
+              <VenomMark className="mb-6 h-14 w-14" title="Venom" />
+              <h1 className="mb-3 text-2xl font-medium tracking-tight sm:text-[28px]">
+                How can I help?
+              </h1>
+              <p className="max-w-md text-sm text-muted-foreground">
+                Project context is automatically included in this thread.
+              </p>
+            </motion.div>
+          ) : (
+            <AnimatePresence initial={false}>
+              {displayMessages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  className={cn(
+                    "flex flex-col w-full group",
+                    msg.role === "user" ? "items-end" : "items-start",
+                  )}
+                >
+                  <div className={cn(
+                    "text-[10px] font-bold font-mono tracking-widest mb-1.5 opacity-50 flex items-center gap-2",
+                    msg.role === "user" ? "flex-row-reverse" : "flex-row"
+                  )}>
+                    {msg.role === "user" ? "You" : "Venom"}
+                  </div>
+                  <div
+                    className={cn(
+                      "relative text-[15px] leading-relaxed max-w-[90%] md:max-w-[85%] px-6 py-4 transition-all hover:scale-[1.01]",
+                      msg.role === "user"
+                        ? "bg-foreground text-background font-medium"
+                        : "bg-muted/50 text-foreground prose prose-neutral dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:rounded-2xl",
+                    )}
+                    style={{
+                      borderRadius:
+                        msg.role === "user"
+                          ? "24px 24px 4px 24px"
+                          : "4px 24px 24px 24px",
+                    }}
+                  >
+                    {msg.content ||
+                      (msg.status === "sending" ? (
+                        <span className="opacity-50 animate-pulse font-mono text-[11px]">Thinking...</span>
+                      ) : (
+                        ""
+                      ))}
+
+                    {msg.status === "sending" && msg.role === "assistant" && msg.content && (
+                      <span
+                        className="inline-block ml-1 w-2 h-4 bg-foreground rounded-full align-middle animate-pulse"
+                        aria-hidden="true"
+                      />
+                    )}
+
+                    {msg.status === "error" && (
+                      <div className="mt-4 p-4 bg-destructive/10 flex flex-col gap-4 rounded-2xl">
+                        <span className="text-sm text-destructive font-bold tracking-widest flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4" /> Connection lost
+                        </span>
+                        <Button
+                          size="sm"
+                          className="w-fit rounded-full font-bold tracking-widest text-xs hover:bg-destructive hover:text-destructive-foreground transition-all"
+                          onClick={handleRetry}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 mr-2" /> Retry
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          )}
+          <div ref={messagesEndRef} className="h-4" />
         </div>
       </div>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-background relative">
-        <div className="p-4 border-b border-border flex items-center justify-between bg-card/50">
-          <div className="font-bold text-lg truncate pr-4">{activeConv?.title || 'Chat'}</div>
-          {activeConvId && (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="rounded-none text-muted-foreground hover:text-destructive" 
-              onClick={() => {
-                if (
-                  window.confirm(
-                    'Clear every message in this conversation? This cannot be undone.',
-                  )
-                ) {
-                  clearConversation(activeConvId);
+      {/* Composer Area - Fixed to bottom */}
+      <div
+        className={cn(
+          "absolute bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-background via-background to-transparent pt-12 z-20",
+          isFocused
+            ? "pb-4 md:pb-8"
+            : "pb-[env(safe-area-inset-bottom,16px)] md:pb-8",
+        )}
+      >
+        <form
+          onSubmit={handleSend}
+          className={cn(
+            "relative mx-auto flex max-w-4xl items-end bg-card transition-all duration-300 border-2 rounded-[2rem]",
+            isFocused
+              ? "border-foreground shadow-lg"
+              : "border-border shadow-sm",
+            "p-2"
+          )}
+        >
+          <div className="relative flex-1 min-h-[48px]">
+            <label htmlFor="chat-input" className="sr-only">
+              Message Venom
+            </label>
+            <textarea
+              id="chat-input"
+              value={inputValue}
+              onChange={(e) => {
+                setInputValue(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+              }}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend(e);
                 }
               }}
-              title="Clear Thread"
-              aria-label="Clear Thread"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-6" role="log" aria-live="polite">
-          {displayMessages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-center">
-              <Bot className="w-12 h-12 mb-4 opacity-50" />
-              <p className="font-mono text-sm max-w-md">
-                 Start a conversation. Venom will keep completed messages and useful project knowledge in your shared workspace.
-              </p>
-            </div>
-          ) : (
-            displayMessages.map((msg) => (
-              <div 
-                key={msg.id} 
-                className={cn(
-                  "flex gap-4 max-w-3xl",
-                  msg.role === 'user' ? "ml-auto flex-row-reverse" : "mr-auto"
-                )}
-              >
-                <div className={cn(
-                  "shrink-0 w-8 h-8 flex items-center justify-center border border-border",
-                  msg.role === 'user' ? "bg-foreground text-background" : "bg-card"
-                )}>
-                  {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-                </div>
-                <div className={cn(
-                  "px-4 py-3 text-sm leading-relaxed",
-                  msg.role === 'user' 
-                    ? "bg-foreground text-background font-medium" 
-                    : "bg-card border border-border text-card-foreground"
-                )}>
-                  {msg.content}
-                  
-                  {msg.status === 'sending' && (
-                    <span className="inline-block ml-2 w-2 h-2 bg-foreground rounded-full animate-pulse" aria-hidden="true" />
-                  )}
-                  
-                  {msg.status === 'error' && (
-                    <div className="mt-3 p-3 bg-destructive/10 border border-destructive/20 flex flex-col gap-2">
-                       <span className="text-xs text-destructive font-mono flex items-center gap-1">
-                         <AlertTriangle className="w-3 h-3" /> Failed to transmit.
-                       </span>
-                       <Button size="sm" variant="outline" className="h-7 text-[10px] w-fit font-mono" onClick={handleRetry}>
-                         <RefreshCw className="w-3 h-3 mr-1" /> Retry
-                       </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        <div className="p-4 border-t border-border bg-card/50">
-          <form onSubmit={handleSend} className="relative max-w-4xl mx-auto flex items-end gap-2">
-            <div className="relative flex-1">
-              <label htmlFor="chat-input" className="sr-only">Transmit message</label>
-              <Input 
-                id="chat-input"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                 placeholder="Message Venom…" 
-                className="w-full pr-12 rounded-none border-border font-mono h-12 shadow-inner bg-background focus-visible:ring-1 focus-visible:ring-foreground"
-                disabled={streaming?.status === 'sending'}
-                autoComplete="off"
-              />
-            </div>
-            <Button 
-              type="submit" 
-              disabled={!inputValue.trim() || streaming?.status === 'sending'}
-              className="rounded-none h-12 px-6 font-bold tracking-widest"
-              aria-label="Send message"
-            >
-              SEND
-              <Send className="w-4 h-4 ml-2" />
-            </Button>
-          </form>
-          <div className="text-center mt-2 text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
-             Venom can make mistakes. Verify important information.
+              placeholder="Message Venom..."
+              className="w-full resize-none border-0 bg-transparent px-5 py-3.5 text-[16px] md:text-[15px] shadow-none outline-none max-h-[200px] scrollbar-none placeholder:text-muted-foreground"
+              rows={1}
+              disabled={streaming?.status === "sending"}
+            />
           </div>
-        </div>
+          <Button
+            type="submit"
+            disabled={!inputValue.trim() || streaming?.status === "sending"}
+            size="icon"
+            className={cn(
+              "h-12 w-12 shrink-0 rounded-[1.5rem] mb-1 mr-1 transition-all",
+              inputValue.trim()
+                ? "bg-foreground text-background hover:scale-105 active:scale-95"
+                : "bg-muted text-muted-foreground"
+            )}
+            aria-label="Send message"
+          >
+            <SendHorizontal className="h-5 w-5" />
+          </Button>
+        </form>
       </div>
     </div>
   );

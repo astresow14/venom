@@ -47,6 +47,12 @@ export default function SignInScreen() {
   const [code, setCode] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [focusedButton, setFocusedButton] = useState<
+    'google' | 'reset' | 'submit' | 'verify' | null
+  >(null);
+  const [focusedField, setFocusedField] = useState<
+    'email' | 'password' | 'code' | null
+  >(null);
 
   const finishSignIn = useCallback(async () => {
     await signIn.finalize({
@@ -147,7 +153,7 @@ export default function SignInScreen() {
 
   return (
     <AuthScreenShell
-      eyebrow={isVerification ? 'IDENTITY CHALLENGE' : 'SECURE ACCESS'}
+      eyebrow={isVerification ? 'Security check' : 'Welcome back'}
       title={isVerification ? 'Verify this device' : 'Resume your workspace'}
       subtitle={
         isVerification
@@ -155,9 +161,15 @@ export default function SignInScreen() {
           : 'Sign in to restore projects, conversations, and your knowledge map on this device.'
       }
       footer={
-        <Text style={[styles.footerText, { color: colors.mutedForeground }]}>
+        <Text style={[styles.footerText, { color: colors.symbioteMuted }]}>
           New to Venom?{' '}
-          <Link href={'/(auth)/sign-up' as Href} style={{ color: colors.primary }}>
+             <Link
+               href={'/(auth)/sign-up' as Href}
+               style={[
+                 styles.footerLink,
+                 { color: colors.symbioteHighlight },
+               ]}
+             >
             Create an account
           </Link>
         </Text>
@@ -166,16 +178,25 @@ export default function SignInScreen() {
       {isVerification ? (
         <>
           <Text style={[styles.label, { color: colors.foreground }]}>
-            SECURITY CODE
+            Security code
           </Text>
           <TextInput
             testID="sign-in-code"
+            accessibilityLabel="Security code"
             style={[
               styles.input,
-              { color: colors.foreground, borderColor: colors.border },
+              {
+                color: colors.foreground,
+                borderColor:
+                  focusedField === 'code' ? colors.foreground : colors.border,
+                backgroundColor: colors.background,
+              },
+              focusedField === 'code' && styles.inputFocused,
             ]}
             value={code}
             onChangeText={setCode}
+            onFocus={() => setFocusedField('code')}
+            onBlur={() => setFocusedField(null)}
             placeholder="000000"
             placeholderTextColor={colors.mutedForeground}
             keyboardType="number-pad"
@@ -183,13 +204,19 @@ export default function SignInScreen() {
           />
           <Pressable
             testID="verify-sign-in"
+            accessibilityRole="button"
+            accessibilityLabel="Verify device"
             style={({ pressed }) => [
               styles.primaryButton,
               { backgroundColor: colors.primary },
               pressed && styles.pressed,
               (!code || isBusy) && styles.disabled,
+              focusedButton === 'verify' && styles.buttonFocused,
+              focusedButton === 'verify' && { outlineColor: colors.foreground },
             ]}
             onPress={handleVerify}
+            onFocus={() => setFocusedButton('verify')}
+            onBlur={() => setFocusedButton(null)}
             disabled={!code || isBusy}
           >
             {isBusy ? (
@@ -201,35 +228,52 @@ export default function SignInScreen() {
                   { color: colors.primaryForeground },
                 ]}
               >
-                VERIFY DEVICE
+                Verify device
               </Text>
             )}
           </Pressable>
           <Pressable
-            style={styles.resetButton}
+            style={[
+              styles.resetButton,
+              focusedButton === 'reset' && styles.buttonFocused,
+              focusedButton === 'reset' && { outlineColor: colors.foreground },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Start sign-in over"
             onPress={() => {
               void signIn.reset();
               setCode('');
               setFormError(null);
             }}
+            onFocus={() => setFocusedButton('reset')}
+            onBlur={() => setFocusedButton(null)}
           >
             <Text style={[styles.resetText, { color: colors.mutedForeground }]}>
-              START OVER
+              Start over
             </Text>
           </Pressable>
         </>
       ) : (
         <>
-          <Text style={[styles.label, { color: colors.foreground }]}>EMAIL</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>Email</Text>
           <TextInput
             testID="sign-in-email"
+            accessibilityLabel="Email"
             style={[
               styles.input,
-              { color: colors.foreground, borderColor: colors.border },
+              {
+                color: colors.foreground,
+                borderColor:
+                  focusedField === 'email' ? colors.foreground : colors.border,
+                backgroundColor: colors.background,
+              },
+              focusedField === 'email' && styles.inputFocused,
             ]}
             value={emailAddress}
             onChangeText={setEmailAddress}
-            placeholder="operator@example.com"
+            onFocus={() => setFocusedField('email')}
+            onBlur={() => setFocusedField(null)}
+            placeholder="you@example.com"
             placeholderTextColor={colors.mutedForeground}
             keyboardType="email-address"
             textContentType="emailAddress"
@@ -237,16 +281,27 @@ export default function SignInScreen() {
             autoCapitalize="none"
           />
           <Text style={[styles.label, { color: colors.foreground }]}>
-            PASSWORD
+            Password
           </Text>
           <TextInput
             testID="sign-in-password"
+            accessibilityLabel="Password"
             style={[
               styles.input,
-              { color: colors.foreground, borderColor: colors.border },
+              {
+                color: colors.foreground,
+                borderColor:
+                  focusedField === 'password'
+                    ? colors.foreground
+                    : colors.border,
+                backgroundColor: colors.background,
+              },
+              focusedField === 'password' && styles.inputFocused,
             ]}
             value={password}
             onChangeText={setPassword}
+            onFocus={() => setFocusedField('password')}
+            onBlur={() => setFocusedField(null)}
             placeholder="Enter your password"
             placeholderTextColor={colors.mutedForeground}
             secureTextEntry
@@ -255,13 +310,19 @@ export default function SignInScreen() {
           />
           <Pressable
             testID="submit-sign-in"
+            accessibilityRole="button"
+            accessibilityLabel="Sign in"
             style={({ pressed }) => [
               styles.primaryButton,
               { backgroundColor: colors.primary },
               pressed && styles.pressed,
               (!emailAddress || !password || isBusy) && styles.disabled,
+              focusedButton === 'submit' && styles.buttonFocused,
+              focusedButton === 'submit' && { outlineColor: colors.foreground },
             ]}
             onPress={handleSubmit}
+            onFocus={() => setFocusedButton('submit')}
+            onBlur={() => setFocusedButton(null)}
             disabled={!emailAddress || !password || isBusy}
           >
             {fetchStatus === 'fetching' ? (
@@ -273,7 +334,7 @@ export default function SignInScreen() {
                   { color: colors.primaryForeground },
                 ]}
               >
-                SIGN IN
+                Sign in
               </Text>
             )}
           </Pressable>
@@ -284,7 +345,7 @@ export default function SignInScreen() {
             <Text
               style={[styles.dividerText, { color: colors.mutedForeground }]}
             >
-              OR
+              Or
             </Text>
             <View
               style={[styles.divider, { backgroundColor: colors.border }]}
@@ -292,13 +353,19 @@ export default function SignInScreen() {
           </View>
           <Pressable
             testID="google-sign-in"
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Google"
             style={({ pressed }) => [
               styles.secondaryButton,
               { borderColor: colors.border, backgroundColor: colors.accent },
               pressed && styles.pressed,
               isBusy && styles.disabled,
+              focusedButton === 'google' && styles.buttonFocused,
+              focusedButton === 'google' && { outlineColor: colors.foreground },
             ]}
             onPress={handleGoogle}
+            onFocus={() => setFocusedButton('google')}
+            onBlur={() => setFocusedButton(null)}
             disabled={isBusy}
           >
             {isGoogleLoading ? (
@@ -316,7 +383,7 @@ export default function SignInScreen() {
                     { color: colors.foreground },
                   ]}
                 >
-                  CONTINUE WITH GOOGLE
+                  Continue with Google
                 </Text>
               </>
             )}
@@ -327,6 +394,8 @@ export default function SignInScreen() {
       {visibleError ? (
         <Text
           testID="sign-in-error"
+          accessibilityLiveRegion="polite"
+          role="alert"
           style={[styles.error, { color: colors.destructive }]}
         >
           {visibleError}
@@ -338,32 +407,39 @@ export default function SignInScreen() {
 
 const styles = StyleSheet.create({
   label: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 10,
-    letterSpacing: 1.8,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    letterSpacing: 0,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    borderRadius: 15,
+    minHeight: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    marginBottom: 18,
+    marginBottom: 20,
+  },
+  inputFocused: {
+    borderWidth: 2,
   },
   primaryButton: {
-    minHeight: 50,
+    minHeight: 52,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-    letterSpacing: 2,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    letterSpacing: 0,
   },
   secondaryButton: {
-    minHeight: 50,
+    minHeight: 52,
     borderWidth: 1,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -371,8 +447,8 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-    letterSpacing: 1.3,
+    fontSize: 14,
+    letterSpacing: 0,
   },
   dividerRow: {
     flexDirection: 'row',
@@ -385,9 +461,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dividerText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 9,
-    letterSpacing: 1.5,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    letterSpacing: 0,
   },
   error: {
     fontFamily: 'Inter_500Medium',
@@ -397,21 +473,33 @@ const styles = StyleSheet.create({
   },
   resetButton: {
     alignItems: 'center',
-    paddingTop: 18,
+    justifyContent: 'center',
+    minHeight: 48,
+    marginTop: 8,
   },
   resetText: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    letterSpacing: 1.6,
+    fontSize: 13,
+    letterSpacing: 0,
   },
   footerText: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 13,
+    fontSize: 14,
+  },
+  footerLink: {
+    fontFamily: 'Inter_600SemiBold',
+    textDecorationLine: 'underline',
   },
   pressed: {
-    opacity: 0.78,
+    opacity: 0.82,
+    transform: [{ scale: 0.985 }],
   },
   disabled: {
     opacity: 0.45,
+  },
+  buttonFocused: {
+    outlineStyle: 'solid',
+    outlineWidth: 3,
+    outlineOffset: 3,
   },
 });

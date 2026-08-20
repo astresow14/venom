@@ -42,3 +42,8 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 packages = ["chromium", "glib", "nspr", "nss", "at-spi2-atk", "at-spi2-core", "dbus", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", "mesa", "xorg.libxcb", "libxkbcommon", "alsa-lib", "libgbm"]
+
+[userenv]
+
+[userenv.shared]
+VENOM_GITHUB_MEMBER_IDS = "user_3IAkBsm1TxtePYHeCo7hTsQL92l"

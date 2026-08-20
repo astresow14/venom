@@ -29,6 +29,12 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [focusedButton, setFocusedButton] = useState<
+    'resend' | 'submit' | 'verify' | null
+  >(null);
+  const [focusedField, setFocusedField] = useState<
+    'email' | 'password' | 'code' | null
+  >(null);
 
   const finishSignUp = useCallback(async () => {
     await signUp.finalize({
@@ -84,7 +90,7 @@ export default function SignUpScreen() {
 
   return (
     <AuthScreenShell
-      eyebrow={isVerification ? 'EMAIL VERIFICATION' : 'NEW OPERATOR'}
+      eyebrow={isVerification ? 'Email verification' : 'Start with Venom'}
       title={isVerification ? 'Confirm your account' : 'Create your workspace'}
       subtitle={
         isVerification
@@ -92,9 +98,15 @@ export default function SignUpScreen() {
           : 'One secure account keeps your intelligence workspace available on every device.'
       }
       footer={
-        <Text style={[styles.footerText, { color: colors.mutedForeground }]}>
+        <Text style={[styles.footerText, { color: colors.symbioteMuted }]}>
           Already have an account?{' '}
-          <Link href={'/(auth)/sign-in' as Href} style={{ color: colors.primary }}>
+          <Link
+            href={'/(auth)/sign-in' as Href}
+            style={[
+              styles.footerLink,
+              { color: colors.symbioteHighlight },
+            ]}
+          >
             Sign in
           </Link>
         </Text>
@@ -103,16 +115,25 @@ export default function SignUpScreen() {
       {isVerification ? (
         <>
           <Text style={[styles.label, { color: colors.foreground }]}>
-            VERIFICATION CODE
+            Verification code
           </Text>
           <TextInput
             testID="sign-up-code"
+            accessibilityLabel="Verification code"
             style={[
               styles.input,
-              { color: colors.foreground, borderColor: colors.border },
+              {
+                color: colors.foreground,
+                borderColor:
+                  focusedField === 'code' ? colors.foreground : colors.border,
+                backgroundColor: colors.background,
+              },
+              focusedField === 'code' && styles.inputFocused,
             ]}
             value={code}
             onChangeText={setCode}
+            onFocus={() => setFocusedField('code')}
+            onBlur={() => setFocusedField(null)}
             placeholder="000000"
             placeholderTextColor={colors.mutedForeground}
             keyboardType="number-pad"
@@ -120,13 +141,19 @@ export default function SignUpScreen() {
           />
           <Pressable
             testID="verify-sign-up"
+            accessibilityRole="button"
+            accessibilityLabel="Confirm account"
             style={({ pressed }) => [
               styles.primaryButton,
               { backgroundColor: colors.primary },
               pressed && styles.pressed,
               (!code || isBusy) && styles.disabled,
+              focusedButton === 'verify' && styles.buttonFocused,
+              focusedButton === 'verify' && { outlineColor: colors.foreground },
             ]}
             onPress={handleVerify}
+            onFocus={() => setFocusedButton('verify')}
+            onBlur={() => setFocusedButton(null)}
             disabled={!code || isBusy}
           >
             {isBusy ? (
@@ -138,33 +165,50 @@ export default function SignUpScreen() {
                   { color: colors.primaryForeground },
                 ]}
               >
-                CONFIRM ACCOUNT
+                Confirm account
               </Text>
             )}
           </Pressable>
           <Pressable
-            style={styles.resendButton}
+            style={[
+              styles.resendButton,
+              focusedButton === 'resend' && styles.buttonFocused,
+              focusedButton === 'resend' && { outlineColor: colors.foreground },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Send a new verification code"
             onPress={() => void signUp.verifications.sendEmailCode()}
+            onFocus={() => setFocusedButton('resend')}
+            onBlur={() => setFocusedButton(null)}
           >
             <Text
               style={[styles.resendText, { color: colors.mutedForeground }]}
             >
-              SEND A NEW CODE
+              Send a new code
             </Text>
           </Pressable>
         </>
       ) : (
         <>
-          <Text style={[styles.label, { color: colors.foreground }]}>EMAIL</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>Email</Text>
           <TextInput
             testID="sign-up-email"
+            accessibilityLabel="Email"
             style={[
               styles.input,
-              { color: colors.foreground, borderColor: colors.border },
+              {
+                color: colors.foreground,
+                borderColor:
+                  focusedField === 'email' ? colors.foreground : colors.border,
+                backgroundColor: colors.background,
+              },
+              focusedField === 'email' && styles.inputFocused,
             ]}
             value={emailAddress}
             onChangeText={setEmailAddress}
-            placeholder="operator@example.com"
+            onFocus={() => setFocusedField('email')}
+            onBlur={() => setFocusedField(null)}
+            placeholder="you@example.com"
             placeholderTextColor={colors.mutedForeground}
             keyboardType="email-address"
             textContentType="emailAddress"
@@ -172,16 +216,27 @@ export default function SignUpScreen() {
             autoCapitalize="none"
           />
           <Text style={[styles.label, { color: colors.foreground }]}>
-            PASSWORD
+            Password
           </Text>
           <TextInput
             testID="sign-up-password"
+            accessibilityLabel="Password"
             style={[
               styles.input,
-              { color: colors.foreground, borderColor: colors.border },
+              {
+                color: colors.foreground,
+                borderColor:
+                  focusedField === 'password'
+                    ? colors.foreground
+                    : colors.border,
+                backgroundColor: colors.background,
+              },
+              focusedField === 'password' && styles.inputFocused,
             ]}
             value={password}
             onChangeText={setPassword}
+            onFocus={() => setFocusedField('password')}
+            onBlur={() => setFocusedField(null)}
             placeholder="Create a secure password"
             placeholderTextColor={colors.mutedForeground}
             secureTextEntry
@@ -190,13 +245,19 @@ export default function SignUpScreen() {
           />
           <Pressable
             testID="submit-sign-up"
+            accessibilityRole="button"
+            accessibilityLabel="Create account"
             style={({ pressed }) => [
               styles.primaryButton,
               { backgroundColor: colors.primary },
               pressed && styles.pressed,
               (!emailAddress || !password || isBusy) && styles.disabled,
+              focusedButton === 'submit' && styles.buttonFocused,
+              focusedButton === 'submit' && { outlineColor: colors.foreground },
             ]}
             onPress={handleSubmit}
+            onFocus={() => setFocusedButton('submit')}
+            onBlur={() => setFocusedButton(null)}
             disabled={!emailAddress || !password || isBusy}
           >
             {isBusy ? (
@@ -208,7 +269,7 @@ export default function SignUpScreen() {
                   { color: colors.primaryForeground },
                 ]}
               >
-                CREATE ACCOUNT
+                Create account
               </Text>
             )}
           </Pressable>
@@ -219,6 +280,8 @@ export default function SignUpScreen() {
       {visibleError ? (
         <Text
           testID="sign-up-error"
+          accessibilityLiveRegion="polite"
+          role="alert"
           style={[styles.error, { color: colors.destructive }]}
         >
           {visibleError}
@@ -230,28 +293,34 @@ export default function SignUpScreen() {
 
 const styles = StyleSheet.create({
   label: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 10,
-    letterSpacing: 1.8,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    letterSpacing: 0,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    borderRadius: 15,
+    minHeight: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    marginBottom: 18,
+    marginBottom: 20,
+  },
+  inputFocused: {
+    borderWidth: 2,
   },
   primaryButton: {
-    minHeight: 50,
+    minHeight: 52,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-    letterSpacing: 2,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    letterSpacing: 0,
   },
   error: {
     fontFamily: 'Inter_500Medium',
@@ -261,21 +330,33 @@ const styles = StyleSheet.create({
   },
   resendButton: {
     alignItems: 'center',
-    paddingTop: 18,
+    justifyContent: 'center',
+    minHeight: 48,
+    marginTop: 8,
   },
   resendText: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    letterSpacing: 1.6,
+    fontSize: 13,
+    letterSpacing: 0,
   },
   footerText: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 13,
+    fontSize: 14,
+  },
+  footerLink: {
+    fontFamily: 'Inter_600SemiBold',
+    textDecorationLine: 'underline',
   },
   pressed: {
-    opacity: 0.78,
+    opacity: 0.82,
+    transform: [{ scale: 0.985 }],
   },
   disabled: {
     opacity: 0.45,
+  },
+  buttonFocused: {
+    outlineStyle: 'solid',
+    outlineWidth: 3,
+    outlineOffset: 3,
   },
 });

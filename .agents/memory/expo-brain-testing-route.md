@@ -1,10 +1,10 @@
 ---
-name: Expo Brain testing route
-description: How to avoid accidentally exercising Venom Desktop while validating the mobile Expo artifact.
+name: Expo browser testing route
+description: How to target and authenticate the mobile Expo artifact reliably in browser tests.
 ---
 
-Test Venom mobile interactions at the Expo development domain root, not at a path-prefixed `/venom` URL. Confirm the mobile Brain by its mobile tab bar and “Living ontology” accessibility label before trusting gesture results.
+Test Venom mobile interactions at the direct Expo development-domain root, not a path-prefixed shared-preview URL. For protected screens, establish Clerk authentication at the root and navigate with the mobile UI only after the signed-in shell renders.
 
-**Why:** Path-prefixed Brain URLs can resolve to the desktop static artifact, producing plausible-looking but invalid “mobile” gesture results.
+**Why:** Shared path prefixes can resolve to the desktop artifact. Injecting a Clerk test session on a protected Expo deep link can also preserve the temporary callback path while that screen is unregistered, producing a misleading Expo not-found result.
 
-**How to apply:** For Expo browser checks, target the Expo artifact root and navigate with the mobile UI. Treat the desktop “Knowledge map. Drag to orbit…” label as a wrong-artifact signal.
+**How to apply:** Open the direct Expo root, inject or complete authentication there, wait for the signed-in mobile shell, then use its navigation to reach protected screens. Confirm mobile-specific controls before trusting results.
