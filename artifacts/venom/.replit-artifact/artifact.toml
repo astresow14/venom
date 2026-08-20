@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/"
+title = "Venom"
+description = "A mobile-first AI workspace that combines an intelligent chat assistant with visual knowledge clusters and project context, designed to expand into connected databases and operational tools."
+version = "1.0.0"
+id = "artifacts/venom"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/" ]
+localPort = 22166
+
+[services.development]
+run = "pnpm --filter @workspace/venom run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/venom", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/venom", "run", "serve" ]
+
+[services.env]
+PORT = "22166"
+BASE_PATH = "/"

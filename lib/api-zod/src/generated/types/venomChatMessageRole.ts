@@ -5,9 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-  status: string;
-}
 
 export type VenomChatMessageRole = typeof VenomChatMessageRole[keyof typeof VenomChatMessageRole];
 
@@ -16,19 +13,3 @@ export const VenomChatMessageRole = {
   user: 'user',
   assistant: 'assistant',
 } as const;
-
-export interface VenomChatMessage {
-  role: VenomChatMessageRole;
-  content: string;
-}
-
-export interface VenomChatRequest {
-  /**
-     * @minItems 1
-     * @maxItems 24
-     */
-  messages: VenomChatMessage[];
-  /** @maxLength 1000 */
-  projectContext?: string;
-}
-

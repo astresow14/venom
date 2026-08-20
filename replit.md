@@ -1,10 +1,11 @@
-# [Project name]
+# Venom
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A mobile-first AI intelligence workspace combining live chat, local projects, and visual knowledge clusters.
 
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/venom run dev` — run the Expo mobile app through its managed workflow
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
@@ -22,15 +23,23 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/venom/` — Expo app, local workspace state, chat, projects, ontology, and settings
+- `artifacts/api-server/src/routes/venom.ts` — streaming AI response service
+- `lib/api-spec/openapi.yaml` — source of truth for the Venom API contract
+- `artifacts/venom/constants/colors.ts` — mobile design tokens
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The first release persists projects and conversation history on-device with AsyncStorage.
+- AI responses stream through the shared API server using Replit's managed OpenAI integration.
+- External databases and software connections are future workspace capabilities; the current UI never claims a source is connected when it is not.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Live AI chat with project context
+- On-device conversation and project management
+- Interactive visual ontology of knowledge clusters and their relationships
+- Connection-readiness and model settings surface
 
 ## User preferences
 
