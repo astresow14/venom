@@ -1,16 +1,51 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
-import { useRouter } from 'expo-router';
-import { fetch } from 'expo/fetch';
-import * as Haptics from 'expo-haptics';
-import Animated, { FadeIn, FadeInUp, FadeInDown, Layout } from 'react-native-reanimated';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  TouchableOpacity,
+  ScrollView,
+  Animated as RNAnimated,
+  PanResponder,
+  TextInput,
+  FlatList,
+  ActivityIndicator,
+  Platform,
+  Keyboard,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { fetch } from "expo/fetch";
+import * as Haptics from "expo-haptics";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  interpolate,
+  Extrapolate,
+  runOnJS,
+  withTiming,
+} from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
-import { useColors } from '@/hooks/useColors';
-import { useVenom, Message } from '@/context/VenomContext';
-import { Header } from '@/components/Header';
+import { useColors } from "@/hooks/useColors";
+import {
+  useVenom,
+  Message,
+  KnowledgeCluster,
+  Task,
+  TaskStatus,
+} from "@/context/VenomContext";
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 let messageCounter = 0;
 function generateUniqueId(): string {
@@ -18,28 +53,41 @@ function generateUniqueId(): string {
   return `msg-${Date.now()}-${messageCounter}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-export default function ChatScreen() {
-  const router = useRouter();
+// --- Components ---
+
+function ChatWorkspace({
+  isActive,
+  activeProject,
+}: {
+  isActive: boolean;
+  activeProject: any;
+}) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { state, isReady, addMessage, setActiveConversation, createNewConversation } = useVenom();
-  
-  const [text, setText] = useState('');
+  const {
+    state,
+    isReady,
+    addMessage,
+    setActiveConversation,
+    createNewConversation,
+  } = useVenom();
+
+  const [text, setText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
-  const [localStreamingMessage, setLocalStreamingMessage] = useState<Message | null>(null);
-  
+  const [localStreamingMessage, setLocalStreamingMessage] =
+    useState<Message | null>(null);
+
   const inputRef = useRef<TextInput>(null);
   const initializedRef = useRef(false);
 
-  const activeConv = state.conversations.find(c => c.id === state.activeConversationId);
-  const activeProject = state.projects.find(p => p.id === state.activeProjectId);
-  
+  const activeConv = state.conversations.find(
+    (c) => c.id === state.activeConversationId,
+  );
   const contextMessages = activeConv?.messages || [];
-  
-  // Combine context messages with the active streaming one
-  const displayMessages = localStreamingMessage 
-    ? [...contextMessages, localStreamingMessage] 
+
+  const displayMessages = localStreamingMessage
+    ? [...contextMessages, localStreamingMessage]
     : contextMessages;
 
   const reversedMessages = [...displayMessages].reverse();
@@ -50,75 +98,83 @@ export default function ChatScreen() {
       const newId = createNewConversation(state.activeProjectId);
       setActiveConversation(newId);
     }
-  }, [isReady, state.activeConversationId]);
+  }, [
+    isReady,
+    state.activeConversationId,
+    createNewConversation,
+    setActiveConversation,
+    state.activeProjectId,
+  ]);
 
   async function handleSend() {
     const trimmed = text.trim();
     if (!trimmed || isStreaming) return;
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setText('');
-    
-    // Create new conv if none exists somehow
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setText("");
+
     let targetConvId = state.activeConversationId;
     if (!targetConvId) {
       targetConvId = createNewConversation(state.activeProjectId);
       setActiveConversation(targetConvId);
     }
 
-    // Add User Message to context
     addMessage(targetConvId, {
-      role: 'user',
+      role: "user",
       content: trimmed,
-      status: 'sent'
+      status: "sent",
     });
-    
+
     setIsStreaming(true);
     setShowTyping(true);
 
-    let fullContent = '';
+    let fullContent = "";
     let hasReceivedFirstChunk = false;
     let streamId = generateUniqueId();
 
     try {
       const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
       const chatHistory = [
-        ...contextMessages.map(m => ({ role: m.role, content: m.content })),
-        { role: 'user', content: trimmed },
+        ...contextMessages.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user", content: trimmed },
       ];
 
       const response = await fetch(`${baseUrl}/api/venom/respond`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
         },
-        body: JSON.stringify({ 
-          messages: chatHistory, 
-          projectContext: activeProject ? `Project: ${activeProject.name}\n${activeProject.description}` : undefined 
+        body: JSON.stringify({
+          messages: chatHistory,
+          projectContext: activeProject
+            ? `Project: ${activeProject.name}\n${activeProject.description}`
+            : undefined,
         }),
       });
 
-      if (!response.ok) throw new Error('Network error');
+      if (!response.ok) throw new Error("Network error");
 
       const reader = response.body?.getReader();
-      if (!reader) throw new Error('No stream');
+      if (!reader) throw new Error("No stream");
 
       const decoder = new TextDecoder();
-      let buffer = '';
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
+          if (!line.startsWith("data: ")) continue;
           const data = line.slice(6);
-          if (data === '[DONE]') continue;
+          if (data === "[DONE]") continue;
           if (data.includes('"done":true')) continue;
 
           try {
@@ -130,14 +186,13 @@ export default function ChatScreen() {
                 setShowTyping(false);
                 hasReceivedFirstChunk = true;
               }
-              
-              // Update local streaming message
+
               setLocalStreamingMessage({
                 id: streamId,
-                role: 'assistant',
+                role: "assistant",
                 content: fullContent,
                 createdAt: Date.now(),
-                status: 'sending'
+                status: "sending",
               });
             }
           } catch (e) {}
@@ -148,102 +203,127 @@ export default function ChatScreen() {
       setShowTyping(false);
       setLocalStreamingMessage({
         id: streamId,
-        role: 'assistant',
-        content: 'Connection lost. Signal disrupted.',
+        role: "assistant",
+        content: "I lost connection to the server. Please try again.",
         createdAt: Date.now(),
-        status: 'error'
+        status: "error",
       });
-      fullContent = 'Connection lost. Signal disrupted.';
+      fullContent = "I lost connection to the server. Please try again.";
     } finally {
       setIsStreaming(false);
       setShowTyping(false);
-      
-      // Commit local stream to context
+
       if (fullContent) {
         addMessage(targetConvId, {
-          role: 'assistant',
+          role: "assistant",
           content: fullContent,
-          status: 'sent'
+          status: "sent",
         });
       }
       setLocalStreamingMessage(null);
-      
-      // Keep keyboard open
-      setTimeout(() => inputRef.current?.focus(), 100);
+
+      if (isActive && Platform.OS !== "web") {
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
     }
   }
 
   const renderMessage = ({ item }: { item: Message }) => {
-    const isUser = item.role === 'user';
+    const isUser = item.role === "user";
     return (
-      <Animated.View 
-        layout={Layout.springify()}
-        entering={FadeInDown.springify()}
-        style={[styles.messageRow, isUser ? styles.messageUser : styles.messageAssistant]}
+      <View
+        style={[
+          styles.messageRow,
+          isUser ? styles.messageUser : styles.messageAssistant,
+        ]}
       >
-        <View style={[
-          styles.messageBubble, 
-          isUser ? [styles.bubbleUser, { backgroundColor: colors.accent }] : styles.bubbleAssistant,
-          item.status === 'error' && { borderColor: colors.destructive, borderWidth: 1 }
-        ]}>
-          <Text style={[
-            styles.messageText, 
-            isUser ? { color: colors.foreground } : { color: colors.primary }
-          ]}>
+        <View
+          style={[
+            styles.messageBubble,
+            isUser
+              ? [styles.bubbleUser, { backgroundColor: colors.secondary }]
+              : styles.bubbleAssistant,
+            item.status === "error" && {
+              borderColor: colors.destructive,
+              borderWidth: 1,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.messageText,
+              { color: isUser ? colors.foreground : colors.foreground },
+            ]}
+          >
             {item.content}
           </Text>
         </View>
-      </Animated.View>
+      </View>
     );
   };
 
   return (
-    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior="padding" keyboardVerticalOffset={0}>
-      <Header 
-        title={activeProject ? activeProject.name : 'GLOBAL WORKSPACE'}
-        subtitle={activeProject ? 'ACTIVE PROJECT' : 'UNCATEGORIZED'}
-        leftIcon="layers"
-        onLeftPress={() => router.push('/projects')}
-        rightIcon="sliders"
-        onRightPress={() => router.push('/settings')}
-        rightIcon2="database"
-        onRight2Press={() => router.push('/knowledge')}
-      />
-      
+    <View style={styles.workspaceContainer}>
       <FlatList
         data={reversedMessages}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         renderItem={renderMessage}
         inverted={reversedMessages.length > 0}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: 24 }]}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        scrollEnabled={reversedMessages.length > 0}
         ListHeaderComponent={
           showTyping ? (
-            <Animated.View entering={FadeIn} style={styles.typingContainer}>
+            <View style={styles.typingContainer}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={[styles.typingText, { color: colors.primary }]}>Receiving signal...</Text>
-            </Animated.View>
+            </View>
           ) : null
         }
         ListEmptyComponent={
           !isStreaming && reversedMessages.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Feather name="cpu" size={48} color={colors.primary} style={{ opacity: 0.5, marginBottom: 16 }} />
-              <Text style={[styles.emptyText, { color: colors.primary }]}>SYSTEM READY.</Text>
-              <Text style={[styles.emptySubtext, { color: colors.mutedForeground }]}>Initiate tactical link.</Text>
+              <View
+                style={[
+                  styles.emptyAvatar,
+                  { backgroundColor: colors.secondary },
+                ]}
+              >
+                <Feather name="zap" size={24} color={colors.primary} />
+              </View>
+              <Text style={[styles.emptyText, { color: colors.foreground }]}>
+                How can I help?
+              </Text>
+              <Text
+                style={[styles.emptySubtext, { color: colors.mutedForeground }]}
+              >
+                Ask anything about the project.
+              </Text>
             </View>
           ) : null
         }
       />
-      
-      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: colors.background, borderTopColor: colors.border }]}>
-        <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
+
+      <View
+        style={[
+          styles.inputContainer,
+          {
+            backgroundColor: colors.background,
+            paddingBottom: Math.max(insets.bottom, 16),
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.inputWrapper,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <TextInput
             ref={inputRef}
             style={[styles.input, { color: colors.foreground }]}
-            placeholder="Awaiting input..."
+            placeholder="Message..."
             placeholderTextColor={colors.mutedForeground}
             value={text}
             onChangeText={setText}
@@ -251,123 +331,946 @@ export default function ChatScreen() {
             maxLength={1000}
             blurOnSubmit={false}
           />
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
-              styles.sendButton, 
-              { backgroundColor: text.trim() ? colors.primary : colors.accent }
+              styles.sendButton,
+              {
+                backgroundColor: text.trim()
+                  ? colors.primary
+                  : colors.secondary,
+              },
             ]}
             onPress={handleSend}
             disabled={!text.trim() || isStreaming}
             hitSlop={12}
+            testID="send-message-button"
           >
-            <Feather name="arrow-up" size={20} color={text.trim() ? colors.primaryForeground : colors.mutedForeground} />
+            <Feather
+              name="arrow-up"
+              size={18}
+              color={
+                text.trim() ? colors.primaryForeground : colors.mutedForeground
+              }
+            />
           </TouchableOpacity>
         </View>
       </View>
+    </View>
+  );
+}
+
+function KnowledgeWorkspace({ isActive }: { isActive: boolean }) {
+  const colors = useColors();
+  const { state } = useVenom();
+  const [selectedCluster, setSelectedCluster] =
+    useState<KnowledgeCluster | null>(null);
+
+  const MAP_SIZE = 800;
+  const CENTER = MAP_SIZE / 2;
+
+  const getPos = useCallback(
+    (c: KnowledgeCluster) => ({
+      x: CENTER + c.x * 2.5,
+      y: CENTER + c.y * 2.5,
+    }),
+    [CENTER],
+  );
+
+  return (
+    <View style={styles.workspaceContainer}>
+      <View style={styles.knowledgeContainer}>
+        <ScrollView
+          horizontal
+          bounces={false}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ width: MAP_SIZE }}
+          centerContent
+        >
+          <ScrollView
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ height: MAP_SIZE, width: MAP_SIZE }}
+            centerContent
+          >
+            <View style={{ width: MAP_SIZE, height: MAP_SIZE }}>
+              {/* SVG Lines - Simplified for web compatibility/expo go without react-native-svg if needed,
+                    using absolute views for simple lines */}
+              {state.clusters.map((cluster) => {
+                const p1 = getPos(cluster);
+                return cluster.links.map((targetId) => {
+                  const target = state.clusters.find((c) => c.id === targetId);
+                  if (!target) return null;
+                  if (cluster.id > target.id) return null;
+
+                  const p2 = getPos(target);
+                  const dx = p2.x - p1.x;
+                  const dy = p2.y - p1.y;
+                  const length = Math.sqrt(dx * dx + dy * dy);
+                  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+                  return (
+                    <View
+                      key={`${cluster.id}-${targetId}`}
+                      style={{
+                        position: "absolute",
+                        left: p1.x,
+                        top: p1.y,
+                        width: length,
+                        height: 1,
+                        backgroundColor: colors.border,
+                        transform: [
+                          { translateX: -length / 2 + dx / 2 },
+                          { translateY: dy / 2 },
+                          { rotate: `${angle}deg` },
+                        ],
+                      }}
+                    />
+                  );
+                });
+              })}
+
+              {/* Nodes */}
+              {state.clusters.map((cluster) => {
+                const p = getPos(cluster);
+                const isSelected = selectedCluster?.id === cluster.id;
+                const size = 32 + cluster.strength * 16;
+
+                return (
+                  <TouchableOpacity
+                    key={cluster.id}
+                    style={[
+                      styles.node,
+                      {
+                        left: p.x - size / 2,
+                        top: p.y - size / 2,
+                        width: size,
+                        height: size,
+                        borderRadius: size / 2,
+                        backgroundColor: isSelected
+                          ? colors.primary
+                          : colors.card,
+                        borderColor: isSelected
+                          ? colors.primary
+                          : colors.border,
+                        borderWidth: 2,
+                        shadowColor: colors.foreground,
+                        shadowOpacity: isSelected ? 0.1 : 0.05,
+                        shadowRadius: 8,
+                        shadowOffset: { width: 0, height: 4 },
+                        elevation: isSelected ? 4 : 2,
+                      },
+                    ]}
+                    onPress={() => {
+                      if (Platform.OS !== "web") Haptics.selectionAsync();
+                      setSelectedCluster(cluster);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Feather
+                      name={
+                        cluster.category === "core"
+                          ? "cpu"
+                          : cluster.category === "data"
+                            ? "database"
+                            : "folder"
+                      }
+                      size={14}
+                      color={
+                        isSelected
+                          ? colors.primaryForeground
+                          : colors.mutedForeground
+                      }
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+
+              {/* Labels */}
+              {state.clusters.map((cluster) => {
+                const p = getPos(cluster);
+                const isSelected = selectedCluster?.id === cluster.id;
+                const size = 32 + cluster.strength * 16;
+
+                return (
+                  <View
+                    key={`label-${cluster.id}`}
+                    style={[
+                      styles.nodeLabelContainer,
+                      {
+                        left: p.x - 75,
+                        top: p.y + size / 2 + 8,
+                      },
+                    ]}
+                    pointerEvents="none"
+                  >
+                    <Text
+                      style={[
+                        styles.nodeLabel,
+                        {
+                          color: isSelected
+                            ? colors.foreground
+                            : colors.mutedForeground,
+                          fontFamily: isSelected
+                            ? "Inter_600SemiBold"
+                            : "Inter_500Medium",
+                        },
+                      ]}
+                    >
+                      {cluster.label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </ScrollView>
+
+        {/* Info Panel Overlay */}
+        {selectedCluster && (
+          <View
+            style={[
+              styles.knowledgeInfoPanel,
+              {
+                backgroundColor: colors.background,
+                borderTopColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.knowledgeInfoContent}>
+              <View style={styles.knowledgeInfoHeader}>
+                <Text
+                  style={[
+                    styles.knowledgeInfoTitle,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  {selectedCluster.label}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setSelectedCluster(null)}
+                  hitSlop={12}
+                >
+                  <Feather name="x" size={20} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              </View>
+              <Text
+                style={[
+                  styles.knowledgeInfoDesc,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                {selectedCluster.description}
+              </Text>
+              <View style={styles.knowledgeInfoMeta}>
+                <View
+                  style={[
+                    styles.metaBadge,
+                    { backgroundColor: colors.secondary },
+                  ]}
+                >
+                  <Text
+                    style={[styles.metaBadgeText, { color: colors.foreground }]}
+                  >
+                    {selectedCluster.category}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.metaBadge,
+                    { backgroundColor: colors.secondary },
+                  ]}
+                >
+                  <Text
+                    style={[styles.metaBadgeText, { color: colors.foreground }]}
+                  >
+                    {selectedCluster.links.length} connections
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function BoardWorkspace({ activeProject }: { activeProject: any }) {
+  const colors = useColors();
+  const { addTask, updateTaskStatus, deleteTask } = useVenom();
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+
+  const tasks = activeProject?.tasks || [];
+  const todoTasks = tasks.filter((t: Task) => t.status === "todo");
+  const inProgressTasks = tasks.filter((t: Task) => t.status === "in_progress");
+  const doneTasks = tasks.filter((t: Task) => t.status === "done");
+
+  const handleAddTask = () => {
+    const trimmed = newTaskTitle.trim();
+    if (trimmed && activeProject) {
+      addTask(activeProject.id, trimmed);
+      setNewTaskTitle("");
+      setIsAdding(false);
+      if (Platform.OS !== "web")
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  const handleToggleStatus = (task: Task) => {
+    if (!activeProject) return;
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    let nextStatus: TaskStatus = "todo";
+    if (task.status === "todo") nextStatus = "in_progress";
+    else if (task.status === "in_progress") nextStatus = "done";
+
+    updateTaskStatus(activeProject.id, task.id, nextStatus);
+  };
+
+  const handleDelete = (task: Task) => {
+    if (!activeProject) return;
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    deleteTask(activeProject.id, task.id);
+  };
+
+  const renderTaskCard = (task: Task) => {
+    return (
+      <TouchableOpacity
+        key={task.id}
+        style={[
+          styles.kanbanCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+        onPress={() => handleToggleStatus(task)}
+        activeOpacity={0.7}
+      >
+        <Text
+          style={[
+            styles.kanbanCardTitle,
+            {
+              color:
+                task.status === "done"
+                  ? colors.mutedForeground
+                  : colors.foreground,
+            },
+            task.status === "done" && { textDecorationLine: "line-through" },
+          ]}
+        >
+          {task.title}
+        </Text>
+        <TouchableOpacity
+          style={styles.kanbanCardDelete}
+          onPress={() => handleDelete(task)}
+          hitSlop={12}
+        >
+          <Feather name="x" size={12} color={colors.mutedForeground} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderColumn = (
+    title: string,
+    status: TaskStatus,
+    columnTasks: Task[],
+  ) => (
+    <View style={styles.boardColumn}>
+      <View style={styles.boardColumnHeader}>
+        <Text style={[styles.boardColumnTitle, { color: colors.foreground }]}>
+          {title}
+        </Text>
+        <Text
+          style={[styles.boardColumnCount, { color: colors.mutedForeground }]}
+        >
+          {columnTasks.length}
+        </Text>
+      </View>
+      <View style={styles.boardColumnList}>
+        {columnTasks.map(renderTaskCard)}
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={styles.workspaceContainer}>
+      <ScrollView
+        contentContainerStyle={styles.boardScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.boardHeader}>
+          <Text style={[styles.boardTitle, { color: colors.foreground }]}>
+            Task Board
+          </Text>
+          <TouchableOpacity
+            style={[styles.addBoardBtn, { backgroundColor: colors.primary }]}
+            onPress={() => setIsAdding(true)}
+            testID="add-task-button"
+          >
+            <Feather name="plus" size={14} color={colors.primaryForeground} />
+            <Text
+              style={[
+                styles.addBoardBtnText,
+                { color: colors.primaryForeground },
+              ]}
+            >
+              New Task
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {isAdding && (
+          <View
+            style={[
+              styles.addTaskForm,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <TextInput
+              style={[styles.addTaskInput, { color: colors.foreground }]}
+              placeholder="What needs to be done?"
+              placeholderTextColor={colors.mutedForeground}
+              value={newTaskTitle}
+              onChangeText={setNewTaskTitle}
+              autoFocus
+              onSubmitEditing={handleAddTask}
+              returnKeyType="done"
+            />
+            <View style={styles.addTaskActions}>
+              <TouchableOpacity
+                onPress={() => setIsAdding(false)}
+                style={styles.addTaskCancel}
+              >
+                <Text
+                  style={[
+                    styles.addTaskCancelText,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleAddTask}
+                style={[
+                  styles.addTaskSubmit,
+                  {
+                    backgroundColor: newTaskTitle.trim()
+                      ? colors.primary
+                      : colors.secondary,
+                  },
+                ]}
+                disabled={!newTaskTitle.trim()}
+              >
+                <Text
+                  style={[
+                    styles.addTaskSubmitText,
+                    {
+                      color: newTaskTitle.trim()
+                        ? colors.primaryForeground
+                        : colors.mutedForeground,
+                    },
+                  ]}
+                >
+                  Add
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {tasks.length === 0 && !isAdding ? (
+          <View style={styles.boardEmpty}>
+            <Feather
+              name="check-circle"
+              size={32}
+              color={colors.mutedForeground}
+              style={{ opacity: 0.5, marginBottom: 12 }}
+            />
+            <Text style={[styles.boardEmptyText, { color: colors.foreground }]}>
+              All caught up
+            </Text>
+            <Text
+              style={[
+                styles.boardEmptySubtext,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              Create a task to get started.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.boardColumnsContainer}>
+            {renderColumn("To Do", "todo", todoTasks)}
+            {renderColumn("Active", "in_progress", inProgressTasks)}
+            {renderColumn("Done", "done", doneTasks)}
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+// --- Main Screen ---
+
+export default function WorkspaceScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { state } = useVenom();
+
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeProject =
+    state.projects.find((p) => p.id === state.activeProjectId) ||
+    state.projects[0];
+
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const handleTabPress = (index: number) => {
+    setActiveIndex(index);
+    scrollViewRef.current?.scrollTo({
+      x: index * SCREEN_WIDTH,
+      animated: true,
+    });
+    if (Platform.OS !== "web") {
+      Haptics.selectionAsync();
+    }
+  };
+
+  const handleScroll = (e: any) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / SCREEN_WIDTH);
+    if (index !== activeIndex && index >= 0 && index < 3) {
+      setActiveIndex(index);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={0}
+    >
+      {/* Custom Header Nav */}
+      <View
+        style={[
+          styles.topNav,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: colors.background,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
+        <View style={styles.navTabs}>
+          {["Chat", "Knowledge", "Board"].map((title, i) => {
+            const isActive = activeIndex === i;
+            return (
+              <TouchableOpacity
+                key={title}
+                onPress={() => handleTabPress(i)}
+                style={styles.navTab}
+                hitSlop={10}
+              >
+                <Text
+                  style={[
+                    styles.navTabText,
+                    {
+                      color: isActive
+                        ? colors.foreground
+                        : colors.mutedForeground,
+                      fontFamily: isActive
+                        ? "Inter_600SemiBold"
+                        : "Inter_500Medium",
+                    },
+                  ]}
+                >
+                  {title}
+                </Text>
+                {isActive && (
+                  <View
+                    style={[
+                      styles.navTabActiveLine,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <TouchableOpacity style={styles.navProject} activeOpacity={0.7}>
+          <Text
+            style={[styles.navProjectText, { color: colors.foreground }]}
+            numberOfLines={1}
+          >
+            {activeProject?.name || "Workspace"}
+          </Text>
+          <Feather
+            name="chevron-down"
+            size={14}
+            color={colors.mutedForeground}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* Swipeable Workspaces */}
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        bounces={false}
+        onMomentumScrollEnd={handleScroll}
+        scrollEventThrottle={16}
+        style={styles.workspacePager}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={[styles.workspacePage, { width: SCREEN_WIDTH }]}>
+          <ChatWorkspace
+            isActive={activeIndex === 0}
+            activeProject={activeProject}
+          />
+        </View>
+        <View style={[styles.workspacePage, { width: SCREEN_WIDTH }]}>
+          <KnowledgeWorkspace isActive={activeIndex === 1} />
+        </View>
+        <View style={[styles.workspacePage, { width: SCREEN_WIDTH }]}>
+          <BoardWorkspace activeProject={activeProject} />
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+  },
+  topNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 0,
+    borderBottomWidth: 1,
+    zIndex: 10,
+  },
+  navTabs: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    flexShrink: 0,
+  },
+  navTab: {
+    paddingVertical: 12,
+    position: "relative",
+  },
+  navTabText: {
+    fontSize: 15,
+  },
+  navTabActiveLine: {
+    position: "absolute",
+    bottom: -1,
+    left: 0,
+    right: 0,
+    height: 2,
+    borderRadius: 1,
+  },
+  navProject: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 1,
+    marginLeft: 12,
+  },
+  navProjectText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    flexShrink: 1,
+  },
+  workspacePager: {
+    flex: 1,
+  },
+  workspacePage: {
+    flex: 1,
+  },
+  workspaceContainer: {
+    flex: 1,
+  },
+
+  // Chat Styles
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 24,
   },
   messageRow: {
-    marginBottom: 16,
-    flexDirection: 'row',
+    marginBottom: 24,
+    flexDirection: "row",
   },
   messageUser: {
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   messageAssistant: {
-    justifyContent: 'flex-start',
+    justifyContent: "flex-start",
   },
   messageBubble: {
-    maxWidth: '85%',
+    maxWidth: "85%",
     paddingHorizontal: 16,
     paddingVertical: 12,
+    borderRadius: 20,
   },
   bubbleUser: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 4,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+    borderBottomRightRadius: 4,
   },
   bubbleAssistant: {
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 16,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#1a241f',
+    borderBottomLeftRadius: 4,
+    backgroundColor: "transparent",
   },
   messageText: {
     fontSize: 15,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 22,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 24,
   },
   typingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingVertical: 12,
     marginBottom: 16,
-  },
-  typingText: {
-    marginLeft: 8,
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    alignItems: "flex-start",
+    paddingHorizontal: 16,
   },
   emptyContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 100,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 80,
+  },
+  emptyAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
   },
   emptyText: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 2,
+    fontSize: 20,
+    fontFamily: "Inter_600SemiBold",
     marginBottom: 8,
   },
   emptySubtext: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
   },
   inputContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    borderTopWidth: 1,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     borderWidth: 1,
     borderRadius: 24,
     paddingLeft: 16,
-    paddingRight: 8,
-    paddingVertical: 8,
+    paddingRight: 6,
+    paddingVertical: 6,
   },
   input: {
     flex: 1,
     maxHeight: 120,
-    minHeight: 24,
+    minHeight: 28,
     fontSize: 15,
-    fontFamily: 'Inter_400Regular',
-    paddingTop: 4,
+    fontFamily: "Inter_400Regular",
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
     marginLeft: 8,
-    marginBottom: 2,
-  }
+  },
+
+  // Knowledge Styles
+  knowledgeContainer: {
+    flex: 1,
+    position: "relative",
+  },
+  node: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nodeLabelContainer: {
+    position: "absolute",
+    width: 150,
+    alignItems: "center",
+  },
+  nodeLabel: {
+    textAlign: "center",
+    fontSize: 12,
+  },
+  knowledgeInfoPanel: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopWidth: 1,
+    paddingBottom: 34, // Safe area roughly
+  },
+  knowledgeInfoContent: {
+    padding: 20,
+  },
+  knowledgeInfoHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  knowledgeInfoTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 18,
+  },
+  knowledgeInfoDesc: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  knowledgeInfoMeta: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  metaBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  metaBadgeText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+  },
+
+  // Board Styles
+  boardScrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  boardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  boardTitle: {
+    fontSize: 18,
+    fontFamily: "Inter_600SemiBold",
+  },
+  addBoardBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    gap: 4,
+  },
+  addBoardBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+  addTaskForm: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  addTaskInput: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    marginBottom: 16,
+  },
+  addTaskActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+    alignItems: "center",
+  },
+  addTaskCancel: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  addTaskCancelText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+  },
+  addTaskSubmit: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+  },
+  addTaskSubmitText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  boardEmpty: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  boardEmptyText: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 4,
+  },
+  boardEmptySubtext: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+  },
+  boardColumnsContainer: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "flex-start",
+  },
+  boardColumn: {
+    flex: 1,
+  },
+  boardColumnHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 12,
+  },
+  boardColumnTitle: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    textTransform: "uppercase",
+  },
+  boardColumnCount: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+  },
+  boardColumnList: {
+    gap: 8,
+  },
+  kanbanCard: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    position: "relative",
+  },
+  kanbanCardTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+    paddingRight: 14,
+  },
+  kanbanCardDelete: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    padding: 4,
+    opacity: 0.6,
+  },
 });

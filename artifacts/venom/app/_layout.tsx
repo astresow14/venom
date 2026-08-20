@@ -27,13 +27,10 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ 
       headerShown: false, 
-      contentStyle: { backgroundColor: '#050908' },
+      contentStyle: { backgroundColor: '#f9f9f8' },
       animation: 'fade',
     }}>
       <Stack.Screen name="index" />
-      <Stack.Screen name="projects" />
-      <Stack.Screen name="knowledge" />
-      <Stack.Screen name="settings" />
     </Stack>
   );
 }
