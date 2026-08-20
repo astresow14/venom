@@ -6,6 +6,7 @@ import {
   createVenomWorkspaceRouter,
   type WorkspaceStore,
 } from "./venom-workspace-router";
+import { validateVenomBoardState } from "./venom-board-validation";
 
 const databaseWorkspaceStore: WorkspaceStore = {
   async get(userId) {
@@ -54,9 +55,13 @@ export default createVenomWorkspaceRouter({
   resolveUserId: (request) => getAuth(request).userId,
   parseBody: (value) => {
     const parsed = SaveVenomWorkspaceBody.safeParse(value);
-    return parsed.success
-      ? { success: true, data: parsed.data }
-      : { success: false, issues: parsed.error.issues };
+    if (!parsed.success) {
+      return { success: false, issues: parsed.error.issues };
+    }
+    const boardIssues = validateVenomBoardState(parsed.data.state);
+    return boardIssues.length > 0
+      ? { success: false, issues: boardIssues }
+      : { success: true, data: parsed.data };
   },
   store: databaseWorkspaceStore,
 });

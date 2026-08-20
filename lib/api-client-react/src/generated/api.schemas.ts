@@ -122,6 +122,9 @@ export interface KnowledgeExtraction {
   clusters: KnowledgeCandidate[];
 }
 
+/**
+ * Legacy task status retained solely for snapshot migration.
+ */
 export type VenomTaskStatus = typeof VenomTaskStatus[keyof typeof VenomTaskStatus];
 
 
@@ -131,6 +134,8 @@ export const VenomTaskStatus = {
   done: 'done',
 } as const;
 
+export type VenomTaskValues = {[key: string]: string | number | boolean};
+
 export interface VenomTask {
   /**
      * @minLength 1
@@ -139,12 +144,77 @@ export interface VenomTask {
   id: string;
   /**
      * @minLength 1
-     * @maxLength 500
+     * @maxLength 280
      */
   title: string;
-  status: VenomTaskStatus;
+  /** Legacy task status retained solely for snapshot migration. */
+  status?: VenomTaskStatus;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  stageId: string;
+  /** @minimum 0 */
+  position: number;
   /** @minimum 0 */
   createdAt: number;
+  /** @minimum 0 */
+  updatedAt: number;
+  values: VenomTaskValues;
+}
+
+export interface VenomKanbanStage {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  /** @minimum 0 */
+  position: number;
+  isDone: boolean;
+  /** @minimum 0 */
+  updatedAt: number;
+}
+
+export type VenomKanbanFieldType = typeof VenomKanbanFieldType[keyof typeof VenomKanbanFieldType];
+
+
+export const VenomKanbanFieldType = {
+  text: 'text',
+  number: 'number',
+  date: 'date',
+  single_select: 'single_select',
+  checkbox: 'checkbox',
+} as const;
+
+export interface VenomKanbanField {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  type: VenomKanbanFieldType;
+  /**
+     * @maxItems 30
+     * @items.minLength 1
+     * @items.maxLength 80
+     */
+  options: string[];
+  /** @minimum 0 */
+  position: number;
+  showOnCard: boolean;
+  /** @minimum 0 */
+  updatedAt: number;
 }
 
 export interface VenomProject {
@@ -171,6 +241,13 @@ export interface VenomProject {
   updatedAt: number;
   /** @maxItems 2000 */
   tasks: VenomTask[];
+  /**
+     * @minItems 1
+     * @maxItems 30
+     */
+  boardStages: VenomKanbanStage[];
+  /** @maxItems 40 */
+  fieldDefinitions: VenomKanbanField[];
 }
 
 export type VenomMessageRole = typeof VenomMessageRole[keyof typeof VenomMessageRole];
@@ -321,6 +398,10 @@ export interface VenomWorkspaceTombstones {
   messages: VenomDeletionMarker[];
   /** @maxItems 2000 */
   clusters: VenomDeletionMarker[];
+  /** @maxItems 15000 */
+  stages: VenomDeletionMarker[];
+  /** @maxItems 20000 */
+  fields: VenomDeletionMarker[];
 }
 
 export interface VenomWorkspaceState {
@@ -356,8 +437,10 @@ export interface VenomWorkspaceSnapshot {
   /** @nullable */
   updatedAt: string | null;
 }
+
 export type SaveVenomWorkspace413 = {
   error: string;
   /** @minimum 1 */
   maxBytes: number;
 };
+

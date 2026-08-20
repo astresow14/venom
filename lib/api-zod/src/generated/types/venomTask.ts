@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { VenomTaskStatus } from './venomTaskStatus';
+import type { VenomTaskValues } from './venomTaskValues';
 
 export interface VenomTask {
   /**
@@ -15,10 +16,21 @@ export interface VenomTask {
   id: string;
   /**
      * @minLength 1
-     * @maxLength 500
+     * @maxLength 280
      */
   title: string;
-  status: VenomTaskStatus;
+  /** Legacy task status retained solely for snapshot migration. */
+  status?: VenomTaskStatus;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  stageId: string;
+  /** @minimum 0 */
+  position: number;
   /** @minimum 0 */
   createdAt: number;
+  /** @minimum 0 */
+  updatedAt: number;
+  values: VenomTaskValues;
 }

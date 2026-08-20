@@ -15,6 +15,14 @@ import {
   clearConversationKnowledge,
 } from './knowledgeState';
 import {
+  compactBoardPositions,
+  createDefaultBoardStages,
+  mergeProjectBoardSnapshots,
+  normalizeBoardValue,
+  normalizeProjectBoard,
+  type BoardValue,
+} from './boardState';
+import {
   ApiError,
   getGetVenomWorkspaceQueryKey,
   saveVenomWorkspace,
@@ -24,6 +32,9 @@ import {
   type VenomDeletionMarker,
   type VenomKnowledgeCluster,
   type VenomKnowledgeSource,
+  type VenomKanbanField,
+  type VenomKanbanFieldType,
+  type VenomKanbanStage,
   type VenomMessage,
   type VenomProject,
   type VenomTask,
@@ -36,6 +47,8 @@ import {
 export type Project = VenomProject;
 export type Task = VenomTask;
 export type TaskStatus = VenomTaskStatus;
+
+export type KanbanStage = VenomKanbanStage;
 export type Message = VenomMessage;
 export type Conversation = VenomConversation;
 export type KnowledgeCluster = VenomKnowledgeCluster;
@@ -62,18 +75,71 @@ type VenomContextType = {
   importDeviceWorkspace: () => void;
   startFreshWorkspace: () => void;
   addProject: (
-    project: Omit<Project, 'id' | 'updatedAt' | 'tasks'>,
+    project: Omit<
+      Project,
+      'id' | 'updatedAt' | 'tasks' | 'boardStages' | 'fieldDefinitions'
+    >,
   ) => void;
   updateProject: (id: string, project: Partial<Project>) => void;
   deleteProject: (id: string) => void;
   setActiveProject: (id: string | null) => void;
-  addTask: (projectId: string, title: string) => void;
-  updateTaskStatus: (
+  addTask: (projectId: string, title: string, stageId?: string) => void;
+  updateTask: (
     projectId: string,
     taskId: string,
-    status: TaskStatus,
+    updates: {
+      title?: string;
+      stageId?: string;
+      values?: Record<string, BoardValue>;
+    },
+  ) => void;
+  moveTask: (
+    projectId: string,
+    taskId: string,
+    stageId: string,
+    position: number,
   ) => void;
   deleteTask: (projectId: string, taskId: string) => void;
+  addStage: (projectId: string, name: string, isDone: boolean) => void;
+  updateStage: (
+    projectId: string,
+    stageId: string,
+    updates: { name?: string; isDone?: boolean },
+  ) => void;
+  reorderStage: (
+    projectId: string,
+    stageId: string,
+    position: number,
+  ) => void;
+  removeStage: (
+    projectId: string,
+    stageId: string,
+    reassignToStageId: string,
+  ) => void;
+  addFieldDefinition: (
+    projectId: string,
+    input: {
+      name: string;
+      type: KanbanFieldType;
+      options?: string[];
+      showOnCard?: boolean;
+    },
+  ) => void;
+  updateFieldDefinition: (
+    projectId: string,
+    fieldId: string,
+    updates: {
+      name?: string;
+      options?: string[];
+      showOnCard?: boolean;
+    },
+  ) => void;
+  reorderFieldDefinition: (
+    projectId: string,
+    fieldId: string,
+    position: number,
+  ) => void;
+  removeFieldDefinition: (projectId: string, fieldId: string) => void;
   addMessage: (
     conversationId: string | null,
     message: Omit<Message, 'id' | 'createdAt'> & { id?: string },
@@ -181,6 +247,17 @@ const storageKeyFor = (userId: string) => `@venom_state_v2:${userId}`;
 const generateId = (prefix: string) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 const normalizeLabel = (label: string) => label.trim().toLocaleLowerCase();
+
+const normalizeFieldOptions = (options: string[]) => {
+  const seen = new Set<string>();
+  return options.flatMap((option): string[] => {
+    const cleaned = option.trim().slice(0, 80);
+    const key = normalizeLabel(cleaned);
+    if (!cleaned || seen.has(key) || seen.size >= 30) return [];
+    seen.add(key);
+    return [cleaned];
+  });
+};
 export const IS_READ_ONLY_UI_TEST =
   __DEV__ &&
   Platform.OS === 'web' &&
@@ -192,6 +269,8 @@ const TOMBSTONE_LIMITS: Record<TombstoneCollection, number> = {
   conversations: 1000,
   messages: 10000,
   clusters: 2000,
+  stages: 15000,
+  fields: 20000,
 };
 
 function createEmptyTombstones(): WorkspaceTombstones {
@@ -201,6 +280,8 @@ function createEmptyTombstones(): WorkspaceTombstones {
     conversations: [],
     messages: [],
     clusters: [],
+    stages: [],
+    fields: [],
   };
 }
 
@@ -229,20 +310,31 @@ function normalizeTombstones(
   return {
     projects: mergeDeletionMarkers(
       TOMBSTONE_LIMITS.projects,
-      tombstones.projects,
+      tombstones.projects ?? [],
     ),
-    tasks: mergeDeletionMarkers(TOMBSTONE_LIMITS.tasks, tombstones.tasks),
+    tasks: mergeDeletionMarkers(
+      TOMBSTONE_LIMITS.tasks,
+      tombstones.tasks ?? [],
+    ),
     conversations: mergeDeletionMarkers(
       TOMBSTONE_LIMITS.conversations,
-      tombstones.conversations,
+      tombstones.conversations ?? [],
     ),
     messages: mergeDeletionMarkers(
       TOMBSTONE_LIMITS.messages,
-      tombstones.messages,
+      tombstones.messages ?? [],
     ),
     clusters: mergeDeletionMarkers(
       TOMBSTONE_LIMITS.clusters,
-      tombstones.clusters,
+      tombstones.clusters ?? [],
+    ),
+    stages: mergeDeletionMarkers(
+      TOMBSTONE_LIMITS.stages,
+      tombstones.stages ?? [],
+    ),
+    fields: mergeDeletionMarkers(
+      TOMBSTONE_LIMITS.fields,
+      tombstones.fields ?? [],
     ),
   };
 }
@@ -277,6 +369,16 @@ function mergeTombstones(
       TOMBSTONE_LIMITS.clusters,
       normalized.clusters,
       additions.clusters ?? [],
+    ),
+    stages: mergeDeletionMarkers(
+      TOMBSTONE_LIMITS.stages,
+      normalized.stages,
+      additions.stages ?? [],
+    ),
+    fields: mergeDeletionMarkers(
+      TOMBSTONE_LIMITS.fields,
+      normalized.fields,
+      additions.fields ?? [],
     ),
   };
 }
@@ -326,6 +428,7 @@ function pruneKnowledgeSources(
 
 function createDefaultState(): VenomState {
   const now = Date.now();
+  const boardStages = createDefaultBoardStages('proj_default', now);
   return {
     projects: [
       {
@@ -335,24 +438,35 @@ function createDefaultState(): VenomState {
         accent: '#b4f536',
         sourceCount: 0,
         updatedAt: now,
+        boardStages,
+        fieldDefinitions: [],
         tasks: [
           {
             id: 'task_1',
             title: 'Define data schema',
-            status: 'done',
+            stageId: boardStages[2].id,
+            position: 0,
             createdAt: now - 100000,
+            updatedAt: now - 100000,
+            values: {},
           },
           {
             id: 'task_2',
             title: 'Implement authentication',
-            status: 'in_progress',
+            stageId: boardStages[1].id,
+            position: 0,
             createdAt: now - 50000,
+            updatedAt: now - 50000,
+            values: {},
           },
           {
             id: 'task_3',
             title: 'Design onboarding flow',
-            status: 'todo',
+            stageId: boardStages[0].id,
+            position: 0,
             createdAt: now,
+            updatedAt: now,
+            values: {},
           },
         ],
       },
@@ -386,10 +500,7 @@ function isWorkspaceState(value: unknown): value is VenomState {
 function normalizeWorkspaceState(value: VenomState): VenomState {
   return {
     ...value,
-    projects: value.projects.map((project) => ({
-      ...project,
-      tasks: Array.isArray(project.tasks) ? project.tasks : [],
-    })),
+    projects: value.projects.map((project) => normalizeProjectBoard(project)),
     clusters: value.clusters.map((cluster) => {
       const legacyDescription =
         typeof cluster.description === 'string'
@@ -426,6 +537,8 @@ function mergeProjects(
 ): Project[] {
   const projectDeletionTimes = deletionTime(tombstones.projects);
   const taskDeletionTimes = deletionTime(tombstones.tasks);
+  const stageDeletionTimes = deletionTime(tombstones.stages);
+  const fieldDeletionTimes = deletionTime(tombstones.fields);
   const cloudById = new Map(cloudItems.map((item) => [item.id, item]));
   const deviceById = new Map(deviceItems.map((item) => [item.id, item]));
   const projectIds = new Set([...cloudById.keys(), ...deviceById.keys()]);
@@ -446,21 +559,17 @@ function mergeProjects(
       continue;
     }
 
-    const older = newest === deviceItem ? cloudItem : deviceItem;
-    const tasks = new Map(
-      (older?.tasks ?? []).map((task) => [task.id, task]),
-    );
-    for (const task of newest.tasks) {
-      tasks.set(task.id, task);
-    }
-
-    merged.push({
-      ...newest,
-      tasks: [...tasks.values()].filter(
-        (task) =>
-          (taskDeletionTimes.get(task.id) ?? -1) < task.createdAt,
+    merged.push(
+      mergeProjectBoardSnapshots(
+        cloudItem ?? newest,
+        deviceItem ?? newest,
+        {
+          tasks: taskDeletionTimes,
+          stages: stageDeletionTimes,
+          fields: fieldDeletionTimes,
+        },
       ),
-    });
+    );
   }
 
   return merged;
@@ -980,12 +1089,21 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
   }, [flushCloudState, userId]);
 
   const addProject = useCallback(
-    (project: Omit<Project, 'id' | 'updatedAt' | 'tasks'>) => {
+    (
+      project: Omit<
+        Project,
+        'id' | 'updatedAt' | 'tasks' | 'boardStages' | 'fieldDefinitions'
+      >,
+    ) => {
+      const id = generateId('proj');
+      const now = Date.now();
       const newProject: Project = {
         ...project,
-        id: generateId('proj'),
-        updatedAt: Date.now(),
+        id,
+        updatedAt: now,
         tasks: [],
+        boardStages: createDefaultBoardStages(id, now),
+        fieldDefinitions: [],
       };
       setState((current) => ({
         ...current,
@@ -1058,6 +1176,14 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
             removedClusters.map((cluster) => cluster.id),
             deletedAt,
           ),
+          stages: createDeletionMarkers(
+            project?.boardStages.map((stage) => stage.id) ?? [],
+            deletedAt,
+          ),
+          fields: createDeletionMarkers(
+            project?.fieldDefinitions.map((field) => field.id) ?? [],
+            deletedAt,
+          ),
         }),
       };
     });
@@ -1067,43 +1193,169 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     setState((current) => ({ ...current, activeProjectId: id }));
   }, []);
 
-  const addTask = useCallback((projectId: string, title: string) => {
-    const now = Date.now();
-    const task: Task = {
-      id: generateId('task'),
-      title,
-      status: 'todo',
-      createdAt: now,
-    };
-    setState((current) => ({
-      ...current,
-      projects: current.projects.map((project) =>
-        project.id === projectId
-          ? {
-              ...project,
-              updatedAt: now,
-              tasks: [...project.tasks, task],
-            }
-          : project,
-      ),
-    }));
-  }, []);
-
-  const updateTaskStatus = useCallback(
-    (projectId: string, taskId: string, status: TaskStatus) => {
+  const addTask = useCallback(
+    (projectId: string, title: string, requestedStageId?: string) => {
+      const cleanedTitle = title.trim().slice(0, 280);
+      if (!cleanedTitle) return;
+      const now = Date.now();
       setState((current) => ({
         ...current,
-        projects: current.projects.map((project) =>
-          project.id === projectId
-            ? {
-                ...project,
-                updatedAt: Date.now(),
-                tasks: project.tasks.map((task) =>
-                  task.id === taskId ? { ...task, status } : task,
-                ),
-              }
-            : project,
-        ),
+        projects: current.projects.map((project) => {
+          if (project.id !== projectId) return project;
+          if (project.tasks.length >= 2000) return project;
+          const stageId = project.boardStages.some(
+            (stage) => stage.id === requestedStageId,
+          )
+            ? requestedStageId!
+            : project.boardStages[0].id;
+          const position = project.tasks.filter(
+            (task) => task.stageId === stageId,
+          ).length;
+          const task: Task = {
+            id: generateId('task'),
+            title: cleanedTitle,
+            stageId,
+            position,
+            createdAt: now,
+            updatedAt: now,
+            values: {},
+          };
+          return {
+            ...project,
+            updatedAt: now,
+            tasks: [...project.tasks, task],
+          };
+        }),
+      }));
+    },
+    [],
+  );
+
+  const updateTask = useCallback(
+    (
+      projectId: string,
+      taskId: string,
+      updates: {
+        title?: string;
+        stageId?: string;
+        values?: Record<string, BoardValue>;
+      },
+    ) => {
+      const now = Date.now();
+      setState((current) => ({
+        ...current,
+        projects: current.projects.map((project) => {
+          if (project.id !== projectId) return project;
+          const existing = project.tasks.find((task) => task.id === taskId);
+          if (!existing) return project;
+          const title =
+            updates.title === undefined
+              ? existing.title
+              : updates.title.trim().slice(0, 280);
+          if (!title) return project;
+          const stageId =
+            updates.stageId &&
+            project.boardStages.some((stage) => stage.id === updates.stageId)
+              ? updates.stageId
+              : existing.stageId;
+          const fieldById = new Map(
+            project.fieldDefinitions.map((field) => [field.id, field]),
+          );
+          const values =
+            updates.values === undefined
+              ? existing.values
+              : Object.fromEntries(
+                  Object.entries(updates.values).flatMap(
+                    ([fieldId, rawValue]) => {
+                      const field = fieldById.get(fieldId);
+                      if (!field) return [];
+                      const normalized = normalizeBoardValue(field, rawValue);
+                      return normalized === undefined
+                        ? []
+                        : [[fieldId, normalized]];
+                    },
+                  ),
+                );
+          const movedToNewStage = stageId !== existing.stageId;
+          const nextTask: Task = {
+            ...existing,
+            title,
+            stageId,
+            position: movedToNewStage
+              ? project.tasks.filter((task) => task.stageId === stageId).length
+              : existing.position,
+            values,
+            updatedAt: now,
+          };
+          return compactBoardPositions({
+            ...project,
+            updatedAt: now,
+            tasks: project.tasks.map((task) =>
+              task.id === taskId ? nextTask : task,
+            ),
+          });
+        }),
+      }));
+    },
+    [],
+  );
+
+  const moveTask = useCallback(
+    (
+      projectId: string,
+      taskId: string,
+      requestedStageId: string,
+      requestedPosition: number,
+    ) => {
+      const now = Date.now();
+      setState((current) => ({
+        ...current,
+        projects: current.projects.map((project) => {
+          if (project.id !== projectId) return project;
+          const task = project.tasks.find((item) => item.id === taskId);
+          if (
+            !task ||
+            !project.boardStages.some(
+              (stage) => stage.id === requestedStageId,
+            )
+          ) {
+            return project;
+          }
+          const otherTasks = project.tasks.filter(
+            (item) =>
+              item.id !== taskId && item.stageId === requestedStageId,
+          );
+          const position = Math.max(
+            0,
+            Math.min(Math.floor(requestedPosition), otherTasks.length),
+          );
+          otherTasks.splice(position, 0, {
+            ...task,
+            stageId: requestedStageId,
+            updatedAt: now,
+          });
+          const movedIds = new Set(otherTasks.map((item) => item.id));
+          const untouched = project.tasks.filter(
+            (item) => !movedIds.has(item.id) && item.id !== taskId,
+          );
+          return compactBoardPositions({
+            ...project,
+            updatedAt: now,
+            tasks: [
+              ...untouched,
+              ...otherTasks.map((item, index) => ({
+                ...item,
+                position: index,
+                updatedAt:
+                  item.position === index &&
+                  item.stageId === requestedStageId &&
+                  item.id !== taskId
+                    ? item.updatedAt
+                    : now,
+              })),
+            ],
+          });
+        }),
       }));
     },
     [],
@@ -1129,6 +1381,390 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       };
     });
   }, []);
+
+  const addStage = useCallback(
+    (projectId: string, name: string, isDone: boolean) => {
+      const cleanedName = name.trim().slice(0, 80);
+      if (!cleanedName) return;
+      const now = Date.now();
+      setState((current) => ({
+        ...current,
+        projects: current.projects.map((project) =>
+          project.id === projectId &&
+          project.boardStages.length < 30 &&
+          !project.boardStages.some(
+            (stage) =>
+              normalizeLabel(stage.name) === normalizeLabel(cleanedName),
+          )
+            ? {
+                ...project,
+                updatedAt: now,
+                boardStages: [
+                  ...project.boardStages,
+                  {
+                    id: generateId('stage'),
+                    name: cleanedName,
+                    position: project.boardStages.length,
+                    isDone,
+                    updatedAt: now,
+                  },
+                ],
+              }
+            : project,
+        ),
+      }));
+    },
+    [],
+  );
+
+  const updateStage = useCallback(
+    (
+      projectId: string,
+      stageId: string,
+      updates: { name?: string; isDone?: boolean },
+    ) => {
+      const cleanedName = updates.name?.trim().slice(0, 80);
+      if (updates.name !== undefined && !cleanedName) return;
+      const now = Date.now();
+      setState((current) => ({
+        ...current,
+        projects: current.projects.map((project) => {
+          if (project.id !== projectId) return project;
+          if (
+            cleanedName &&
+            project.boardStages.some(
+              (stage) =>
+                stage.id !== stageId &&
+                normalizeLabel(stage.name) === normalizeLabel(cleanedName),
+            )
+          ) {
+            return project;
+          }
+          if (
+            updates.isDone === false &&
+            project.boardStages.find((stage) => stage.id === stageId)?.isDone &&
+            project.boardStages.filter((stage) => stage.isDone).length === 1
+          ) {
+            return project;
+          }
+          return {
+            ...project,
+            updatedAt: now,
+            boardStages: project.boardStages.map((stage) =>
+              stage.id === stageId
+                ? {
+                    ...stage,
+                    ...(cleanedName ? { name: cleanedName } : {}),
+                    ...(updates.isDone === undefined
+                      ? {}
+                      : { isDone: updates.isDone }),
+                    updatedAt: now,
+                  }
+                : stage,
+            ),
+          };
+        }),
+      }));
+    },
+    [],
+  );
+
+  const reorderStage = useCallback(
+    (projectId: string, stageId: string, requestedPosition: number) => {
+      const now = Date.now();
+      setState((current) => ({
+        ...current,
+        projects: current.projects.map((project) => {
+          if (project.id !== projectId) return project;
+          const stages = [...project.boardStages].sort(
+            (left, right) => left.position - right.position,
+          );
+          const index = stages.findIndex((stage) => stage.id === stageId);
+          if (index < 0) return project;
+          const [stage] = stages.splice(index, 1);
+          const position = Math.max(
+            0,
+            Math.min(Math.floor(requestedPosition), stages.length),
+          );
+          stages.splice(position, 0, stage);
+          return {
+            ...project,
+            updatedAt: now,
+            boardStages: stages.map((item, nextPosition) =>
+              item.position === nextPosition
+                ? item
+                : { ...item, position: nextPosition, updatedAt: now },
+            ),
+          };
+        }),
+      }));
+    },
+    [],
+  );
+
+  const removeStage = useCallback(
+    (
+      projectId: string,
+      stageId: string,
+      reassignToStageId: string,
+    ) => {
+      const now = Date.now();
+      setState((current) => {
+        const project = current.projects.find((item) => item.id === projectId);
+        if (
+          !project ||
+          project.boardStages.length <= 1 ||
+          stageId === reassignToStageId ||
+          !project.boardStages.some(
+            (stage) => stage.id === reassignToStageId,
+          )
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          projects: current.projects.map((item) =>
+            item.id === projectId
+              ? compactBoardPositions({
+                  ...item,
+                  updatedAt: now,
+                  boardStages: item.boardStages
+                    .filter((stage) => stage.id !== stageId)
+                    .map((stage) =>
+                      stage.id === reassignToStageId &&
+                      project.boardStages.find(
+                        (candidate) => candidate.id === stageId,
+                      )?.isDone &&
+                      project.boardStages.filter((candidate) => candidate.isDone)
+                        .length === 1
+                        ? { ...stage, isDone: true, updatedAt: now }
+                        : stage,
+                    ),
+                  tasks: item.tasks.map((task) =>
+                    task.stageId === stageId
+                      ? {
+                          ...task,
+                          stageId: reassignToStageId,
+                          position: item.tasks.filter(
+                            (candidate) =>
+                              candidate.stageId === reassignToStageId,
+                          ).length,
+                          updatedAt: now,
+                        }
+                      : task,
+                  ),
+                })
+              : item,
+          ),
+          tombstones: mergeTombstones(current.tombstones, {
+            stages: createDeletionMarkers([stageId], now),
+          }),
+        };
+      });
+    },
+    [],
+  );
+
+  const addFieldDefinition = useCallback(
+    (
+      projectId: string,
+      input: {
+        name: string;
+        type: KanbanFieldType;
+        options?: string[];
+        showOnCard?: boolean;
+      },
+    ) => {
+      const name = input.name.trim().slice(0, 80);
+      if (!name) return;
+      const now = Date.now();
+      const options = normalizeFieldOptions(input.options ?? []);
+      setState((current) => ({
+        ...current,
+        projects: current.projects.map((project) =>
+          project.id === projectId &&
+          project.fieldDefinitions.length < 40 &&
+          !project.fieldDefinitions.some(
+            (field) => normalizeLabel(field.name) === normalizeLabel(name),
+          )
+            ? {
+                ...project,
+                updatedAt: now,
+                fieldDefinitions: [
+                  ...project.fieldDefinitions,
+                  {
+                    id: generateId('field'),
+                    name,
+                    type: input.type,
+                    options:
+                      input.type === 'single_select' ? options : [],
+                    position: project.fieldDefinitions.length,
+                    showOnCard: input.showOnCard ?? true,
+                    updatedAt: now,
+                  },
+                ],
+              }
+            : project,
+        ),
+      }));
+    },
+    [],
+  );
+
+  const updateFieldDefinition = useCallback(
+    (
+      projectId: string,
+      fieldId: string,
+      updates: {
+        name?: string;
+        options?: string[];
+        showOnCard?: boolean;
+      },
+    ) => {
+      const name = updates.name?.trim().slice(0, 80);
+      if (updates.name !== undefined && !name) return;
+      const now = Date.now();
+      setState((current) => ({
+        ...current,
+        projects: current.projects.map((project) => {
+          if (project.id !== projectId) return project;
+          const existingField = project.fieldDefinitions.find(
+            (field) => field.id === fieldId,
+          );
+          if (!existingField) return project;
+          if (
+            name &&
+            project.fieldDefinitions.some(
+              (field) =>
+                field.id !== fieldId &&
+                normalizeLabel(field.name) === normalizeLabel(name),
+            )
+          ) {
+            return project;
+          }
+          const nextOptions =
+            updates.options !== undefined &&
+            existingField.type === 'single_select'
+              ? normalizeFieldOptions(updates.options)
+              : existingField.options;
+          if (
+            existingField.type === 'single_select' &&
+            nextOptions.length === 0
+          ) {
+            return project;
+          }
+          return {
+            ...project,
+            updatedAt: now,
+            fieldDefinitions: project.fieldDefinitions.map((field) =>
+              field.id === fieldId
+                ? {
+                    ...field,
+                    ...(name ? { name } : {}),
+                    ...(updates.options === undefined ||
+                    field.type !== 'single_select'
+                      ? {}
+                      : { options: nextOptions }),
+                    ...(updates.showOnCard === undefined
+                      ? {}
+                      : { showOnCard: updates.showOnCard }),
+                    updatedAt: now,
+                  }
+                : field,
+            ),
+            tasks:
+              updates.options === undefined ||
+              existingField.type !== 'single_select'
+                ? project.tasks
+                : project.tasks.map((task) => {
+                    const currentValue = task.values[fieldId];
+                    if (
+                      typeof currentValue !== 'string' ||
+                      nextOptions.includes(currentValue)
+                    ) {
+                      return task;
+                    }
+                    const values = { ...task.values };
+                    delete values[fieldId];
+                    return { ...task, values, updatedAt: now };
+                  }),
+          };
+        }),
+      }));
+    },
+    [],
+  );
+
+  const reorderFieldDefinition = useCallback(
+    (projectId: string, fieldId: string, requestedPosition: number) => {
+      const now = Date.now();
+      setState((current) => ({
+        ...current,
+        projects: current.projects.map((project) => {
+          if (project.id !== projectId) return project;
+          const fields = [...project.fieldDefinitions].sort(
+            (left, right) => left.position - right.position,
+          );
+          const index = fields.findIndex((field) => field.id === fieldId);
+          if (index < 0) return project;
+          const [field] = fields.splice(index, 1);
+          const position = Math.max(
+            0,
+            Math.min(Math.floor(requestedPosition), fields.length),
+          );
+          fields.splice(position, 0, field);
+          return {
+            ...project,
+            updatedAt: now,
+            fieldDefinitions: fields.map((item, nextPosition) =>
+              item.position === nextPosition
+                ? item
+                : { ...item, position: nextPosition, updatedAt: now },
+            ),
+          };
+        }),
+      }));
+    },
+    [],
+  );
+
+  const removeFieldDefinition = useCallback(
+    (projectId: string, fieldId: string) => {
+      const now = Date.now();
+      setState((current) => {
+        const project = current.projects.find((item) => item.id === projectId);
+        if (!project) return current;
+        return {
+          ...current,
+          projects: current.projects.map((item) =>
+            item.id === projectId
+              ? compactBoardPositions({
+                  ...item,
+                  updatedAt: now,
+                  fieldDefinitions: item.fieldDefinitions.filter(
+                    (field) => field.id !== fieldId,
+                  ),
+                  tasks: item.tasks.map((task) => {
+                    const values = { ...task.values };
+                    delete values[fieldId];
+                    return {
+                      ...task,
+                      values,
+                      updatedAt:
+                        fieldId in task.values ? now : task.updatedAt,
+                    };
+                  }),
+                })
+              : item,
+          ),
+          tombstones: mergeTombstones(current.tombstones, {
+            fields: createDeletionMarkers([fieldId], now),
+          }),
+        };
+      });
+    },
+    [],
+  );
 
   const createNewConversation = useCallback((projectId: string | null) => {
     const id = generateId('conv');
@@ -1423,8 +2059,17 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       deleteProject,
       setActiveProject,
       addTask,
-      updateTaskStatus,
+      updateTask,
+      moveTask,
       deleteTask,
+      addStage,
+      updateStage,
+      reorderStage,
+      removeStage,
+      addFieldDefinition,
+      updateFieldDefinition,
+      reorderFieldDefinition,
+      removeFieldDefinition,
       addMessage,
       updateMessage,
       setActiveConversation,
@@ -1437,7 +2082,9 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       addMessage,
+      addFieldDefinition,
       addProject,
+      addStage,
       addTask,
       applyKnowledgeInsights,
       clearConversation,
@@ -1449,7 +2096,12 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       isReady,
       lastSyncedAt,
       mergeKnowledgeClusters,
+      moveTask,
       renameKnowledgeCluster,
+      removeFieldDefinition,
+      removeStage,
+      reorderFieldDefinition,
+      reorderStage,
       setActiveConversation,
       setActiveProject,
       state,
@@ -1457,8 +2109,10 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       syncStatus,
       deleteKnowledgeCluster,
       updateMessage,
+      updateFieldDefinition,
       updateProject,
-      updateTaskStatus,
+      updateStage,
+      updateTask,
     ],
   );
 
@@ -1558,3 +2212,7 @@ export function useVenom() {
   }
   return context;
 }
+
+export type KanbanFieldType = VenomKanbanFieldType;
+
+export type KanbanField = VenomKanbanField;

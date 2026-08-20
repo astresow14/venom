@@ -3,8 +3,30 @@ export type TaskStatus = "todo" | "in_progress" | "done";
 export type Task = {
   id: string;
   title: string;
-  status: TaskStatus;
+  status?: TaskStatus;
+  stageId: string;
+  position: number;
   createdAt: number;
+  updatedAt: number;
+  values: Record<string, string | number | boolean>;
+};
+
+export type KanbanStage = {
+  id: string;
+  name: string;
+  position: number;
+  isDone: boolean;
+  updatedAt: number;
+};
+
+export type KanbanField = {
+  id: string;
+  name: string;
+  type: "text" | "number" | "date" | "single_select" | "checkbox";
+  options: string[];
+  position: number;
+  showOnCard: boolean;
+  updatedAt: number;
 };
 
 export type Project = {
@@ -15,6 +37,8 @@ export type Project = {
   sourceCount: number;
   updatedAt: number;
   tasks: Task[];
+  boardStages: KanbanStage[];
+  fieldDefinitions: KanbanField[];
 };
 
 export type Message = {

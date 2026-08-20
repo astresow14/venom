@@ -119,12 +119,53 @@ export const getVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMultipleOf = 
 
 export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax = 120;
 
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax = 500;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax = 280;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemStageIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMultipleOf = 1;
 
 export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin = 0;
 export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf = 1;
 
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesOneMax = 1000;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMin = -1000000000;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMax = 1000000000;
+
 export const getVenomWorkspaceResponseStateOneProjectsItemTasksMax = 2000;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemNameMax = 80;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesMax = 30;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemNameMax = 80;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsItemMax = 80;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsMax = 30;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax = 40;
 
 export const getVenomWorkspaceResponseStateOneProjectsMax = 500;
 
@@ -231,6 +272,20 @@ export const getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMul
 
 export const getVenomWorkspaceResponseStateOneTombstonesClustersMax = 2000;
 
+export const getVenomWorkspaceResponseStateOneTombstonesStagesItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneTombstonesStagesMax = 15000;
+
+export const getVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneTombstonesFieldsMax = 20000;
+
 export const getVenomWorkspaceResponseRevisionMin = 0;
 export const getVenomWorkspaceResponseRevisionMultipleOf = 1;
 
@@ -248,9 +303,29 @@ export const GetVenomWorkspaceResponse = zod.object({
   "tasks": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax),
   "title": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax),
-  "status": zod.enum(['todo', 'in_progress', 'done']),
-  "createdAt": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf)
-})).max(getVenomWorkspaceResponseStateOneProjectsItemTasksMax)
+  "status": zod.enum(['todo', 'in_progress', 'done']).optional().describe('Legacy task status retained solely for snapshot migration.'),
+  "stageId": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemTasksItemStageIdMax),
+  "position": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMultipleOf),
+  "createdAt": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf),
+  "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMultipleOf),
+  "values": zod.record(zod.string(), zod.union([zod.string().max(getVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesOneMax),zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMin).max(getVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMax),zod.boolean()]))
+})).max(getVenomWorkspaceResponseStateOneProjectsItemTasksMax),
+  "boardStages": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemIdMax),
+  "name": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemNameMax),
+  "position": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMultipleOf),
+  "isDone": zod.boolean(),
+  "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMultipleOf)
+})).min(1).max(getVenomWorkspaceResponseStateOneProjectsItemBoardStagesMax),
+  "fieldDefinitions": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemIdMax),
+  "name": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemNameMax),
+  "type": zod.enum(['text', 'number', 'date', 'single_select', 'checkbox']),
+  "options": zod.array(zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsItemMax)).max(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsMax),
+  "position": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMultipleOf),
+  "showOnCard": zod.boolean(),
+  "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax)
 })).max(getVenomWorkspaceResponseStateOneProjectsMax),
   "conversations": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemIdMax),
@@ -309,7 +384,15 @@ export const GetVenomWorkspaceResponse = zod.object({
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax),
   "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf)
-})).max(getVenomWorkspaceResponseStateOneTombstonesClustersMax)
+})).max(getVenomWorkspaceResponseStateOneTombstonesClustersMax),
+  "stages": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesStagesItemIdMax),
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneTombstonesStagesMax),
+  "fields": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax),
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneTombstonesFieldsMax)
 }).optional()
 }),zod.null()]),
   "revision": zod.number().min(getVenomWorkspaceResponseRevisionMin).multipleOf(getVenomWorkspaceResponseRevisionMultipleOf),
@@ -336,12 +419,53 @@ export const saveVenomWorkspaceBodyStateProjectsItemUpdatedAtMultipleOf = 1;
 
 export const saveVenomWorkspaceBodyStateProjectsItemTasksItemIdMax = 120;
 
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemTitleMax = 500;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemTitleMax = 280;
+
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemStageIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemPositionMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemPositionMultipleOf = 1;
 
 export const saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMin = 0;
 export const saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMultipleOf = 1;
 
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemValuesOneMax = 1000;
+
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemValuesTwoMin = -1000000000;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemValuesTwoMax = 1000000000;
+
 export const saveVenomWorkspaceBodyStateProjectsItemTasksMax = 2000;
+
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemNameMax = 80;
+
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemPositionMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemPositionMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesMax = 30;
+
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemNameMax = 80;
+
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemOptionsItemMax = 80;
+
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemOptionsMax = 30;
+
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemPositionMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemPositionMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsMax = 40;
 
 export const saveVenomWorkspaceBodyStateProjectsMax = 500;
 
@@ -448,6 +572,20 @@ export const saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMultipleO
 
 export const saveVenomWorkspaceBodyStateTombstonesClustersMax = 2000;
 
+export const saveVenomWorkspaceBodyStateTombstonesStagesItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateTombstonesStagesMax = 15000;
+
+export const saveVenomWorkspaceBodyStateTombstonesFieldsItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateTombstonesFieldsMax = 20000;
+
 export const saveVenomWorkspaceBodyBaseRevisionMin = 0;
 export const saveVenomWorkspaceBodyBaseRevisionMultipleOf = 1;
 
@@ -465,9 +603,29 @@ export const SaveVenomWorkspaceBody = zod.object({
   "tasks": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemTasksItemIdMax),
   "title": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemTasksItemTitleMax),
-  "status": zod.enum(['todo', 'in_progress', 'done']),
-  "createdAt": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMultipleOf)
-})).max(saveVenomWorkspaceBodyStateProjectsItemTasksMax)
+  "status": zod.enum(['todo', 'in_progress', 'done']).optional().describe('Legacy task status retained solely for snapshot migration.'),
+  "stageId": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemTasksItemStageIdMax),
+  "position": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemTasksItemPositionMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemTasksItemPositionMultipleOf),
+  "createdAt": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMultipleOf),
+  "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemTasksItemUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemTasksItemUpdatedAtMultipleOf),
+  "values": zod.record(zod.string(), zod.union([zod.string().max(saveVenomWorkspaceBodyStateProjectsItemTasksItemValuesOneMax),zod.number().min(saveVenomWorkspaceBodyStateProjectsItemTasksItemValuesTwoMin).max(saveVenomWorkspaceBodyStateProjectsItemTasksItemValuesTwoMax),zod.boolean()]))
+})).max(saveVenomWorkspaceBodyStateProjectsItemTasksMax),
+  "boardStages": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemIdMax),
+  "name": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemNameMax),
+  "position": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemPositionMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemPositionMultipleOf),
+  "isDone": zod.boolean(),
+  "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemUpdatedAtMultipleOf)
+})).min(1).max(saveVenomWorkspaceBodyStateProjectsItemBoardStagesMax),
+  "fieldDefinitions": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemIdMax),
+  "name": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemNameMax),
+  "type": zod.enum(['text', 'number', 'date', 'single_select', 'checkbox']),
+  "options": zod.array(zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemOptionsItemMax)).max(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemOptionsMax),
+  "position": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemPositionMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemPositionMultipleOf),
+  "showOnCard": zod.boolean(),
+  "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsMax)
 })).max(saveVenomWorkspaceBodyStateProjectsMax),
   "conversations": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemIdMax),
@@ -526,7 +684,15 @@ export const SaveVenomWorkspaceBody = zod.object({
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesClustersItemIdMax),
   "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMultipleOf)
-})).max(saveVenomWorkspaceBodyStateTombstonesClustersMax)
+})).max(saveVenomWorkspaceBodyStateTombstonesClustersMax),
+  "stages": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesStagesItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateTombstonesStagesMax),
+  "fields": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesFieldsItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateTombstonesFieldsMax)
 }).optional()
 }),
   "baseRevision": zod.number().min(saveVenomWorkspaceBodyBaseRevisionMin).multipleOf(saveVenomWorkspaceBodyBaseRevisionMultipleOf)
@@ -548,12 +714,53 @@ export const saveVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMultipleOf =
 
 export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax = 120;
 
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax = 500;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax = 280;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemStageIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMultipleOf = 1;
 
 export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin = 0;
 export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf = 1;
 
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesOneMax = 1000;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMin = -1000000000;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMax = 1000000000;
+
 export const saveVenomWorkspaceResponseStateOneProjectsItemTasksMax = 2000;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemNameMax = 80;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesMax = 30;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemNameMax = 80;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsItemMax = 80;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsMax = 30;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax = 40;
 
 export const saveVenomWorkspaceResponseStateOneProjectsMax = 500;
 
@@ -660,6 +867,20 @@ export const saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMu
 
 export const saveVenomWorkspaceResponseStateOneTombstonesClustersMax = 2000;
 
+export const saveVenomWorkspaceResponseStateOneTombstonesStagesItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesStagesMax = 15000;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesFieldsMax = 20000;
+
 export const saveVenomWorkspaceResponseRevisionMin = 0;
 export const saveVenomWorkspaceResponseRevisionMultipleOf = 1;
 
@@ -677,9 +898,29 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "tasks": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax),
   "title": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax),
-  "status": zod.enum(['todo', 'in_progress', 'done']),
-  "createdAt": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf)
-})).max(saveVenomWorkspaceResponseStateOneProjectsItemTasksMax)
+  "status": zod.enum(['todo', 'in_progress', 'done']).optional().describe('Legacy task status retained solely for snapshot migration.'),
+  "stageId": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemStageIdMax),
+  "position": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMultipleOf),
+  "createdAt": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf),
+  "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMultipleOf),
+  "values": zod.record(zod.string(), zod.union([zod.string().max(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesOneMax),zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMin).max(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMax),zod.boolean()]))
+})).max(saveVenomWorkspaceResponseStateOneProjectsItemTasksMax),
+  "boardStages": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemIdMax),
+  "name": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemNameMax),
+  "position": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMultipleOf),
+  "isDone": zod.boolean(),
+  "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMultipleOf)
+})).min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesMax),
+  "fieldDefinitions": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemIdMax),
+  "name": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemNameMax),
+  "type": zod.enum(['text', 'number', 'date', 'single_select', 'checkbox']),
+  "options": zod.array(zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsItemMax)).max(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsMax),
+  "position": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMultipleOf),
+  "showOnCard": zod.boolean(),
+  "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax)
 })).max(saveVenomWorkspaceResponseStateOneProjectsMax),
   "conversations": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemIdMax),
@@ -738,9 +979,19 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax),
   "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf)
-})).max(saveVenomWorkspaceResponseStateOneTombstonesClustersMax)
+})).max(saveVenomWorkspaceResponseStateOneTombstonesClustersMax),
+  "stages": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesStagesItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneTombstonesStagesMax),
+  "fields": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneTombstonesFieldsMax)
 }).optional()
 }),zod.null()]),
   "revision": zod.number().min(saveVenomWorkspaceResponseRevisionMin).multipleOf(saveVenomWorkspaceResponseRevisionMultipleOf),
   "updatedAt": zod.coerce.date().nullable()
 })
+
+

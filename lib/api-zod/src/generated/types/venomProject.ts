@@ -5,6 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VenomKanbanField } from './venomKanbanField';
+import type { VenomKanbanStage } from './venomKanbanStage';
 import type { VenomTask } from './venomTask';
 
 export interface VenomProject {
@@ -31,4 +33,11 @@ export interface VenomProject {
   updatedAt: number;
   /** @maxItems 2000 */
   tasks: VenomTask[];
+  /**
+     * @minItems 1
+     * @maxItems 30
+     */
+  boardStages: VenomKanbanStage[];
+  /** @maxItems 40 */
+  fieldDefinitions: VenomKanbanField[];
 }

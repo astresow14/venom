@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import test from "node:test";
 import express from "express";
+import { SaveVenomWorkspaceBody } from "../../../../lib/api-zod/src/generated/api.ts";
 import {
   createVenomWorkspaceRouter,
   MAX_API_JSON_BODY_BYTES,
@@ -11,6 +12,7 @@ import {
   workspacePayloadBytes,
   workspaceTooLargeResponse,
 } from "./venom-workspace-router.ts";
+import { validateVenomBoardState } from "./venom-board-validation.ts";
 
 function createMemoryStore() {
   const records = new Map();
@@ -207,4 +209,122 @@ test("parser-level 413 matches the published workspace error shape", async () =>
     server.close();
     await once(server, "close");
   }
+});
+
+function createBoardWorkspace() {
+  const now = Date.now();
+  return {
+    projects: [
+      {
+        id: "project-board",
+        name: "Board",
+        description: "",
+        accent: "#000000",
+        sourceCount: 0,
+        updatedAt: now,
+        boardStages: [
+          {
+            id: "stage-todo",
+            name: "To Do",
+            position: 0,
+            isDone: false,
+            updatedAt: now,
+          },
+          {
+            id: "stage-done",
+            name: "Done",
+            position: 1,
+            isDone: true,
+            updatedAt: now,
+          },
+        ],
+        fieldDefinitions: [
+          {
+            id: "field-date",
+            name: "Due",
+            type: "date",
+            options: [],
+            position: 0,
+            showOnCard: true,
+            updatedAt: now,
+          },
+          {
+            id: "field-priority",
+            name: "Priority",
+            type: "single_select",
+            options: ["High", "Low"],
+            position: 1,
+            showOnCard: true,
+            updatedAt: now,
+          },
+        ],
+        tasks: [
+          {
+            id: "task-board",
+            title: "Validate the board",
+            stageId: "stage-todo",
+            position: 0,
+            createdAt: now,
+            updatedAt: now,
+            values: {
+              "field-date": "2026-08-20",
+              "field-priority": "High",
+            },
+          },
+        ],
+      },
+    ],
+    conversations: [],
+    clusters: [],
+    activeProjectId: "project-board",
+    activeConversationId: null,
+    tombstones: {
+      projects: [],
+      tasks: [],
+      conversations: [],
+      messages: [],
+      clusters: [],
+      stages: [],
+      fields: [],
+    },
+  };
+}
+
+test("generated contract accepts a fully typed customizable board", () => {
+  const state = createBoardWorkspace();
+  assert.equal(
+    SaveVenomWorkspaceBody.safeParse({ state, baseRevision: 0 }).success,
+    true,
+  );
+  assert.deepEqual(validateVenomBoardState(state), []);
+});
+
+test("board validation rejects stale field values and invalid typed values", () => {
+  const state = createBoardWorkspace();
+  state.projects[0].tasks[0].values["field-date"] = "August 20";
+  state.projects[0].tasks[0].values["field-priority"] = "Urgent";
+  state.projects[0].tasks[0].values["removed-field"] = "must not return";
+
+  const issues = validateVenomBoardState(state);
+  assert.equal(issues.length, 3);
+  assert.ok(
+    issues.every((issue) => !JSON.stringify(issue).includes("must not return")),
+  );
+});
+
+test("board validation requires valid ordering and explicit done semantics", () => {
+  const state = createBoardWorkspace();
+  state.projects[0].boardStages[1].position = 0;
+  state.projects[0].boardStages[1].isDone = false;
+  state.projects[0].tasks.push({
+    ...state.projects[0].tasks[0],
+    id: "task-collision",
+  });
+
+  const messages = validateVenomBoardState(state).map(
+    (issue) => issue.message,
+  );
+  assert.ok(messages.includes("Stage positions must be unique"));
+  assert.ok(messages.includes("At least one stage must mark cards done"));
+  assert.ok(messages.includes("Task positions must be unique within a stage"));
 });

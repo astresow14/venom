@@ -18,4 +18,8 @@ export interface VenomWorkspaceTombstones {
   messages: VenomDeletionMarker[];
   /** @maxItems 2000 */
   clusters: VenomDeletionMarker[];
+  /** @maxItems 15000 */
+  stages: VenomDeletionMarker[];
+  /** @maxItems 20000 */
+  fields: VenomDeletionMarker[];
 }

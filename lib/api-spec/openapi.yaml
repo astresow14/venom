@@ -257,15 +257,97 @@ components:
         title:
           type: string
           minLength: 1
-          maxLength: 500
+          maxLength: 280
         status:
           type: string
           enum: [todo, in_progress, done]
+          description: Legacy task status retained solely for snapshot migration.
+        stageId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        position:
+          type: number
+          multipleOf: 1
+          minimum: 0
         createdAt:
           type: number
           multipleOf: 1
           minimum: 0
-      required: [id, title, status, createdAt]
+        updatedAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        values:
+          type: object
+          maxProperties: 40
+          additionalProperties:
+            oneOf:
+              - type: string
+                maxLength: 1000
+              - type: number
+                minimum: -1000000000
+                maximum: 1000000000
+              - type: boolean
+      required: [id, title, stageId, position, createdAt, updatedAt, values]
+    VenomKanbanStage:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 120
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        position:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        isDone:
+          type: boolean
+        updatedAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+      required: [id, name, position, isDone, updatedAt]
+    VenomKanbanFieldType:
+      type: string
+      enum: [text, number, date, single_select, checkbox]
+    VenomKanbanField:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 120
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        type:
+          $ref: "#/components/schemas/VenomKanbanFieldType"
+        options:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+            minLength: 1
+            maxLength: 80
+        position:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        showOnCard:
+          type: boolean
+        updatedAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+      required: [id, name, type, options, position, showOnCard, updatedAt]
     VenomProject:
       type: object
       additionalProperties: false
@@ -298,7 +380,18 @@ components:
           maxItems: 2000
           items:
             $ref: "#/components/schemas/VenomTask"
-      required: [id, name, description, accent, sourceCount, updatedAt, tasks]
+        boardStages:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            $ref: "#/components/schemas/VenomKanbanStage"
+        fieldDefinitions:
+          type: array
+          maxItems: 40
+          items:
+            $ref: "#/components/schemas/VenomKanbanField"
+      required: [id, name, description, accent, sourceCount, updatedAt, tasks, boardStages, fieldDefinitions]
     VenomMessage:
       type: object
       additionalProperties: false
@@ -474,7 +567,17 @@ components:
           maxItems: 2000
           items:
             $ref: "#/components/schemas/VenomDeletionMarker"
-      required: [projects, tasks, conversations, messages, clusters]
+        stages:
+          type: array
+          maxItems: 15000
+          items:
+            $ref: "#/components/schemas/VenomDeletionMarker"
+        fields:
+          type: array
+          maxItems: 20000
+          items:
+            $ref: "#/components/schemas/VenomDeletionMarker"
+      required: [projects, tasks, conversations, messages, clusters, stages, fields]
     VenomWorkspaceState:
       type: object
       additionalProperties: false

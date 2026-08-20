@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Legacy task status retained solely for snapshot migration.
+ */
 export type VenomTaskStatus = typeof VenomTaskStatus[keyof typeof VenomTaskStatus];
 
 
