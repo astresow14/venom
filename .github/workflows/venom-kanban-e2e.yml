@@ -1,0 +1,113 @@
+name: Venom Kanban E2E
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect Venom changes
+    runs-on: ubuntu-latest
+    outputs:
+      venom: ${{ steps.filter.outputs.venom }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            venom:
+              - "artifacts/venom/**"
+              - "lib/api-client-react/**"
+              - "lib/api-spec/**"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - "tsconfig.base.json"
+              - ".github/workflows/venom-kanban-e2e.yml"
+
+  kanban-regression:
+    name: Kanban browser regression
+    needs: changes
+    if: needs.changes.outputs.venom == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: "true"
+      VENOM_E2E_BASE_URL: http://127.0.0.1:22167
+      EXPO_PUBLIC_VENOM_UI_TEST: "true"
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+      EXPO_PACKAGER_PROXY_URL: http://127.0.0.1:22167
+      EXPO_PUBLIC_DOMAIN: 127.0.0.1:22167
+      REACT_NATIVE_PACKAGER_HOSTNAME: 127.0.0.1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verify CI configuration
+        run: |
+          if [ -z "$EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY" ]; then
+            echo "::error::Set the CLERK_PUBLISHABLE_KEY GitHub Actions secret before running Venom E2E."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium dependencies
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start Expo web
+        run: |
+          set -euo pipefail
+
+          pnpm --filter @workspace/venom exec expo start --web --localhost --port 22167 \
+            > "$RUNNER_TEMP/venom-expo.log" 2>&1 &
+          expo_pid=$!
+          echo "VENOM_EXPO_PID=$expo_pid" >> "$GITHUB_ENV"
+
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent --output /dev/null "$VENOM_E2E_BASE_URL"; then
+              exit 0
+            fi
+
+            if ! kill -0 "$expo_pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/venom-expo.log"
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          echo "::error::Expo web did not become ready in time."
+          cat "$RUNNER_TEMP/venom-expo.log"
+          exit 1
+
+      - name: Run Venom E2E
+        run: pnpm test:e2e:venom
+
+      - name: Upload Playwright failure artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: venom-kanban-playwright-failures
+          path: |
+            artifacts/venom/test-results/
+            artifacts/venom/playwright-report/
+            ${{ runner.temp }}/venom-expo.log
+          if-no-files-found: ignore
+          retention-days: 14
