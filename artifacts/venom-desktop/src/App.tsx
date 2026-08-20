@@ -10,7 +10,10 @@ import {
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { VenomWorkspaceProvider } from "@/context/venom-workspace";
+import {
+  IS_UI_TEST,
+  VenomWorkspaceProvider,
+} from "@/context/venom-workspace";
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing";
 import SignInPage from "@/pages/auth/sign-in";
@@ -20,6 +23,8 @@ import ChatPage from "@/pages/workspace/chat";
 import FeedPage from "@/pages/workspace/feed";
 import BrainPage from "@/pages/workspace/brain";
 import TasksPage from "@/pages/workspace/tasks";
+import AppsPage from "@/pages/workspace/apps";
+import AppDetailPage from "@/pages/workspace/apps/[id]";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AnimatePresence } from "framer-motion";
 import {
@@ -177,6 +182,8 @@ function WorkspaceRouter() {
           <Route path="/workspace/feed" component={FeedPage} />
           <Route path="/workspace/brain" component={BrainPage} />
           <Route path="/workspace/tasks" component={TasksPage} />
+          <Route path="/workspace/apps" component={AppsPage} />
+          <Route path="/workspace/apps/:id" component={AppDetailPage} />
           <Route component={NotFound} />
         </Switch>
       </AnimatePresence>

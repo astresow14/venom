@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Sun,
+  Hexagon,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -99,6 +100,7 @@ export default function WorkspaceLayout({
   const [isFeed] = useRoute("/workspace/feed");
   const [isBrain] = useRoute("/workspace/brain");
   const [isTasks] = useRoute("/workspace/tasks");
+  const [isApps] = useRoute("/workspace/apps/*?");
 
   const { signOut } = useClerk();
   const { user } = useUser();
@@ -147,6 +149,10 @@ export default function WorkspaceLayout({
       if (e.altKey && e.key === "4") {
         e.preventDefault();
         setLocation("/workspace/tasks");
+      }
+      if (e.altKey && e.key === "5") {
+        e.preventDefault();
+        setLocation("/workspace/apps");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -306,6 +312,14 @@ export default function WorkspaceLayout({
           label="To-Do"
           isActive={!!isTasks}
           shortcut="Alt+4"
+          onNavigate={() => handleDrawerOpenChange(false)}
+        />
+        <NavItem
+          href="/workspace/apps"
+          icon={Hexagon}
+          label="Apps"
+          isActive={!!isApps}
+          shortcut="Alt+5"
           onNavigate={() => handleDrawerOpenChange(false)}
         />
       </nav>

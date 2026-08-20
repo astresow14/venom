@@ -12,6 +12,7 @@ type HeaderProps = {
   onLeftPress?: () => void;
   rightIcon?: keyof typeof Feather.glyphMap;
   onRightPress?: () => void;
+  rightAccessibilityLabel?: string;
   rightIcon2?: keyof typeof Feather.glyphMap;
   onRight2Press?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -25,6 +26,7 @@ export function Header({
   onLeftPress,
   rightIcon,
   onRightPress,
+  rightAccessibilityLabel,
   rightIcon2,
   onRight2Press,
   style,
@@ -49,7 +51,13 @@ export function Header({
       <View style={styles.content}>
         <View style={styles.side}>
           {activeLeftIcon && (
-            <TouchableOpacity onPress={handleLeftPress} style={styles.iconButton} hitSlop={12}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={showBack ? "Go back" : `Open ${activeLeftIcon}`}
+              onPress={handleLeftPress}
+              style={styles.iconButton}
+              hitSlop={12}
+            >
               <Feather name={activeLeftIcon} size={22} color={colors.foreground} />
             </TouchableOpacity>
           )}
@@ -67,7 +75,13 @@ export function Header({
             </TouchableOpacity>
           )}
           {rightIcon && (
-            <TouchableOpacity onPress={onRightPress} style={[styles.iconButton, { marginLeft: 8 }]} hitSlop={12}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={rightAccessibilityLabel ?? `Open ${rightIcon}`}
+              onPress={onRightPress}
+              style={[styles.iconButton, { marginLeft: 8 }]}
+              hitSlop={12}
+            >
               <Feather name={rightIcon} size={20} color={colors.foreground} />
             </TouchableOpacity>
           )}

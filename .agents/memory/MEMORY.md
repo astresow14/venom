@@ -8,4 +8,4 @@
 - [Durable draft cleanup](durable-draft-cleanup.md) — serialize draft autosaves with success cleanup so an in-flight write cannot resurrect filed content.
 - [React Native Web checked state](react-native-web-checked-state.md) — mirror checkbox/radio state to web ARIA; accessibilityState alone may not update the browser tree.
 - [React Native Web keyboard events](react-native-web-keyboard-events.md) — raw key handlers on touchables may be filtered; verify the rendered DOM behavior in a browser.
-- [Expo Brain testing route](expo-brain-testing-route.md) — test mobile at the Expo root; /venom paths can resolve to the desktop artifact.
+- [Expo browser testing route](expo-brain-testing-route.md) — authenticate at the Expo root, then navigate in-app; prefixed paths can hit desktop.

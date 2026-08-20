@@ -218,6 +218,214 @@ paths:
                     multipleOf: 1
                     minimum: 1
                 required: [error, maxBytes]
+  /venom/apps:
+    get:
+      operationId: listVenomApps
+      tags: [venom]
+      summary: List the signed-in user's portfolio apps
+      responses:
+        "200":
+          description: Account-owned app records
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 500
+                items:
+                  $ref: "#/components/schemas/VenomApp"
+        "401":
+          description: Authentication required
+    post:
+      operationId: createVenomApp
+      tags: [venom]
+      summary: Create an app portfolio record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomAppInput"
+      responses:
+        "201":
+          description: Created app record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomApp"
+        "400":
+          description: Invalid app metadata
+        "401":
+          description: Authentication required
+  /venom/apps/{appId}:
+    get:
+      operationId: getVenomApp
+      tags: [venom]
+      summary: Get an app and its source history
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      responses:
+        "200":
+          description: Account-owned app detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomAppDetail"
+        "401":
+          description: Authentication required
+        "404":
+          description: App not found
+    patch:
+      operationId: updateVenomApp
+      tags: [venom]
+      summary: Update app metadata
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomAppUpdate"
+      responses:
+        "200":
+          description: Updated app
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomApp"
+        "400":
+          description: Invalid app metadata
+        "401":
+          description: Authentication required
+        "404":
+          description: App not found
+    delete:
+      operationId: deleteVenomApp
+      tags: [venom]
+      summary: Delete an app record and its private source packages
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      responses:
+        "204":
+          description: App deleted
+        "401":
+          description: Authentication required
+        "404":
+          description: App not found
+  /venom/apps/{appId}/versions:
+    get:
+      operationId: listVenomAppVersions
+      tags: [venom]
+      summary: List immutable source versions for an app
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      responses:
+        "200":
+          description: Source version history
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 500
+                items:
+                  $ref: "#/components/schemas/VenomSourceVersion"
+        "401":
+          description: Authentication required
+        "404":
+          description: App not found
+  /venom/apps/{appId}/imports:
+    post:
+      operationId: createVenomAppImport
+      tags: [venom]
+      summary: Start a private ZIP source import
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomImportInput"
+      responses:
+        "201":
+          description: Private upload ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomImportUploadTicket"
+        "400":
+          description: Invalid archive metadata
+        "401":
+          description: Authentication required
+        "404":
+          description: App not found
+        "413":
+          description: Archive exceeds the upload limit
+        "415":
+          description: Only ZIP archives are accepted
+  /venom/apps/{appId}/imports/{importJobId}:
+    get:
+      operationId: getVenomAppImport
+      tags: [venom]
+      summary: Get a ZIP import's observable status
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+        - $ref: "#/components/parameters/ImportJobId"
+      responses:
+        "200":
+          description: Current import status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomImportJob"
+        "401":
+          description: Authentication required
+        "404":
+          description: Import not found
+  /venom/apps/{appId}/imports/{importJobId}/complete:
+    post:
+      operationId: completeVenomAppImportUpload
+      tags: [venom]
+      summary: Confirm upload and start bounded archive inspection
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+        - $ref: "#/components/parameters/ImportJobId"
+      responses:
+        "202":
+          description: Import accepted for validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomImportJob"
+        "401":
+          description: Authentication required
+        "404":
+          description: Import not found
+        "409":
+          description: Import cannot be completed from its current state
+        "422":
+          description: Uploaded object is unavailable
+  /venom/apps/{appId}/imports/{importJobId}/retry:
+    post:
+      operationId: retryVenomAppImport
+      tags: [venom]
+      summary: Create a fresh private upload target for a failed import
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+        - $ref: "#/components/parameters/ImportJobId"
+      responses:
+        "200":
+          description: Fresh upload ticket for the same import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomImportUploadTicket"
+        "401":
+          description: Authentication required
+        "404":
+          description: Import not found
+        "409":
+          description: Only failed imports can be retried
 components:
   parameters:
     ProjectId:
@@ -228,7 +436,326 @@ components:
         type: string
         minLength: 1
         maxLength: 120
+    AppId:
+      name: appId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9a-fA-F-]{36}$"
+    ImportJobId:
+      name: importJobId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9a-fA-F-]{36}$"
   schemas:
+    VenomAppStatus:
+      type: string
+      enum: [draft, importing, ready, attention]
+    VenomImportStatus:
+      type: string
+      enum:
+        [awaiting_upload, uploading, validating, inspecting, complete, failed]
+    VenomApp:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        brand:
+          type: string
+          minLength: 1
+          maxLength: 120
+        status:
+          $ref: "#/components/schemas/VenomAppStatus"
+        detectedStack:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+        sourceType:
+          type: string
+          enum: [none, zip]
+        sourceVersion:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        deploymentUrl:
+          type: [string, "null"]
+          maxLength: 2048
+        importStatus:
+          oneOf:
+            - $ref: "#/components/schemas/VenomImportStatus"
+            - type: "null"
+        sourceUpdatedAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        [id, name, purpose, brand, status, detectedStack, sourceType, sourceVersion, deploymentUrl, importStatus, sourceUpdatedAt, createdAt, updatedAt]
+    VenomAppInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        brand:
+          type: string
+          minLength: 1
+          maxLength: 120
+        deploymentUrl:
+          type: [string, "null"]
+          maxLength: 2048
+      required: [name, purpose, brand]
+    VenomAppUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        brand:
+          type: string
+          minLength: 1
+          maxLength: 120
+        status:
+          $ref: "#/components/schemas/VenomAppStatus"
+        deploymentUrl:
+          type: [string, "null"]
+          maxLength: 2048
+    VenomSourceManifest:
+      type: object
+      additionalProperties: false
+      properties:
+        formatVersion:
+          type: number
+          const: 1
+        rootKind:
+          type: string
+          enum: [single-project, monorepo]
+        totalEntries:
+          type: number
+          multipleOf: 1
+          minimum: 1
+          maximum: 5000
+        safeFileCount:
+          type: number
+          multipleOf: 1
+          minimum: 0
+          maximum: 5000
+        excludedSensitiveFileCount:
+          type: number
+          multipleOf: 1
+          minimum: 0
+          maximum: 5000
+        files:
+          type: array
+          maxItems: 200
+          items:
+            type: string
+            maxLength: 240
+        projectFiles:
+          type: array
+          maxItems: 40
+          items:
+            type: string
+            maxLength: 240
+        detectedStack:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+      required:
+        [formatVersion, rootKind, totalEntries, safeFileCount, excludedSensitiveFileCount, files, projectFiles, detectedStack]
+    VenomSourceVersion:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+        versionNumber:
+          type: number
+          multipleOf: 1
+          minimum: 1
+        sourceType:
+          type: string
+          enum: [zip]
+        archiveFilename:
+          type: string
+          minLength: 1
+          maxLength: 160
+        archiveBytes:
+          type: number
+          multipleOf: 1
+          minimum: 1
+        checksumSha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        manifest:
+          $ref: "#/components/schemas/VenomSourceManifest"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        [id, versionNumber, sourceType, archiveFilename, archiveBytes, checksumSha256, manifest, createdAt]
+    VenomImportJob:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+        appId:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+        archiveFilename:
+          type: string
+          minLength: 1
+          maxLength: 160
+        declaredBytes:
+          type: number
+          multipleOf: 1
+          minimum: 1
+        status:
+          $ref: "#/components/schemas/VenomImportStatus"
+        progress:
+          type: number
+          multipleOf: 1
+          minimum: 0
+          maximum: 100
+        failureCode:
+          type: [string, "null"]
+          maxLength: 80
+        failureMessage:
+          type: [string, "null"]
+          maxLength: 240
+        sourceVersionId:
+          type: [string, "null"]
+          pattern: "^[0-9a-fA-F-]{36}$"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+      required:
+        [id, appId, archiveFilename, declaredBytes, status, progress, failureCode, failureMessage, sourceVersionId, createdAt, updatedAt, completedAt]
+    VenomDeploymentLink:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+        label:
+          type: string
+          minLength: 1
+          maxLength: 80
+        url:
+          type: string
+          maxLength: 2048
+        isPrimary:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, label, url, isPrimary, createdAt]
+    VenomAppDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        app:
+          $ref: "#/components/schemas/VenomApp"
+        versions:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/VenomSourceVersion"
+        importJobs:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/VenomImportJob"
+        deploymentLinks:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/VenomDeploymentLink"
+      required: [app, versions, importJobs, deploymentLinks]
+    VenomImportInput:
+      type: object
+      additionalProperties: false
+      properties:
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 160
+          pattern: "^.*\\.[zZ][iI][pP]$"
+        size:
+          type: number
+          multipleOf: 1
+          minimum: 1
+          maximum: 52428800
+        idempotencyKey:
+          type: string
+          minLength: 16
+          maxLength: 120
+          pattern: "^[A-Za-z0-9_-]+$"
+      required: [filename, size, idempotencyKey]
+    VenomImportUploadTicket:
+      type: object
+      additionalProperties: false
+      properties:
+        job:
+          $ref: "#/components/schemas/VenomImportJob"
+        uploadUrl:
+          type: string
+          maxLength: 8192
+        maxBytes:
+          type: number
+          const: 52428800
+        requiredContentType:
+          type: string
+          const: application/zip
+      required: [job, uploadUrl, maxBytes, requiredContentType]
     HealthStatus:
       type: object
       properties:

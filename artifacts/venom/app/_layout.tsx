@@ -91,6 +91,7 @@ function RootLayoutNav() {
             <Stack.Screen name="projects" />
             <Stack.Screen name="settings" />
             <Stack.Screen name="knowledge" />
+            <Stack.Screen name="apps" />
           </Stack.Protected>
         </Stack>
       </VenomProvider>

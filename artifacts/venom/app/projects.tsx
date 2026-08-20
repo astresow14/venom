@@ -52,7 +52,13 @@ export default function ProjectsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <Header title="Projects" showBack />
+      <Header
+        title="Projects"
+        showBack
+        rightIcon="grid"
+        rightAccessibilityLabel="Open app portfolio"
+        onRightPress={() => router.push("/apps" as never)}
+      />
       <ScrollView
         contentContainerStyle={[
           styles.content,

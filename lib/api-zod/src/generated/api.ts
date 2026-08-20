@@ -16,6 +16,7 @@ export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
 
+
 /**
  * @summary Stream a response from the Venom assistant
  */
@@ -1472,4 +1473,591 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "updatedAt": zod.coerce.date().nullable()
 })
 
-export {};
+
+/**
+ * @summary List the signed-in user's portfolio apps
+ */
+export const listVenomAppsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomAppsResponseNameMax = 120;
+
+export const listVenomAppsResponsePurposeMax = 1000;
+
+export const listVenomAppsResponseBrandMax = 120;
+
+export const listVenomAppsResponseDetectedStackItemMax = 60;
+
+export const listVenomAppsResponseDetectedStackMax = 20;
+
+export const listVenomAppsResponseSourceVersionMin = 0;
+export const listVenomAppsResponseSourceVersionMultipleOf = 1;
+
+export const listVenomAppsResponseDeploymentUrlMax = 2048;
+
+
+
+export const ListVenomAppsResponseItem = zod.object({
+  "id": zod.string().regex(listVenomAppsResponseIdRegExp),
+  "name": zod.string().min(1).max(listVenomAppsResponseNameMax),
+  "purpose": zod.string().min(1).max(listVenomAppsResponsePurposeMax),
+  "brand": zod.string().min(1).max(listVenomAppsResponseBrandMax),
+  "status": zod.enum(['draft', 'importing', 'ready', 'attention']),
+  "detectedStack": zod.array(zod.string().min(1).max(listVenomAppsResponseDetectedStackItemMax)).max(listVenomAppsResponseDetectedStackMax),
+  "sourceType": zod.enum(['none', 'zip']),
+  "sourceVersion": zod.number().min(listVenomAppsResponseSourceVersionMin).multipleOf(listVenomAppsResponseSourceVersionMultipleOf),
+  "deploymentUrl": zod.string().max(listVenomAppsResponseDeploymentUrlMax).nullable(),
+  "importStatus": zod.union([zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),zod.null()]),
+  "sourceUpdatedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListVenomAppsResponse = zod.array(ListVenomAppsResponseItem).max(500)
+
+
+/**
+ * @summary Create an app portfolio record
+ */
+export const createVenomAppBodyNameMax = 120;
+
+export const createVenomAppBodyPurposeMax = 1000;
+
+export const createVenomAppBodyBrandMax = 120;
+
+export const createVenomAppBodyDeploymentUrlMax = 2048;
+
+
+
+export const CreateVenomAppBody = zod.object({
+  "name": zod.string().min(1).max(createVenomAppBodyNameMax),
+  "purpose": zod.string().min(1).max(createVenomAppBodyPurposeMax),
+  "brand": zod.string().min(1).max(createVenomAppBodyBrandMax),
+  "deploymentUrl": zod.string().max(createVenomAppBodyDeploymentUrlMax).nullish()
+})
+
+export const createVenomAppResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppResponseNameMax = 120;
+
+export const createVenomAppResponsePurposeMax = 1000;
+
+export const createVenomAppResponseBrandMax = 120;
+
+export const createVenomAppResponseDetectedStackItemMax = 60;
+
+export const createVenomAppResponseDetectedStackMax = 20;
+
+export const createVenomAppResponseSourceVersionMin = 0;
+export const createVenomAppResponseSourceVersionMultipleOf = 1;
+
+export const createVenomAppResponseDeploymentUrlMax = 2048;
+
+
+
+export const CreateVenomAppResponse = zod.object({
+  "id": zod.string().regex(createVenomAppResponseIdRegExp),
+  "name": zod.string().min(1).max(createVenomAppResponseNameMax),
+  "purpose": zod.string().min(1).max(createVenomAppResponsePurposeMax),
+  "brand": zod.string().min(1).max(createVenomAppResponseBrandMax),
+  "status": zod.enum(['draft', 'importing', 'ready', 'attention']),
+  "detectedStack": zod.array(zod.string().min(1).max(createVenomAppResponseDetectedStackItemMax)).max(createVenomAppResponseDetectedStackMax),
+  "sourceType": zod.enum(['none', 'zip']),
+  "sourceVersion": zod.number().min(createVenomAppResponseSourceVersionMin).multipleOf(createVenomAppResponseSourceVersionMultipleOf),
+  "deploymentUrl": zod.string().max(createVenomAppResponseDeploymentUrlMax).nullable(),
+  "importStatus": zod.union([zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),zod.null()]),
+  "sourceUpdatedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get an app and its source history
+ */
+export const getVenomAppPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const GetVenomAppParams = zod.object({
+  "appId": zod.coerce.string().regex(getVenomAppPathAppIdRegExp)
+})
+
+export const getVenomAppResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseAppNameMax = 120;
+
+export const getVenomAppResponseAppPurposeMax = 1000;
+
+export const getVenomAppResponseAppBrandMax = 120;
+
+export const getVenomAppResponseAppDetectedStackItemMax = 60;
+
+export const getVenomAppResponseAppDetectedStackMax = 20;
+
+export const getVenomAppResponseAppSourceVersionMin = 0;
+export const getVenomAppResponseAppSourceVersionMultipleOf = 1;
+
+export const getVenomAppResponseAppDeploymentUrlMax = 2048;
+
+export const getVenomAppResponseVersionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseVersionsItemVersionNumberMultipleOf = 1;
+
+export const getVenomAppResponseVersionsItemArchiveFilenameMax = 160;
+
+export const getVenomAppResponseVersionsItemArchiveBytesMultipleOf = 1;
+
+export const getVenomAppResponseVersionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomAppResponseVersionsItemManifestTotalEntriesMax = 5000;
+export const getVenomAppResponseVersionsItemManifestTotalEntriesMultipleOf = 1;
+
+export const getVenomAppResponseVersionsItemManifestSafeFileCountMin = 0;
+export const getVenomAppResponseVersionsItemManifestSafeFileCountMax = 5000;
+export const getVenomAppResponseVersionsItemManifestSafeFileCountMultipleOf = 1;
+
+export const getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMin = 0;
+export const getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMax = 5000;
+export const getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMultipleOf = 1;
+
+export const getVenomAppResponseVersionsItemManifestFilesItemMax = 240;
+
+export const getVenomAppResponseVersionsItemManifestFilesMax = 200;
+
+export const getVenomAppResponseVersionsItemManifestProjectFilesItemMax = 240;
+
+export const getVenomAppResponseVersionsItemManifestProjectFilesMax = 40;
+
+export const getVenomAppResponseVersionsItemManifestDetectedStackItemMax = 60;
+
+export const getVenomAppResponseVersionsItemManifestDetectedStackMax = 20;
+
+export const getVenomAppResponseVersionsMax = 500;
+
+export const getVenomAppResponseImportJobsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseImportJobsItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseImportJobsItemArchiveFilenameMax = 160;
+
+export const getVenomAppResponseImportJobsItemDeclaredBytesMultipleOf = 1;
+
+export const getVenomAppResponseImportJobsItemProgressMin = 0;
+export const getVenomAppResponseImportJobsItemProgressMax = 100;
+export const getVenomAppResponseImportJobsItemProgressMultipleOf = 1;
+
+export const getVenomAppResponseImportJobsItemFailureCodeMax = 80;
+
+export const getVenomAppResponseImportJobsItemFailureMessageMax = 240;
+
+export const getVenomAppResponseImportJobsItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseImportJobsMax = 100;
+
+export const getVenomAppResponseDeploymentLinksItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseDeploymentLinksItemLabelMax = 80;
+
+export const getVenomAppResponseDeploymentLinksItemUrlMax = 2048;
+
+export const getVenomAppResponseDeploymentLinksMax = 20;
+
+
+
+export const GetVenomAppResponse = zod.object({
+  "app": zod.object({
+  "id": zod.string().regex(getVenomAppResponseAppIdRegExp),
+  "name": zod.string().min(1).max(getVenomAppResponseAppNameMax),
+  "purpose": zod.string().min(1).max(getVenomAppResponseAppPurposeMax),
+  "brand": zod.string().min(1).max(getVenomAppResponseAppBrandMax),
+  "status": zod.enum(['draft', 'importing', 'ready', 'attention']),
+  "detectedStack": zod.array(zod.string().min(1).max(getVenomAppResponseAppDetectedStackItemMax)).max(getVenomAppResponseAppDetectedStackMax),
+  "sourceType": zod.enum(['none', 'zip']),
+  "sourceVersion": zod.number().min(getVenomAppResponseAppSourceVersionMin).multipleOf(getVenomAppResponseAppSourceVersionMultipleOf),
+  "deploymentUrl": zod.string().max(getVenomAppResponseAppDeploymentUrlMax).nullable(),
+  "importStatus": zod.union([zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),zod.null()]),
+  "sourceUpdatedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "versions": zod.array(zod.object({
+  "id": zod.string().regex(getVenomAppResponseVersionsItemIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(getVenomAppResponseVersionsItemVersionNumberMultipleOf),
+  "sourceType": zod.enum(['zip']),
+  "archiveFilename": zod.string().min(1).max(getVenomAppResponseVersionsItemArchiveFilenameMax),
+  "archiveBytes": zod.number().min(1).multipleOf(getVenomAppResponseVersionsItemArchiveBytesMultipleOf),
+  "checksumSha256": zod.string().regex(getVenomAppResponseVersionsItemChecksumSha256RegExp),
+  "manifest": zod.object({
+  "formatVersion": zod.literal(1),
+  "rootKind": zod.enum(['single-project', 'monorepo']),
+  "totalEntries": zod.number().min(1).max(getVenomAppResponseVersionsItemManifestTotalEntriesMax).multipleOf(getVenomAppResponseVersionsItemManifestTotalEntriesMultipleOf),
+  "safeFileCount": zod.number().min(getVenomAppResponseVersionsItemManifestSafeFileCountMin).max(getVenomAppResponseVersionsItemManifestSafeFileCountMax).multipleOf(getVenomAppResponseVersionsItemManifestSafeFileCountMultipleOf),
+  "excludedSensitiveFileCount": zod.number().min(getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMin).max(getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMax).multipleOf(getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMultipleOf),
+  "files": zod.array(zod.string().max(getVenomAppResponseVersionsItemManifestFilesItemMax)).max(getVenomAppResponseVersionsItemManifestFilesMax),
+  "projectFiles": zod.array(zod.string().max(getVenomAppResponseVersionsItemManifestProjectFilesItemMax)).max(getVenomAppResponseVersionsItemManifestProjectFilesMax),
+  "detectedStack": zod.array(zod.string().min(1).max(getVenomAppResponseVersionsItemManifestDetectedStackItemMax)).max(getVenomAppResponseVersionsItemManifestDetectedStackMax)
+}),
+  "createdAt": zod.coerce.date()
+})).max(getVenomAppResponseVersionsMax),
+  "importJobs": zod.array(zod.object({
+  "id": zod.string().regex(getVenomAppResponseImportJobsItemIdRegExp),
+  "appId": zod.string().regex(getVenomAppResponseImportJobsItemAppIdRegExp),
+  "archiveFilename": zod.string().min(1).max(getVenomAppResponseImportJobsItemArchiveFilenameMax),
+  "declaredBytes": zod.number().min(1).multipleOf(getVenomAppResponseImportJobsItemDeclaredBytesMultipleOf),
+  "status": zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),
+  "progress": zod.number().min(getVenomAppResponseImportJobsItemProgressMin).max(getVenomAppResponseImportJobsItemProgressMax).multipleOf(getVenomAppResponseImportJobsItemProgressMultipleOf),
+  "failureCode": zod.string().max(getVenomAppResponseImportJobsItemFailureCodeMax).nullable(),
+  "failureMessage": zod.string().max(getVenomAppResponseImportJobsItemFailureMessageMax).nullable(),
+  "sourceVersionId": zod.string().regex(getVenomAppResponseImportJobsItemSourceVersionIdRegExp).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullable()
+})).max(getVenomAppResponseImportJobsMax),
+  "deploymentLinks": zod.array(zod.object({
+  "id": zod.string().regex(getVenomAppResponseDeploymentLinksItemIdRegExp),
+  "label": zod.string().min(1).max(getVenomAppResponseDeploymentLinksItemLabelMax),
+  "url": zod.string().max(getVenomAppResponseDeploymentLinksItemUrlMax),
+  "isPrimary": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})).max(getVenomAppResponseDeploymentLinksMax)
+})
+
+
+/**
+ * @summary Update app metadata
+ */
+export const updateVenomAppPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const UpdateVenomAppParams = zod.object({
+  "appId": zod.coerce.string().regex(updateVenomAppPathAppIdRegExp)
+})
+
+export const updateVenomAppBodyNameMax = 120;
+
+export const updateVenomAppBodyPurposeMax = 1000;
+
+export const updateVenomAppBodyBrandMax = 120;
+
+export const updateVenomAppBodyDeploymentUrlMax = 2048;
+
+
+
+export const UpdateVenomAppBody = zod.object({
+  "name": zod.string().min(1).max(updateVenomAppBodyNameMax).optional(),
+  "purpose": zod.string().min(1).max(updateVenomAppBodyPurposeMax).optional(),
+  "brand": zod.string().min(1).max(updateVenomAppBodyBrandMax).optional(),
+  "status": zod.enum(['draft', 'importing', 'ready', 'attention']).optional(),
+  "deploymentUrl": zod.string().max(updateVenomAppBodyDeploymentUrlMax).nullish()
+})
+
+export const updateVenomAppResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomAppResponseNameMax = 120;
+
+export const updateVenomAppResponsePurposeMax = 1000;
+
+export const updateVenomAppResponseBrandMax = 120;
+
+export const updateVenomAppResponseDetectedStackItemMax = 60;
+
+export const updateVenomAppResponseDetectedStackMax = 20;
+
+export const updateVenomAppResponseSourceVersionMin = 0;
+export const updateVenomAppResponseSourceVersionMultipleOf = 1;
+
+export const updateVenomAppResponseDeploymentUrlMax = 2048;
+
+
+
+export const UpdateVenomAppResponse = zod.object({
+  "id": zod.string().regex(updateVenomAppResponseIdRegExp),
+  "name": zod.string().min(1).max(updateVenomAppResponseNameMax),
+  "purpose": zod.string().min(1).max(updateVenomAppResponsePurposeMax),
+  "brand": zod.string().min(1).max(updateVenomAppResponseBrandMax),
+  "status": zod.enum(['draft', 'importing', 'ready', 'attention']),
+  "detectedStack": zod.array(zod.string().min(1).max(updateVenomAppResponseDetectedStackItemMax)).max(updateVenomAppResponseDetectedStackMax),
+  "sourceType": zod.enum(['none', 'zip']),
+  "sourceVersion": zod.number().min(updateVenomAppResponseSourceVersionMin).multipleOf(updateVenomAppResponseSourceVersionMultipleOf),
+  "deploymentUrl": zod.string().max(updateVenomAppResponseDeploymentUrlMax).nullable(),
+  "importStatus": zod.union([zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),zod.null()]),
+  "sourceUpdatedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an app record and its private source packages
+ */
+export const deleteVenomAppPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const DeleteVenomAppParams = zod.object({
+  "appId": zod.coerce.string().regex(deleteVenomAppPathAppIdRegExp)
+})
+
+export const DeleteVenomAppResponse = zod.void()
+
+
+/**
+ * @summary List immutable source versions for an app
+ */
+export const listVenomAppVersionsPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ListVenomAppVersionsParams = zod.object({
+  "appId": zod.coerce.string().regex(listVenomAppVersionsPathAppIdRegExp)
+})
+
+export const listVenomAppVersionsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomAppVersionsResponseVersionNumberMultipleOf = 1;
+
+export const listVenomAppVersionsResponseArchiveFilenameMax = 160;
+
+export const listVenomAppVersionsResponseArchiveBytesMultipleOf = 1;
+
+export const listVenomAppVersionsResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listVenomAppVersionsResponseManifestTotalEntriesMax = 5000;
+export const listVenomAppVersionsResponseManifestTotalEntriesMultipleOf = 1;
+
+export const listVenomAppVersionsResponseManifestSafeFileCountMin = 0;
+export const listVenomAppVersionsResponseManifestSafeFileCountMax = 5000;
+export const listVenomAppVersionsResponseManifestSafeFileCountMultipleOf = 1;
+
+export const listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMin = 0;
+export const listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMax = 5000;
+export const listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMultipleOf = 1;
+
+export const listVenomAppVersionsResponseManifestFilesItemMax = 240;
+
+export const listVenomAppVersionsResponseManifestFilesMax = 200;
+
+export const listVenomAppVersionsResponseManifestProjectFilesItemMax = 240;
+
+export const listVenomAppVersionsResponseManifestProjectFilesMax = 40;
+
+export const listVenomAppVersionsResponseManifestDetectedStackItemMax = 60;
+
+export const listVenomAppVersionsResponseManifestDetectedStackMax = 20;
+
+
+
+export const ListVenomAppVersionsResponseItem = zod.object({
+  "id": zod.string().regex(listVenomAppVersionsResponseIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(listVenomAppVersionsResponseVersionNumberMultipleOf),
+  "sourceType": zod.enum(['zip']),
+  "archiveFilename": zod.string().min(1).max(listVenomAppVersionsResponseArchiveFilenameMax),
+  "archiveBytes": zod.number().min(1).multipleOf(listVenomAppVersionsResponseArchiveBytesMultipleOf),
+  "checksumSha256": zod.string().regex(listVenomAppVersionsResponseChecksumSha256RegExp),
+  "manifest": zod.object({
+  "formatVersion": zod.literal(1),
+  "rootKind": zod.enum(['single-project', 'monorepo']),
+  "totalEntries": zod.number().min(1).max(listVenomAppVersionsResponseManifestTotalEntriesMax).multipleOf(listVenomAppVersionsResponseManifestTotalEntriesMultipleOf),
+  "safeFileCount": zod.number().min(listVenomAppVersionsResponseManifestSafeFileCountMin).max(listVenomAppVersionsResponseManifestSafeFileCountMax).multipleOf(listVenomAppVersionsResponseManifestSafeFileCountMultipleOf),
+  "excludedSensitiveFileCount": zod.number().min(listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMin).max(listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMax).multipleOf(listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMultipleOf),
+  "files": zod.array(zod.string().max(listVenomAppVersionsResponseManifestFilesItemMax)).max(listVenomAppVersionsResponseManifestFilesMax),
+  "projectFiles": zod.array(zod.string().max(listVenomAppVersionsResponseManifestProjectFilesItemMax)).max(listVenomAppVersionsResponseManifestProjectFilesMax),
+  "detectedStack": zod.array(zod.string().min(1).max(listVenomAppVersionsResponseManifestDetectedStackItemMax)).max(listVenomAppVersionsResponseManifestDetectedStackMax)
+}),
+  "createdAt": zod.coerce.date()
+})
+export const ListVenomAppVersionsResponse = zod.array(ListVenomAppVersionsResponseItem).max(500)
+
+
+/**
+ * @summary Start a private ZIP source import
+ */
+export const createVenomAppImportPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const CreateVenomAppImportParams = zod.object({
+  "appId": zod.coerce.string().regex(createVenomAppImportPathAppIdRegExp)
+})
+
+export const createVenomAppImportBodyFilenameMax = 160;
+
+
+export const createVenomAppImportBodyFilenameRegExp = new RegExp('^.*\\.[zZ][iI][pP]$');
+export const createVenomAppImportBodySizeMax = 52428800;
+export const createVenomAppImportBodySizeMultipleOf = 1;
+
+export const createVenomAppImportBodyIdempotencyKeyMin = 16;
+export const createVenomAppImportBodyIdempotencyKeyMax = 120;
+
+
+export const createVenomAppImportBodyIdempotencyKeyRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+
+
+export const CreateVenomAppImportBody = zod.object({
+  "filename": zod.string().min(1).max(createVenomAppImportBodyFilenameMax).regex(createVenomAppImportBodyFilenameRegExp),
+  "size": zod.number().min(1).max(createVenomAppImportBodySizeMax).multipleOf(createVenomAppImportBodySizeMultipleOf),
+  "idempotencyKey": zod.string().min(createVenomAppImportBodyIdempotencyKeyMin).max(createVenomAppImportBodyIdempotencyKeyMax).regex(createVenomAppImportBodyIdempotencyKeyRegExp)
+})
+
+export const createVenomAppImportResponseJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppImportResponseJobAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppImportResponseJobArchiveFilenameMax = 160;
+
+export const createVenomAppImportResponseJobDeclaredBytesMultipleOf = 1;
+
+export const createVenomAppImportResponseJobProgressMin = 0;
+export const createVenomAppImportResponseJobProgressMax = 100;
+export const createVenomAppImportResponseJobProgressMultipleOf = 1;
+
+export const createVenomAppImportResponseJobFailureCodeMax = 80;
+
+export const createVenomAppImportResponseJobFailureMessageMax = 240;
+
+export const createVenomAppImportResponseJobSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppImportResponseUploadUrlMax = 8192;
+
+
+
+export const CreateVenomAppImportResponse = zod.object({
+  "job": zod.object({
+  "id": zod.string().regex(createVenomAppImportResponseJobIdRegExp),
+  "appId": zod.string().regex(createVenomAppImportResponseJobAppIdRegExp),
+  "archiveFilename": zod.string().min(1).max(createVenomAppImportResponseJobArchiveFilenameMax),
+  "declaredBytes": zod.number().min(1).multipleOf(createVenomAppImportResponseJobDeclaredBytesMultipleOf),
+  "status": zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),
+  "progress": zod.number().min(createVenomAppImportResponseJobProgressMin).max(createVenomAppImportResponseJobProgressMax).multipleOf(createVenomAppImportResponseJobProgressMultipleOf),
+  "failureCode": zod.string().max(createVenomAppImportResponseJobFailureCodeMax).nullable(),
+  "failureMessage": zod.string().max(createVenomAppImportResponseJobFailureMessageMax).nullable(),
+  "sourceVersionId": zod.string().regex(createVenomAppImportResponseJobSourceVersionIdRegExp).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullable()
+}),
+  "uploadUrl": zod.string().max(createVenomAppImportResponseUploadUrlMax),
+  "maxBytes": zod.literal(52428800),
+  "requiredContentType": zod.literal("application/zip")
+})
+/**
+ * @summary Get a ZIP import's observable status
+ */
+export const getVenomAppImportPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppImportPathImportJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const GetVenomAppImportParams = zod.object({
+  "appId": zod.coerce.string().regex(getVenomAppImportPathAppIdRegExp),
+  "importJobId": zod.coerce.string().regex(getVenomAppImportPathImportJobIdRegExp)
+})
+
+export const getVenomAppImportResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppImportResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppImportResponseArchiveFilenameMax = 160;
+
+export const getVenomAppImportResponseDeclaredBytesMultipleOf = 1;
+
+export const getVenomAppImportResponseProgressMin = 0;
+export const getVenomAppImportResponseProgressMax = 100;
+export const getVenomAppImportResponseProgressMultipleOf = 1;
+
+export const getVenomAppImportResponseFailureCodeMax = 80;
+
+export const getVenomAppImportResponseFailureMessageMax = 240;
+
+export const getVenomAppImportResponseSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const GetVenomAppImportResponse = zod.object({
+  "id": zod.string().regex(getVenomAppImportResponseIdRegExp),
+  "appId": zod.string().regex(getVenomAppImportResponseAppIdRegExp),
+  "archiveFilename": zod.string().min(1).max(getVenomAppImportResponseArchiveFilenameMax),
+  "declaredBytes": zod.number().min(1).multipleOf(getVenomAppImportResponseDeclaredBytesMultipleOf),
+  "status": zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),
+  "progress": zod.number().min(getVenomAppImportResponseProgressMin).max(getVenomAppImportResponseProgressMax).multipleOf(getVenomAppImportResponseProgressMultipleOf),
+  "failureCode": zod.string().max(getVenomAppImportResponseFailureCodeMax).nullable(),
+  "failureMessage": zod.string().max(getVenomAppImportResponseFailureMessageMax).nullable(),
+  "sourceVersionId": zod.string().regex(getVenomAppImportResponseSourceVersionIdRegExp).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Confirm upload and start bounded archive inspection
+ */
+export const completeVenomAppImportUploadPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const completeVenomAppImportUploadPathImportJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const CompleteVenomAppImportUploadParams = zod.object({
+  "appId": zod.coerce.string().regex(completeVenomAppImportUploadPathAppIdRegExp),
+  "importJobId": zod.coerce.string().regex(completeVenomAppImportUploadPathImportJobIdRegExp)
+})
+
+export const completeVenomAppImportUploadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const completeVenomAppImportUploadResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const completeVenomAppImportUploadResponseArchiveFilenameMax = 160;
+
+export const completeVenomAppImportUploadResponseDeclaredBytesMultipleOf = 1;
+
+export const completeVenomAppImportUploadResponseProgressMin = 0;
+export const completeVenomAppImportUploadResponseProgressMax = 100;
+export const completeVenomAppImportUploadResponseProgressMultipleOf = 1;
+
+export const completeVenomAppImportUploadResponseFailureCodeMax = 80;
+
+export const completeVenomAppImportUploadResponseFailureMessageMax = 240;
+
+export const completeVenomAppImportUploadResponseSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const CompleteVenomAppImportUploadResponse = zod.object({
+  "id": zod.string().regex(completeVenomAppImportUploadResponseIdRegExp),
+  "appId": zod.string().regex(completeVenomAppImportUploadResponseAppIdRegExp),
+  "archiveFilename": zod.string().min(1).max(completeVenomAppImportUploadResponseArchiveFilenameMax),
+  "declaredBytes": zod.number().min(1).multipleOf(completeVenomAppImportUploadResponseDeclaredBytesMultipleOf),
+  "status": zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),
+  "progress": zod.number().min(completeVenomAppImportUploadResponseProgressMin).max(completeVenomAppImportUploadResponseProgressMax).multipleOf(completeVenomAppImportUploadResponseProgressMultipleOf),
+  "failureCode": zod.string().max(completeVenomAppImportUploadResponseFailureCodeMax).nullable(),
+  "failureMessage": zod.string().max(completeVenomAppImportUploadResponseFailureMessageMax).nullable(),
+  "sourceVersionId": zod.string().regex(completeVenomAppImportUploadResponseSourceVersionIdRegExp).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Create a fresh private upload target for a failed import
+ */
+export const retryVenomAppImportPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomAppImportPathImportJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const RetryVenomAppImportParams = zod.object({
+  "appId": zod.coerce.string().regex(retryVenomAppImportPathAppIdRegExp),
+  "importJobId": zod.coerce.string().regex(retryVenomAppImportPathImportJobIdRegExp)
+})
+
+export const retryVenomAppImportResponseJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomAppImportResponseJobAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomAppImportResponseJobArchiveFilenameMax = 160;
+
+export const retryVenomAppImportResponseJobDeclaredBytesMultipleOf = 1;
+
+export const retryVenomAppImportResponseJobProgressMin = 0;
+export const retryVenomAppImportResponseJobProgressMax = 100;
+export const retryVenomAppImportResponseJobProgressMultipleOf = 1;
+
+export const retryVenomAppImportResponseJobFailureCodeMax = 80;
+
+export const retryVenomAppImportResponseJobFailureMessageMax = 240;
+
+export const retryVenomAppImportResponseJobSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomAppImportResponseUploadUrlMax = 8192;
+
+
+
+export const RetryVenomAppImportResponse = zod.object({
+  "job": zod.object({
+  "id": zod.string().regex(retryVenomAppImportResponseJobIdRegExp),
+  "appId": zod.string().regex(retryVenomAppImportResponseJobAppIdRegExp),
+  "archiveFilename": zod.string().min(1).max(retryVenomAppImportResponseJobArchiveFilenameMax),
+  "declaredBytes": zod.number().min(1).multipleOf(retryVenomAppImportResponseJobDeclaredBytesMultipleOf),
+  "status": zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),
+  "progress": zod.number().min(retryVenomAppImportResponseJobProgressMin).max(retryVenomAppImportResponseJobProgressMax).multipleOf(retryVenomAppImportResponseJobProgressMultipleOf),
+  "failureCode": zod.string().max(retryVenomAppImportResponseJobFailureCodeMax).nullable(),
+  "failureMessage": zod.string().max(retryVenomAppImportResponseJobFailureMessageMax).nullable(),
+  "sourceVersionId": zod.string().regex(retryVenomAppImportResponseJobSourceVersionIdRegExp).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullable()
+}),
+  "uploadUrl": zod.string().max(retryVenomAppImportResponseUploadUrlMax),
+  "maxBytes": zod.literal(52428800),
+  "requiredContentType": zod.literal("application/zip")
+})

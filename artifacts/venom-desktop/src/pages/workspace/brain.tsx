@@ -594,7 +594,7 @@ export default function BrainPage() {
                         Synaptic Links
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {selectedCluster.links.map((id) => {
+                        {selectedCluster.links.map((id: string) => {
                           const linked = clusters.find(
                             (cluster) => cluster.id === id,
                           );
