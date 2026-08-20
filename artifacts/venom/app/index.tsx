@@ -38,8 +38,6 @@ import Animated, {
   withSpring,
   withRepeat,
   cancelAnimation,
-  interpolate,
-  Extrapolate,
   ReduceMotion,
   runOnJS,
   withTiming,
@@ -487,6 +485,8 @@ function ChatWorkspace({
 }
 
 type GraphPoint = { x: number; y: number };
+
+type GraphCamera = { yaw: number; pitch: number; zoom: number };
 type GraphConnection = {
   id: string;
   from: KnowledgeCluster;
@@ -496,6 +496,7 @@ type GraphConnection = {
 
 const MAX_LIVE_CONNECTIONS = 48;
 
+const DEFAULT_GRAPH_CAMERA: GraphCamera = { yaw: 0, pitch: 0, zoom: 1 };
 const SYMBIOTE_LOBES = [
   { width: 210, height: 116, x: -105, y: -58, rotate: "-12deg" },
   { width: 104, height: 238, x: -52, y: -119, rotate: "18deg" },
@@ -510,19 +511,23 @@ function SymbioteTendrilSegment({
   index,
   breath,
   reduceMotion,
+  opacity,
 }: {
   from: GraphPoint;
   to: GraphPoint;
   index: number;
   breath: SharedValue<number>;
   reduceMotion: boolean;
+  opacity: number;
 }) {
   const colors = useColors();
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const length = Math.sqrt(dx * dx + dy * dy);
   const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-  const thickness = 5 + (index % 3);
+  const thickness =
+    (2.4 + (index % 3) * 0.55) *
+    clampGraphValue(opacity + 0.25, 0.55, 1.2);
   const left = (from.x + to.x) / 2 - length / 2;
   const top = (from.y + to.y) / 2 - thickness / 2;
 
@@ -555,6 +560,7 @@ function SymbioteTendrilSegment({
           backgroundColor: colors.symbioteSoft,
           borderColor: colors.symbioteSoft,
           shadowColor: colors.symbioteHighlight,
+          opacity,
           transform: [{ rotate: `${angle}deg` }],
         },
       ]}
@@ -587,12 +593,14 @@ function SymbioteConnection({
   index,
   breath,
   reduceMotion,
+  opacity,
 }: {
   from: GraphPoint;
   to: GraphPoint;
   index: number;
   breath: SharedValue<number>;
   reduceMotion: boolean;
+  opacity: number;
 }) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -611,6 +619,7 @@ function SymbioteConnection({
         index={index * 2}
         breath={breath}
         reduceMotion={reduceMotion}
+        opacity={opacity}
       />
       <SymbioteTendrilSegment
         from={control}
@@ -618,6 +627,7 @@ function SymbioteConnection({
         index={index * 2 + 1}
         breath={breath}
         reduceMotion={reduceMotion}
+        opacity={opacity}
       />
     </>
   );
@@ -630,19 +640,22 @@ function SymbioteNode({
   isSelected,
   breath,
   reduceMotion,
+  depthScale,
+  depthOpacity,
   onPress,
 }: {
   cluster: KnowledgeCluster;
-  position: GraphPoint;
+  position: ProjectedGraphPoint;
   index: number;
   isSelected: boolean;
   breath: SharedValue<number>;
   reduceMotion: boolean;
+  depthScale: number;
+  depthOpacity: number;
   onPress: () => void;
 }) {
   const colors = useColors();
   const size = 34 + cluster.strength * 18;
-  const depthScale = 0.88 + (position.y / 800) * 0.22;
 
   const nodeMotion = useAnimatedStyle(() => {
     const wave = reduceMotion
@@ -671,6 +684,8 @@ function SymbioteNode({
             top: position.y - size / 2,
             width: size,
             height: size,
+            zIndex: Math.round(1000 + position.depth),
+            opacity: depthOpacity,
           },
           nodeMotion,
         ]}
@@ -742,7 +757,9 @@ function SymbioteNode({
           styles.nodeLabelContainer,
           {
             left: position.x - 75,
-            top: position.y + size / 2 + 10,
+            top: position.y + (size * depthScale) / 2 + 8,
+            zIndex: Math.round(1000 + position.depth),
+            opacity: depthOpacity,
           },
         ]}
       >
@@ -813,20 +830,25 @@ function KnowledgeWorkspace({
     Math.max(0.46, (windowWidth - 20) / MAP_SIZE),
   );
   const breath = useSharedValue(0);
-  const graphScale = useSharedValue(baseGraphScale);
-  const savedGraphScale = useSharedValue(baseGraphScale);
-  const tiltX = useSharedValue(0);
-  const tiltY = useSharedValue(0);
+  const [graphCamera, setGraphCamera] =
+    useState<GraphCamera>(DEFAULT_GRAPH_CAMERA);
+  const graphCameraRef = useRef(graphCamera);
+  const orbitStartRef = useRef<GraphCamera>(DEFAULT_GRAPH_CAMERA);
+  const pinchStartRef = useRef<GraphCamera>(DEFAULT_GRAPH_CAMERA);
+
+  useEffect(() => {
+    graphCameraRef.current = graphCamera;
+  }, [graphCamera]);
+
+  const commitGraphCamera = useCallback((next: GraphCamera) => {
+    graphCameraRef.current = next;
+    setGraphCamera(next);
+  }, []);
 
   useEffect(() => {
     cancelAnimation(breath);
-    cancelAnimation(graphScale);
-    cancelAnimation(tiltX);
-    cancelAnimation(tiltY);
     if (!isActive || reduceMotion || IS_READ_ONLY_UI_TEST) {
       breath.value = 0;
-      tiltX.value = 0;
-      tiltY.value = 0;
       return;
     }
     breath.value = withRepeat(
@@ -839,16 +861,8 @@ function KnowledgeWorkspace({
     );
     return () => {
       cancelAnimation(breath);
-      cancelAnimation(graphScale);
-      cancelAnimation(tiltX);
-      cancelAnimation(tiltY);
     };
-  }, [breath, graphScale, isActive, reduceMotion, tiltX, tiltY]);
-
-  useEffect(() => {
-    graphScale.value = baseGraphScale;
-    savedGraphScale.value = baseGraphScale;
-  }, [baseGraphScale, graphScale, savedGraphScale]);
+  }, [breath, isActive, reduceMotion]);
 
   useEffect(() => {
     if (
@@ -898,61 +912,69 @@ function KnowledgeWorkspace({
       .slice(0, MAX_LIVE_CONNECTIONS);
   }, [clustersById, visibleClusters]);
 
-  const getPos = useCallback(
-    (c: KnowledgeCluster) => ({
-      x: CENTER + c.x * 2.5,
-      y: CENTER + c.y * 2.5,
-    }),
-    [CENTER],
+  const projectedClusters = useMemo<ProjectedGraphCluster[]>(
+    () =>
+      visibleClusters
+        .map((cluster) => ({
+          cluster,
+          ...projectGraphCluster(cluster, graphCamera, baseGraphScale, CENTER),
+        }))
+        .sort((left, right) => left.depth - right.depth),
+    [CENTER, baseGraphScale, graphCamera, visibleClusters],
+  );
+  const projectedById = useMemo(
+    () =>
+      new Map(
+        projectedClusters.map((projected) => [projected.cluster.id, projected]),
+      ),
+    [projectedClusters],
   );
 
   const orbitGesture = Gesture.Pan()
+    .runOnJS(true)
+    .maxPointers(1)
+    .minDistance(12)
+    .onBegin(() => {
+      orbitStartRef.current = graphCameraRef.current;
+    })
     .onUpdate((event) => {
-      tiltY.value = interpolate(
-        event.translationX,
-        [-windowWidth, windowWidth],
-        [-20, 20],
-        Extrapolate.CLAMP,
-      );
-      tiltX.value = interpolate(
-        event.translationY,
-        [-windowWidth, windowWidth],
-        [18, -18],
-        Extrapolate.CLAMP,
-      );
+      const start = orbitStartRef.current;
+      commitGraphCamera({
+        ...start,
+        yaw: start.yaw + event.translationX * 0.009,
+        pitch: clampGraphValue(
+          start.pitch - event.translationY * 0.007,
+          -0.82,
+          0.82,
+        ),
+      });
     })
-    .onEnd(() => {
-      if (reduceMotion) {
-        tiltX.value = 0;
-        tiltY.value = 0;
-      } else {
-        tiltX.value = withSpring(0, { damping: 15, stiffness: 110 });
-        tiltY.value = withSpring(0, { damping: 15, stiffness: 110 });
-      }
-    })
-    .minDistance(12);
+    .onFinalize((_event, success) => {
+      if (success) return;
+      commitGraphCamera({
+        ...graphCameraRef.current,
+        yaw: orbitStartRef.current.yaw,
+        pitch: orbitStartRef.current.pitch,
+      });
+    });
 
   const zoomGesture = Gesture.Pinch()
-    .onUpdate((event) => {
-      graphScale.value = Math.max(
-        baseGraphScale * 0.8,
-        Math.min(savedGraphScale.value * event.scale, 1.08),
-      );
+    .runOnJS(true)
+    .onBegin(() => {
+      pinchStartRef.current = graphCameraRef.current;
     })
-    .onEnd(() => {
-      savedGraphScale.value = graphScale.value;
+    .onUpdate((event) => {
+      commitGraphCamera({
+        ...graphCameraRef.current,
+        zoom: clampGraphValue(
+          pinchStartRef.current.zoom * event.scale,
+          0.7,
+          1.65,
+        ),
+      });
     });
 
   const graphGesture = Gesture.Simultaneous(orbitGesture, zoomGesture);
-
-  const graphMotionStyle = useAnimatedStyle(() => ({
-    transform: [
-      { perspective: 900 },
-      { rotateX: `${tiltX.value}deg` },
-      { rotateY: `${tiltY.value}deg` },
-      { scale: graphScale.value * (reduceMotion ? 1 : 1 + breath.value * 0.018) },
-    ],
-  }));
 
   const auraMotionStyle = useAnimatedStyle(() => ({
     opacity: reduceMotion ? 0.16 : 0.12 + breath.value * 0.16,
@@ -960,19 +982,7 @@ function KnowledgeWorkspace({
   }));
 
   const resetView = () => {
-    savedGraphScale.value = baseGraphScale;
-    if (reduceMotion) {
-      graphScale.value = baseGraphScale;
-      tiltX.value = 0;
-      tiltY.value = 0;
-    } else {
-      graphScale.value = withSpring(baseGraphScale, {
-        damping: 16,
-        stiffness: 120,
-      });
-      tiltX.value = withSpring(0, { damping: 15, stiffness: 110 });
-      tiltY.value = withSpring(0, { damping: 15, stiffness: 110 });
-    }
+    commitGraphCamera(DEFAULT_GRAPH_CAMERA);
   };
 
   const closeDetails = () => {
@@ -1101,7 +1111,7 @@ function KnowledgeWorkspace({
               styles.symbioteStage,
               { backgroundColor: colors.symbioteBackdrop },
             ]}
-            accessibilityLabel={`Living ontology with ${visibleClusters.length} selectable knowledge clusters`}
+            accessibilityLabel={`Living ontology with ${visibleClusters.length} selectable knowledge clusters. Camera yaw ${graphCamera.yaw.toFixed(3)}, pitch ${graphCamera.pitch.toFixed(3)}, zoom ${graphCamera.zoom.toFixed(3)}`}
           >
             <View style={styles.symbioteHud} pointerEvents="none">
               <View>
@@ -1157,7 +1167,6 @@ function KnowledgeWorkspace({
                       left: (windowWidth - MAP_SIZE) / 2,
                       top: -36,
                     },
-                    graphMotionStyle,
                   ]}
                 >
                   <Animated.View
@@ -1230,29 +1239,37 @@ function KnowledgeWorkspace({
                     </View>
                   ))}
 
-                  {liveConnections.map((connection) => (
-                    <SymbioteConnection
-                      key={connection.id}
-                      from={getPos(connection.from)}
-                      to={getPos(connection.to)}
-                      index={connection.index}
-                      breath={breath}
-                      reduceMotion={reduceMotion}
-                    />
-                  ))}
+                  {liveConnections.map((connection) => {
+                    const from = projectedById.get(connection.from.id);
+                    const to = projectedById.get(connection.to.id);
+                    if (!from || !to) return null;
+                    return (
+                      <SymbioteConnection
+                        key={connection.id}
+                        from={from}
+                        to={to}
+                        index={connection.index}
+                        breath={breath}
+                        reduceMotion={reduceMotion}
+                        opacity={(from.opacity + to.opacity) / 2}
+                      />
+                    );
+                  })}
 
-                  {visibleClusters.map((cluster, index) => (
+                  {projectedClusters.map((projected, index) => (
                     <SymbioteNode
-                      key={cluster.id}
-                      cluster={cluster}
-                      position={getPos(cluster)}
+                      key={projected.cluster.id}
+                      cluster={projected.cluster}
+                      position={projected}
                       index={index}
-                      isSelected={selectedCluster?.id === cluster.id}
+                      isSelected={selectedCluster?.id === projected.cluster.id}
                       breath={breath}
                       reduceMotion={reduceMotion}
+                      depthScale={projected.scale}
+                      depthOpacity={projected.opacity}
                       onPress={() => {
                         if (Platform.OS !== "web") Haptics.selectionAsync();
-                        openCluster(cluster.id);
+                        openCluster(projected.cluster.id);
                       }}
                     />
                   ))}
@@ -1269,7 +1286,7 @@ function KnowledgeWorkspace({
                 ]}
               >
                   {reduceMotion
-                    ? "Motion reduced · explore clusters"
+                    ? "Motion reduced · drag to orbit"
                     : "Drag to orbit · pinch to dive"}
               </Text>
             </View>
@@ -5362,6 +5379,40 @@ function isValidCardDate(value: string) {
   );
 }
 
+function projectGraphCluster(
+  cluster: KnowledgeCluster,
+  camera: GraphCamera,
+  baseScale: number,
+  center: number,
+): ProjectedGraphPoint {
+  const worldX = cluster.x * 2.25;
+  const worldY = cluster.y * 2.25;
+  const worldZ = graphDepthForCluster(cluster);
+  const cosYaw = Math.cos(camera.yaw);
+  const sinYaw = Math.sin(camera.yaw);
+  const cosPitch = Math.cos(camera.pitch);
+  const sinPitch = Math.sin(camera.pitch);
+  const afterYawX = worldX * cosYaw + worldZ * sinYaw;
+  const afterYawZ = worldZ * cosYaw - worldX * sinYaw;
+  const afterPitchY = worldY * cosPitch - afterYawZ * sinPitch;
+  const depth = afterYawZ * cosPitch + worldY * sinPitch;
+  const perspective = 700 / (700 - depth);
+  const positionScale = clampGraphValue(
+    baseScale * camera.zoom * perspective,
+    0.28,
+    1.35,
+  );
+  const scale = clampGraphValue(camera.zoom * perspective, 0.66, 1.45);
+
+  return {
+    x: center + afterYawX * positionScale,
+    y: center + afterPitchY * positionScale,
+    depth,
+    scale,
+    opacity: clampGraphValue(0.34 + (depth + 220) / 370, 0.34, 1),
+  };
+}
+
 const WORKSPACE_TABS = ["Chat", "Feed", "Brain", "To-Do"] as const;
 
 type WorkspaceTabHandle = {
@@ -5381,3 +5432,24 @@ type WebKeyboardEvent = {
   nativeEvent?: { key?: string };
   preventDefault?: () => void;
 };
+
+type ProjectedGraphCluster = ProjectedGraphPoint & {
+  cluster: KnowledgeCluster;
+};
+
+const clampGraphValue = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
+type ProjectedGraphPoint = GraphPoint & {
+  depth: number;
+  scale: number;
+  opacity: number;
+};
+
+function graphDepthForCluster(cluster: KnowledgeCluster) {
+  let hash = 17;
+  for (const character of cluster.id) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return (hash % 210) - 105 + Math.sin(cluster.x * 0.06 + cluster.y * 0.04) * 32;
+}
