@@ -47,6 +47,7 @@ import { useColors } from "@/hooks/useColors";
 import { useTheme } from "@/context/ThemeContext";
 import {
   useVenom,
+  IS_READ_ONLY_UI_TEST,
   Message,
   KnowledgeCluster,
   Task,
@@ -808,7 +809,7 @@ function KnowledgeWorkspace({
     cancelAnimation(graphScale);
     cancelAnimation(tiltX);
     cancelAnimation(tiltY);
-    if (!isActive || reduceMotion) {
+    if (!isActive || reduceMotion || IS_READ_ONLY_UI_TEST) {
       breath.value = 0;
       tiltX.value = 0;
       tiltY.value = 0;
@@ -1059,6 +1060,7 @@ function KnowledgeWorkspace({
           </View>
         ) : (
           <View
+            testID="knowledge-map"
             style={[
               styles.symbioteStage,
               { backgroundColor: colors.symbioteBackdrop },
@@ -1269,6 +1271,7 @@ function KnowledgeWorkspace({
         {/* Info Panel Overlay */}
         {selectedCluster && (
           <View
+            testID="knowledge-cluster-details"
             style={[
               styles.knowledgeInfoPanel,
               {
@@ -2305,7 +2308,7 @@ export default function WorkspaceScreen() {
           },
         ]}
       >
-        <View style={styles.navTabs}>
+        <View accessibilityRole="tablist" style={styles.navTabs}>
           {["Chat", "Feed", "Brain", "To-Do"].map((title, i) => {
             const isActive = activeIndex === i;
             return (
@@ -2314,6 +2317,10 @@ export default function WorkspaceScreen() {
                 onPress={() => handleTabPress(i)}
                 style={styles.navTab}
                 hitSlop={10}
+                testID={`workspace-tab-${title.toLowerCase().replace("-", "")}`}
+                accessibilityRole="tab"
+                accessibilityLabel={`Open ${title} workspace`}
+                accessibilityState={{ selected: isActive }}
               >
                 <Text
                   style={[
@@ -2400,6 +2407,7 @@ export default function WorkspaceScreen() {
         {...workspaceSwipeResponder.panHandlers}
       >
         <View
+          testID="workspace-chat"
           style={[
             styles.workspacePage,
             activeIndex !== 0 && styles.workspacePageHidden,
@@ -2411,6 +2419,7 @@ export default function WorkspaceScreen() {
           />
         </View>
         <View
+          testID="workspace-feed"
           style={[
             styles.workspacePage,
             activeIndex !== 1 && styles.workspacePageHidden,
@@ -2422,6 +2431,7 @@ export default function WorkspaceScreen() {
           />
         </View>
         <View
+          testID="workspace-brain"
           style={[
             styles.workspacePage,
             activeIndex !== 2 && styles.workspacePageHidden,
@@ -2433,6 +2443,7 @@ export default function WorkspaceScreen() {
           />
         </View>
         <View
+          testID="workspace-todo"
           style={[
             styles.workspacePage,
             activeIndex !== 3 && styles.workspacePageHidden,

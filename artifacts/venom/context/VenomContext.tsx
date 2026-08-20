@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { useAuth } from '@clerk/expo';
 import {
   applyKnowledgeInsightsToState,
@@ -180,6 +181,10 @@ const storageKeyFor = (userId: string) => `@venom_state_v2:${userId}`;
 const generateId = (prefix: string) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 const normalizeLabel = (label: string) => label.trim().toLocaleLowerCase();
+export const IS_READ_ONLY_UI_TEST =
+  __DEV__ &&
+  Platform.OS === 'web' &&
+  process.env.EXPO_PUBLIC_VENOM_UI_TEST === 'true';
 
 const TOMBSTONE_LIMITS: Record<TombstoneCollection, number> = {
   projects: 1000,
@@ -629,7 +634,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
   const workspaceQuery = useGetVenomWorkspace({
     query: {
-      enabled: Boolean(userId),
+      enabled: Boolean(userId) && !IS_READ_ONLY_UI_TEST,
       queryKey: [
         ...getGetVenomWorkspaceQueryKey(),
         userId ?? 'signed-out',
@@ -640,6 +645,22 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
   });
   useEffect(() => {
     let cancelled = false;
+
+    if (IS_READ_ONLY_UI_TEST) {
+      hydratedUserRef.current = userId ?? null;
+      revisionRef.current = 0;
+      lastSerializedRef.current = JSON.stringify(createDefaultState());
+      setLocalState(null);
+      setLegacyState(null);
+      setHasScopedState(false);
+      setHasPendingLegacyImport(false);
+      setLocalUserId(userId ?? null);
+      setState(createDefaultState());
+      setIsReady(true);
+      setSyncStatus('offline');
+      setLastSyncedAt(null);
+      return;
+    }
 
     if (!userId) {
       hydratedUserRef.current = null;
@@ -718,7 +739,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
   const flushCloudState = useCallback(
     async (nextState: VenomState) => {
-      if (!userId) return;
+      if (!userId || IS_READ_ONLY_UI_TEST) return;
 
       const syncUserId = userId;
       const controller = syncControllerRef.current;
@@ -892,6 +913,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (
+      IS_READ_ONLY_UI_TEST ||
       !isReady ||
       !userId ||
       hasPendingLegacyImport ||
