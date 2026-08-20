@@ -1,1 +1,2 @@
 - [Knowledge extraction contracts](knowledge-extraction-contracts.md) — JSON-only model output still needs server-side normalization, source checks, and schema validation.
+- [Mobile workspace paging](mobile-workspace-paging.md) — keep workspace screens mounted and isolated; RN Web scroll paging can expose adjacent screens at artifact widths.

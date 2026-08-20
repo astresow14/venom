@@ -14,13 +14,112 @@ import {
   hydrateVenomState,
   initialVenomState,
   type Conversation,
+  type KnowledgeCluster,
   type KnowledgeInsight,
+  type KnowledgeSource,
   type Message,
   type Project,
   type Task,
   type TaskStatus,
   type VenomState,
 } from "./knowledgeState";
+
+const normalizeLabel = (label: string) => label.trim().toLocaleLowerCase();
+
+function createWorkspaceBriefClusters(now: number): KnowledgeCluster[] {
+  return [
+    {
+      id: "cluster_workspace",
+      projectId: "proj_default",
+      label: "Venom Workspace",
+      category: "core",
+      strength: 0.96,
+      x: 0,
+      y: 0,
+      links: ["cluster_chat", "cluster_ontology", "cluster_execution"],
+      summary:
+        "A chat-first AI workspace that turns conversations into durable project context.",
+      mentionCount: 1,
+      lastUpdatedAt: now,
+      sources: [],
+    },
+    {
+      id: "cluster_chat",
+      projectId: "proj_default",
+      label: "Chat-first Interface",
+      category: "experience",
+      strength: 0.82,
+      x: -82,
+      y: -68,
+      links: ["cluster_workspace", "cluster_feed"],
+      summary:
+        "The primary experience stays familiar and conversational, with deeper tools one gesture away.",
+      mentionCount: 1,
+      lastUpdatedAt: now - 1,
+      sources: [],
+    },
+    {
+      id: "cluster_ontology",
+      projectId: "proj_default",
+      label: "Living Ontology",
+      category: "data",
+      strength: 0.9,
+      x: 92,
+      y: -48,
+      links: ["cluster_workspace", "cluster_sources", "cluster_feed"],
+      summary:
+        "Knowledge extracted from project conversations becomes an editable, connected graph.",
+      mentionCount: 1,
+      lastUpdatedAt: now - 2,
+      sources: [],
+    },
+    {
+      id: "cluster_execution",
+      projectId: "proj_default",
+      label: "Project Execution",
+      category: "workflow",
+      strength: 0.72,
+      x: -72,
+      y: 92,
+      links: ["cluster_workspace", "cluster_sources"],
+      summary:
+        "Notes and to-dos keep decisions tied to the work that follows from them.",
+      mentionCount: 1,
+      lastUpdatedAt: now - 3,
+      sources: [],
+    },
+    {
+      id: "cluster_feed",
+      projectId: "proj_default",
+      label: "Workspace Feed",
+      category: "experience",
+      strength: 0.66,
+      x: 120,
+      y: 82,
+      links: ["cluster_chat", "cluster_ontology"],
+      summary:
+        "A chronological surface for conversations, learned notes, and task movement.",
+      mentionCount: 1,
+      lastUpdatedAt: now - 4,
+      sources: [],
+    },
+    {
+      id: "cluster_sources",
+      projectId: "proj_default",
+      label: "Connected Sources",
+      category: "data",
+      strength: 0.76,
+      x: 12,
+      y: 142,
+      links: ["cluster_ontology", "cluster_execution"],
+      summary:
+        "External tools and websites provide the project context Venom can reason across.",
+      mentionCount: 1,
+      lastUpdatedAt: now - 5,
+      sources: [],
+    },
+  ];
+}
 
 export type {
   Conversation,
@@ -93,10 +192,28 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       if (data) {
         try {
           const hydratedState = hydrateVenomState(JSON.parse(data));
-          setState((prev) => ({
-            ...prev,
-            ...hydratedState,
-          }));
+          setState((prev) => {
+            const projects = hydratedState.projects ?? prev.projects;
+            const conversations =
+              hydratedState.conversations ?? prev.conversations;
+            const clusters = hydratedState.clusters ?? prev.clusters;
+            const shouldAddWorkspaceBrief =
+              clusters.length === 0 &&
+              projects.some((project) => project.id === "proj_default") &&
+              conversations.every(
+                (conversation) => conversation.messages.length === 0,
+              );
+
+            return {
+              ...prev,
+              ...hydratedState,
+              projects,
+              conversations,
+              clusters: shouldAddWorkspaceBrief
+                ? createWorkspaceBriefClusters(Date.now())
+                : clusters,
+            };
+          });
         } catch (e) {
           console.error("Failed to parse venom state", e);
         }
@@ -105,7 +222,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
           id: "proj_default",
           name: "Main Workspace",
           description: "Default intelligence container",
-          accent: "#10b981",
+          accent: "#111111",
           sourceCount: 0,
           updatedAt: Date.now(),
           tasks: [
@@ -140,6 +257,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           projects: [defaultProject],
           conversations: [defaultConv],
+          clusters: createWorkspaceBriefClusters(Date.now()),
           activeProjectId: "proj_default",
           activeConversationId: "conv_default",
         }));

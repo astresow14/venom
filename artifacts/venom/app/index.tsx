@@ -26,9 +26,12 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { fetch } from "expo/fetch";
 import * as Haptics from "expo-haptics";
 import Animated, {
+  Easing,
+  type SharedValue,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withRepeat,
   interpolate,
   Extrapolate,
   runOnJS,
@@ -240,7 +243,7 @@ function ChatWorkspace({
         const conversationTitle =
           conversation?.title === "New Session"
             ? `${trimmed.slice(0, 30)}...`
-            : conversation?.title ?? "New Session";
+            : (conversation?.title ?? "New Session");
 
         void extractKnowledge
           .mutateAsync({
@@ -327,11 +330,15 @@ function ChatWorkspace({
   return (
     <View style={styles.workspaceContainer}>
       <FlatList
+        style={styles.chatList}
         data={reversedMessages}
         keyExtractor={(item) => item.id}
         renderItem={renderMessage}
         inverted={reversedMessages.length > 0}
-        contentContainerStyle={[styles.listContent, { paddingBottom: 24 }]}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: 24, flexGrow: 1 },
+        ]}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -372,7 +379,10 @@ function ChatWorkspace({
           styles.inputContainer,
           {
             backgroundColor: colors.background,
-            paddingBottom: Math.max(insets.bottom, 16),
+            paddingBottom: Math.max(
+              insets.bottom,
+              Platform.OS === "web" ? 34 : 16,
+            ),
           },
         ]}
       >
@@ -425,6 +435,256 @@ function ChatWorkspace({
   );
 }
 
+type GraphPoint = { x: number; y: number };
+
+const SYMBIOTE_LOBES = [
+  { width: 210, height: 116, x: -105, y: -58, rotate: "-12deg" },
+  { width: 104, height: 238, x: -52, y: -119, rotate: "18deg" },
+  { width: 74, height: 188, x: -136, y: -94, rotate: "-48deg" },
+  { width: 68, height: 212, x: 66, y: -106, rotate: "52deg" },
+  { width: 54, height: 170, x: -27, y: -38, rotate: "82deg" },
+] as const;
+
+function SymbioteTendrilSegment({
+  from,
+  to,
+  index,
+  breath,
+}: {
+  from: GraphPoint;
+  to: GraphPoint;
+  index: number;
+  breath: SharedValue<number>;
+}) {
+  const colors = useColors();
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const thickness = 5 + (index % 3);
+  const left = (from.x + to.x) / 2 - length / 2;
+  const top = (from.y + to.y) / 2 - thickness / 2;
+
+  const flowStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateX: Math.sin(breath.value * Math.PI * 2 + index * 0.85) * 10,
+      },
+    ],
+    opacity:
+      0.4 + ((Math.sin(breath.value * Math.PI * 2 + index) + 1) / 2) * 0.55,
+  }));
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.tendrilSegment,
+        {
+          left,
+          top,
+          width: length,
+          height: thickness,
+          borderRadius: thickness,
+          backgroundColor: colors.symbioteSurface,
+          shadowColor: colors.symbioteGlow,
+          transform: [{ rotate: `${angle}deg` }],
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.tendrilHighlight,
+          {
+            backgroundColor: colors.symbioteHighlight,
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.tendrilFlow,
+          {
+            backgroundColor: colors.symbioteHighlight,
+            left: `${28 + (index % 3) * 18}%`,
+          },
+          flowStyle,
+        ]}
+      />
+    </View>
+  );
+}
+
+function SymbioteConnection({
+  from,
+  to,
+  index,
+  breath,
+}: {
+  from: GraphPoint;
+  to: GraphPoint;
+  index: number;
+  breath: SharedValue<number>;
+}) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+  const bend = ((index % 5) - 2) * 10;
+  const control = {
+    x: (from.x + to.x) / 2 + (-dy / length) * bend,
+    y: (from.y + to.y) / 2 + (dx / length) * bend,
+  };
+
+  return (
+    <>
+      <SymbioteTendrilSegment
+        from={from}
+        to={control}
+        index={index * 2}
+        breath={breath}
+      />
+      <SymbioteTendrilSegment
+        from={control}
+        to={to}
+        index={index * 2 + 1}
+        breath={breath}
+      />
+    </>
+  );
+}
+
+function SymbioteNode({
+  cluster,
+  position,
+  index,
+  isSelected,
+  breath,
+  onPress,
+}: {
+  cluster: KnowledgeCluster;
+  position: GraphPoint;
+  index: number;
+  isSelected: boolean;
+  breath: SharedValue<number>;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  const size = 34 + cluster.strength * 18;
+  const depthScale = 0.88 + (position.y / 800) * 0.22;
+
+  const nodeMotion = useAnimatedStyle(() => {
+    const wave = Math.sin(breath.value * Math.PI * 2 + index * 0.9);
+    return {
+      transform: [
+        {
+          scale:
+            depthScale *
+            (isSelected ? 1.14 : 1) *
+            (1 + ((wave + 1) / 2) * 0.055),
+        },
+        { rotate: `${wave * 2.5}deg` },
+      ],
+    };
+  });
+
+  return (
+    <>
+      <Animated.View
+        style={[
+          styles.symbioteNodeMotion,
+          {
+            left: position.x - size / 2,
+            top: position.y - size / 2,
+            width: size,
+            height: size,
+          },
+          nodeMotion,
+        ]}
+      >
+        <View
+          pointerEvents="none"
+          style={[
+            styles.symbioteNodeHalo,
+            {
+              width: size + 20,
+              height: size + 20,
+              borderRadius: (size + 20) / 2,
+              left: -10,
+              top: -10,
+              backgroundColor: colors.symbioteGlow,
+              opacity: isSelected ? 0.6 : 0.24,
+            },
+          ]}
+        />
+        <TouchableOpacity
+          testID={`knowledge-cluster-${cluster.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${cluster.label} knowledge cluster`}
+          style={[
+            styles.symbioteNode,
+            {
+              width: size,
+              height: size,
+              borderRadius: size * 0.42,
+              backgroundColor: colors.symbioteSurface,
+              borderColor: isSelected
+                ? colors.symbioteHighlight
+                : colors.symbioteSoft,
+            },
+          ]}
+          onPress={onPress}
+          activeOpacity={0.75}
+        >
+          <View
+            pointerEvents="none"
+            style={[
+              styles.symbioteNodeReflection,
+              {
+                width: Math.max(8, size * 0.24),
+                height: Math.max(4, size * 0.09),
+                borderRadius: size,
+                backgroundColor: colors.symbioteHighlight,
+              },
+            ]}
+          />
+          <Feather
+            name={
+              cluster.category === "core"
+                ? "cpu"
+                : cluster.category === "data"
+                  ? "database"
+                  : "hexagon"
+            }
+            size={14}
+            color={colors.symbioteHighlight}
+          />
+        </TouchableOpacity>
+      </Animated.View>
+      <View
+        pointerEvents="none"
+        style={[
+          styles.nodeLabelContainer,
+          {
+            left: position.x - 75,
+            top: position.y + size / 2 + 10,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.nodeLabel,
+            {
+              color: isSelected ? colors.foreground : colors.mutedForeground,
+              fontFamily: isSelected ? "Inter_600SemiBold" : "Inter_500Medium",
+            },
+          ]}
+        >
+          {cluster.label}
+        </Text>
+      </View>
+    </>
+  );
+}
+
 function KnowledgeWorkspace({
   onOpenConversation,
 }: {
@@ -449,11 +709,30 @@ function KnowledgeWorkspace({
     (cluster) => cluster.projectId === state.activeProjectId,
   );
   const selectedCluster =
-    visibleClusters.find((cluster) => cluster.id === selectedClusterId) ??
-    null;
+    visibleClusters.find((cluster) => cluster.id === selectedClusterId) ?? null;
 
   const MAP_SIZE = 800;
   const CENTER = MAP_SIZE / 2;
+  const baseGraphScale = Math.min(
+    0.78,
+    Math.max(0.46, (SCREEN_WIDTH - 20) / MAP_SIZE),
+  );
+  const breath = useSharedValue(0);
+  const graphScale = useSharedValue(baseGraphScale);
+  const savedGraphScale = useSharedValue(baseGraphScale);
+  const tiltX = useSharedValue(0);
+  const tiltY = useSharedValue(0);
+
+  useEffect(() => {
+    breath.value = withRepeat(
+      withTiming(1, {
+        duration: 2600,
+        easing: Easing.inOut(Easing.cubic),
+      }),
+      -1,
+      true,
+    );
+  }, [breath]);
 
   const getPos = useCallback(
     (c: KnowledgeCluster) => ({
@@ -462,6 +741,53 @@ function KnowledgeWorkspace({
     }),
     [CENTER],
   );
+
+  const orbitGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      tiltY.value = interpolate(
+        event.translationX,
+        [-SCREEN_WIDTH, SCREEN_WIDTH],
+        [-20, 20],
+        Extrapolate.CLAMP,
+      );
+      tiltX.value = interpolate(
+        event.translationY,
+        [-SCREEN_WIDTH, SCREEN_WIDTH],
+        [18, -18],
+        Extrapolate.CLAMP,
+      );
+    })
+    .onEnd(() => {
+      tiltX.value = withSpring(0, { damping: 15, stiffness: 110 });
+      tiltY.value = withSpring(0, { damping: 15, stiffness: 110 });
+    });
+
+  const zoomGesture = Gesture.Pinch()
+    .onUpdate((event) => {
+      graphScale.value = Math.max(
+        baseGraphScale * 0.8,
+        Math.min(savedGraphScale.value * event.scale, 1.08),
+      );
+    })
+    .onEnd(() => {
+      savedGraphScale.value = graphScale.value;
+    });
+
+  const graphGesture = Gesture.Simultaneous(orbitGesture, zoomGesture);
+
+  const graphMotionStyle = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 900 },
+      { rotateX: `${tiltX.value}deg` },
+      { rotateY: `${tiltY.value}deg` },
+      { scale: graphScale.value * (1 + breath.value * 0.018) },
+    ],
+  }));
+
+  const auraMotionStyle = useAnimatedStyle(() => ({
+    opacity: 0.12 + breath.value * 0.16,
+    transform: [{ scale: 0.9 + breath.value * 0.16 }],
+  }));
 
   const closeDetails = () => {
     setSelectedClusterId(null);
@@ -561,156 +887,164 @@ function KnowledgeWorkspace({
             </Text>
           </View>
         ) : (
-          <ScrollView
-            horizontal
-            bounces={false}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ width: MAP_SIZE }}
-            centerContent
-          >
-            <ScrollView
-              bounces={false}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ height: MAP_SIZE, width: MAP_SIZE }}
-              centerContent
-            >
-              <View style={{ width: MAP_SIZE, height: MAP_SIZE }}>
-                {/* SVG Lines - Simplified for web compatibility/expo go without react-native-svg if needed,
-                    using absolute views for simple lines */}
-                {visibleClusters.map((cluster) => {
-                  const p1 = getPos(cluster);
-                  return cluster.links.map((targetId) => {
-                    const target = visibleClusters.find(
-                      (candidate) => candidate.id === targetId,
-                    );
-                    if (!target) return null;
-                    if (cluster.id > target.id) return null;
+          <View style={styles.symbioteStage}>
+            <View style={styles.symbioteHud} pointerEvents="none">
+              <View>
+                <Text
+                  style={[
+                    styles.symbioteEyebrow,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  LIVE ONTOLOGY
+                </Text>
+                <Text
+                  style={[styles.symbioteTitle, { color: colors.foreground }]}
+                >
+                  {visibleClusters.length} living nodes
+                </Text>
+              </View>
+              <View
+                style={[styles.symbioteStatus, { borderColor: colors.border }]}
+              >
+                <View
+                  style={[
+                    styles.symbioteStatusDot,
+                    { backgroundColor: colors.foreground },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.symbioteStatusText,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  EVOLVING
+                </Text>
+              </View>
+            </View>
 
-                    const p2 = getPos(target);
-                    const dx = p2.x - p1.x;
-                    const dy = p2.y - p1.y;
-                    const length = Math.sqrt(dx * dx + dy * dy);
-                    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+            <GestureDetector gesture={graphGesture}>
+              <View style={styles.symbioteViewport}>
+                <Animated.View
+                  style={[
+                    styles.symbioteMap,
+                    {
+                      left: (SCREEN_WIDTH - MAP_SIZE) / 2,
+                      top: -36,
+                    },
+                    graphMotionStyle,
+                  ]}
+                >
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.symbioteAura,
+                      {
+                        left: CENTER - 180,
+                        top: CENTER - 180,
+                        borderColor: colors.symbioteGlow,
+                        backgroundColor: colors.symbioteGlow,
+                      },
+                      auraMotionStyle,
+                    ]}
+                  />
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.symbioteOrbit,
+                      {
+                        left: CENTER - 235,
+                        top: CENTER - 235,
+                        borderColor: colors.symbioteGlow,
+                      },
+                    ]}
+                  />
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.symbioteOrbitInner,
+                      {
+                        left: CENTER - 145,
+                        top: CENTER - 145,
+                        borderColor: colors.symbioteGlow,
+                      },
+                    ]}
+                  />
 
-                    return (
-                      <View
-                        key={`${cluster.id}-${targetId}`}
-                        style={{
-                          position: "absolute",
-                          left: p1.x,
-                          top: p1.y,
-                          width: length,
-                          height: 1,
-                          backgroundColor: colors.border,
-                          transform: [
-                            { translateX: -length / 2 + dx / 2 },
-                            { translateY: dy / 2 },
-                            { rotate: `${angle}deg` },
-                          ],
-                        }}
-                      />
-                    );
-                  });
-                })}
-
-                {/* Nodes */}
-                {visibleClusters.map((cluster) => {
-                  const p = getPos(cluster);
-                  const isSelected = selectedCluster?.id === cluster.id;
-                  const size = 32 + cluster.strength * 16;
-
-                  return (
-                    <TouchableOpacity
-                      key={cluster.id}
-                      testID={`knowledge-cluster-${cluster.id}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open ${cluster.label} knowledge cluster`}
+                  {SYMBIOTE_LOBES.map((lobe, index) => (
+                    <View
+                      key={`symbiote-lobe-${index}`}
+                      pointerEvents="none"
                       style={[
-                        styles.node,
+                        styles.symbioteLobe,
                         {
-                          left: p.x - size / 2,
-                          top: p.y - size / 2,
-                          width: size,
-                          height: size,
-                          borderRadius: size / 2,
-                          backgroundColor: isSelected
-                            ? colors.primary
-                            : colors.card,
-                          borderColor: isSelected
-                            ? colors.primary
-                            : colors.border,
-                          borderWidth: 2,
-                          shadowColor: colors.foreground,
-                          shadowOpacity: isSelected ? 0.1 : 0.05,
-                          shadowRadius: 8,
-                          shadowOffset: { width: 0, height: 4 },
-                          elevation: isSelected ? 4 : 2,
+                          width: lobe.width,
+                          height: lobe.height,
+                          left: CENTER + lobe.x,
+                          top: CENTER + lobe.y,
+                          borderRadius:
+                            Math.min(lobe.width, lobe.height) * 0.46,
+                          backgroundColor: colors.symbioteSurface,
+                          borderColor: colors.symbioteSoft,
+                          transform: [{ rotate: lobe.rotate }],
                         },
                       ]}
+                    />
+                  ))}
+
+                  {visibleClusters.map((cluster, clusterIndex) => {
+                    const from = getPos(cluster);
+                    return cluster.links.map((targetId, targetIndex) => {
+                      const target = visibleClusters.find(
+                        (candidate) => candidate.id === targetId,
+                      );
+                      if (!target || cluster.id > target.id) return null;
+
+                      return (
+                        <SymbioteConnection
+                          key={`${cluster.id}-${targetId}`}
+                          from={from}
+                          to={getPos(target)}
+                          index={
+                            clusterIndex * visibleClusters.length + targetIndex
+                          }
+                          breath={breath}
+                        />
+                      );
+                    });
+                  })}
+
+                  {visibleClusters.map((cluster, index) => (
+                    <SymbioteNode
+                      key={cluster.id}
+                      cluster={cluster}
+                      position={getPos(cluster)}
+                      index={index}
+                      isSelected={selectedCluster?.id === cluster.id}
+                      breath={breath}
                       onPress={() => {
                         if (Platform.OS !== "web") Haptics.selectionAsync();
                         openCluster(cluster.id);
                       }}
-                      activeOpacity={0.8}
-                    >
-                      <Feather
-                        name={
-                          cluster.category === "core"
-                            ? "cpu"
-                            : cluster.category === "data"
-                              ? "database"
-                              : "folder"
-                        }
-                        size={14}
-                        color={
-                          isSelected
-                            ? colors.primaryForeground
-                            : colors.mutedForeground
-                        }
-                      />
-                    </TouchableOpacity>
-                  );
-                })}
-
-                {/* Labels */}
-                {visibleClusters.map((cluster) => {
-                  const p = getPos(cluster);
-                  const isSelected = selectedCluster?.id === cluster.id;
-                  const size = 32 + cluster.strength * 16;
-
-                  return (
-                    <View
-                      key={`label-${cluster.id}`}
-                      style={[
-                        styles.nodeLabelContainer,
-                        {
-                          left: p.x - 75,
-                          top: p.y + size / 2 + 8,
-                        },
-                      ]}
-                      pointerEvents="none"
-                    >
-                      <Text
-                        style={[
-                          styles.nodeLabel,
-                          {
-                            color: isSelected
-                              ? colors.foreground
-                              : colors.mutedForeground,
-                            fontFamily: isSelected
-                              ? "Inter_600SemiBold"
-                              : "Inter_500Medium",
-                          },
-                        ]}
-                      >
-                        {cluster.label}
-                      </Text>
-                    </View>
-                  );
-                })}
+                    />
+                  ))}
+                </Animated.View>
               </View>
-            </ScrollView>
-          </ScrollView>
+            </GestureDetector>
+
+            <View style={styles.symbioteHint} pointerEvents="none">
+              <Feather name="move" size={12} color={colors.mutedForeground} />
+              <Text
+                style={[
+                  styles.symbioteHintText,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                Drag to orbit · pinch to dive
+              </Text>
+            </View>
+          </View>
         )}
 
         {/* Info Panel Overlay */}
@@ -793,7 +1127,11 @@ function KnowledgeWorkspace({
                   accessibilityRole="button"
                   accessibilityLabel={`Merge another cluster into ${selectedCluster.label}`}
                 >
-                  <Feather name="git-merge" size={15} color={colors.foreground} />
+                  <Feather
+                    name="git-merge"
+                    size={15}
+                    color={colors.foreground}
+                  />
                   <Text
                     style={[
                       styles.knowledgeEditButtonText,
@@ -818,7 +1156,11 @@ function KnowledgeWorkspace({
                   accessibilityRole="button"
                   accessibilityLabel={`Delete ${selectedCluster.label}`}
                 >
-                  <Feather name="trash-2" size={15} color={colors.destructive} />
+                  <Feather
+                    name="trash-2"
+                    size={15}
+                    color={colors.destructive}
+                  />
                   <Text
                     style={[
                       styles.knowledgeEditButtonText,
@@ -833,7 +1175,10 @@ function KnowledgeWorkspace({
                 <View
                   style={[
                     styles.knowledgeEditCard,
-                    { backgroundColor: colors.card, borderColor: colors.border },
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
                   ]}
                 >
                   <Text
@@ -926,7 +1271,10 @@ function KnowledgeWorkspace({
                 <View
                   style={[
                     styles.knowledgeEditCard,
-                    { backgroundColor: colors.card, borderColor: colors.border },
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
                   ]}
                 >
                   <Text
@@ -1368,6 +1716,194 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
   );
 }
 
+function FeedWorkspace({
+  activeProject,
+  onOpenConversation,
+}: {
+  activeProject: any;
+  onOpenConversation: (conversationId: string) => void;
+}) {
+  const colors = useColors();
+  const { state } = useVenom();
+
+  const feedItems = useMemo(() => {
+    if (!activeProject) return [];
+
+    const conversations = state.conversations
+      .filter((conversation) => conversation.projectId === activeProject.id)
+      .map((conversation) => {
+        const latestMessage =
+          conversation.messages[conversation.messages.length - 1];
+        return {
+          id: `conversation-${conversation.id}`,
+          type: "conversation" as const,
+          icon: "message-square" as const,
+          label: "Conversation",
+          title: conversation.title,
+          detail: latestMessage?.content || "A new conversation is ready.",
+          timestamp: conversation.updatedAt,
+          conversationId: conversation.id,
+        };
+      });
+
+    const tasks = activeProject.tasks.map((task: Task) => ({
+      id: `task-${task.id}`,
+      type: "task" as const,
+      icon:
+        task.status === "done" ? ("check" as const) : ("check-square" as const),
+      label: task.status === "done" ? "Completed task" : "Project task",
+      title: task.title,
+      detail:
+        task.status === "in_progress"
+          ? "Currently in progress"
+          : task.status === "done"
+            ? "Marked complete"
+            : "Waiting to start",
+      timestamp: task.createdAt,
+      conversationId: undefined,
+    }));
+
+    const clusters = state.clusters
+      .filter((cluster) => cluster.projectId === activeProject.id)
+      .map((cluster) => ({
+        id: `cluster-${cluster.id}`,
+        type: "knowledge" as const,
+        icon: "hexagon" as const,
+        label: "Knowledge note",
+        title: cluster.label,
+        detail: cluster.summary,
+        timestamp: cluster.lastUpdatedAt,
+        conversationId: undefined,
+      }));
+
+    return [...conversations, ...tasks, ...clusters]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 12);
+  }, [activeProject, state.conversations, state.clusters]);
+
+  return (
+    <View style={styles.workspaceContainer}>
+      <ScrollView
+        contentContainerStyle={styles.feedScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.feedHeader}>
+          <View>
+            <Text
+              style={[styles.feedEyebrow, { color: colors.mutedForeground }]}
+            >
+              {activeProject?.name || "Workspace"}
+            </Text>
+            <Text style={[styles.feedTitle, { color: colors.foreground }]}>
+              Feed
+            </Text>
+          </View>
+          <Feather name="rss" size={18} color={colors.foreground} />
+        </View>
+
+        {feedItems.length === 0 ? (
+          <View style={styles.feedEmpty}>
+            <View
+              style={[
+                styles.feedEmptyIcon,
+                { backgroundColor: colors.secondary },
+              ]}
+            >
+              <Feather name="rss" size={22} color={colors.foreground} />
+            </View>
+            <Text style={[styles.feedEmptyTitle, { color: colors.foreground }]}>
+              Your feed is quiet
+            </Text>
+            <Text
+              style={[styles.feedEmptyText, { color: colors.mutedForeground }]}
+            >
+              Start a conversation or create a task to see project activity
+              here.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.feedList}>
+            {feedItems.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.feedCard,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+                onPress={() =>
+                  item.conversationId && onOpenConversation(item.conversationId)
+                }
+                disabled={!item.conversationId}
+                activeOpacity={0.75}
+                accessibilityRole={item.conversationId ? "button" : "text"}
+                accessibilityLabel={`${item.label}: ${item.title}`}
+              >
+                <View
+                  style={[
+                    styles.feedIcon,
+                    { backgroundColor: colors.secondary },
+                  ]}
+                >
+                  <Feather
+                    name={item.icon}
+                    size={15}
+                    color={colors.foreground}
+                  />
+                </View>
+                <View style={styles.feedCardBody}>
+                  <View style={styles.feedCardMeta}>
+                    <Text
+                      style={[
+                        styles.feedCardLabel,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.feedCardTime,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      {new Date(item.timestamp).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[styles.feedCardTitle, { color: colors.foreground }]}
+                    numberOfLines={2}
+                  >
+                    {item.title}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.feedCardDetail,
+                      { color: colors.mutedForeground },
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {item.detail}
+                  </Text>
+                </View>
+                {item.conversationId && (
+                  <Feather
+                    name="arrow-up-right"
+                    size={15}
+                    color={colors.mutedForeground}
+                  />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
 // --- Main Screen ---
 
 export default function WorkspaceScreen() {
@@ -1381,26 +1917,30 @@ export default function WorkspaceScreen() {
     state.projects.find((p) => p.id === state.activeProjectId) ||
     state.projects[0];
 
-  const scrollViewRef = useRef<ScrollView>(null);
-
-  const handleTabPress = (index: number) => {
+  const handleTabPress = useCallback((index: number) => {
     setActiveIndex(index);
-    scrollViewRef.current?.scrollTo({
-      x: index * SCREEN_WIDTH,
-      animated: true,
-    });
     if (Platform.OS !== "web") {
       Haptics.selectionAsync();
     }
-  };
+  }, []);
 
-  const handleScroll = (e: any) => {
-    const offsetX = e.nativeEvent.contentOffset.x;
-    const index = Math.round(offsetX / SCREEN_WIDTH);
-    if (index !== activeIndex && index >= 0 && index < 3) {
-      setActiveIndex(index);
-    }
-  };
+  const workspaceSwipeResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          activeIndex !== 2 &&
+          Math.abs(gestureState.dx) > 18 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5,
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx < -70 && activeIndex < 3) {
+            handleTabPress(activeIndex + 1);
+          } else if (gestureState.dx > 70 && activeIndex > 0) {
+            handleTabPress(activeIndex - 1);
+          }
+        },
+      }),
+    [activeIndex, handleTabPress],
+  );
 
   const handleOpenConversation = (conversationId: string) => {
     const conversation = state.conversations.find(
@@ -1424,14 +1964,14 @@ export default function WorkspaceScreen() {
         style={[
           styles.topNav,
           {
-            paddingTop: Math.max(insets.top, 16),
+            paddingTop: Math.max(insets.top, Platform.OS === "web" ? 67 : 16),
             backgroundColor: colors.background,
             borderBottomColor: colors.border,
           },
         ]}
       >
         <View style={styles.navTabs}>
-          {["Chat", "Knowledge", "Board"].map((title, i) => {
+          {["Chat", "Feed", "Notes", "To-Do"].map((title, i) => {
             const isActive = activeIndex === i;
             return (
               <TouchableOpacity
@@ -1499,31 +2039,49 @@ export default function WorkspaceScreen() {
         </View>
       </View>
 
-      {/* Swipeable Workspaces */}
-      <ScrollView
-        ref={scrollViewRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        bounces={false}
-        onMomentumScrollEnd={handleScroll}
-        scrollEventThrottle={16}
+      <View
         style={styles.workspacePager}
-        keyboardShouldPersistTaps="handled"
+        {...workspaceSwipeResponder.panHandlers}
       >
-        <View style={[styles.workspacePage, { width: SCREEN_WIDTH }]}>
+        <View
+          style={[
+            styles.workspacePage,
+            activeIndex !== 0 && styles.workspacePageHidden,
+          ]}
+        >
           <ChatWorkspace
             isActive={activeIndex === 0}
             activeProject={activeProject}
           />
         </View>
-        <View style={[styles.workspacePage, { width: SCREEN_WIDTH }]}>
+        <View
+          style={[
+            styles.workspacePage,
+            activeIndex !== 1 && styles.workspacePageHidden,
+          ]}
+        >
+          <FeedWorkspace
+            activeProject={activeProject}
+            onOpenConversation={handleOpenConversation}
+          />
+        </View>
+        <View
+          style={[
+            styles.workspacePage,
+            activeIndex !== 2 && styles.workspacePageHidden,
+          ]}
+        >
           <KnowledgeWorkspace onOpenConversation={handleOpenConversation} />
         </View>
-        <View style={[styles.workspacePage, { width: SCREEN_WIDTH }]}>
+        <View
+          style={[
+            styles.workspacePage,
+            activeIndex !== 3 && styles.workspacePageHidden,
+          ]}
+        >
           <BoardWorkspace activeProject={activeProject} />
         </View>
-      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -1544,7 +2102,7 @@ const styles = StyleSheet.create({
   navTabs: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
+    gap: 12,
     flexShrink: 0,
   },
   navTab: {
@@ -1589,18 +2147,122 @@ const styles = StyleSheet.create({
   },
   workspacePager: {
     flex: 1,
+    width: "100%",
   },
   workspacePage: {
     flex: 1,
+    width: "100%",
+  },
+  workspacePageHidden: {
+    display: "none",
   },
   workspaceContainer: {
     flex: 1,
+  },
+  feedScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
+  feedHeader: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    marginBottom: 24,
+  },
+  feedEyebrow: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  feedTitle: {
+    fontSize: 30,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: -1,
+  },
+  feedList: {
+    gap: 10,
+  },
+  feedCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    gap: 12,
+  },
+  feedIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  feedCardBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  feedCardMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 5,
+  },
+  feedCardLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  feedCardTime: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+  },
+  feedCardTitle: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    lineHeight: 21,
+    marginBottom: 4,
+  },
+  feedCardDetail: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 19,
+  },
+  feedEmpty: {
+    alignItems: "center",
+    paddingTop: 110,
+    paddingHorizontal: 28,
+  },
+  feedEmptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  feedEmptyTitle: {
+    fontSize: 18,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 8,
+  },
+  feedEmptyText: {
+    textAlign: "center",
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 21,
   },
 
   // Chat Styles
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
+  },
+  chatList: {
+    flex: 1,
   },
   messageRow: {
     marginBottom: 24,
@@ -1721,6 +2383,150 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textAlign: "center",
     maxWidth: 340,
+  },
+  symbioteStage: {
+    flex: 1,
+    position: "relative",
+    overflow: "hidden",
+  },
+  symbioteHud: {
+    position: "absolute",
+    top: 18,
+    left: 16,
+    right: 16,
+    zIndex: 20,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  symbioteEyebrow: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 1.4,
+    marginBottom: 4,
+  },
+  symbioteTitle: {
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: -0.35,
+  },
+  symbioteStatus: {
+    minHeight: 30,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderWidth: 1,
+    borderRadius: 15,
+    paddingHorizontal: 10,
+  },
+  symbioteStatusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  symbioteStatusText: {
+    fontSize: 9,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 1,
+  },
+  symbioteViewport: {
+    flex: 1,
+    overflow: "hidden",
+  },
+  symbioteMap: {
+    position: "absolute",
+    width: 800,
+    height: 800,
+  },
+  symbioteAura: {
+    position: "absolute",
+    width: 360,
+    height: 360,
+    borderRadius: 180,
+    borderWidth: 1,
+  },
+  symbioteOrbit: {
+    position: "absolute",
+    width: 470,
+    height: 470,
+    borderRadius: 235,
+    borderWidth: 1,
+    opacity: 0.34,
+    transform: [{ scaleY: 0.44 }, { rotate: "-8deg" }],
+  },
+  symbioteOrbitInner: {
+    position: "absolute",
+    width: 290,
+    height: 290,
+    borderRadius: 145,
+    borderWidth: 1,
+    opacity: 0.46,
+    transform: [{ scaleY: 0.52 }, { rotate: "22deg" }],
+  },
+  symbioteLobe: {
+    position: "absolute",
+    borderWidth: 1,
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  tendrilSegment: {
+    position: "absolute",
+    overflow: "visible",
+    shadowOpacity: 0.32,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  tendrilHighlight: {
+    position: "absolute",
+    left: 5,
+    right: 5,
+    top: 1,
+    height: 1,
+    borderRadius: 1,
+    opacity: 0.36,
+  },
+  tendrilFlow: {
+    position: "absolute",
+    top: -2,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  symbioteNodeMotion: {
+    position: "absolute",
+    zIndex: 10,
+  },
+  symbioteNodeHalo: {
+    position: "absolute",
+  },
+  symbioteNode: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    overflow: "hidden",
+  },
+  symbioteNodeReflection: {
+    position: "absolute",
+    top: 7,
+    right: 8,
+    opacity: 0.7,
+    transform: [{ rotate: "-16deg" }],
+  },
+  symbioteHint: {
+    position: "absolute",
+    bottom: 18,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  symbioteHintText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    letterSpacing: 0.2,
   },
   node: {
     position: "absolute",
