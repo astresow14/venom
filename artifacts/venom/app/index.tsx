@@ -1859,6 +1859,9 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
   const [pendingDeleteFieldId, setPendingDeleteFieldId] = useState<
     string | null
   >(null);
+  const [focusedMoveControl, setFocusedMoveControl] = useState<string | null>(
+    null,
+  );
   const [boardError, setBoardError] = useState("");
 
   const tasksForStage = useCallback(
@@ -2158,11 +2161,18 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
           </TouchableOpacity>
           <View style={styles.cardMoveActions}>
             <TouchableOpacity
-              style={styles.cardMoveButton}
+              style={[
+                styles.cardMoveButton,
+                focusedMoveControl === `${task.id}:up` && {
+                  borderColor: colors.primary,
+                },
+              ]}
               onPress={() => moveCard(task, stage.id, taskIndex - 1)}
               disabled={taskIndex === 0}
               accessibilityRole="button"
               accessibilityLabel={`Move ${task.title} up`}
+              onFocus={() => setFocusedMoveControl(`${task.id}:up`)}
+              onBlur={() => setFocusedMoveControl(null)}
             >
               <Feather
                 name="arrow-up"
@@ -2173,11 +2183,18 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
               />
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.cardMoveButton}
+              style={[
+                styles.cardMoveButton,
+                focusedMoveControl === `${task.id}:down` && {
+                  borderColor: colors.primary,
+                },
+              ]}
               onPress={() => moveCard(task, stage.id, taskIndex + 1)}
               disabled={taskIndex === columnTasks.length - 1}
               accessibilityRole="button"
               accessibilityLabel={`Move ${task.title} down`}
+              onFocus={() => setFocusedMoveControl(`${task.id}:down`)}
+              onBlur={() => setFocusedMoveControl(null)}
             >
               <Feather
                 name="arrow-down"
@@ -2191,7 +2208,12 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
             </TouchableOpacity>
             <View style={styles.cardMoveSpacer} />
             <TouchableOpacity
-              style={styles.cardMoveButton}
+              style={[
+                styles.cardMoveButton,
+                focusedMoveControl === `${task.id}:previous` && {
+                  borderColor: colors.primary,
+                },
+              ]}
               onPress={() =>
                 moveCard(
                   task,
@@ -2202,6 +2224,8 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
               disabled={stageIndex === 0}
               accessibilityRole="button"
               accessibilityLabel={`Move ${task.title} to previous stage`}
+              onFocus={() => setFocusedMoveControl(`${task.id}:previous`)}
+              onBlur={() => setFocusedMoveControl(null)}
             >
               <Feather
                 name="arrow-left"
@@ -2212,7 +2236,12 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
               />
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.cardMoveButton}
+              style={[
+                styles.cardMoveButton,
+                focusedMoveControl === `${task.id}:next` && {
+                  borderColor: colors.primary,
+                },
+              ]}
               onPress={() =>
                 moveCard(
                   task,
@@ -2223,6 +2252,8 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
               disabled={stageIndex === stages.length - 1}
               accessibilityRole="button"
               accessibilityLabel={`Move ${task.title} to next stage`}
+              onFocus={() => setFocusedMoveControl(`${task.id}:next`)}
+              onBlur={() => setFocusedMoveControl(null)}
             >
               <Feather
                 name="arrow-right"
@@ -2405,6 +2436,7 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: stage.isDone }}
                     accessibilityLabel={`${stage.name} is a done stage`}
+                    aria-checked={stage.isDone}
                   >
                     <Feather
                       name={stage.isDone ? "check-circle" : "circle"}
@@ -2515,6 +2547,8 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                             accessibilityState={{
                               selected: reassignStageId === target.id,
                             }}
+                            accessibilityLabel={`Reassign cards to ${target.name}`}
+                            aria-checked={reassignStageId === target.id}
                           >
                             <Text
                               style={[
@@ -2589,6 +2623,7 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: newStageIsDone }}
                 accessibilityLabel="New stage is a done stage"
+                aria-checked={newStageIsDone}
               >
                 <Feather
                   name={newStageIsDone ? "check-circle" : "circle"}
@@ -2702,6 +2737,7 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: field.showOnCard }}
                     accessibilityLabel={`Show ${field.name} on cards`}
+                    aria-checked={field.showOnCard}
                   >
                     <Feather
                       name={field.showOnCard ? "eye" : "eye-off"}
@@ -2828,6 +2864,8 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                           styles.destructiveButton,
                           { backgroundColor: colors.destructive },
                         ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Confirm removal of ${field.name}`}
                       >
                         <Text
                           style={[
@@ -2864,6 +2902,8 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                     onPress={() => setNewFieldType(type)}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: newFieldType === type }}
+                    accessibilityLabel={`${FIELD_TYPE_LABELS[type]} field type`}
+                    aria-checked={newFieldType === type}
                   >
                     <Text
                       style={[
@@ -2939,6 +2979,8 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                   styles.boardColumn,
                   { borderColor: colors.border, backgroundColor: colors.card },
                 ]}
+                accessibilityRole="list"
+                accessibilityLabel={`${stage.name} stage`}
               >
                 <View style={styles.boardColumnHeader}>
                   <View style={styles.boardColumnTitleRow}>
@@ -3163,6 +3205,7 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                       selected: editorStageId === stage.id,
                     }}
                     accessibilityLabel={`Move card to ${stage.name}`}
+                    aria-checked={editorStageId === stage.id}
                   >
                     <Feather
                       name={stage.isDone ? "check-circle" : "circle"}
@@ -3202,6 +3245,7 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                         checked: editorValues[field.id] === true,
                       }}
                       accessibilityLabel={field.name}
+                      aria-checked={editorValues[field.id] === true}
                     >
                       <Feather
                         name={
@@ -3238,6 +3282,8 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                         accessibilityState={{
                           selected: !editorValues[field.id],
                         }}
+                        accessibilityLabel={`Clear ${field.name}`}
+                        aria-checked={!editorValues[field.id]}
                       >
                         <Text
                           style={[
@@ -3270,6 +3316,8 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                           accessibilityState={{
                             selected: editorValues[field.id] === option,
                           }}
+                          accessibilityLabel={`Set ${field.name} to ${option}`}
+                          aria-checked={editorValues[field.id] === option}
                         >
                           <Text
                             style={[
@@ -5052,6 +5100,9 @@ const styles = StyleSheet.create({
   cardMoveButton: {
     width: 34,
     height: 34,
+    borderWidth: 2,
+    borderColor: "transparent",
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -18,7 +18,12 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
-import { IS_READ_ONLY_UI_TEST, VenomProvider } from "@/context/VenomContext";
+import {
+  IS_READ_ONLY_UI_TEST,
+  IS_UI_TEST,
+  UI_TEST_USER_ID,
+  VenomProvider,
+} from "@/context/VenomContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
@@ -40,25 +45,28 @@ const clerkPublishableKey: string = publishableKey;
 
 function RootLayoutNav() {
   const { getToken, isSignedIn, userId } = useAuth();
+  const effectiveUserId = IS_UI_TEST ? UI_TEST_USER_ID : (userId ?? null);
   const colors = useColors();
   const { theme } = useTheme();
   const previousUserId = useRef<string | null | undefined>(undefined);
   const canOpenWorkspace = Boolean(isSignedIn) || IS_READ_ONLY_UI_TEST;
 
   useEffect(() => {
-    setAuthTokenGetter(isSignedIn ? () => getToken() : null);
+    setAuthTokenGetter(
+      !IS_UI_TEST && isSignedIn ? () => getToken() : null,
+    );
     return () => setAuthTokenGetter(null);
   }, [getToken, isSignedIn]);
 
   useEffect(() => {
     if (
       previousUserId.current !== undefined &&
-      previousUserId.current !== (userId ?? null)
+      previousUserId.current !== effectiveUserId
     ) {
       queryClient.clear();
     }
-    previousUserId.current = userId ?? null;
-  }, [userId]);
+    previousUserId.current = effectiveUserId;
+  }, [effectiveUserId]);
 
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(colors.background);

@@ -3,3 +3,4 @@
 - [Playwright on Replit Nix](playwright-on-replit-nix.md) — downloaded Chromium still needs explicit Nix runtime libraries before browser validation can launch.
 - [Workspace sync identity boundaries](workspace-sync-identity-boundaries.md) — bind saves to the initiating account; never let a later session authorize stale work.
 - [Durable draft cleanup](durable-draft-cleanup.md) — serialize draft autosaves with success cleanup so an in-flight write cannot resurrect filed content.
+- [React Native Web checked state](react-native-web-checked-state.md) — mirror checkbox/radio state to web ARIA; accessibilityState alone may not update the browser tree.

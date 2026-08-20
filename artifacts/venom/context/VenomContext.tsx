@@ -266,10 +266,18 @@ const normalizeFieldOptions = (options: string[]) => {
     return [cleaned];
   });
 };
-export const IS_READ_ONLY_UI_TEST =
+const UI_TEST_QUERY_ENABLED =
+  Platform.OS === 'web' &&
+  typeof globalThis.location?.search === 'string' &&
+  globalThis.location.search.includes('venomUiTest=true');
+
+export const IS_UI_TEST =
   __DEV__ &&
   Platform.OS === 'web' &&
-  process.env.EXPO_PUBLIC_VENOM_UI_TEST === 'true';
+  (process.env.EXPO_PUBLIC_VENOM_UI_TEST === 'true' ||
+    UI_TEST_QUERY_ENABLED);
+export const IS_READ_ONLY_UI_TEST = IS_UI_TEST;
+export const UI_TEST_USER_ID = 'venom-ui-test';
 
 const TOMBSTONE_LIMITS: Record<TombstoneCollection, number> = {
   projects: 1000,
@@ -717,7 +725,8 @@ type SyncController = {
 const VenomContext = createContext<VenomContextType | null>(null);
 
 export function VenomProvider({ children }: { children: React.ReactNode }) {
-  const { getToken, userId } = useAuth();
+  const { getToken, userId: authenticatedUserId } = useAuth();
+  const userId = IS_UI_TEST ? UI_TEST_USER_ID : authenticatedUserId;
   const [state, setState] = useState<VenomState>(() => createDefaultState());
   const [localState, setLocalState] = useState<VenomState | null>(null);
   const [legacyState, setLegacyState] = useState<VenomState | null>(null);
@@ -762,22 +771,6 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
   });
   useEffect(() => {
     let cancelled = false;
-
-    if (IS_READ_ONLY_UI_TEST) {
-      hydratedUserRef.current = userId ?? null;
-      revisionRef.current = 0;
-      lastSerializedRef.current = JSON.stringify(createDefaultState());
-      setLocalState(null);
-      setLegacyState(null);
-      setHasScopedState(false);
-      setHasPendingLegacyImport(false);
-      setLocalUserId(userId ?? null);
-      setState(createDefaultState());
-      setIsReady(true);
-      setSyncStatus('offline');
-      setLastSyncedAt(null);
-      return;
-    }
 
     if (!userId) {
       hydratedUserRef.current = null;
@@ -856,7 +849,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
   const flushCloudState = useCallback(
     async (nextState: VenomState) => {
-      if (!userId || IS_READ_ONLY_UI_TEST) return;
+      if (!userId || IS_UI_TEST) return;
 
       const syncUserId = userId;
       const controller = syncControllerRef.current;
@@ -966,7 +959,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       localUserId !== userId ||
       !localState ||
       hydratedUserRef.current === userId ||
-      workspaceQuery.isPending
+      (!IS_UI_TEST && workspaceQuery.isPending)
     ) {
       return;
     }
@@ -1030,7 +1023,6 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (
-      IS_READ_ONLY_UI_TEST ||
       !isReady ||
       !userId ||
       hasPendingLegacyImport ||
@@ -1042,6 +1034,11 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     const serialized = JSON.stringify(state);
     void AsyncStorage.setItem(storageKeyFor(userId), serialized);
 
+    if (IS_UI_TEST) {
+      lastSerializedRef.current = serialized;
+      setSyncStatus('offline');
+      return;
+    }
     if (serialized === lastSerializedRef.current) return;
 
     const timeout = setTimeout(() => {

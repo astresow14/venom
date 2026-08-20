@@ -11,7 +11,8 @@
     "test": "pnpm run test:unit && pnpm run test:web",
     "test:unit": "node --test --experimental-strip-types context/**/*.test.mjs",
     "pretest:web": "playwright install chromium",
-    "test:web": "playwright test"
+    "test:web": "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$(command -v chromium || true) playwright test",
+    "test:e2e": "pnpm run test:web"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
