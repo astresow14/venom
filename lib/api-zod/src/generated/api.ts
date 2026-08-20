@@ -100,3 +100,647 @@ export const ExtractVenomKnowledgeResponse = zod.object({
 })
 
 
+/**
+ * @summary Get the signed-in user's workspace
+ */
+export const getVenomWorkspaceResponseStateOneProjectsItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemNameMax = 120;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemDescriptionMax = 1000;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemAccentMax = 32;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemSourceCountMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemSourceCountMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax = 500;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksMax = 2000;
+
+export const getVenomWorkspaceResponseStateOneProjectsMax = 500;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemTitleMax = 200;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemProjectIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemContentMax = 50000;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesMax = 1000;
+
+export const getVenomWorkspaceResponseStateOneConversationsMax = 500;
+
+export const getVenomWorkspaceResponseStateOneClustersItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneClustersItemProjectIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneClustersItemLabelMax = 200;
+
+export const getVenomWorkspaceResponseStateOneClustersItemCategoryMax = 100;
+
+export const getVenomWorkspaceResponseStateOneClustersItemStrengthMin = 0;
+export const getVenomWorkspaceResponseStateOneClustersItemStrengthMax = 1;
+
+export const getVenomWorkspaceResponseStateOneClustersItemLinksItemMax = 120;
+
+export const getVenomWorkspaceResponseStateOneClustersItemLinksMax = 100;
+
+export const getVenomWorkspaceResponseStateOneClustersItemDescriptionMax = 2000;
+
+export const getVenomWorkspaceResponseStateOneClustersItemSummaryMax = 2000;
+
+export const getVenomWorkspaceResponseStateOneClustersItemMentionCountMin = 0;
+export const getVenomWorkspaceResponseStateOneClustersItemMentionCountMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemProjectIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationTitleMax = 200;
+
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsItemMax = 120;
+
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsMax = 12;
+
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax = 2000;
+
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesMax = 8;
+
+export const getVenomWorkspaceResponseStateOneClustersMax = 1000;
+
+export const getVenomWorkspaceResponseStateOneActiveProjectIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneActiveConversationIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneTombstonesProjectsItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneTombstonesProjectsMax = 1000;
+
+export const getVenomWorkspaceResponseStateOneTombstonesTasksItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneTombstonesTasksMax = 5000;
+
+export const getVenomWorkspaceResponseStateOneTombstonesConversationsItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneTombstonesConversationsMax = 1000;
+
+export const getVenomWorkspaceResponseStateOneTombstonesMessagesItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneTombstonesMessagesMax = 10000;
+
+export const getVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneTombstonesClustersMax = 2000;
+
+export const getVenomWorkspaceResponseRevisionMin = 0;
+export const getVenomWorkspaceResponseRevisionMultipleOf = 1;
+
+
+
+export const GetVenomWorkspaceResponse = zod.object({
+  "state": zod.union([zod.object({
+  "projects": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemIdMax),
+  "name": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemNameMax),
+  "description": zod.string().max(getVenomWorkspaceResponseStateOneProjectsItemDescriptionMax),
+  "accent": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemAccentMax),
+  "sourceCount": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemSourceCountMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemSourceCountMultipleOf),
+  "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMultipleOf),
+  "tasks": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax),
+  "title": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax),
+  "status": zod.enum(['todo', 'in_progress', 'done']),
+  "createdAt": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneProjectsItemTasksMax)
+})).max(getVenomWorkspaceResponseStateOneProjectsMax),
+  "conversations": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemIdMax),
+  "title": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemTitleMax),
+  "projectId": zod.string().max(getVenomWorkspaceResponseStateOneConversationsItemProjectIdMax).nullable(),
+  "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMultipleOf),
+  "messages": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemIdMax),
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemContentMax),
+  "createdAt": zod.number().min(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf),
+  "status": zod.enum(['sending', 'sent', 'error'])
+})).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesMax)
+})).max(getVenomWorkspaceResponseStateOneConversationsMax),
+  "clusters": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneClustersItemIdMax),
+  "projectId": zod.string().max(getVenomWorkspaceResponseStateOneClustersItemProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(getVenomWorkspaceResponseStateOneClustersItemLabelMax),
+  "category": zod.string().min(1).max(getVenomWorkspaceResponseStateOneClustersItemCategoryMax),
+  "strength": zod.number().min(getVenomWorkspaceResponseStateOneClustersItemStrengthMin).max(getVenomWorkspaceResponseStateOneClustersItemStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(getVenomWorkspaceResponseStateOneClustersItemLinksItemMax)).max(getVenomWorkspaceResponseStateOneClustersItemLinksMax),
+  "description": zod.string().max(getVenomWorkspaceResponseStateOneClustersItemDescriptionMax).optional(),
+  "summary": zod.string().max(getVenomWorkspaceResponseStateOneClustersItemSummaryMax),
+  "mentionCount": zod.number().min(getVenomWorkspaceResponseStateOneClustersItemMentionCountMin).multipleOf(getVenomWorkspaceResponseStateOneClustersItemMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(getVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationIdMax),
+  "projectId": zod.string().max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsItemMax)).max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneClustersItemSourcesMax)
+})).max(getVenomWorkspaceResponseStateOneClustersMax),
+  "activeProjectId": zod.string().max(getVenomWorkspaceResponseStateOneActiveProjectIdMax).nullable(),
+  "activeConversationId": zod.string().max(getVenomWorkspaceResponseStateOneActiveConversationIdMax).nullable(),
+  "tombstones": zod.object({
+  "projects": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesProjectsItemIdMax),
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneTombstonesProjectsMax),
+  "tasks": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesTasksItemIdMax),
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneTombstonesTasksMax),
+  "conversations": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesConversationsItemIdMax),
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneTombstonesConversationsMax),
+  "messages": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesMessagesItemIdMax),
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneTombstonesMessagesMax),
+  "clusters": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax),
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneTombstonesClustersMax)
+}).optional()
+}),zod.null()]),
+  "revision": zod.number().min(getVenomWorkspaceResponseRevisionMin).multipleOf(getVenomWorkspaceResponseRevisionMultipleOf),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Save the signed-in user's workspace
+ */
+export const saveVenomWorkspaceBodyStateProjectsItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateProjectsItemNameMax = 120;
+
+export const saveVenomWorkspaceBodyStateProjectsItemDescriptionMax = 1000;
+
+export const saveVenomWorkspaceBodyStateProjectsItemAccentMax = 32;
+
+export const saveVenomWorkspaceBodyStateProjectsItemSourceCountMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemSourceCountMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateProjectsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemTitleMax = 500;
+
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateProjectsItemTasksMax = 2000;
+
+export const saveVenomWorkspaceBodyStateProjectsMax = 500;
+
+export const saveVenomWorkspaceBodyStateConversationsItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateConversationsItemTitleMax = 200;
+
+export const saveVenomWorkspaceBodyStateConversationsItemProjectIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateConversationsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateConversationsItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemContentMax = 50000;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesMax = 1000;
+
+export const saveVenomWorkspaceBodyStateConversationsMax = 500;
+
+export const saveVenomWorkspaceBodyStateClustersItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateClustersItemProjectIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateClustersItemLabelMax = 200;
+
+export const saveVenomWorkspaceBodyStateClustersItemCategoryMax = 100;
+
+export const saveVenomWorkspaceBodyStateClustersItemStrengthMin = 0;
+export const saveVenomWorkspaceBodyStateClustersItemStrengthMax = 1;
+
+export const saveVenomWorkspaceBodyStateClustersItemLinksItemMax = 120;
+
+export const saveVenomWorkspaceBodyStateClustersItemLinksMax = 100;
+
+export const saveVenomWorkspaceBodyStateClustersItemDescriptionMax = 2000;
+
+export const saveVenomWorkspaceBodyStateClustersItemSummaryMax = 2000;
+
+export const saveVenomWorkspaceBodyStateClustersItemMentionCountMin = 0;
+export const saveVenomWorkspaceBodyStateClustersItemMentionCountMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateClustersItemLastUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateClustersItemLastUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemConversationIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemProjectIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemConversationTitleMax = 200;
+
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemMessageIdsItemMax = 120;
+
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemMessageIdsMax = 12;
+
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemExcerptMax = 2000;
+
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateClustersItemSourcesMax = 8;
+
+export const saveVenomWorkspaceBodyStateClustersMax = 1000;
+
+export const saveVenomWorkspaceBodyStateActiveProjectIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateActiveConversationIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateTombstonesProjectsItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateTombstonesProjectsMax = 1000;
+
+export const saveVenomWorkspaceBodyStateTombstonesTasksItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateTombstonesTasksMax = 5000;
+
+export const saveVenomWorkspaceBodyStateTombstonesConversationsItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateTombstonesConversationsMax = 1000;
+
+export const saveVenomWorkspaceBodyStateTombstonesMessagesItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateTombstonesMessagesMax = 10000;
+
+export const saveVenomWorkspaceBodyStateTombstonesClustersItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateTombstonesClustersMax = 2000;
+
+export const saveVenomWorkspaceBodyBaseRevisionMin = 0;
+export const saveVenomWorkspaceBodyBaseRevisionMultipleOf = 1;
+
+
+
+export const SaveVenomWorkspaceBody = zod.object({
+  "state": zod.object({
+  "projects": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemIdMax),
+  "name": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemNameMax),
+  "description": zod.string().max(saveVenomWorkspaceBodyStateProjectsItemDescriptionMax),
+  "accent": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemAccentMax),
+  "sourceCount": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemSourceCountMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemSourceCountMultipleOf),
+  "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemUpdatedAtMultipleOf),
+  "tasks": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemTasksItemIdMax),
+  "title": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemTasksItemTitleMax),
+  "status": zod.enum(['todo', 'in_progress', 'done']),
+  "createdAt": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateProjectsItemTasksMax)
+})).max(saveVenomWorkspaceBodyStateProjectsMax),
+  "conversations": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemIdMax),
+  "title": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemTitleMax),
+  "projectId": zod.string().max(saveVenomWorkspaceBodyStateConversationsItemProjectIdMax).nullable(),
+  "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateConversationsItemUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateConversationsItemUpdatedAtMultipleOf),
+  "messages": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemIdMax),
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemContentMax),
+  "createdAt": zod.number().min(saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMin).multipleOf(saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMultipleOf),
+  "status": zod.enum(['sending', 'sent', 'error'])
+})).max(saveVenomWorkspaceBodyStateConversationsItemMessagesMax)
+})).max(saveVenomWorkspaceBodyStateConversationsMax),
+  "clusters": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateClustersItemIdMax),
+  "projectId": zod.string().max(saveVenomWorkspaceBodyStateClustersItemProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(saveVenomWorkspaceBodyStateClustersItemLabelMax),
+  "category": zod.string().min(1).max(saveVenomWorkspaceBodyStateClustersItemCategoryMax),
+  "strength": zod.number().min(saveVenomWorkspaceBodyStateClustersItemStrengthMin).max(saveVenomWorkspaceBodyStateClustersItemStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(saveVenomWorkspaceBodyStateClustersItemLinksItemMax)).max(saveVenomWorkspaceBodyStateClustersItemLinksMax),
+  "description": zod.string().max(saveVenomWorkspaceBodyStateClustersItemDescriptionMax).optional(),
+  "summary": zod.string().max(saveVenomWorkspaceBodyStateClustersItemSummaryMax),
+  "mentionCount": zod.number().min(saveVenomWorkspaceBodyStateClustersItemMentionCountMin).multipleOf(saveVenomWorkspaceBodyStateClustersItemMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(saveVenomWorkspaceBodyStateClustersItemLastUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateClustersItemLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(saveVenomWorkspaceBodyStateClustersItemSourcesItemConversationIdMax),
+  "projectId": zod.string().max(saveVenomWorkspaceBodyStateClustersItemSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(saveVenomWorkspaceBodyStateClustersItemSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(saveVenomWorkspaceBodyStateClustersItemSourcesItemMessageIdsItemMax)).max(saveVenomWorkspaceBodyStateClustersItemSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(saveVenomWorkspaceBodyStateClustersItemSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateClustersItemSourcesMax)
+})).max(saveVenomWorkspaceBodyStateClustersMax),
+  "activeProjectId": zod.string().max(saveVenomWorkspaceBodyStateActiveProjectIdMax).nullable(),
+  "activeConversationId": zod.string().max(saveVenomWorkspaceBodyStateActiveConversationIdMax).nullable(),
+  "tombstones": zod.object({
+  "projects": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesProjectsItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateTombstonesProjectsMax),
+  "tasks": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesTasksItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateTombstonesTasksMax),
+  "conversations": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesConversationsItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateTombstonesConversationsMax),
+  "messages": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesMessagesItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateTombstonesMessagesMax),
+  "clusters": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesClustersItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateTombstonesClustersMax)
+}).optional()
+}),
+  "baseRevision": zod.number().min(saveVenomWorkspaceBodyBaseRevisionMin).multipleOf(saveVenomWorkspaceBodyBaseRevisionMultipleOf)
+})
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemNameMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemDescriptionMax = 1000;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemAccentMax = 32;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemSourceCountMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemSourceCountMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax = 500;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksMax = 2000;
+
+export const saveVenomWorkspaceResponseStateOneProjectsMax = 500;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemTitleMax = 200;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemProjectIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemContentMax = 50000;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesMax = 1000;
+
+export const saveVenomWorkspaceResponseStateOneConversationsMax = 500;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemProjectIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemLabelMax = 200;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemCategoryMax = 100;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemStrengthMin = 0;
+export const saveVenomWorkspaceResponseStateOneClustersItemStrengthMax = 1;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemLinksItemMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemLinksMax = 100;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemDescriptionMax = 2000;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemSummaryMax = 2000;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemMentionCountMin = 0;
+export const saveVenomWorkspaceResponseStateOneClustersItemMentionCountMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemProjectIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationTitleMax = 200;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsItemMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsMax = 12;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax = 2000;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesMax = 8;
+
+export const saveVenomWorkspaceResponseStateOneClustersMax = 1000;
+
+export const saveVenomWorkspaceResponseStateOneActiveProjectIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneActiveConversationIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesProjectsItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesProjectsMax = 1000;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesTasksItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesTasksMax = 5000;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesConversationsItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesConversationsMax = 1000;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesMessagesItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesMessagesMax = 10000;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesClustersMax = 2000;
+
+export const saveVenomWorkspaceResponseRevisionMin = 0;
+export const saveVenomWorkspaceResponseRevisionMultipleOf = 1;
+
+
+
+export const SaveVenomWorkspaceResponse = zod.object({
+  "state": zod.union([zod.object({
+  "projects": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemIdMax),
+  "name": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemNameMax),
+  "description": zod.string().max(saveVenomWorkspaceResponseStateOneProjectsItemDescriptionMax),
+  "accent": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemAccentMax),
+  "sourceCount": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemSourceCountMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemSourceCountMultipleOf),
+  "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMultipleOf),
+  "tasks": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax),
+  "title": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax),
+  "status": zod.enum(['todo', 'in_progress', 'done']),
+  "createdAt": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneProjectsItemTasksMax)
+})).max(saveVenomWorkspaceResponseStateOneProjectsMax),
+  "conversations": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemIdMax),
+  "title": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemTitleMax),
+  "projectId": zod.string().max(saveVenomWorkspaceResponseStateOneConversationsItemProjectIdMax).nullable(),
+  "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMultipleOf),
+  "messages": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemIdMax),
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemContentMax),
+  "createdAt": zod.number().min(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf),
+  "status": zod.enum(['sending', 'sent', 'error'])
+})).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesMax)
+})).max(saveVenomWorkspaceResponseStateOneConversationsMax),
+  "clusters": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneClustersItemIdMax),
+  "projectId": zod.string().max(saveVenomWorkspaceResponseStateOneClustersItemProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneClustersItemLabelMax),
+  "category": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneClustersItemCategoryMax),
+  "strength": zod.number().min(saveVenomWorkspaceResponseStateOneClustersItemStrengthMin).max(saveVenomWorkspaceResponseStateOneClustersItemStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(saveVenomWorkspaceResponseStateOneClustersItemLinksItemMax)).max(saveVenomWorkspaceResponseStateOneClustersItemLinksMax),
+  "description": zod.string().max(saveVenomWorkspaceResponseStateOneClustersItemDescriptionMax).optional(),
+  "summary": zod.string().max(saveVenomWorkspaceResponseStateOneClustersItemSummaryMax),
+  "mentionCount": zod.number().min(saveVenomWorkspaceResponseStateOneClustersItemMentionCountMin).multipleOf(saveVenomWorkspaceResponseStateOneClustersItemMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationIdMax),
+  "projectId": zod.string().max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsItemMax)).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesMax)
+})).max(saveVenomWorkspaceResponseStateOneClustersMax),
+  "activeProjectId": zod.string().max(saveVenomWorkspaceResponseStateOneActiveProjectIdMax).nullable(),
+  "activeConversationId": zod.string().max(saveVenomWorkspaceResponseStateOneActiveConversationIdMax).nullable(),
+  "tombstones": zod.object({
+  "projects": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesProjectsItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneTombstonesProjectsMax),
+  "tasks": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesTasksItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneTombstonesTasksMax),
+  "conversations": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesConversationsItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneTombstonesConversationsMax),
+  "messages": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesMessagesItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneTombstonesMessagesMax),
+  "clusters": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneTombstonesClustersMax)
+}).optional()
+}),zod.null()]),
+  "revision": zod.number().min(saveVenomWorkspaceResponseRevisionMin).multipleOf(saveVenomWorkspaceResponseRevisionMultipleOf),
+  "updatedAt": zod.coerce.date().nullable()
+})

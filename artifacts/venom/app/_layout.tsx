@@ -1,6 +1,14 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  ClerkLoaded,
+  ClerkLoading,
+  ClerkProvider,
+  useAuth,
+} from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ActivityIndicator, View } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -18,18 +26,46 @@ import * as SystemUI from "expo-system-ui";
 import { VenomProvider } from "@/context/VenomContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { useColors } from "@/hooks/useColors";
-import { setBaseUrl } from "@workspace/api-client-react";
+import {
+  setAuthTokenGetter,
+  setBaseUrl,
+} from "@workspace/api-client-react";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-// Setup API URL outside React lifecycle
-setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+const domain = process.env.EXPO_PUBLIC_DOMAIN;
+if (domain) setBaseUrl(`https://${domain}`);
+
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const proxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
+
+if (!publishableKey) {
+  throw new Error("Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY");
+}
+const clerkPublishableKey: string = publishableKey;
 
 function RootLayoutNav() {
+  const { getToken, isSignedIn, userId } = useAuth();
   const colors = useColors();
   const { theme } = useTheme();
+  const previousUserId = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    setAuthTokenGetter(isSignedIn ? () => getToken() : null);
+    return () => setAuthTokenGetter(null);
+  }, [getToken, isSignedIn]);
+
+  useEffect(() => {
+    if (
+      previousUserId.current !== undefined &&
+      previousUserId.current !== (userId ?? null)
+    ) {
+      queryClient.clear();
+    }
+    previousUserId.current = userId ?? null;
+  }, [userId]);
 
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(colors.background);
@@ -38,15 +74,24 @@ function RootLayoutNav() {
   return (
     <>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.background },
-          animation: "fade",
-        }}
-      >
-        <Stack.Screen name="index" />
-      </Stack>
+      <VenomProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.background },
+            animation: "fade",
+          }}
+        >
+          <Stack.Protected guard={!isSignedIn}>
+            <Stack.Screen name="(auth)" />
+          </Stack.Protected>
+          <Stack.Protected guard={Boolean(isSignedIn)}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="projects" />
+            <Stack.Screen name="settings" />
+          </Stack.Protected>
+        </Stack>
+      </VenomProvider>
     </>
   );
 }
@@ -72,13 +117,31 @@ export default function RootLayout() {
       <ThemeProvider>
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <KeyboardProvider>
-                <VenomProvider>
-                  <RootLayoutNav />
-                </VenomProvider>
-              </KeyboardProvider>
-            </GestureHandlerRootView>
+            <ClerkProvider
+              publishableKey={clerkPublishableKey}
+              tokenCache={tokenCache}
+              proxyUrl={proxyUrl}
+            >
+              <ClerkLoading>
+                <View
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#050908",
+                  }}
+                >
+                  <ActivityIndicator size="small" color="#b4f536" />
+                </View>
+              </ClerkLoading>
+              <ClerkLoaded>
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                  <KeyboardProvider>
+                    <RootLayoutNav />
+                  </KeyboardProvider>
+                </GestureHandlerRootView>
+              </ClerkLoaded>
+            </ClerkProvider>
           </QueryClientProvider>
         </ErrorBoundary>
       </ThemeProvider>

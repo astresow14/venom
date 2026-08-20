@@ -8,6 +8,7 @@ import {
   openai,
   type ChatCompletionMessageParam,
 } from "@workspace/integrations-openai-ai-server";
+import { getAuth } from "@clerk/express";
 
 const router: IRouter = Router();
 
@@ -32,6 +33,12 @@ function isRecord(value: unknown): value is UnknownRecord {
 }
 
 router.post("/venom/respond", async (req, res): Promise<void> => {
+  const auth = getAuth(req);
+  if (!auth.userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
   const parsed = SendVenomMessageBody.safeParse(req.body);
 
   if (!parsed.success) {
@@ -103,6 +110,12 @@ router.post("/venom/respond", async (req, res): Promise<void> => {
 });
 
 router.post("/venom/knowledge/extract", async (req, res): Promise<void> => {
+  const auth = getAuth(req);
+  if (!auth.userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
   const parsed = ExtractVenomKnowledgeBody.safeParse(req.body);
 
   if (!parsed.success) {
@@ -115,7 +128,7 @@ router.post("/venom/knowledge/extract", async (req, res): Promise<void> => {
   }
 
   const now = Date.now();
-  const rateLimitKey = req.ip || req.socket.remoteAddress || "unknown";
+  const rateLimitKey = auth.userId;
   const currentLimit = knowledgeRateLimits.get(rateLimitKey);
   if (!currentLimit || currentLimit.resetAt <= now) {
     knowledgeRateLimits.set(rateLimitKey, {

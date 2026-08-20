@@ -42,6 +42,8 @@ paths:
           description: SSE stream of assistant text chunks
           content:
             text/event-stream: {}
+        "401":
+          description: Authentication required
   /venom/knowledge/extract:
     post:
       operationId: extractVenomKnowledge
@@ -60,8 +62,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/KnowledgeExtraction"
+        "401":
+          description: Authentication required
         "429":
           description: Too many extraction requests
+  /venom/workspace:
+    get:
+      operationId: getVenomWorkspace
+      tags: [venom]
+      summary: Get the signed-in user's workspace
+      responses:
+        "200":
+          description: Current cloud workspace, or an empty envelope for a new account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomWorkspaceSnapshot"
+        "401":
+          description: Authentication required
+    put:
+      operationId: saveVenomWorkspace
+      tags: [venom]
+      summary: Save the signed-in user's workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomWorkspaceSaveInput"
+      responses:
+        "200":
+          description: Saved workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomWorkspaceSnapshot"
+        "401":
+          description: Authentication required
+        "409":
+          description: The cloud workspace changed on another device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomWorkspaceSnapshot"
+        "413":
+          description: The workspace exceeds the supported cloud snapshot size
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  error:
+                    type: string
+                  maxBytes:
+                    type: number
+                    multipleOf: 1
+                    minimum: 1
+                required: [error, maxBytes]
 components:
   schemas:
     HealthStatus:
@@ -98,6 +156,7 @@ components:
         - messages
     KnowledgeConversation:
       type: object
+      additionalProperties: false
       required: [id, title]
       properties:
         id:
@@ -109,10 +168,11 @@ components:
           minLength: 1
           maxLength: 160
         projectId:
-          type: ["string", "null"]
+          type: [string, "null"]
           maxLength: 160
     KnowledgeMessage:
       type: object
+      additionalProperties: false
       required: [id, role, content]
       properties:
         id:
@@ -128,6 +188,7 @@ components:
           maxLength: 8000
     KnowledgeExtractionInput:
       type: object
+      additionalProperties: false
       required: [conversation, messages]
       properties:
         conversation:
@@ -140,7 +201,9 @@ components:
             $ref: "#/components/schemas/KnowledgeMessage"
     KnowledgeCandidate:
       type: object
-      required: [label, category, confidence, summary, sourceMessageIds, relatedLabels]
+      additionalProperties: false
+      required:
+        [label, category, confidence, summary, sourceMessageIds, relatedLabels]
       properties:
         label:
           type: string
@@ -175,6 +238,7 @@ components:
             maxLength: 64
     KnowledgeExtraction:
       type: object
+      additionalProperties: false
       required: [clusters]
       properties:
         clusters:
@@ -182,4 +246,293 @@ components:
           maxItems: 8
           items:
             $ref: "#/components/schemas/KnowledgeCandidate"
+    VenomTask:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 120
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        status:
+          type: string
+          enum: [todo, in_progress, done]
+        createdAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+      required: [id, title, status, createdAt]
+    VenomProject:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 120
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 1000
+        accent:
+          type: string
+          minLength: 1
+          maxLength: 32
+        sourceCount:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        updatedAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        tasks:
+          type: array
+          maxItems: 2000
+          items:
+            $ref: "#/components/schemas/VenomTask"
+      required: [id, name, description, accent, sourceCount, updatedAt, tasks]
+    VenomMessage:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 120
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+          maxLength: 50000
+        createdAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        status:
+          type: string
+          enum: [sending, sent, error]
+      required: [id, role, content, createdAt, status]
+    VenomConversation:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 120
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        projectId:
+          type: [string, "null"]
+          maxLength: 120
+        updatedAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        messages:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/VenomMessage"
+      required: [id, title, projectId, updatedAt, messages]
+    VenomKnowledgeSource:
+      type: object
+      additionalProperties: false
+      properties:
+        conversationId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        projectId:
+          type: [string, "null"]
+          maxLength: 120
+        conversationTitle:
+          type: string
+          minLength: 1
+          maxLength: 200
+        messageIds:
+          type: array
+          maxItems: 12
+          items:
+            type: string
+            minLength: 1
+            maxLength: 120
+        excerpt:
+          type: string
+          maxLength: 2000
+        updatedAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+      required:
+        [conversationId, projectId, conversationTitle, messageIds, excerpt, updatedAt]
+    VenomKnowledgeCluster:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 120
+        projectId:
+          type: [string, "null"]
+          maxLength: 120
+        label:
+          type: string
+          minLength: 1
+          maxLength: 200
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+        strength:
+          type: number
+          minimum: 0
+          maximum: 1
+        x:
+          type: number
+        y:
+          type: number
+        links:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            minLength: 1
+            maxLength: 120
+        description:
+          type: string
+          maxLength: 2000
+        summary:
+          type: string
+          maxLength: 2000
+        mentionCount:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        lastUpdatedAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        sources:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/VenomKnowledgeSource"
+      required:
+        [id, projectId, label, category, strength, x, y, links, summary, mentionCount, lastUpdatedAt, sources]
+    VenomDeletionMarker:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 120
+        deletedAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+      required: [id, deletedAt]
+    VenomWorkspaceTombstones:
+      type: object
+      additionalProperties: false
+      properties:
+        projects:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/VenomDeletionMarker"
+        tasks:
+          type: array
+          maxItems: 5000
+          items:
+            $ref: "#/components/schemas/VenomDeletionMarker"
+        conversations:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/VenomDeletionMarker"
+        messages:
+          type: array
+          maxItems: 10000
+          items:
+            $ref: "#/components/schemas/VenomDeletionMarker"
+        clusters:
+          type: array
+          maxItems: 2000
+          items:
+            $ref: "#/components/schemas/VenomDeletionMarker"
+      required: [projects, tasks, conversations, messages, clusters]
+    VenomWorkspaceState:
+      type: object
+      additionalProperties: false
+      properties:
+        projects:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/VenomProject"
+        conversations:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/VenomConversation"
+        clusters:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/VenomKnowledgeCluster"
+        activeProjectId:
+          type: [string, "null"]
+          maxLength: 120
+        activeConversationId:
+          type: [string, "null"]
+          maxLength: 120
+        tombstones:
+          $ref: "#/components/schemas/VenomWorkspaceTombstones"
+      required:
+        - projects
+        - conversations
+        - clusters
+        - activeProjectId
+        - activeConversationId
+    VenomWorkspaceSaveInput:
+      type: object
+      additionalProperties: false
+      properties:
+        state:
+          $ref: "#/components/schemas/VenomWorkspaceState"
+        baseRevision:
+          type: number
+          multipleOf: 1
+          minimum: 0
+      required: [state, baseRevision]
+    VenomWorkspaceSnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        state:
+          oneOf:
+            - $ref: "#/components/schemas/VenomWorkspaceState"
+            - type: "null"
+        revision:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        updatedAt:
+          type: [string, "null"]
+          format: date-time
+      required: [state, revision, updatedAt]
 

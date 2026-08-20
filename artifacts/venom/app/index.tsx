@@ -22,6 +22,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useAuth } from "@clerk/expo";
+import { useRouter } from "expo-router";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { fetch } from "expo/fetch";
 import * as Haptics from "expo-haptics";
@@ -48,7 +50,7 @@ import {
   Task,
   TaskStatus,
 } from "@/context/VenomContext";
-import { useExtractVenomKnowledge } from "@workspace/api-client-react";
+import { extractVenomKnowledge } from "@workspace/api-client-react";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -67,6 +69,7 @@ function ChatWorkspace({
   isActive: boolean;
   activeProject: any;
 }) {
+  const { getToken, userId } = useAuth();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const {
@@ -77,8 +80,6 @@ function ChatWorkspace({
     createNewConversation,
     applyKnowledgeInsights,
   } = useVenom();
-  const extractKnowledge = useExtractVenomKnowledge();
-
   const [text, setText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
@@ -87,6 +88,19 @@ function ChatWorkspace({
 
   const inputRef = useRef<TextInput>(null);
   const initializedRef = useRef(false);
+  const activeUserIdRef = useRef<string | null>(userId ?? null);
+  const activeRequestAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    activeUserIdRef.current = userId ?? null;
+    return () => {
+      if (activeUserIdRef.current === (userId ?? null)) {
+        activeUserIdRef.current = null;
+      }
+      activeRequestAbortRef.current?.abort();
+      activeRequestAbortRef.current = null;
+    };
+  }, [userId]);
 
   const activeConv = state.conversations.find(
     (c) => c.id === state.activeConversationId,
@@ -115,7 +129,11 @@ function ChatWorkspace({
 
   async function handleSend() {
     const trimmed = text.trim();
-    if (!trimmed || isStreaming) return;
+    const initiatingUserId = userId ?? null;
+    if (!trimmed || isStreaming || !initiatingUserId) return;
+    const initiatingProjectId = activeProject?.id ?? state.activeProjectId;
+    const abortController = new AbortController();
+    activeRequestAbortRef.current = abortController;
 
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -142,10 +160,22 @@ function ChatWorkspace({
     let fullContent = "";
     let requestFailed = false;
     let hasReceivedFirstChunk = false;
+    let requestToken: string | null = null;
     const streamId = generateUniqueId();
 
     try {
-      const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+      const domain = process.env.EXPO_PUBLIC_DOMAIN;
+      if (!domain) throw new Error("API domain is unavailable");
+      const token = await getToken();
+      if (
+        !token ||
+        activeUserIdRef.current !== initiatingUserId ||
+        abortController.signal.aborted
+      ) {
+        throw new Error("Authentication session changed");
+      }
+      requestToken = token;
+      const baseUrl = `https://${domain}`;
       const chatHistory = [
         ...contextMessages
           .slice(-23)
@@ -158,6 +188,7 @@ function ChatWorkspace({
         headers: {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           messages: chatHistory,
@@ -165,8 +196,10 @@ function ChatWorkspace({
             ? `Project: ${activeProject.name}\n${activeProject.description}`
             : undefined,
         }),
+        signal: abortController.signal,
       });
 
+      if (activeUserIdRef.current !== initiatingUserId) return;
       if (!response.ok) throw new Error("Network error");
 
       const reader = response.body?.getReader();
@@ -178,6 +211,10 @@ function ChatWorkspace({
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        if (activeUserIdRef.current !== initiatingUserId) {
+          await reader.cancel();
+          return;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -211,6 +248,7 @@ function ChatWorkspace({
         }
       }
     } catch (error) {
+      if (activeUserIdRef.current !== initiatingUserId) return;
       console.error(error);
       requestFailed = true;
       setShowTyping(false);
@@ -223,6 +261,10 @@ function ChatWorkspace({
       });
       fullContent = "I lost connection to the server. Please try again.";
     } finally {
+      if (activeUserIdRef.current !== initiatingUserId) return;
+      if (activeRequestAbortRef.current === abortController) {
+        activeRequestAbortRef.current = null;
+      }
       setIsStreaming(false);
       setShowTyping(false);
 
@@ -236,7 +278,7 @@ function ChatWorkspace({
       }
       setLocalStreamingMessage(null);
 
-      if (fullContent && !requestFailed) {
+      if (fullContent && !requestFailed && requestToken) {
         const conversation = state.conversations.find(
           (item) => item.id === targetConvId,
         );
@@ -245,39 +287,40 @@ function ChatWorkspace({
             ? `${trimmed.slice(0, 30)}...`
             : (conversation?.title ?? "New Session");
 
-        void extractKnowledge
-          .mutateAsync({
-            data: {
-              conversation: {
-                id: targetConvId,
-                title: conversationTitle,
-                projectId: activeProject?.id ?? null,
-              },
-              messages: [
-                ...contextMessages.slice(-46).map((message) => ({
-                  id: message.id,
-                  role: message.role,
-                  content: message.content.slice(0, 8000),
-                })),
-                {
-                  id: userMessageId,
-                  role: "user",
-                  content: trimmed,
-                },
-                {
-                  id: streamId,
-                  role: "assistant",
-                  content: fullContent.slice(0, 8000),
-                },
-              ],
+        void extractVenomKnowledge(
+          {
+            conversation: {
+              id: targetConvId,
+              title: conversationTitle,
+              projectId: initiatingProjectId,
             },
-          })
+            messages: [
+              ...contextMessages.slice(-46).map((message) => ({
+                id: message.id,
+                role: message.role,
+                content: message.content.slice(0, 8000),
+              })),
+              {
+                id: userMessageId,
+                role: "user",
+                content: trimmed,
+              },
+              {
+                id: streamId,
+                role: "assistant",
+                content: fullContent.slice(0, 8000),
+              },
+            ],
+          },
+          { headers: { Authorization: `Bearer ${requestToken}` } },
+        )
           .then((result) => {
+            if (activeUserIdRef.current !== initiatingUserId) return;
             applyKnowledgeInsights(
               {
                 id: targetConvId,
                 title: conversationTitle,
-                projectId: activeProject?.id ?? null,
+                projectId: initiatingProjectId,
               },
               result.clusters,
             );
@@ -1907,10 +1950,20 @@ function FeedWorkspace({
 // --- Main Screen ---
 
 export default function WorkspaceScreen() {
+  const router = useRouter();
   const colors = useColors();
   const { theme, toggleTheme } = useTheme();
   const insets = useSafeAreaInsets();
-  const { state, setActiveConversation, setActiveProject } = useVenom();
+  const {
+    state,
+    isReady,
+    syncStatus,
+    hasPendingLegacyImport,
+    importDeviceWorkspace,
+    startFreshWorkspace,
+    setActiveConversation,
+    setActiveProject,
+  } = useVenom();
 
   const [activeIndex, setActiveIndex] = useState(0);
   const activeProject =
@@ -1952,6 +2005,101 @@ export default function WorkspaceScreen() {
     setActiveConversation(conversation.id);
     handleTabPress(0);
   };
+
+  if (!isReady) {
+    return (
+      <View
+        style={[
+          styles.restoreContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text
+          style={[styles.restoreText, { color: colors.mutedForeground }]}
+        >
+          Restoring workspace
+        </Text>
+      </View>
+    );
+  }
+
+  if (hasPendingLegacyImport) {
+    return (
+      <View
+        style={[
+          styles.migrationContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <View
+          style={[
+            styles.migrationCard,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={[
+              styles.migrationIcon,
+              { backgroundColor: colors.secondary },
+            ]}
+          >
+            <Feather name="hard-drive" size={22} color={colors.primary} />
+          </View>
+          <Text
+            style={[styles.migrationTitle, { color: colors.foreground }]}
+          >
+            Workspace found on this device
+          </Text>
+          <Text
+            style={[
+              styles.migrationDescription,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            Choose whether to securely attach the existing local workspace to
+            this account. Nothing is uploaded until you confirm.
+          </Text>
+          <TouchableOpacity
+            testID="import-device-workspace"
+            style={[
+              styles.migrationPrimary,
+              { backgroundColor: colors.primary },
+            ]}
+            activeOpacity={0.78}
+            onPress={importDeviceWorkspace}
+          >
+            <Text
+              style={[
+                styles.migrationPrimaryText,
+                { color: colors.primaryForeground },
+              ]}
+            >
+              Keep and sync
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="start-fresh-workspace"
+            style={[
+              styles.migrationSecondary,
+              { borderColor: colors.border },
+            ]}
+            activeOpacity={0.7}
+            onPress={startFreshWorkspace}
+          >
+            <Text
+              style={[
+                styles.migrationSecondaryText,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              Start fresh instead
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -2023,7 +2171,28 @@ export default function WorkspaceScreen() {
               color={colors.foreground}
             />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navProject} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={() => router.push("/settings")}
+            style={styles.navIconButton}
+            testID="open-settings"
+            hitSlop={8}
+          >
+            <Feather
+              name={syncStatus === "synced" ? "cloud" : "cloud-off"}
+              size={17}
+              color={
+                syncStatus === "synced"
+                  ? colors.primary
+                  : colors.mutedForeground
+              }
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.navProject}
+            activeOpacity={0.7}
+            onPress={() => router.push("/projects")}
+            testID="open-projects"
+          >
             <Text
               style={[styles.navProjectText, { color: colors.foreground }]}
               numberOfLines={1}
@@ -2090,6 +2259,68 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  restoreContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  restoreText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+  migrationContainer: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  migrationCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 24,
+  },
+  migrationIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 22,
+  },
+  migrationTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 24,
+    letterSpacing: -0.5,
+  },
+  migrationDescription: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 10,
+    marginBottom: 24,
+  },
+  migrationPrimary: {
+    minHeight: 50,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  migrationPrimaryText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+  },
+  migrationSecondary: {
+    minHeight: 50,
+    borderWidth: 1,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 12,
+  },
+  migrationSecondaryText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+  },
   topNav: {
     flexDirection: "row",
     alignItems: "center",
@@ -2134,6 +2365,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   themeButton: {
+    width: 30,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  navIconButton: {
     width: 30,
     height: 36,
     alignItems: "center",

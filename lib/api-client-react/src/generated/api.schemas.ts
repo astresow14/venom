@@ -122,3 +122,242 @@ export interface KnowledgeExtraction {
   clusters: KnowledgeCandidate[];
 }
 
+export type VenomTaskStatus = typeof VenomTaskStatus[keyof typeof VenomTaskStatus];
+
+
+export const VenomTaskStatus = {
+  todo: 'todo',
+  in_progress: 'in_progress',
+  done: 'done',
+} as const;
+
+export interface VenomTask {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  title: string;
+  status: VenomTaskStatus;
+  /** @minimum 0 */
+  createdAt: number;
+}
+
+export interface VenomProject {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /** @maxLength 1000 */
+  description: string;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  accent: string;
+  /** @minimum 0 */
+  sourceCount: number;
+  /** @minimum 0 */
+  updatedAt: number;
+  /** @maxItems 2000 */
+  tasks: VenomTask[];
+}
+
+export type VenomMessageRole = typeof VenomMessageRole[keyof typeof VenomMessageRole];
+
+
+export const VenomMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export type VenomMessageStatus = typeof VenomMessageStatus[keyof typeof VenomMessageStatus];
+
+
+export const VenomMessageStatus = {
+  sending: 'sending',
+  sent: 'sent',
+  error: 'error',
+} as const;
+
+export interface VenomMessage {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  role: VenomMessageRole;
+  /** @maxLength 50000 */
+  content: string;
+  /** @minimum 0 */
+  createdAt: number;
+  status: VenomMessageStatus;
+}
+
+export interface VenomConversation {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  projectId: string | null;
+  /** @minimum 0 */
+  updatedAt: number;
+  /** @maxItems 1000 */
+  messages: VenomMessage[];
+}
+
+export interface VenomKnowledgeSource {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  conversationId: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  projectId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  conversationTitle: string;
+  /**
+     * @maxItems 12
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  messageIds: string[];
+  /** @maxLength 2000 */
+  excerpt: string;
+  /** @minimum 0 */
+  updatedAt: number;
+}
+
+export interface VenomKnowledgeCluster {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  projectId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  label: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  category: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  strength: number;
+  x: number;
+  y: number;
+  /**
+     * @maxItems 100
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  links: string[];
+  /** @maxLength 2000 */
+  description?: string;
+  /** @maxLength 2000 */
+  summary: string;
+  /** @minimum 0 */
+  mentionCount: number;
+  /** @minimum 0 */
+  lastUpdatedAt: number;
+  /** @maxItems 8 */
+  sources: VenomKnowledgeSource[];
+}
+
+export interface VenomDeletionMarker {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  /** @minimum 0 */
+  deletedAt: number;
+}
+
+export interface VenomWorkspaceTombstones {
+  /** @maxItems 1000 */
+  projects: VenomDeletionMarker[];
+  /** @maxItems 5000 */
+  tasks: VenomDeletionMarker[];
+  /** @maxItems 1000 */
+  conversations: VenomDeletionMarker[];
+  /** @maxItems 10000 */
+  messages: VenomDeletionMarker[];
+  /** @maxItems 2000 */
+  clusters: VenomDeletionMarker[];
+}
+
+export interface VenomWorkspaceState {
+  /** @maxItems 500 */
+  projects: VenomProject[];
+  /** @maxItems 500 */
+  conversations: VenomConversation[];
+  /** @maxItems 1000 */
+  clusters: VenomKnowledgeCluster[];
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  activeProjectId: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  activeConversationId: string | null;
+  tombstones?: VenomWorkspaceTombstones;
+}
+
+export interface VenomWorkspaceSaveInput {
+  state: VenomWorkspaceState;
+  /** @minimum 0 */
+  baseRevision: number;
+}
+
+export interface VenomWorkspaceSnapshot {
+  state: VenomWorkspaceState | null;
+  /** @minimum 0 */
+  revision: number;
+  /** @nullable */
+  updatedAt: string | null;
+}
+export type SaveVenomWorkspace413 = {
+  error: string;
+  /** @minimum 1 */
+  maxBytes: number;
+};

@@ -23,7 +23,10 @@ import type {
   HealthStatus,
   KnowledgeExtraction,
   KnowledgeExtractionInput,
-  VenomChatRequest
+  SaveVenomWorkspace413,
+  VenomChatRequest,
+  VenomWorkspaceSaveInput,
+  VenomWorkspaceSnapshot
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -157,7 +160,7 @@ export const sendVenomMessage = async (venomChatRequest: VenomChatRequest, optio
 
 
 
-export const getSendVenomMessageMutationOptions = <TError = ErrorType<unknown>,
+export const getSendVenomMessageMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendVenomMessage>>, TError,{data: BodyType<VenomChatRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof sendVenomMessage>>, TError,{data: BodyType<VenomChatRequest>}, TContext> => {
 
@@ -186,12 +189,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type SendVenomMessageMutationResult = NonNullable<Awaited<ReturnType<typeof sendVenomMessage>>>
     export type SendVenomMessageMutationBody = BodyType<VenomChatRequest>
-    export type SendVenomMessageMutationError = ErrorType<unknown>
+    export type SendVenomMessageMutationError = ErrorType<void>
 
     /**
  * @summary Stream a response from the Venom assistant
  */
-export const useSendVenomMessage = <TError = ErrorType<unknown>,
+export const useSendVenomMessage = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendVenomMessage>>, TError,{data: BodyType<VenomChatRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof sendVenomMessage>>,
@@ -271,5 +274,153 @@ export const useExtractVenomKnowledge = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getExtractVenomKnowledgeMutationOptions(options));
+    }
+
+export const getGetVenomWorkspaceUrl = () => {
+
+
+
+
+  return `/api/venom/workspace`
+}
+
+/**
+ * @summary Get the signed-in user's workspace
+ */
+export const getVenomWorkspace = async ( options?: Parameters<typeof customFetch>[1]): Promise<VenomWorkspaceSnapshot> => {
+
+  return customFetch<VenomWorkspaceSnapshot>(getGetVenomWorkspaceUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomWorkspaceQueryKey = () => {
+    return [
+    `/api/venom/workspace`
+    ] as const;
+    }
+
+
+export const getGetVenomWorkspaceQueryOptions = <TData = Awaited<ReturnType<typeof getVenomWorkspace>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomWorkspace>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomWorkspaceQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomWorkspace>>> = ({ signal }) => getVenomWorkspace({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomWorkspace>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomWorkspaceQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomWorkspace>>>
+export type GetVenomWorkspaceQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the signed-in user's workspace
+ */
+
+export function useGetVenomWorkspace<TData = Awaited<ReturnType<typeof getVenomWorkspace>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomWorkspace>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomWorkspaceQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveVenomWorkspaceUrl = () => {
+
+
+
+
+  return `/api/venom/workspace`
+}
+
+/**
+ * @summary Save the signed-in user's workspace
+ */
+export const saveVenomWorkspace = async (venomWorkspaceSaveInput: VenomWorkspaceSaveInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomWorkspaceSnapshot> => {
+
+  return customFetch<VenomWorkspaceSnapshot>(getSaveVenomWorkspaceUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomWorkspaceSaveInput)
+  }
+);}
+
+
+
+
+
+export const getSaveVenomWorkspaceMutationOptions = <TError = ErrorType<void | VenomWorkspaceSnapshot | SaveVenomWorkspace413>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveVenomWorkspace>>, TError,{data: BodyType<VenomWorkspaceSaveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveVenomWorkspace>>, TError,{data: BodyType<VenomWorkspaceSaveInput>}, TContext> => {
+
+const mutationKey = ['saveVenomWorkspace'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveVenomWorkspace>>, {data: BodyType<VenomWorkspaceSaveInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveVenomWorkspace(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveVenomWorkspaceMutationResult = NonNullable<Awaited<ReturnType<typeof saveVenomWorkspace>>>
+    export type SaveVenomWorkspaceMutationBody = BodyType<VenomWorkspaceSaveInput>
+    export type SaveVenomWorkspaceMutationError = ErrorType<void | VenomWorkspaceSnapshot | SaveVenomWorkspace413>
+
+    /**
+ * @summary Save the signed-in user's workspace
+ */
+export const useSaveVenomWorkspace = <TError = ErrorType<void | VenomWorkspaceSnapshot | SaveVenomWorkspace413>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveVenomWorkspace>>, TError,{data: BodyType<VenomWorkspaceSaveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveVenomWorkspace>>,
+        TError,
+        {data: BodyType<VenomWorkspaceSaveInput>},
+        TContext
+      > => {
+      return useMutation(getSaveVenomWorkspaceMutationOptions(options));
     }
 
