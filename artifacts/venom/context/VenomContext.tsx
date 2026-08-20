@@ -41,7 +41,7 @@ import {
   saveWorkspaceForSyncTest,
   WORKSPACE_SYNC_UI_TEST_USER_ID,
 } from './workspaceSyncTestHarness';
-import { mergeProjectSources } from './sourceState';
+import { mergeProjectSources, replaceRefreshedSource } from './sourceState';
 import {
   ApiError,
   getGetVenomWorkspaceQueryKey,
@@ -105,6 +105,7 @@ type VenomContextType = {
   deleteProject: (id: string) => void;
   setActiveProject: (id: string | null) => void;
   addSource: (source: ProjectSource) => void;
+  refreshSource: (previousSourceId: string, source: ProjectSource) => void;
   removeSource: (sourceId: string) => void;
   addTask: (projectId: string, title: string, stageId?: string) => void;
   updateTask: (
@@ -1004,6 +1005,45 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       };
     });
   }, []);
+
+  const refreshSource = useCallback(
+    (previousSourceId: string, source: ProjectSource) => {
+      setState((current) => {
+        const replaced = replaceRefreshedSource(
+          current.sources,
+          previousSourceId,
+          source,
+        );
+        if (!replaced) return current;
+
+        const refreshedAt = Date.now();
+        return {
+          ...current,
+          sources: replaced.sources,
+          projects: current.projects.map((project) =>
+            project.id === source.projectId
+              ? {
+                  ...project,
+                  sourceCount: replaced.sources.filter(
+                    (item) => item.projectId === source.projectId,
+                  ).length,
+                  updatedAt: refreshedAt,
+                }
+              : project,
+          ),
+          tombstones: replaced.retiredSourceId
+            ? mergeTombstones(current.tombstones, {
+                sources: createDeletionMarkers(
+                  [replaced.retiredSourceId],
+                  refreshedAt,
+                ),
+              })
+            : current.tombstones,
+        };
+      });
+    },
+    [],
+  );
 
   const removeSource = useCallback((sourceId: string) => {
     setState((current) => {
@@ -1936,6 +1976,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       deleteProject,
       setActiveProject,
       addSource,
+      refreshSource,
       removeSource,
       addTask,
       updateTask,
@@ -1979,6 +2020,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       fileKnowledgeNote,
       mergeKnowledgeClusters,
       moveTask,
+      refreshSource,
       renameKnowledgeCluster,
       removeFieldDefinition,
       removeSource,

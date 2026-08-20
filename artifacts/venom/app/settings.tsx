@@ -22,7 +22,11 @@ import {
 
 import { useColors } from "@/hooks/useColors";
 import { Header } from "@/components/Header";
-import { useVenom } from "@/context/VenomContext";
+import { useVenom, type ProjectSource } from "@/context/VenomContext";
+import {
+  describeLastSync,
+  sourceRefreshRequest,
+} from "@/context/sourceState";
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -30,12 +34,31 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { signOut } = useClerk();
   const { user } = useUser();
-  const { state, syncStatus, lastSyncedAt, addSource, removeSource } =
-    useVenom();
+  const {
+    state,
+    syncStatus,
+    lastSyncedAt,
+    addSource,
+    refreshSource,
+    removeSource,
+  } = useVenom();
 
   const [showGitHubPicker, setShowGitHubPicker] = React.useState(false);
   const [websiteUrl, setWebsiteUrl] = React.useState("");
   const [sourceError, setSourceError] = React.useState<string | null>(null);
+  const [refreshingSourceId, setRefreshingSourceId] = React.useState<
+    string | null
+  >(null);
+  const [refreshErrors, setRefreshErrors] = React.useState<
+    Record<string, string>
+  >({});
+  // Keeps the "last synced" labels honest while the screen stays open.
+  const [now, setNow] = React.useState(() => Date.now());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const { data: health, isError } = useHealthCheck();
   const isConnected = !!health && !isError;
@@ -75,6 +98,93 @@ export default function SettingsScreen() {
       onError: (error: Error) => setSourceError(error.message),
     },
   });
+
+  const applyRefresh = React.useCallback(
+    (previousSourceId: string, source: ProjectSource) => {
+      refreshSource(previousSourceId, source);
+      setNow(Date.now());
+      setRefreshingSourceId((current) =>
+        current === previousSourceId ? null : current,
+      );
+      setRefreshErrors((current) => {
+        if (!(previousSourceId in current)) return current;
+        const next = { ...current };
+        delete next[previousSourceId];
+        return next;
+      });
+    },
+    [refreshSource],
+  );
+
+  const failRefresh = React.useCallback(
+    (previousSourceId: string, message: string) => {
+      setRefreshingSourceId((current) =>
+        current === previousSourceId ? null : current,
+      );
+      setRefreshErrors((current) => ({
+        ...current,
+        [previousSourceId]: message,
+      }));
+    },
+    [],
+  );
+
+  // The connect endpoints recompute a deterministic source id, so a refresh is
+  // the original connect request replayed for one specific card.
+  const refreshTargetRef = React.useRef<string | null>(null);
+
+  const refreshHandlers = {
+    onSuccess: (source: ProjectSource) => {
+      const target = refreshTargetRef.current;
+      if (!target) return;
+      refreshTargetRef.current = null;
+      applyRefresh(target, source);
+    },
+    onError: (error: Error) => {
+      const target = refreshTargetRef.current;
+      if (!target) return;
+      refreshTargetRef.current = null;
+      failRefresh(target, error.message);
+    },
+  };
+
+  const githubRefresh = useConnectGitHubSource({ mutation: refreshHandlers });
+  const websiteRefresh = useConnectWebsiteSource({ mutation: refreshHandlers });
+
+  const refreshConnectedSource = (source: ProjectSource) => {
+    if (refreshingSourceId) return;
+
+    const request = sourceRefreshRequest(source);
+    if (!request) {
+      failRefresh(
+        source.id,
+        "Venom cannot refresh this source automatically. Remove it and connect it again.",
+      );
+      return;
+    }
+
+    refreshTargetRef.current = source.id;
+    setRefreshingSourceId(source.id);
+    setRefreshErrors((current) => {
+      if (!(source.id in current)) return current;
+      const next = { ...current };
+      delete next[source.id];
+      return next;
+    });
+
+    if (request.provider === "github") {
+      githubRefresh.mutate({
+        projectId: request.projectId,
+        data: { repository: request.repository },
+      });
+      return;
+    }
+
+    websiteRefresh.mutate({
+      projectId: request.projectId,
+      data: { url: request.url },
+    });
+  };
 
   const syncLabels = {
     loading: "Restoring",
@@ -644,70 +754,120 @@ export default function SettingsScreen() {
               >
                  Active in this project
               </Text>
-              {projectSources.map((source) => (
-                <View
-                  key={source.id}
-                  style={[
-                    styles.connectedSource,
-                    {
-                      borderColor: colors.border,
-                      backgroundColor: colors.card,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.providerIcon,
-                      {
-                        borderColor: colors.border,
-                        backgroundColor: colors.secondary,
-                      },
-                    ]}
-                  >
-                    <Feather
-                      name={
-                        source.provider === "github" ? "github" : "globe"
-                      }
-                      size={16}
-                      color={colors.primary}
-                    />
-                  </View>
-                  <View style={styles.providerCopy}>
-                    <Text
+              {projectSources.map((source) => {
+                const isRefreshing = refreshingSourceId === source.id;
+                const refreshError = refreshErrors[source.id];
+                return (
+                  <View key={source.id}>
+                    <View
                       style={[
-                        styles.repositoryName,
-                        { color: colors.foreground },
+                        styles.connectedSource,
+                        {
+                          borderColor: colors.border,
+                          backgroundColor: colors.card,
+                        },
                       ]}
-                      numberOfLines={1}
                     >
-                      {source.name}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.repositoryDescription,
-                        { color: colors.mutedForeground },
-                      ]}
-                      numberOfLines={1}
-                    >
-                       {source.status} · {source.citations.length} citations · synced{" "}
-                      {source.syncedAt.slice(0, 10)}
-                    </Text>
+                      <View
+                        style={[
+                          styles.providerIcon,
+                          {
+                            borderColor: colors.border,
+                            backgroundColor: colors.secondary,
+                          },
+                        ]}
+                      >
+                        <Feather
+                          name={
+                            source.provider === "github" ? "github" : "globe"
+                          }
+                          size={16}
+                          color={colors.primary}
+                        />
+                      </View>
+                      <View style={styles.providerCopy}>
+                        <Text
+                          style={[
+                            styles.repositoryName,
+                            { color: colors.foreground },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {source.name}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.repositoryDescription,
+                            { color: colors.mutedForeground },
+                          ]}
+                          numberOfLines={1}
+                          testID={`source-sync-status-${source.id}`}
+                        >
+                          {isRefreshing
+                            ? "Refreshing…"
+                            : `${source.citations.length} citations · ${describeLastSync(source.syncedAt, now)}`}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => refreshConnectedSource(source)}
+                        disabled={refreshingSourceId !== null}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Refresh ${source.name}`}
+                        accessibilityState={{
+                          busy: isRefreshing,
+                          disabled: refreshingSourceId !== null,
+                        }}
+                        hitSlop={12}
+                        testID={`refresh-source-${source.id}`}
+                      >
+                        {isRefreshing ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={colors.primary}
+                          />
+                        ) : (
+                          <Feather
+                            name="refresh-cw"
+                            size={16}
+                            color={
+                              refreshingSourceId
+                                ? colors.border
+                                : colors.mutedForeground
+                            }
+                          />
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => removeSource(source.id)}
+                        disabled={isRefreshing}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${source.name}`}
+                        hitSlop={12}
+                        testID={`remove-source-${source.id}`}
+                      >
+                        <Feather
+                          name="x"
+                          size={18}
+                          color={colors.mutedForeground}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    {refreshError && (
+                      <Text
+                        style={[
+                          styles.refreshError,
+                          { color: colors.destructive },
+                        ]}
+                        accessibilityLiveRegion="polite"
+                        accessibilityRole="alert"
+                        testID={`source-refresh-error-${source.id}`}
+                      >
+                        {refreshError}
+                      </Text>
+                    )}
                   </View>
-                  <TouchableOpacity
-                    onPress={() => removeSource(source.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove ${source.name}`}
-                    hitSlop={12}
-                    testID={`remove-source-${source.id}`}
-                  >
-                    <Feather
-                      name="x"
-                      size={18}
-                      color={colors.mutedForeground}
-                    />
-                  </TouchableOpacity>
-                </View>
-              ))}
+                );
+              })}
             </View>
           )}
         </View>
@@ -992,6 +1152,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 14,
     padding: 10,
+  },
+  refreshError: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
+    marginLeft: 12,
   },
   signOut: {
     flexDirection: "row",
