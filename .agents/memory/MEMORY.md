@@ -10,3 +10,4 @@
 - [React Native Web keyboard events](react-native-web-keyboard-events.md) — raw key handlers on touchables may be filtered; verify the rendered DOM behavior in a browser.
 - [Venom connected-source refresh](venom-source-refresh.md) — refresh replays the original connect request; deterministic source ids make in-place replacement safe.
 - [Expo browser testing route](expo-brain-testing-route.md) — authenticate at the Expo root, then navigate in-app; prefixed paths can hit desktop.
+- [GitHub CI setup constraints](github-ci-setup-constraints.md) — the GitHub connector cannot write workflow files; CI/ruleset setup needs a fine-grained PAT and a real check name.
