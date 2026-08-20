@@ -10,12 +10,34 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 /**
- * The workspace shell is backend-independent, but the Apps section reads the
- * portfolio API. CI runs the desktop bundle without an API server, so the list
- * endpoint is stubbed to keep the regression hermetic and deterministic.
+ * The workspace shell keeps its own state, but the chat composer reads the
+ * managed model catalog and the Apps section reads the portfolio API. CI runs
+ * the desktop bundle without an API server, so both reads are stubbed to keep
+ * the regression hermetic and deterministic.
  */
-test.beforeEach(async ({ page }) => {
-  await page.route('**/venom/apps', async (route) => {
+const MANAGED_MODELS = [
+  {
+    id: 'venom-gpt',
+    provider: 'openai',
+    name: 'Venom GPT',
+    family: 'GPT',
+    summary: 'Balanced general-purpose reasoning.',
+    available: true,
+    availabilityText: 'Ready',
+  },
+  {
+    id: 'venom-claude',
+    provider: 'anthropic',
+    name: 'Venom Claude',
+    family: 'Claude',
+    summary: 'Long-context writing and analysis.',
+    available: true,
+    availabilityText: 'Ready',
+  },
+];
+
+async function stubJsonGet(page: Page, url: string, body: unknown) {
+  await page.route(url, async (route) => {
     if (route.request().method() !== 'GET') {
       await route.fallback();
       return;
@@ -23,9 +45,14 @@ test.beforeEach(async ({ page }) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: '[]',
+      body: JSON.stringify(body),
     });
   });
+}
+
+test.beforeEach(async ({ page }) => {
+  await stubJsonGet(page, '**/venom/models', MANAGED_MODELS);
+  await stubJsonGet(page, '**/venom/apps', []);
 });
 
 async function openDrawer(page: Page) {
