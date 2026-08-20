@@ -64,6 +64,7 @@ import {
 import { extractVenomKnowledge } from "@workspace/api-client-react";
 import { BrainNoteComposer } from "@/components/BrainNoteComposer";
 import { buildChatProjectContextBundle } from "@/context/sourceContext";
+import { messageCitationSegments } from "@/context/messageCitations";
 
 // Browser UI tests run without a Clerk session, so chat uses a stand-in
 // identity and token that only exist in the development UI-test bundle.
@@ -376,23 +377,36 @@ function ChatWorkspace({
   const renderMessage = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
     const content = !isUser
-      ? item.content.split(/(\[source:[^\]]+\])/g).map((part, index) => {
-          const match = part.match(/^\[source:([^\]]+)\]$/);
-          const citation = match ? citationsById.get(match[1]) : undefined;
-          return citation ? (
-            <Text
-              key={`${citation.id}-${index}`}
-              onPress={() => Linking.openURL(citation.url)}
-              accessibilityRole="link"
-              accessibilityLabel={`Open source: ${citation.title}`}
-              style={[styles.citationLink, { color: colors.primary }]}
-            >
-              {citation.title}
-            </Text>
-          ) : (
-            part
-          );
-        })
+      ? messageCitationSegments(item.content, citationsById).map(
+          (segment, index) => {
+            if (segment.kind === "text") return segment.text;
+            if (segment.kind === "citation") {
+              return (
+                <Text
+                  key={`${segment.citation.id}-${index}`}
+                  onPress={() => Linking.openURL(segment.citation.url)}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Open source: ${segment.citation.title}`}
+                  style={[styles.citationLink, { color: colors.primary }]}
+                >
+                  {segment.citation.title}
+                </Text>
+              );
+            }
+            return (
+              <Text
+                key={`${segment.citationId}-${index}`}
+                accessibilityLabel="Archived source, no longer connected"
+                style={[
+                  styles.citationArchived,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                {segment.label}
+              </Text>
+            );
+          },
+        )
       : item.content;
     return (
       <View
@@ -4448,6 +4462,9 @@ const styles = StyleSheet.create({
   citationLink: {
     fontFamily: "Inter_600SemiBold",
     textDecorationLine: "underline",
+  },
+  citationArchived: {
+    fontStyle: "italic",
   },
   typingContainer: {
     paddingVertical: 12,

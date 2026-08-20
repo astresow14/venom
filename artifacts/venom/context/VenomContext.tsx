@@ -43,6 +43,10 @@ import {
 } from './workspaceSyncTestHarness';
 import { mergeProjectSources, replaceRefreshedSource } from './sourceState';
 import {
+  remapConversationCitations,
+  retiredCitationRemap,
+} from './messageCitations';
+import {
   ApiError,
   getGetVenomWorkspaceQueryKey,
   saveVenomWorkspace,
@@ -1009,6 +1013,9 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
   const refreshSource = useCallback(
     (previousSourceId: string, source: ProjectSource) => {
       setState((current) => {
+        const previous = current.sources.find(
+          (item) => item.id === previousSourceId,
+        );
         const replaced = replaceRefreshedSource(
           current.sources,
           previousSourceId,
@@ -1017,9 +1024,20 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         if (!replaced) return current;
 
         const refreshedAt = Date.now();
+        // Answers saved before the refresh still carry the retired citation
+        // ids, so point them at the refreshed equivalent where one exists.
+        const citationRemap = retiredCitationRemap(
+          previous?.citations ?? [],
+          source.citations,
+        );
         return {
           ...current,
           sources: replaced.sources,
+          conversations: remapConversationCitations(
+            current.conversations,
+            source.projectId,
+            citationRemap,
+          ),
           projects: current.projects.map((project) =>
             project.id === source.projectId
               ? {
