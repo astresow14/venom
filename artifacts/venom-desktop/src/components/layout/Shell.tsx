@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, Link, useRoute } from "wouter";
+import { motion } from "framer-motion";
 import {
   Activity,
   AlertTriangle,
   BrainCircuit,
   CheckSquare,
   ChevronDown,
-  Hexagon,
+  Combine,
   LogOut,
   Menu,
   MessageSquare,
@@ -27,6 +28,7 @@ import {
 import { useVenomWorkspace } from "@/context/venom-workspace";
 import { useClerk, useUser } from "@clerk/react";
 import { useTheme } from "@/components/theme-provider";
+import { cn } from "@/lib/utils";
 
 type NavItemProps = {
   href: string;
@@ -61,15 +63,24 @@ function NavItem({
     <Link
       href={href}
       onClick={onNavigate}
-      className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-[15px] transition-colors ${
+      className={cn(
+        "relative flex min-h-12 items-center gap-4 rounded-none px-4 text-[15px] font-bold uppercase tracking-wider transition-all group outline-none focus-visible:ring-2 focus-visible:ring-ring border-l-2",
         isActive
-          ? "bg-accent text-accent-foreground font-medium"
-          : "text-foreground/85 hover:bg-muted hover:text-foreground"
-      }`}
+          ? "text-background bg-foreground border-foreground"
+          : "text-sidebar-foreground/70 border-transparent hover:bg-foreground/5 hover:text-sidebar-foreground",
+      )}
       aria-current={isActive ? "page" : undefined}
       title={`${label} (${shortcut})`}
     >
-      <Icon className="h-5 w-5 shrink-0" strokeWidth={1.8} />
+      <Icon
+        className={cn(
+          "h-4 w-4 shrink-0 transition-transform",
+          isActive
+            ? "scale-110"
+            : "group-hover:scale-110 motion-reduce:group-hover:scale-100",
+        )}
+        strokeWidth={isActive ? 2.5 : 2}
+      />
       <span>{label}</span>
     </Link>
   );
@@ -82,6 +93,8 @@ export default function WorkspaceLayout({
 }) {
   const [, setLocation] = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerTriggerRef = useRef<HTMLButtonElement>(null);
+  const drawerFocusTimerRef = useRef<number | null>(null);
   const [isChat] = useRoute("/workspace/chat");
   const [isFeed] = useRoute("/workspace/feed");
   const [isBrain] = useRoute("/workspace/brain");
@@ -108,20 +121,17 @@ export default function WorkspaceLayout({
 
   const navigateTo = (path: string) => {
     setLocation(path);
-    setDrawerOpen(false);
+    handleDrawerOpenChange(false);
   };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Mod+N (Ctrl+N or Cmd+N)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
         e.preventDefault();
         const convId = createNewConversation(state?.activeProjectId || null);
         setActiveConversation(convId);
         setLocation("/workspace/chat");
       }
-
-      // Alt+1..4
       if (e.altKey && e.key === "1") {
         e.preventDefault();
         setLocation("/workspace/chat");
@@ -139,7 +149,6 @@ export default function WorkspaceLayout({
         setLocation("/workspace/tasks");
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
@@ -149,15 +158,24 @@ export default function WorkspaceLayout({
     state?.activeProjectId,
   ]);
 
+  useEffect(
+    () => () => {
+      if (drawerFocusTimerRef.current !== null) {
+        window.clearTimeout(drawerFocusTimerRef.current);
+      }
+    },
+    [],
+  );
+
   if (!isReady || !state) {
     return (
-      <div className="flex h-screen flex-col bg-background">
+      <div className="flex h-[100dvh] flex-col bg-background">
         <div className="flex h-14 items-center gap-3 border-b border-border px-4">
-          <Skeleton className="h-9 w-9 rounded-full" />
-          <Skeleton className="h-5 w-28" />
+          <Skeleton className="h-8 w-8 rounded-none" />
+          <Skeleton className="h-5 w-32" />
         </div>
         <div className="flex-1 p-4 md:p-8">
-          <Skeleton className="h-full w-full rounded-2xl" />
+          <Skeleton className="h-full w-full rounded-none" />
         </div>
       </div>
     );
@@ -198,265 +216,295 @@ export default function WorkspaceLayout({
     navigateTo("/workspace/chat");
   };
 
-  return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground selection:bg-foreground selection:text-background">
-      <header className="flex h-14 shrink-0 items-center border-b border-border/70 px-3 md:px-4">
-        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-          <SheetTrigger asChild>
-            <button
-              type="button"
-              className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Open navigation and chat history"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-          </SheetTrigger>
-          <SheetContent
-            side="left"
-            className="flex w-[min(88vw,21rem)] flex-col gap-0 border-r border-border bg-sidebar p-0 sm:max-w-[21rem] [&>button]:right-4 [&>button]:top-5"
+  const handleDrawerOpenChange = (open: boolean) => {
+    if (drawerFocusTimerRef.current !== null) {
+      window.clearTimeout(drawerFocusTimerRef.current);
+      drawerFocusTimerRef.current = null;
+    }
+
+    setDrawerOpen(open);
+
+    if (!open) {
+      drawerFocusTimerRef.current = window.setTimeout(() => {
+        drawerTriggerRef.current?.focus({ preventScroll: true });
+        drawerFocusTimerRef.current = null;
+      }, 350);
+    }
+  };
+
+  const DrawerContent = (
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground w-full">
+      <SheetHeader className="sr-only">
+        <SheetTitle>Navigation Menu</SheetTitle>
+        <SheetDescription>
+          Access workspace features and settings
+        </SheetDescription>
+      </SheetHeader>
+
+      <header className="flex shrink-0 items-center justify-between px-5 pb-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] border-b border-border/50">
+        <div className="flex items-center gap-3 text-2xl font-black uppercase tracking-tighter group cursor-pointer">
+          <div className="relative flex items-center justify-center w-8 h-8 bg-sidebar-foreground text-sidebar overflow-hidden group-hover:scale-105 transition-transform duration-500 ease-out">
+            <Combine className="w-4 h-4 relative z-10" />
+          </div>
+          Venom
+        </div>
+      </header>
+
+      <div className="px-5 py-4 shrink-0 border-b border-border/50">
+        <label htmlFor="drawer-project-context" className="sr-only">
+          Active project
+        </label>
+        <div className="relative">
+          <select
+            id="drawer-project-context"
+            value={activeProject?.id ?? ""}
+            onChange={(event) => handleProjectChange(event.target.value)}
+            className="h-11 w-full appearance-none rounded-none border border-border/50 bg-background/50 px-4 pr-10 text-sm font-bold uppercase tracking-wider outline-none transition-colors hover:bg-background hover:border-sidebar-foreground/50 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            title={activeProject?.name || "Global Workspace"}
           >
-            <SheetHeader className="border-b border-border/70 px-5 py-5 text-left">
-              <SheetTitle className="flex items-center gap-2 text-2xl tracking-tight">
-                <Hexagon className="h-6 w-6 fill-foreground" />
-                Venom
-              </SheetTitle>
-              <SheetDescription className="sr-only">
-                Workspace navigation and recent conversations
-              </SheetDescription>
-            </SheetHeader>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sidebar-foreground" />
+        </div>
+      </div>
 
-            <div className="px-3 pb-2 pt-3">
-              <label htmlFor="drawer-project-context" className="sr-only">
-                Active project
-              </label>
-              <div className="relative">
-                <select
-                  id="drawer-project-context"
-                  value={activeProject?.id ?? ""}
-                  onChange={(event) => handleProjectChange(event.target.value)}
-                  className="h-11 w-full appearance-none rounded-xl border-0 bg-muted/70 px-3 pr-9 text-sm font-medium outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                  title={activeProject?.name || "Global Workspace"}
-                >
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              </div>
-            </div>
+      <nav
+        className="grid gap-1 px-3 py-4 shrink-0 border-b border-border/50"
+        aria-label="Workspace navigation"
+      >
+        <NavItem
+          href="/workspace/chat"
+          icon={MessageSquare}
+          label="Chats"
+          isActive={!!isChat}
+          shortcut="Alt+1"
+          onNavigate={() => handleDrawerOpenChange(false)}
+        />
+        <NavItem
+          href="/workspace/feed"
+          icon={Activity}
+          label="Feed"
+          isActive={!!isFeed}
+          shortcut="Alt+2"
+          onNavigate={() => handleDrawerOpenChange(false)}
+        />
+        <NavItem
+          href="/workspace/brain"
+          icon={BrainCircuit}
+          label="Brain"
+          isActive={!!isBrain}
+          shortcut="Alt+3"
+          onNavigate={() => handleDrawerOpenChange(false)}
+        />
+        <NavItem
+          href="/workspace/tasks"
+          icon={CheckSquare}
+          label="To-Do"
+          isActive={!!isTasks}
+          shortcut="Alt+4"
+          onNavigate={() => handleDrawerOpenChange(false)}
+        />
+      </nav>
 
-            <nav
-              className="grid gap-1 px-3 py-2"
-              aria-label="Workspace navigation"
-            >
-              <NavItem
-                href="/workspace/chat"
-                icon={MessageSquare}
-                label="Chats"
-                isActive={!!isChat}
-                shortcut="Alt+1"
-                onNavigate={() => setDrawerOpen(false)}
-              />
-              <NavItem
-                href="/workspace/feed"
-                icon={Activity}
-                label="Feed"
-                isActive={!!isFeed}
-                shortcut="Alt+2"
-                onNavigate={() => setDrawerOpen(false)}
-              />
-              <NavItem
-                href="/workspace/brain"
-                icon={BrainCircuit}
-                label="Brain"
-                isActive={!!isBrain}
-                shortcut="Alt+3"
-                onNavigate={() => setDrawerOpen(false)}
-              />
-              <NavItem
-                href="/workspace/tasks"
-                icon={CheckSquare}
-                label="To-Do"
-                isActive={!!isTasks}
-                shortcut="Alt+4"
-                onNavigate={() => setDrawerOpen(false)}
-              />
-            </nav>
-
-            <div className="flex min-h-0 flex-1 flex-col pt-3">
-              <div className="flex items-center justify-between px-5 pb-2">
-                <span className="text-sm text-muted-foreground">Recents</span>
-                <button
-                  type="button"
-                  onClick={handleNewConversation}
-                  className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label="New chat"
-                  title="New chat"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-                {sortedProjectConversations.length > 0 ? (
-                  <div className="grid gap-0.5">
-                    {sortedProjectConversations.map((conversation) => (
-                      <button
-                        type="button"
-                        key={conversation.id}
-                        onClick={() =>
-                          handleConversationSelect(conversation.id)
-                        }
-                        className={`min-h-10 truncate rounded-lg px-3 text-left text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                          state.activeConversationId === conversation.id
-                            ? "bg-accent text-accent-foreground"
-                            : "text-foreground/85 hover:bg-muted"
-                        }`}
-                        aria-current={
-                          state.activeConversationId === conversation.id
-                            ? "page"
-                            : undefined
-                        }
-                      >
-                        {conversation.title || "Untitled chat"}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="px-3 py-2 text-sm text-muted-foreground">
-                    No conversations yet
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="border-t border-border/70 p-3">
-              <div
-                className="mb-2 flex min-h-9 items-center gap-2 px-3 text-xs text-muted-foreground"
-                aria-live="polite"
-                title={`Workspace sync: ${syncStatus}`}
-              >
-                {syncStatus === "syncing" ? (
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                ) : syncStatus === "error" ||
-                  syncStatus === "offline" ||
-                  syncStatus === "too_large" ? (
-                  <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
-                ) : (
-                  <span
-                    className="h-2 w-2 rounded-full bg-foreground"
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="capitalize">
-                  {syncStatus.replace("_", " ")}
-                </span>
-                {(syncStatus === "error" || syncStatus === "offline") && (
-                  <button
-                    type="button"
-                    onClick={retrySync}
-                    className="ml-auto underline underline-offset-2 text-foreground"
-                  >
-                    Retry
-                  </button>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={handleNewConversation}
-                className="mb-2 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <Plus className="h-4 w-4" />
-                New chat
-              </button>
-
-              <div className="flex items-center gap-2">
-                <div
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border bg-muted text-sm font-medium"
-                  aria-hidden="true"
-                >
-                  {user?.firstName?.charAt(0) ||
-                    user?.primaryEmailAddress?.emailAddress
-                      ?.charAt(0)
-                      .toUpperCase() ||
-                    "V"}
-                </div>
-                <div className="min-w-0 flex-1 truncate text-sm">
-                  {user?.firstName ||
-                    user?.primaryEmailAddress?.emailAddress ||
-                    "Account"}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                  className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={
-                    theme === "dark" ? "Use light mode" : "Use dark mode"
-                  }
-                  title={theme === "dark" ? "Use light mode" : "Use dark mode"}
-                >
-                  {theme === "dark" ? (
-                    <Sun className="h-4 w-4" />
-                  ) : (
-                    <Moon className="h-4 w-4" />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label="Sign out"
-                  title="Sign out"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </SheetContent>
-        </Sheet>
-
-        <div className="ml-1 flex min-w-0 items-center gap-2">
-          <Hexagon className="h-5 w-5 shrink-0 fill-foreground" />
-          <span className="hidden text-sm font-semibold sm:inline">Venom</span>
-          <span className="hidden text-muted-foreground sm:inline">/</span>
-          <span className="truncate text-sm text-muted-foreground">
-            {activeProject?.name || "Workspace"}
+      <div className="flex min-h-0 flex-1 flex-col pt-4">
+        <div className="flex items-center justify-between px-5 pb-3 shrink-0">
+          <span className="text-xs font-bold uppercase tracking-widest text-sidebar-foreground/50">
+            Recent Threads
           </span>
+          <button
+            type="button"
+            onClick={handleNewConversation}
+            className="grid h-7 w-7 place-items-center rounded-none border border-transparent bg-sidebar-foreground/5 text-sidebar-foreground transition-all hover:bg-sidebar-foreground hover:text-sidebar focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            aria-label="New chat"
+            title="New chat"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+          {sortedProjectConversations.length > 0 ? (
+            <div className="grid gap-1">
+              {sortedProjectConversations.map((conversation) => (
+                <button
+                  type="button"
+                  key={conversation.id}
+                  onClick={() => handleConversationSelect(conversation.id)}
+                  className={cn(
+                    "min-h-10 truncate rounded-none px-3 text-left text-[13px] font-mono transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring border-l-2",
+                    state.activeConversationId === conversation.id
+                      ? "border-sidebar-foreground bg-sidebar-foreground/10 text-sidebar-foreground font-bold"
+                      : "border-transparent text-sidebar-foreground/70 hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground hover:border-sidebar-foreground/30",
+                  )}
+                  aria-current={
+                    state.activeConversationId === conversation.id
+                      ? "page"
+                      : undefined
+                  }
+                >
+                  {conversation.title || "Untitled Thread"}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="px-3 py-2 text-sm font-mono text-sidebar-foreground/50">
+              Silence.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-border/50 bg-sidebar px-5 pt-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
         <div
-          className="ml-auto flex items-center gap-2"
+          className="mb-4 flex min-h-9 items-center gap-2 px-1 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/60"
           aria-live="polite"
           title={`Workspace sync: ${syncStatus}`}
         >
           {syncStatus === "syncing" ? (
-            <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
           ) : syncStatus === "error" ||
             syncStatus === "offline" ||
             syncStatus === "too_large" ? (
+            <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+          ) : (
+            <span
+              className="h-2 w-2 bg-sidebar-foreground animate-pulse"
+              aria-hidden="true"
+            />
+          )}
+          <span>{syncStatus.replace("_", " ")}</span>
+          {(syncStatus === "error" || syncStatus === "offline") && (
             <button
               type="button"
               onClick={retrySync}
-              className="grid h-9 w-9 place-items-center rounded-full text-destructive hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Retry workspace sync"
+              className="ml-auto underline underline-offset-4 text-sidebar-foreground font-bold"
             >
-              <AlertTriangle className="h-4 w-4" />
+              Retry
             </button>
-          ) : (
-            <span
-              className="h-2 w-2 rounded-full bg-foreground"
-              aria-label="Workspace synced"
-            />
           )}
         </div>
-      </header>
 
-      <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-        {children}
-      </main>
+        <button
+          type="button"
+          onClick={handleNewConversation}
+          className="mb-5 flex h-12 w-full items-center justify-center gap-2 rounded-none bg-sidebar-foreground px-4 text-sm font-black uppercase tracking-widest text-sidebar transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+        >
+          <Plus className="h-4 w-4" />
+          New chat
+        </button>
+
+        <div className="flex items-center gap-3">
+          <div
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-none bg-sidebar-foreground text-sidebar text-lg font-black uppercase"
+            aria-hidden="true"
+          >
+            {user?.firstName?.charAt(0) ||
+              user?.primaryEmailAddress?.emailAddress?.charAt(0) ||
+              "V"}
+          </div>
+          <div className="min-w-0 flex-1 truncate text-sm font-bold uppercase tracking-wide">
+            {user?.firstName ||
+              user?.primaryEmailAddress?.emailAddress ||
+              "Host"}
+          </div>
+          <button
+            type="button"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="grid h-10 w-10 place-items-center border border-border/50 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-foreground hover:text-sidebar focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            aria-label={theme === "dark" ? "Use light mode" : "Use dark mode"}
+            title={theme === "dark" ? "Use light mode" : "Use dark mode"}
+          >
+            {theme === "dark" ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="grid h-10 w-10 place-items-center border border-border/50 text-sidebar-foreground/70 transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-background text-foreground relative">
+      {/* Main Content Area */}
+      <div className="flex flex-1 flex-col min-w-0 h-full relative z-10">
+        {/* Universal Header */}
+        <header className="sticky top-0 z-30 flex h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b-2 border-border/40 bg-background/80 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl md:px-6">
+          <div className="flex items-center gap-4">
+            <Sheet open={drawerOpen} onOpenChange={handleDrawerOpenChange}>
+              <SheetTrigger asChild>
+                <button
+                  ref={drawerTriggerRef}
+                  type="button"
+                  className="grid h-12 w-12 place-items-center bg-transparent border border-transparent hover:border-foreground/20 text-foreground transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring -ml-3"
+                  aria-label="Open navigation"
+                >
+                  <Menu className="h-6 w-6" />
+                </button>
+              </SheetTrigger>
+              <SheetContent
+                side="left"
+                onCloseAutoFocus={(event) => {
+                  event.preventDefault();
+                }}
+                className="h-[100dvh] w-[85vw] max-w-[340px] border-r border-border p-0 shadow-2xl [&>button]:top-[calc(env(safe-area-inset-top)+1.25rem)] [&>button]:right-5"
+              >
+                {DrawerContent}
+              </SheetContent>
+            </Sheet>
+
+            <div className="flex items-center gap-3">
+              <Combine className="h-5 w-5 text-foreground hidden sm:block" />
+              <span className="text-sm font-black uppercase tracking-widest truncate max-w-[140px] md:max-w-[400px]">
+                {activeProject?.name || "Global Workspace"}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3" aria-live="polite">
+            {syncStatus === "syncing" ? (
+              <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : syncStatus === "error" ||
+              syncStatus === "offline" ||
+              syncStatus === "too_large" ? (
+              <button
+                type="button"
+                onClick={retrySync}
+                className="grid h-9 w-9 place-items-center border border-destructive bg-destructive/10 text-destructive focus-visible:outline-none focus-visible:ring-2"
+                aria-label="Retry sync"
+              >
+                <AlertTriangle className="h-4 w-4" />
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 px-2 py-1 bg-foreground text-background font-mono text-[10px] font-bold uppercase tracking-widest">
+                <span
+                  className="h-1.5 w-1.5 bg-background animate-pulse"
+                  aria-label="Synced"
+                />
+                Synced
+              </div>
+            )}
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="relative flex-1 flex flex-col min-h-0 bg-transparent overflow-hidden">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

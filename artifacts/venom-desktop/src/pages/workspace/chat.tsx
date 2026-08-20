@@ -4,19 +4,18 @@ import {
   type VenomMessage,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Send,
   Trash2,
-  Bot,
-  User,
   RefreshCw,
   AlertTriangle,
+  Hexagon,
+  SendHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVenomWorkspace } from "@/context/venom-workspace";
 import { useUser } from "@clerk/react";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function ChatPage() {
   const { user } = useUser();
@@ -30,6 +29,7 @@ export default function ChatPage() {
   } = useVenomWorkspace();
 
   const [inputValue, setInputValue] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
 
   // Local state for the message currently being streamed
   const [streaming, setStreaming] = useState<{
@@ -37,10 +37,11 @@ export default function ChatPage() {
     id: string;
     content: string;
     status: "sending" | "sent" | "error";
-    originalInput?: string; // used for retry
+    originalInput?: string;
   } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const extractionControllersRef = useRef<Set<AbortController>>(new Set());
@@ -86,10 +87,13 @@ export default function ChatPage() {
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    messagesEndRef.current?.scrollIntoView({
-      behavior: reduceMotion ? "auto" : "smooth",
-    });
-  }, [activeConv?.messages, streaming]);
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "end",
+      });
+    }
+  }, [activeConv?.messages?.length, streaming?.content]);
 
   const handleFetchStream = useCallback(
     async (
@@ -259,7 +263,7 @@ export default function ChatPage() {
               );
             }
           } catch {
-            // The completed chat remains available when background extraction fails.
+            // Background extraction fails silently
           } finally {
             extractionControllersRef.current.delete(extractionController);
           }
@@ -347,15 +351,13 @@ export default function ChatPage() {
 
   if (!state) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <Skeleton className="w-64 h-8" />
+      <div className="flex-1 flex items-center justify-center h-full bg-background">
+        <Skeleton className="w-[300px] h-12 rounded-2xl bg-foreground/10" />
       </div>
     );
   }
 
   const messages = activeConv?.messages || [];
-
-  // Combine real messages with streaming message if it belongs to this conversation
   const displayMessages = [...messages];
   if (streaming && streaming.convId === activeConvId) {
     displayMessages.push({
@@ -368,149 +370,206 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex-1 flex h-full overflow-hidden relative">
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-background relative">
-        <div className="flex h-14 shrink-0 items-center justify-between px-4 md:px-6">
-          <div className="truncate pr-4 text-sm font-medium text-muted-foreground">
-            {activeConv?.title || "New chat"}
-          </div>
-          {activeConvId && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-full text-muted-foreground hover:text-destructive"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "Clear every message in this conversation? This cannot be undone.",
-                  )
-                ) {
-                  clearConversation(activeConvId);
-                }
-              }}
-              title="Clear Thread"
-              aria-label="Clear Thread"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          )}
+    <div className="flex-1 flex flex-col h-full bg-background relative z-0">
+      {/* Top Bar for Desktop */}
+      <div className="hidden md:flex h-16 shrink-0 items-center justify-between px-8 border-b border-border/40 bg-background/80 backdrop-blur-md z-10 sticky top-0">
+        <div className="truncate pr-4 text-sm font-bold tracking-widest text-muted-foreground">
+          {activeConv?.title || "New chat"}
         </div>
+        {activeConvId && messages.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 rounded-2xl text-muted-foreground hover:text-background hover:bg-foreground font-bold tracking-widest text-[11px] transition-colors border-2 border-transparent hover:border-foreground"
+            onClick={() => {
+              if (window.confirm("Clear this thread? This cannot be undone.")) {
+                clearConversation(activeConvId);
+              }
+            }}
+            title="Clear Thread"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-2" /> Clear
+          </Button>
+        )}
+      </div>
 
-        <div
-          className="flex-1 overflow-y-auto px-4 py-6 md:px-8"
-          role="log"
-          aria-live="polite"
-        >
-          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6">
-            {displayMessages.length === 0 ? (
-              <div className="flex min-h-full flex-1 flex-col items-center justify-center text-center">
-                <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-muted">
-                  <Bot className="h-5 w-5" />
-                </div>
-                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-                  What can I help with?
-                </h1>
+      {/* Mobile Top Bar */}
+      <div className="md:hidden absolute top-0 right-4 h-16 flex items-center z-40">
+        {activeConvId && messages.length > 0 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-full text-muted-foreground hover:text-background hover:bg-foreground border border-transparent"
+            onClick={() => {
+              if (window.confirm("Clear this thread?")) {
+                clearConversation(activeConvId);
+              }
+            }}
+            aria-label="Clear Thread"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Messages Area */}
+      <div
+        ref={scrollContainerRef}
+        className={cn(
+          "flex-1 overflow-y-auto px-4 pb-36 md:px-12 md:pb-40 md:pt-10 scroll-smooth",
+          activeConvId && messages.length > 0 ? "pt-20" : "pt-10",
+        )}
+        role="log"
+        aria-live="polite"
+      >
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 md:gap-10 min-h-full">
+          {displayMessages.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: "spring", stiffness: 200, damping: 20 }}
+              className="flex flex-1 flex-col items-center justify-center text-center pb-24"
+            >
+              <div className="mb-8 relative flex items-center justify-center w-24 h-24 bg-foreground text-background overflow-hidden animate-ink-flow shadow-[inset_-5px_-5px_10px_rgba(255,255,255,0.1),inset_5px_5px_10px_rgba(255,255,255,0.1)]">
+                <Hexagon className="w-10 h-10 relative z-10" fill="currentColor" />
               </div>
-            ) : (
-              displayMessages.map((msg) => (
-                <div
+              <h1 className="text-4xl md:text-5xl font-black tracking-tighter mb-4">
+                How can I help?
+              </h1>
+              <p className="text-muted-foreground font-mono text-sm max-w-md">
+                Project context is automatically included in this thread.
+              </p>
+            </motion.div>
+          ) : (
+            <AnimatePresence initial={false}>
+              {displayMessages.map((msg) => (
+                <motion.div
                   key={msg.id}
+                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
                   className={cn(
-                    "flex gap-3 md:gap-4",
-                    msg.role === "user"
-                      ? "ml-auto flex-row-reverse"
-                      : "mr-auto",
+                    "flex flex-col w-full group",
+                    msg.role === "user" ? "items-end" : "items-start",
                   )}
                 >
-                  <div
-                    className={cn(
-                      "shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-                      msg.role === "user"
-                        ? "bg-foreground text-background"
-                        : "bg-muted",
-                    )}
-                  >
-                    {msg.role === "user" ? (
-                      <User className="w-4 h-4" />
-                    ) : (
-                      <Bot className="w-4 h-4" />
-                    )}
+                  <div className={cn(
+                    "text-[10px] font-bold font-mono tracking-widest mb-1.5 opacity-50 flex items-center gap-2",
+                    msg.role === "user" ? "flex-row-reverse" : "flex-row"
+                  )}>
+                    {msg.role === "user" ? "You" : "Venom"}
                   </div>
                   <div
                     className={cn(
-                      "px-4 py-3 text-[15px] leading-7",
+                      "relative text-[15px] leading-relaxed max-w-[90%] md:max-w-[85%] px-6 py-4 transition-all hover:scale-[1.01]",
                       msg.role === "user"
-                        ? "rounded-2xl rounded-tr-md bg-muted text-foreground"
-                        : "text-card-foreground",
+                        ? "bg-foreground text-background font-medium"
+                        : "bg-muted/50 text-foreground prose prose-neutral dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:rounded-2xl",
                     )}
+                    style={{
+                      borderRadius:
+                        msg.role === "user"
+                          ? "24px 24px 4px 24px"
+                          : "4px 24px 24px 24px",
+                    }}
                   >
-                    {msg.content}
+                    {msg.content ||
+                      (msg.status === "sending" ? (
+                        <span className="opacity-50 animate-pulse font-mono text-[11px]">Thinking...</span>
+                      ) : (
+                        ""
+                      ))}
 
-                    {msg.status === "sending" && (
+                    {msg.status === "sending" && msg.role === "assistant" && msg.content && (
                       <span
-                        className="inline-block ml-2 w-2 h-2 bg-foreground rounded-full animate-pulse"
+                        className="inline-block ml-1 w-2 h-4 bg-foreground rounded-full align-middle animate-pulse"
                         aria-hidden="true"
                       />
                     )}
 
                     {msg.status === "error" && (
-                      <div className="mt-3 p-3 bg-destructive/10 border border-destructive/20 flex flex-col gap-2">
-                        <span className="text-xs text-destructive font-mono flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" /> Failed to
-                          transmit.
+                      <div className="mt-4 p-4 bg-destructive/10 flex flex-col gap-4 rounded-2xl">
+                        <span className="text-sm text-destructive font-bold tracking-widest flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4" /> Connection lost
                         </span>
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="h-7 text-[10px] w-fit font-mono"
+                          className="w-fit rounded-full font-bold tracking-widest text-xs hover:bg-destructive hover:text-destructive-foreground transition-all"
                           onClick={handleRetry}
                         >
-                          <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                          <RefreshCw className="w-3.5 h-3.5 mr-2" /> Retry
                         </Button>
                       </div>
                     )}
                   </div>
-                </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          )}
+          <div ref={messagesEndRef} className="h-4" />
         </div>
+      </div>
 
-        <div className="px-4 pb-4 pt-2 md:px-8 md:pb-6">
-          <form
-            onSubmit={handleSend}
-            className="relative mx-auto flex max-w-3xl items-center rounded-[26px] border border-border bg-card p-2 shadow-sm transition-shadow focus-within:shadow-md"
-          >
-            <div className="relative flex-1">
-              <label htmlFor="chat-input" className="sr-only">
-                Message Venom
-              </label>
-              <Input
-                id="chat-input"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder="Message Venom…"
-                className="h-11 w-full border-0 bg-transparent px-3 text-[15px] shadow-none focus-visible:ring-0"
-                disabled={streaming?.status === "sending"}
-                autoComplete="off"
-              />
-            </div>
-            <Button
-              type="submit"
-              disabled={!inputValue.trim() || streaming?.status === "sending"}
-              size="icon"
-              className="h-10 w-10 shrink-0 rounded-full"
-              aria-label="Send message"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </form>
-          <div className="mt-2 text-center text-[11px] text-muted-foreground">
-            Venom can make mistakes.
+      {/* Composer Area - Fixed to bottom */}
+      <div
+        className={cn(
+          "absolute bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-background via-background to-transparent pt-12 z-20",
+          isFocused
+            ? "pb-4 md:pb-8"
+            : "pb-[env(safe-area-inset-bottom,16px)] md:pb-8",
+        )}
+      >
+        <form
+          onSubmit={handleSend}
+          className={cn(
+            "relative mx-auto flex max-w-4xl items-end bg-card transition-all duration-300 border-2 rounded-[2rem]",
+            isFocused
+              ? "border-foreground shadow-lg"
+              : "border-border shadow-sm",
+            "p-2"
+          )}
+        >
+          <div className="relative flex-1 min-h-[48px]">
+            <label htmlFor="chat-input" className="sr-only">
+              Message Venom
+            </label>
+            <textarea
+              id="chat-input"
+              value={inputValue}
+              onChange={(e) => {
+                setInputValue(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+              }}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend(e);
+                }
+              }}
+              placeholder="Message Venom..."
+              className="w-full resize-none border-0 bg-transparent px-5 py-3.5 text-[16px] md:text-[15px] shadow-none outline-none max-h-[200px] scrollbar-none font-medium placeholder:font-mono placeholder:tracking-widest"
+              rows={1}
+              disabled={streaming?.status === "sending"}
+            />
           </div>
-        </div>
+          <Button
+            type="submit"
+            disabled={!inputValue.trim() || streaming?.status === "sending"}
+            size="icon"
+            className={cn(
+              "h-12 w-12 shrink-0 rounded-[1.5rem] mb-1 mr-1 transition-all",
+              inputValue.trim()
+                ? "bg-foreground text-background hover:scale-105 active:scale-95"
+                : "bg-muted text-muted-foreground"
+            )}
+            aria-label="Send message"
+          >
+            <SendHorizontal className="h-5 w-5" />
+          </Button>
+        </form>
       </div>
     </div>
   );
