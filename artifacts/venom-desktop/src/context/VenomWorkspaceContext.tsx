@@ -41,7 +41,9 @@ import {
   mergeTombstones,
   normalizeLabel,
   normalizeWorkspaceState,
+  prepareWorkspaceStateForSave,
   reconcileKnowledgeLinks,
+  stageIdForTaskStatus,
   updateProjectKnowledgeSourceCount,
   type Conversation,
   type KnowledgeCluster,
@@ -211,7 +213,14 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
           syncControllerRef.current === controller &&
           activeUserIdRef.current === syncUserId
         ) {
-          const stateToSave: WorkspaceState = candidate;
+          const prepared = prepareWorkspaceStateForSave(candidate);
+          if (!prepared.success) {
+            controller.queued = null;
+            setSyncStatus('too_large');
+            candidate = null;
+            continue;
+          }
+          const stateToSave = prepared.state;
           const serialized = JSON.stringify(stateToSave);
           setSyncStatus('syncing');
 
@@ -594,34 +603,67 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
 
   const addTask = useCallback((projectId: string, title: string) => {
     const now = Date.now();
-    const task: VenomTask = {
-      id: generateId('task'),
-      title,
-      status: 'todo',
-      createdAt: now,
-    };
     setState((current) => ({
       ...current,
-      projects: current.projects.map((p) =>
-        p.id === projectId ? { ...p, updatedAt: now, tasks: [...p.tasks, task] } : p,
-      ),
+      projects: current.projects.map((project) => {
+        if (project.id !== projectId) return project;
+        const stageId = stageIdForTaskStatus(project, 'todo');
+        if (!stageId) return project;
+        const position =
+          Math.max(
+            -1,
+            ...project.tasks
+              .filter((task) => task.stageId === stageId)
+              .map((task) => task.position),
+          ) + 1;
+        const task: VenomTask = {
+          id: generateId('task'),
+          title,
+          stageId,
+          position,
+          createdAt: now,
+          updatedAt: now,
+          values: {},
+        };
+        return { ...project, updatedAt: now, tasks: [...project.tasks, task] };
+      }),
     }));
   }, []);
 
   const updateTaskStatus = useCallback(
     (projectId: string, taskId: string, status: VenomTaskStatus) => {
-      setState((current) => ({
-        ...current,
-        projects: current.projects.map((p) =>
-          p.id === projectId
-            ? {
-                ...p,
-                updatedAt: Date.now(),
-                tasks: p.tasks.map((t) => (t.id === taskId ? { ...t, status } : t)),
-              }
-            : p,
-        ),
-      }));
+      setState((current) => {
+        const updatedAt = Date.now();
+        return {
+          ...current,
+          projects: current.projects.map((project) => {
+            if (project.id !== projectId) return project;
+            const stageId = stageIdForTaskStatus(project, status);
+            if (!stageId) return project;
+            const task = project.tasks.find((candidate) => candidate.id === taskId);
+            if (!task || task.stageId === stageId) return project;
+            const position =
+              Math.max(
+                -1,
+                ...project.tasks
+                  .filter(
+                    (candidate) =>
+                      candidate.id !== taskId && candidate.stageId === stageId,
+                  )
+                  .map((candidate) => candidate.position),
+              ) + 1;
+            return {
+              ...project,
+              updatedAt,
+              tasks: project.tasks.map((candidate) =>
+                candidate.id === taskId
+                  ? { ...candidate, stageId, position, updatedAt }
+                  : candidate,
+              ),
+            };
+          }),
+        };
+      });
     },
     [],
   );

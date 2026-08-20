@@ -5,6 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, CheckCircle2, Circle, Clock, Trash2, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  availableTaskStatuses,
+  taskStatusForProject,
+} from '@/lib/workspaceState';
 import { useVenomWorkspace } from '@/context/venom-workspace';
 
 export default function TasksPage() {
@@ -13,6 +17,12 @@ export default function TasksPage() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   
   const activeProjectId = state?.activeProjectId;
+  const activeProject = state?.projects.find(project => project.id === activeProjectId);
+  const availableStatuses = useMemo(
+    () => (activeProject ? availableTaskStatuses(activeProject) : []),
+    [activeProject],
+  );
+  const canAddTask = availableStatuses.includes('todo');
   
   const tasks = useMemo(() => {
     if (!state) return [];
@@ -23,7 +33,13 @@ export default function TasksPage() {
       if (active) relevantProjects = [active];
     }
     
-    return relevantProjects.flatMap(p => (p.tasks || []).map(t => ({ ...t, projectId: p.id })));
+    return relevantProjects.flatMap(project =>
+      (project.tasks || []).map(task => ({
+        ...task,
+        projectId: project.id,
+        status: taskStatusForProject(project, task),
+      })),
+    );
   }, [state, activeProjectId]);
 
   const columns: { id: VenomTaskStatus; title: string; icon: React.ElementType }[] = [
@@ -34,7 +50,7 @@ export default function TasksPage() {
 
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTaskTitle.trim() || !activeProjectId) return;
+    if (!newTaskTitle.trim() || !activeProjectId || !canAddTask) return;
     addTask(activeProjectId, newTaskTitle.trim());
     setNewTaskTitle('');
   };
@@ -56,9 +72,12 @@ export default function TasksPage() {
         </div>
         
         <form onSubmit={handleCreateTask} className="flex items-center w-full md:w-auto relative group">
-          {!activeProjectId && (
+          {(!activeProjectId || !canAddTask) && (
              <div className="absolute -top-6 left-0 text-[10px] text-destructive font-mono flex items-center">
-                <ShieldAlert className="w-3 h-3 mr-1" /> Requires active project context
+                <ShieldAlert className="w-3 h-3 mr-1" />
+                {!activeProjectId
+                  ? 'Requires active project context'
+                  : 'This board has no open stage'}
              </div>
           )}
           <label htmlFor="new-task-input" className="sr-only">New task title</label>
@@ -67,17 +86,17 @@ export default function TasksPage() {
             placeholder="New task…"
             value={newTaskTitle}
             onChange={(e) => setNewTaskTitle(e.target.value)}
-            disabled={!activeProjectId}
+            disabled={!activeProjectId || !canAddTask}
             className="w-full md:w-64 rounded-none border-border font-mono rounded-l-sm focus-visible:ring-1 focus-visible:ring-foreground bg-background disabled:bg-muted"
           />
-          <Button type="submit" disabled={!activeProjectId || !newTaskTitle.trim()} className="rounded-none font-bold uppercase rounded-r-sm h-10">
+          <Button type="submit" disabled={!activeProjectId || !canAddTask || !newTaskTitle.trim()} className="rounded-none font-bold uppercase rounded-r-sm h-10">
             <Plus className="w-4 h-4 mr-1" /> Add
           </Button>
         </form>
       </header>
 
       <div className="flex-1 flex flex-col md:flex-row gap-6 overflow-auto">
-        {columns.map(col => {
+        {columns.filter(col => availableStatuses.includes(col.id)).map(col => {
           const colTasks = tasks.filter(t => t.status === col.id).sort((a, b) => b.createdAt - a.createdAt);
           const Icon = col.icon;
           
@@ -115,7 +134,7 @@ export default function TasksPage() {
                           
                           {/* Quick Actions */}
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                            {col.id !== 'todo' && (
+                            {col.id !== 'todo' && availableStatuses.includes('todo') && (
                               <button 
                                 onClick={() => updateTaskStatus(task.projectId, task.id, 'todo')}
                                 className="text-[10px] font-mono border border-border px-1.5 py-0.5 hover:bg-foreground hover:text-background transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground"
@@ -124,7 +143,7 @@ export default function TasksPage() {
                                 TODO
                               </button>
                             )}
-                            {col.id !== 'in_progress' && (
+                            {col.id !== 'in_progress' && availableStatuses.includes('in_progress') && (
                               <button 
                                 onClick={() => updateTaskStatus(task.projectId, task.id, 'in_progress')}
                                 className="text-[10px] font-mono border border-border px-1.5 py-0.5 hover:bg-foreground hover:text-background transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground"
@@ -133,7 +152,7 @@ export default function TasksPage() {
                                 DOING
                               </button>
                             )}
-                            {col.id !== 'done' && (
+                            {col.id !== 'done' && availableStatuses.includes('done') && (
                               <button 
                                 onClick={() => updateTaskStatus(task.projectId, task.id, 'done')}
                                 className="text-[10px] font-mono border border-border px-1.5 py-0.5 hover:bg-foreground hover:text-background transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground"

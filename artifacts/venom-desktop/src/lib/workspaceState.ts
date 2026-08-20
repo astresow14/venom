@@ -14,6 +14,20 @@ import type {
   VenomWorkspaceTombstones,
   KnowledgeCandidate,
 } from '@workspace/api-client-react';
+import {
+  availableTaskStatuses,
+  createDefaultBoardStages,
+  mergeProjectBoardSnapshots,
+  normalizeProjectBoard,
+  stageIdForTaskStatus,
+  taskStatusForProject,
+} from './boardState.ts';
+
+export {
+  availableTaskStatuses,
+  stageIdForTaskStatus,
+  taskStatusForProject,
+};
 
 // ---------------------------------------------------------------------------
 // Re-exported type aliases (keep callers from importing the schema directly)
@@ -62,6 +76,8 @@ const TOMBSTONE_LIMITS: Record<TombstoneCollection, number> = {
   conversations: 1000,
   messages: 10000,
   clusters: 2000,
+  stages: 15000,
+  fields: 20000,
 };
 
 export function createEmptyTombstones(): WorkspaceTombstones {
@@ -71,6 +87,8 @@ export function createEmptyTombstones(): WorkspaceTombstones {
     conversations: [],
     messages: [],
     clusters: [],
+    stages: [],
+    fields: [],
   };
 }
 
@@ -96,11 +114,16 @@ export function normalizeTombstones(
   const empty = createEmptyTombstones();
   if (!tombstones) return empty;
   return {
-    projects: mergeDeletionMarkers(TOMBSTONE_LIMITS.projects, tombstones.projects),
-    tasks: mergeDeletionMarkers(TOMBSTONE_LIMITS.tasks, tombstones.tasks),
-    conversations: mergeDeletionMarkers(TOMBSTONE_LIMITS.conversations, tombstones.conversations),
-    messages: mergeDeletionMarkers(TOMBSTONE_LIMITS.messages, tombstones.messages),
-    clusters: mergeDeletionMarkers(TOMBSTONE_LIMITS.clusters, tombstones.clusters),
+    projects: mergeDeletionMarkers(TOMBSTONE_LIMITS.projects, tombstones.projects ?? []),
+    tasks: mergeDeletionMarkers(TOMBSTONE_LIMITS.tasks, tombstones.tasks ?? []),
+    conversations: mergeDeletionMarkers(
+      TOMBSTONE_LIMITS.conversations,
+      tombstones.conversations ?? [],
+    ),
+    messages: mergeDeletionMarkers(TOMBSTONE_LIMITS.messages, tombstones.messages ?? []),
+    clusters: mergeDeletionMarkers(TOMBSTONE_LIMITS.clusters, tombstones.clusters ?? []),
+    stages: mergeDeletionMarkers(TOMBSTONE_LIMITS.stages, tombstones.stages ?? []),
+    fields: mergeDeletionMarkers(TOMBSTONE_LIMITS.fields, tombstones.fields ?? []),
   };
 }
 
@@ -134,6 +157,16 @@ export function mergeTombstones(
       TOMBSTONE_LIMITS.clusters,
       normalized.clusters,
       additions.clusters ?? [],
+    ),
+    stages: mergeDeletionMarkers(
+      TOMBSTONE_LIMITS.stages,
+      normalized.stages,
+      additions.stages ?? [],
+    ),
+    fields: mergeDeletionMarkers(
+      TOMBSTONE_LIMITS.fields,
+      normalized.fields,
+      additions.fields ?? [],
     ),
   };
 }
@@ -230,6 +263,7 @@ const defaultClusters: KnowledgeCluster[] = [
 
 export function createDefaultState(): WorkspaceState {
   const now = Date.now();
+  const boardStages = createDefaultBoardStages('proj_default', now);
   return {
     projects: [
       {
@@ -239,10 +273,36 @@ export function createDefaultState(): WorkspaceState {
         accent: '#e5e5e5',
         sourceCount: 0,
         updatedAt: now,
+        boardStages,
+        fieldDefinitions: [],
         tasks: [
-          { id: 'task_1', title: 'Define data schema', status: 'done', createdAt: now - 100000 },
-          { id: 'task_2', title: 'Implement authentication', status: 'in_progress', createdAt: now - 50000 },
-          { id: 'task_3', title: 'Design onboarding flow', status: 'todo', createdAt: now },
+          {
+            id: 'task_1',
+            title: 'Define data schema',
+            stageId: boardStages[2].id,
+            position: 0,
+            createdAt: now - 100000,
+            updatedAt: now - 100000,
+            values: {},
+          },
+          {
+            id: 'task_2',
+            title: 'Implement authentication',
+            stageId: boardStages[1].id,
+            position: 0,
+            createdAt: now - 50000,
+            updatedAt: now - 50000,
+            values: {},
+          },
+          {
+            id: 'task_3',
+            title: 'Design onboarding flow',
+            stageId: boardStages[0].id,
+            position: 0,
+            createdAt: now,
+            updatedAt: now,
+            values: {},
+          },
         ],
       },
     ],
@@ -275,10 +335,7 @@ export function isWorkspaceState(value: unknown): value is WorkspaceState {
 export function normalizeWorkspaceState(value: WorkspaceState): WorkspaceState {
   return {
     ...value,
-    projects: value.projects.map((project) => ({
-      ...project,
-      tasks: Array.isArray(project.tasks) ? project.tasks : [],
-    })),
+    projects: value.projects.map((project) => normalizeProjectBoard(project)),
     clusters: value.clusters.map((cluster) => {
       const legacyDescription =
         typeof cluster.description === 'string'
@@ -301,6 +358,44 @@ export function normalizeWorkspaceState(value: WorkspaceState): WorkspaceState {
   };
 }
 
+export type PreparedWorkspaceState =
+  | { success: true; state: WorkspaceState }
+  | { success: false; reason: 'board_limits' };
+
+export function prepareWorkspaceStateForSave(
+  value: WorkspaceState,
+): PreparedWorkspaceState {
+  for (const project of value.projects) {
+    const rawProject = project as unknown as Record<string, unknown>;
+    const rawStages = rawProject.boardStages;
+    const rawFields = rawProject.fieldDefinitions;
+    const rawTasks = rawProject.tasks;
+    if (
+      (Array.isArray(rawStages) && rawStages.length > 30) ||
+      (Array.isArray(rawFields) && rawFields.length > 40) ||
+      (Array.isArray(rawTasks) && rawTasks.length > 2000)
+    ) {
+      return { success: false, reason: 'board_limits' };
+    }
+    if (
+      Array.isArray(rawTasks) &&
+      rawTasks.some((task) => {
+        if (!task || typeof task !== 'object' || Array.isArray(task)) return false;
+        const values = (task as Record<string, unknown>).values;
+        return (
+          values !== null &&
+          typeof values === 'object' &&
+          !Array.isArray(values) &&
+          Object.keys(values).length > 40
+        );
+      })
+    ) {
+      return { success: false, reason: 'board_limits' };
+    }
+  }
+  return { success: true, state: normalizeWorkspaceState(value) };
+}
+
 // ---------------------------------------------------------------------------
 // Merge helpers
 // ---------------------------------------------------------------------------
@@ -311,7 +406,11 @@ function mergeProjects(
   tombstones: WorkspaceTombstones,
 ): Project[] {
   const projectDeletionTimes = deletionTimeMap(tombstones.projects);
-  const taskDeletionTimes = deletionTimeMap(tombstones.tasks);
+  const boardDeletionTimes = {
+    tasks: deletionTimeMap(tombstones.tasks),
+    stages: deletionTimeMap(tombstones.stages),
+    fields: deletionTimeMap(tombstones.fields),
+  };
   const cloudById = new Map(cloudItems.map((item) => [item.id, item]));
   const deviceById = new Map(deviceItems.map((item) => [item.id, item]));
   const projectIds = new Set([...cloudById.keys(), ...deviceById.keys()]);
@@ -327,16 +426,13 @@ function mergeProjects(
     if (!newest) continue;
     if ((projectDeletionTimes.get(projectId) ?? -1) >= newest.updatedAt) continue;
 
-    const older = newest === deviceItem ? cloudItem : deviceItem;
-    const tasks = new Map((older?.tasks ?? []).map((task) => [task.id, task]));
-    for (const task of newest.tasks) tasks.set(task.id, task);
-
-    merged.push({
-      ...newest,
-      tasks: [...tasks.values()].filter(
-        (task) => (taskDeletionTimes.get(task.id) ?? -1) < task.createdAt,
+    merged.push(
+      mergeProjectBoardSnapshots(
+        cloudItem ?? newest,
+        deviceItem ?? newest,
+        boardDeletionTimes,
       ),
-    });
+    );
   }
   return merged;
 }
@@ -381,18 +477,24 @@ export function mergeWorkspaceStates(
   cloudState: WorkspaceState,
   deviceState: WorkspaceState,
 ): WorkspaceState {
-  const tombstones = mergeTombstones(cloudState.tombstones, {
-    ...normalizeTombstones(deviceState.tombstones),
+  const normalizedCloud = normalizeWorkspaceState(cloudState);
+  const normalizedDevice = normalizeWorkspaceState(deviceState);
+  const tombstones = mergeTombstones(normalizedCloud.tombstones, {
+    ...normalizeTombstones(normalizedDevice.tombstones),
   });
-  const projects = mergeProjects(cloudState.projects, deviceState.projects, tombstones);
+  const projects = mergeProjects(
+    normalizedCloud.projects,
+    normalizedDevice.projects,
+    tombstones,
+  );
   const conversations = mergeConversations(
-    cloudState.conversations,
-    deviceState.conversations,
+    normalizedCloud.conversations,
+    normalizedDevice.conversations,
     tombstones,
   );
   const clusterDeletionTimes = deletionTimeMap(tombstones.clusters);
-  const clusters = new Map(cloudState.clusters.map((c) => [c.id, c]));
-  for (const cluster of deviceState.clusters) {
+  const clusters = new Map(normalizedCloud.clusters.map((c) => [c.id, c]));
+  for (const cluster of normalizedDevice.clusters) {
     const existing = clusters.get(cluster.id);
     if (!existing || cluster.lastUpdatedAt >= existing.lastUpdatedAt) {
       clusters.set(cluster.id, cluster);
@@ -413,17 +515,19 @@ export function mergeWorkspaceStates(
   );
 
   const preferredProjectId =
-    deviceState.activeProjectId && projectIds.has(deviceState.activeProjectId)
-      ? deviceState.activeProjectId
-      : cloudState.activeProjectId && projectIds.has(cloudState.activeProjectId)
-        ? cloudState.activeProjectId
+    normalizedDevice.activeProjectId && projectIds.has(normalizedDevice.activeProjectId)
+      ? normalizedDevice.activeProjectId
+      : normalizedCloud.activeProjectId && projectIds.has(normalizedCloud.activeProjectId)
+        ? normalizedCloud.activeProjectId
         : null;
 
   const preferredConversationId =
-    deviceState.activeConversationId && conversationIds.has(deviceState.activeConversationId)
-      ? deviceState.activeConversationId
-      : cloudState.activeConversationId && conversationIds.has(cloudState.activeConversationId)
-        ? cloudState.activeConversationId
+    normalizedDevice.activeConversationId &&
+    conversationIds.has(normalizedDevice.activeConversationId)
+      ? normalizedDevice.activeConversationId
+      : normalizedCloud.activeConversationId &&
+          conversationIds.has(normalizedCloud.activeConversationId)
+        ? normalizedCloud.activeConversationId
         : null;
 
   return {

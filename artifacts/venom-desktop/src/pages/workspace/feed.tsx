@@ -3,6 +3,7 @@ import { useVenomWorkspace } from '@/context/venom-workspace';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Activity, CheckCircle2, MessageSquare, Clock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { taskStatusForProject } from '@/lib/workspaceState';
 
 type FeedItem = {
   id: string;
@@ -23,10 +24,11 @@ export default function FeedPage() {
     // Synthesize feed from tasks, conversations, and clusters
     state.projects?.forEach(project => {
       project.tasks?.forEach(task => {
+        const status = taskStatusForProject(project, task);
         items.push({
           id: `task_${task.id}`,
           type: 'task',
-          title: `Task ${task.status.replace('_', ' ')}`,
+          title: `Task ${status.replace('_', ' ')}`,
           subtitle: task.title,
           timestamp: task.createdAt,
           icon: CheckCircle2,
