@@ -43,8 +43,9 @@ test('persists two-axis orbit, distinguishes drag from click, and resets from th
   const map = page.getByRole('region', { name: /Knowledge map with 5 nodes/ });
   await expect(map).toBeVisible();
   const initial = await camera(map);
-  const matchingNode = page.getByRole('button', {
-    name: /^Node: Product Context\./,
+  const matchingNode = map.getByRole('button', {
+    name: 'Node: Product Context',
+    exact: true,
   });
 
   await dragFrom(page, matchingNode, 130, -70);
@@ -55,12 +56,12 @@ test('persists two-axis orbit, distinguishes drag from click, and resets from th
   await expectCameraToStay(map, moved);
   await expect(page.getByLabel('Close details')).toHaveCount(0);
 
-  await page.getByLabel('Search knowledge').fill('Product Context');
+  await page.getByLabel('Search map').fill('Product Context');
   await matchingNode.click();
   await expect(page.getByRole('heading', { name: 'Product Context' })).toBeVisible();
   await page.getByLabel('Close details').click();
 
-  const reset = page.getByRole('button', { name: 'Reset view' });
+  const reset = page.getByRole('button', { name: 'Align', exact: true });
   await reset.focus();
   await page.keyboard.press('Enter');
   await expectCameraToStay(map, initial);
@@ -91,6 +92,6 @@ test('keeps wheel and button zoom stable on a sparse map', async ({ page }) => {
   await page.getByRole('button', { name: 'Zoom in' }).click();
   expect((await camera(map)).zoom).toBeGreaterThan(buttonZoom.zoom);
 
-  await page.getByRole('button', { name: 'Reset view' }).click();
+  await page.getByRole('button', { name: 'Align', exact: true }).click();
   await expectCameraToStay(map, initial);
 });

@@ -57,7 +57,7 @@ export default function KnowledgeScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Header
-        title="KNOWLEDGE MATRIX"
+        title="Knowledge"
         showBack
       />
 
@@ -117,8 +117,12 @@ export default function KnowledgeScreen() {
                       backgroundColor: isSelected ? colors.primary : colors.accent,
                       borderColor: isSelected ? colors.foreground : colors.primary,
                       borderWidth: isSelected ? 2 : 1,
+                      shadowColor: colors.foreground,
                     }]}
                     onPress={() => setSelectedCluster(cluster)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${cluster.label} knowledge cluster`}
+                    accessibilityState={{ selected: isSelected }}
                     activeOpacity={0.8}
                   >
                     {isSelected && (
@@ -159,27 +163,31 @@ export default function KnowledgeScreen() {
           }]}>
             <View style={styles.infoHeader}>
               <Text style={[styles.infoTitle, { color: colors.foreground }]}>{selectedCluster.label}</Text>
-              <TouchableOpacity onPress={() => setSelectedCluster(null)}>
+              <TouchableOpacity
+                onPress={() => setSelectedCluster(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Close knowledge details"
+              >
                 <Feather name="x" size={20} color={colors.mutedForeground} />
               </TouchableOpacity>
             </View>
             <View style={styles.infoStats}>
               <View style={styles.statItem}>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>CATEGORY</Text>
-                <Text style={[styles.statValue, { color: colors.primary }]}>{selectedCluster.category.toUpperCase()}</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Category</Text>
+                <Text style={[styles.statValue, { color: colors.primary }]}>{selectedCluster.category}</Text>
               </View>
               <View style={styles.statItem}>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>STRENGTH</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Strength</Text>
                 <Text style={[styles.statValue, { color: colors.primary }]}>{(selectedCluster.strength * 100).toFixed(0)}%</Text>
               </View>
               <View style={styles.statItem}>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>CONNECTIONS</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Connections</Text>
                   <Text style={[styles.statValue, { color: colors.primary }]}>{selectedCluster.citations?.length ?? selectedCluster.links.length}</Text>
               </View>
             </View>
               {selectedCluster.citations && selectedCluster.citations.length > 0 && (
                 <View style={[styles.citationList, { borderTopColor: colors.border }]}>
-                  <Text style={[styles.citationHeading, { color: colors.mutedForeground }]}>SOURCE CITATIONS</Text>
+                  <Text style={[styles.citationHeading, { color: colors.mutedForeground }]}>Source citations</Text>
                   {selectedCluster.citations.slice(0, 2).map(citation => (
                     <TouchableOpacity
                       key={citation.id}
@@ -214,9 +222,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#b4f536',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.22,
     shadowRadius: 10,
     elevation: 5,
   },
@@ -232,9 +239,8 @@ const styles = StyleSheet.create({
     width: 120,
     textAlign: 'center',
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    fontSize: 11,
+    letterSpacing: 0,
   },
   infoPanel: {
     position: 'absolute',
@@ -251,10 +257,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   infoTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 18,
+    letterSpacing: -0.3,
   },
   infoStats: {
     flexDirection: 'row',
@@ -267,9 +272,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   citationHeading: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 10,
-    letterSpacing: 1.2,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0,
   },
   citationRow: {
     flexDirection: 'row',
@@ -291,8 +296,8 @@ const styles = StyleSheet.create({
   statItem: {},
   statLabel: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 10,
-    letterSpacing: 1,
+    fontSize: 11,
+    letterSpacing: 0,
     marginBottom: 4,
   },
   statValue: {

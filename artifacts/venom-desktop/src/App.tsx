@@ -59,9 +59,9 @@ const clerkAppearance = {
   theme: shadcn,
   cssLayerName: "clerk",
   options: {
-    logoPlacement: "inside" as const,
-    logoLinkUrl: basePath || "/",
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+    // The page already shows the Venom mark; a bitmap logo inside the card
+    // cannot follow light/dark, so it is omitted.
+    logoPlacement: "none" as const,
     socialButtonsPlacement: "top" as const,
   },
   variables: {
@@ -78,17 +78,15 @@ const clerkAppearance = {
     cardBox:
       "bg-card border border-border w-[440px] max-w-full overflow-hidden shadow-2xl rounded-2xl",
     card: "!shadow-none !border-0 !bg-transparent",
-    headerTitle: "!text-foreground !font-black !uppercase !tracking-tight",
-    headerSubtitle: "!text-muted-foreground !font-mono",
-    socialButtonsBlockButtonText: "!text-foreground !font-semibold",
-    formFieldLabel: "!text-foreground/80 !font-mono !uppercase !text-xs",
-    footerActionLink: "!text-foreground !font-bold hover:!text-foreground/80",
+    headerTitle: "!text-foreground !font-medium !tracking-tight",
+    headerSubtitle: "!text-muted-foreground",
+    socialButtonsBlockButtonText: "!text-foreground !font-medium",
+    formFieldLabel: "!text-foreground/80 !text-sm !font-medium",
+    footerActionLink: "!text-foreground !font-semibold hover:!text-foreground/80",
     footerActionText: "!text-muted-foreground",
-    dividerText: "!text-muted-foreground !font-mono",
+    dividerText: "!text-muted-foreground",
     formFieldSuccessText: "!text-foreground",
     alertText: "!text-foreground",
-    logoBox: "!h-10",
-    logoImage: "!h-10 !w-auto",
     socialButtonsBlockButton:
       "!border-border !bg-background hover:!bg-muted !rounded-xl",
     formButtonPrimary:

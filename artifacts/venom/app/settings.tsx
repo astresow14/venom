@@ -77,13 +77,13 @@ export default function SettingsScreen() {
   });
 
   const syncLabels = {
-    loading: "RESTORING",
-    pending: "ACTION NEEDED",
-    syncing: "SYNCING",
-    synced: "SYNCED",
-    offline: "OFFLINE",
-    too_large: "TOO LARGE",
-    error: "RETRY NEEDED",
+    loading: "Restoring",
+    pending: "Action needed",
+    syncing: "Syncing",
+    synced: "Synced",
+    offline: "Offline",
+    too_large: "Too large",
+    error: "Retry needed",
   } as const;
   const isSyncHealthy = syncStatus === "synced" || syncStatus === "syncing";
   const accountLabel =
@@ -119,7 +119,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title="SYSTEM PARAMS" showBack />
+      <Header title="Settings" showBack />
 
       <ScrollView
         contentContainerStyle={[
@@ -131,7 +131,7 @@ export default function SettingsScreen() {
         {/* Account */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-            SECURE ACCOUNT
+            Account
           </Text>
           <View
             style={[
@@ -202,7 +202,7 @@ export default function SettingsScreen() {
         {/* Connection Status */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-            CONNECTION STATUS
+            Connection
           </Text>
           <View
             style={[
@@ -218,7 +218,7 @@ export default function SettingsScreen() {
                   color={isConnected ? colors.primary : colors.destructive}
                 />
                 <Text style={[styles.rowTitle, { color: colors.foreground }]}>
-                  Neural Uplink
+                   Service
                 </Text>
               </View>
               <Text
@@ -229,10 +229,12 @@ export default function SettingsScreen() {
                   },
                 ]}
               >
-                {isConnected ? "ONLINE" : "OFFLINE"}
+                {isConnected ? "Online" : "Offline"}
               </Text>
             </View>
-            <View style={styles.divider} />
+            <View
+              style={[styles.divider, { backgroundColor: colors.border }]}
+            />
             <View style={styles.row}>
               <View style={styles.rowLeft}>
                 <Feather
@@ -259,7 +261,7 @@ export default function SettingsScreen() {
         {/* Model Configuration */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-            MODEL CONFIGURATION
+            Model and sync
           </Text>
           <View
             style={[
@@ -275,14 +277,16 @@ export default function SettingsScreen() {
                   color={colors.mutedForeground}
                 />
                 <Text style={[styles.rowTitle, { color: colors.foreground }]}>
-                  Core Reasoning
+                   Default model
                 </Text>
               </View>
               <Text style={[styles.statusText, { color: colors.primary }]}>
                 GPT-5.1
               </Text>
             </View>
-            <View style={styles.divider} />
+            <View
+              style={[styles.divider, { backgroundColor: colors.border }]}
+            />
             <View style={styles.row}>
               <View style={styles.rowLeft}>
                 <Feather
@@ -291,17 +295,20 @@ export default function SettingsScreen() {
                   color={colors.mutedForeground}
                 />
                 <Text style={[styles.rowTitle, { color: colors.foreground }]}>
-                  Stealth Mode
+                   Private workspace
                 </Text>
               </View>
               <Switch
                 value={true}
                 onValueChange={() => {}}
+                accessibilityLabel="Private workspace"
                 trackColor={{ false: colors.accent, true: colors.primary }}
                 thumbColor={colors.background}
               />
             </View>
-            <View style={styles.divider} />
+            <View
+              style={[styles.divider, { backgroundColor: colors.border }]}
+            />
             <View style={styles.row}>
               <View style={styles.rowLeft}>
                 <Feather
@@ -310,7 +317,7 @@ export default function SettingsScreen() {
                   color={colors.mutedForeground}
                 />
                 <Text style={[styles.rowTitle, { color: colors.foreground }]}>
-                  Cloud Workspace
+                   Cloud backup
                 </Text>
               </View>
               <View style={styles.syncCopy}>
@@ -350,7 +357,7 @@ export default function SettingsScreen() {
           <View style={styles.sourceHeading}>
             <View>
               <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-                PROJECT SOURCES
+                Project sources
               </Text>
               <Text
                 style={[
@@ -359,8 +366,8 @@ export default function SettingsScreen() {
                 ]}
               >
                 {activeProject
-                  ? activeProject.name.toUpperCase()
-                  : "NO PROJECT SELECTED"}
+                  ? activeProject.name
+                  : "No project selected"}
               </Text>
             </View>
             <View
@@ -452,7 +459,7 @@ export default function SettingsScreen() {
                     { color: colors.mutedForeground },
                   ]}
                 >
-                  SECURE WORKSPACE AUTHORIZATION
+                   Workspace authorization
                 </Text>
               </View>
               <Feather
@@ -618,7 +625,7 @@ export default function SettingsScreen() {
                         },
                       ]}
                     >
-                      CONNECT
+                       Connect
                     </Text>
                   </>
                 )}
@@ -635,7 +642,7 @@ export default function SettingsScreen() {
                   { color: colors.mutedForeground },
                 ]}
               >
-                ACTIVE IN THIS PROJECT
+                 Active in this project
               </Text>
               {projectSources.map((source) => (
                 <View
@@ -682,13 +689,14 @@ export default function SettingsScreen() {
                       ]}
                       numberOfLines={1}
                     >
-                      {source.status.toUpperCase()} ·{" "}
-                      {source.citations.length} CITATIONS · SYNCED{" "}
+                       {source.status} · {source.citations.length} citations · synced{" "}
                       {source.syncedAt.slice(0, 10)}
                     </Text>
                   </View>
                   <TouchableOpacity
                     onPress={() => removeSource(source.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${source.name}`}
                     hitSlop={12}
                     testID={`remove-source-${source.id}`}
                   >
@@ -707,6 +715,8 @@ export default function SettingsScreen() {
         {/* Sign out */}
         <TouchableOpacity
           testID="sign-out"
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
           style={[
             styles.signOut,
             { borderColor: colors.border, backgroundColor: colors.card },
@@ -716,11 +726,13 @@ export default function SettingsScreen() {
         >
           <Feather name="log-out" size={18} color={colors.foreground} />
           <Text style={[styles.signOutText, { color: colors.foreground }]}>
-            SIGN OUT
+            Sign out
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Delete all workspace data"
           style={[
             styles.dangerZone,
             {
@@ -738,7 +750,7 @@ export default function SettingsScreen() {
           <Text
             style={[styles.dangerText, { color: colors.destructive }]}
           >
-            PURGE ALL DATA
+            Delete all data
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -749,17 +761,17 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16 },
-  section: { marginBottom: 32 },
+  section: { marginBottom: 34 },
   sectionTitle: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 12,
-    letterSpacing: 2,
-    marginBottom: 12,
-    marginLeft: 4,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 18,
+    letterSpacing: -0.35,
+    marginBottom: 14,
+    marginLeft: 2,
   },
   card: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 20,
     overflow: "hidden",
   },
   row: {
@@ -785,6 +797,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 42,
     height: 42,
+    borderRadius: 21,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -822,13 +835,12 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   statusText: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 13,
-    letterSpacing: 1,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    letterSpacing: 0,
   },
   divider: {
     height: 1,
-    backgroundColor: "#1a241f",
     marginLeft: 46,
   },
   sourceHeading: {
@@ -837,16 +849,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   projectCaption: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 10,
-    letterSpacing: 1,
-    marginTop: -7,
-    marginLeft: 4,
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    letterSpacing: 0,
+    marginTop: -8,
+    marginLeft: 2,
   },
   sourceCount: {
     minWidth: 32,
     height: 28,
     borderWidth: 1,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -865,6 +878,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     borderWidth: 1,
+    borderRadius: 14,
     padding: 10,
     marginBottom: 12,
   },
@@ -886,14 +900,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
+    borderRadius: 12,
   },
   providerCopy: {
     flex: 1,
   },
   providerDetail: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 10,
-    letterSpacing: 0.8,
+    fontFamily: "Inter_400Regular",
+    fontSize: 11,
+    letterSpacing: 0,
     marginTop: 3,
   },
   repositoryPanel: {
@@ -914,6 +929,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
+    borderRadius: 14,
     padding: 10,
   },
   repositoryName: {
@@ -940,12 +956,14 @@ const styles = StyleSheet.create({
   websiteInput: {
     height: 42,
     borderWidth: 1,
+    borderRadius: 14,
     paddingHorizontal: 12,
     fontFamily: "Inter_400Regular",
     fontSize: 13,
   },
   websiteButton: {
-    height: 40,
+    minHeight: 46,
+    borderRadius: 14,
     marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
@@ -953,18 +971,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   websiteButtonText: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 11,
-    letterSpacing: 1.2,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    letterSpacing: 0,
   },
   connectedSources: {
     marginTop: 16,
     gap: 8,
   },
   connectedHeading: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 10,
-    letterSpacing: 1.1,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    letterSpacing: 0,
     marginLeft: 2,
   },
   connectedSource: {
@@ -972,6 +990,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
+    borderRadius: 14,
     padding: 10,
   },
   signOut: {
@@ -980,13 +999,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     borderWidth: 1,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
   },
   signOutText: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 13,
-    letterSpacing: 1,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    letterSpacing: 0,
   },
   dangerZone: {
     flexDirection: "row",
@@ -995,11 +1015,11 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 1,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 16,
   },
   dangerText: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 13,
-    letterSpacing: 1,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    letterSpacing: 0,
   },
 });

@@ -1162,7 +1162,7 @@ function KnowledgeWorkspace({
                     { color: colors.symbioteMuted },
                   ]}
                 >
-                  LIVE ONTOLOGY
+                  Live knowledge
                 </Text>
                 <Text
                   style={[
@@ -1194,7 +1194,7 @@ function KnowledgeWorkspace({
                     { color: colors.symbioteMuted },
                   ]}
                 >
-                  {reduceMotion ? "STABLE" : "EVOLVING"}
+                  {reduceMotion ? "Stable" : "Evolving"}
                 </Text>
               </View>
             </View>
@@ -4084,6 +4084,8 @@ export default function WorkspaceScreen() {
             activeOpacity={0.7}
             onPress={() => router.push("/projects")}
             testID="open-projects"
+            accessibilityRole="button"
+            accessibilityLabel={`Open projects. Current project: ${activeProject?.name || "Workspace"}.`}
           >
             <Text
               style={[styles.navProjectText, { color: colors.foreground }]}
@@ -4317,8 +4319,7 @@ const styles = StyleSheet.create({
   feedEyebrow: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+    letterSpacing: 0,
     marginBottom: 6,
   },
   feedTitle: {
@@ -4357,8 +4358,7 @@ const styles = StyleSheet.create({
   feedCardLabel: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
+    letterSpacing: 0,
   },
   feedCardTime: {
     fontSize: 11,
@@ -4564,9 +4564,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   symbioteEyebrow: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-    letterSpacing: 1.4,
+    letterSpacing: 0,
     marginBottom: 4,
   },
   symbioteTitle: {
@@ -4589,9 +4589,9 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   symbioteStatusText: {
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: "Inter_600SemiBold",
-    letterSpacing: 1,
+    letterSpacing: 0,
   },
   symbioteViewport: {
     flex: 1,
@@ -4878,9 +4878,8 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 6,
     fontFamily: "Inter_600SemiBold",
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
+    fontSize: 12,
+    letterSpacing: 0,
   },
   knowledgeSourcesList: {
     flexShrink: 1,
@@ -5141,8 +5140,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   boardColumnCount: {
     fontSize: 11,

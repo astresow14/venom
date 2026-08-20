@@ -1,8 +1,8 @@
 import React from 'react';
-import { Image } from 'expo-image';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import { VenomMark } from '@/components/VenomMark';
 import { useColors } from '@/hooks/useColors';
 
 type AuthScreenShellProps = {
@@ -27,16 +27,16 @@ export function AuthScreenShell({
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <View
         style={[
-          styles.orbit,
-          styles.orbitLarge,
-          { borderColor: colors.border },
+          styles.atmosphere,
+          styles.atmosphereTop,
+          { backgroundColor: colors.secondary },
         ]}
       />
       <View
         style={[
-          styles.orbit,
-          styles.orbitSmall,
-          { borderColor: colors.accent },
+          styles.atmosphere,
+          styles.atmosphereBottom,
+          { backgroundColor: colors.muted },
         ]}
       />
       <KeyboardAwareScrollViewCompat
@@ -52,28 +52,23 @@ export function AuthScreenShell({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.brand}>
-          <View
-            style={[
-              styles.logoFrame,
-              { borderColor: colors.primary, backgroundColor: colors.card },
-            ]}
-          >
-            <Image
-              source={require('@/assets/images/icon_2.png')}
-              style={styles.logo}
-              contentFit="contain"
-            />
-          </View>
-          <Text style={[styles.wordmark, { color: colors.primary }]}>VENOM</Text>
+          <VenomMark color={colors.foreground} size={42} />
+          <Text style={[styles.wordmark, { color: colors.foreground }]}>
+            Venom
+          </Text>
         </View>
 
         <View
           style={[
             styles.panel,
-            { backgroundColor: colors.card, borderColor: colors.border },
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              shadowColor: colors.foreground,
+            },
           ]}
         >
-          <Text style={[styles.eyebrow, { color: colors.primary }]}>
+          <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>
             {eyebrow}
           </Text>
           <Text style={[styles.title, { color: colors.foreground }]}>
@@ -96,74 +91,73 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  orbit: {
+  atmosphere: {
     position: 'absolute',
-    borderWidth: 1,
     borderRadius: 999,
-    opacity: 0.45,
+    opacity: 0.58,
   },
-  orbitLarge: {
-    width: 360,
-    height: 360,
-    top: -170,
-    right: -150,
+  atmosphereTop: {
+    width: 420,
+    height: 270,
+    top: -150,
+    right: -190,
+    transform: [{ rotate: '-18deg' }],
   },
-  orbitSmall: {
-    width: 220,
+  atmosphereBottom: {
+    width: 320,
     height: 220,
-    bottom: -110,
-    left: -90,
+    bottom: -145,
+    left: -150,
+    transform: [{ rotate: '16deg' }],
   },
   content: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 22,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 480,
   },
   brand: {
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  logoFrame: {
-    width: 72,
-    height: 72,
-    borderWidth: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    transform: [{ rotate: '45deg' }],
-  },
-  logo: {
-    width: 52,
-    height: 52,
-    transform: [{ rotate: '-45deg' }],
+    gap: 11,
+    marginBottom: 32,
   },
   wordmark: {
-    marginTop: 18,
     fontFamily: 'Inter_700Bold',
-    fontSize: 13,
-    letterSpacing: 6,
+    fontSize: 22,
+    letterSpacing: -0.7,
   },
   panel: {
     borderWidth: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 24,
+    borderRadius: 28,
+    paddingHorizontal: 22,
+    paddingVertical: 26,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: Platform.OS === 'web' ? 0.08 : 0.12,
+    shadowRadius: 32,
+    elevation: 4,
   },
   eyebrow: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 10,
-    letterSpacing: 2.2,
-    marginBottom: 10,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.1,
+    marginBottom: 9,
   },
   title: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 28,
-    letterSpacing: -0.5,
+    fontSize: 31,
+    lineHeight: 37,
+    letterSpacing: -1,
   },
   subtitle: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    lineHeight: 21,
-    marginTop: 8,
-    marginBottom: 24,
+    lineHeight: 22,
+    marginTop: 10,
+    marginBottom: 26,
   },
   footer: {
     alignItems: 'center',

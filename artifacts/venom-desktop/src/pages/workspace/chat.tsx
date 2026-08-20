@@ -9,10 +9,11 @@ import {
   Trash2,
   RefreshCw,
   AlertTriangle,
-  Hexagon,
   SendHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { takePendingPrompt } from "@/lib/pending-prompt";
+import { VenomMark } from "@/components/venom-mark";
 import { useVenomWorkspace } from "@/context/venom-workspace";
 import { useUser } from "@clerk/react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -28,7 +29,7 @@ export default function ChatPage() {
     applyKnowledgeInsights,
   } = useVenomWorkspace();
 
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState(takePendingPrompt);
   const [isFocused, setIsFocused] = useState(false);
 
   // Local state for the message currently being streamed
@@ -430,13 +431,11 @@ export default function ChatPage() {
               transition={{ type: "spring", stiffness: 200, damping: 20 }}
               className="flex flex-1 flex-col items-center justify-center text-center pb-24"
             >
-              <div className="mb-8 relative flex items-center justify-center w-24 h-24 bg-foreground text-background overflow-hidden animate-ink-flow shadow-[inset_-5px_-5px_10px_rgba(255,255,255,0.1),inset_5px_5px_10px_rgba(255,255,255,0.1)]">
-                <Hexagon className="w-10 h-10 relative z-10" fill="currentColor" />
-              </div>
-              <h1 className="text-4xl md:text-5xl font-black tracking-tighter mb-4">
+              <VenomMark className="mb-6 h-14 w-14" title="Venom" />
+              <h1 className="mb-3 text-2xl font-medium tracking-tight sm:text-[28px]">
                 How can I help?
               </h1>
-              <p className="text-muted-foreground font-mono text-sm max-w-md">
+              <p className="max-w-md text-sm text-muted-foreground">
                 Project context is automatically included in this thread.
               </p>
             </motion.div>
@@ -550,7 +549,7 @@ export default function ChatPage() {
                 }
               }}
               placeholder="Message Venom..."
-              className="w-full resize-none border-0 bg-transparent px-5 py-3.5 text-[16px] md:text-[15px] shadow-none outline-none max-h-[200px] scrollbar-none font-medium placeholder:font-mono placeholder:tracking-widest"
+              className="w-full resize-none border-0 bg-transparent px-5 py-3.5 text-[16px] md:text-[15px] shadow-none outline-none max-h-[200px] scrollbar-none placeholder:text-muted-foreground"
               rows={1}
               disabled={streaming?.status === "sending"}
             />

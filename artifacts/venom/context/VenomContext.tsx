@@ -358,7 +358,7 @@ function createDefaultState(): VenomState {
         id: 'proj_default',
         name: 'Global Workspace',
         description: 'Uncategorized intelligence',
-        accent: '#b4f536',
+        accent: '#73736f',
         sourceCount: 0,
         updatedAt: now,
         boardStages,

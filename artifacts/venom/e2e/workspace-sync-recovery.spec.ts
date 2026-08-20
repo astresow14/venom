@@ -30,7 +30,7 @@ async function addTaskThatChangesWorkspace(page: Page, title: string) {
 async function openSettings(page: Page) {
   await page.getByTestId("open-settings").click();
   await expect(
-    page.getByText("Cloud Workspace", { exact: true }),
+    page.getByText("Cloud backup", { exact: true }),
   ).toBeVisible();
   return page.getByTestId("cloud-sync-status");
 }
@@ -48,8 +48,8 @@ test("recovers a failed workspace save and persists the latest device edit", asy
   await addTaskThatChangesWorkspace(page, taskTitle);
 
   const syncStatus = await openSettings(page);
-  await expect(syncStatus).toHaveText("RETRY NEEDED");
-  await expect(syncStatus).toHaveText("SYNCED", { timeout: 10_000 });
+  await expect(syncStatus).toHaveText("Retry needed");
+  await expect(syncStatus).toHaveText("Synced", { timeout: 10_000 });
 
   const savedTaskTitles = await page.evaluate((userId) => {
     const snapshot = window.__venomWorkspaceSyncTest?.snapshots[userId];

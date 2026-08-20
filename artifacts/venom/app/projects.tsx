@@ -17,8 +17,6 @@ import { useColors } from "@/hooks/useColors";
 import { useVenom, type Project } from "@/context/VenomContext";
 import { Header } from "@/components/Header";
 
-const ACCENTS = ["#FFFFFF", "#A3A3A3", "#737373", "#D4D4D4"];
-
 export default function ProjectsScreen() {
   const colors = useColors();
   const router = useRouter();
@@ -28,6 +26,12 @@ export default function ProjectsScreen() {
   const [isCreating, setIsCreating] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const projectAccents = [
+    colors.foreground,
+    colors.mutedForeground,
+    colors.border,
+    colors.secondaryForeground,
+  ];
 
   const chooseProject = (projectId: string) => {
     setActiveProject(projectId);
@@ -40,7 +44,7 @@ export default function ProjectsScreen() {
     const projectId = addProject({
       name: trimmedName,
       description: description.trim() || "Project workspace",
-      accent: ACCENTS[state.projects.length % ACCENTS.length],
+      accent: projectAccents[state.projects.length % projectAccents.length],
       sourceCount: 0,
     });
     setActiveProject(projectId);
@@ -68,7 +72,7 @@ export default function ProjectsScreen() {
         <View style={styles.heading}>
           <View>
             <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>
-              WORKSPACES
+              Your workspaces
             </Text>
             <Text style={[styles.title, { color: colors.foreground }]}>
               Choose where you work
@@ -170,6 +174,9 @@ export default function ProjectsScreen() {
                     ) : (
                       <TouchableOpacity
                         onPress={() => deleteProject(project.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Delete ${project.name}`}
+                        style={styles.deleteButton}
                         hitSlop={12}
                         testID={`delete-project-${project.id}`}
                       >
@@ -188,7 +195,12 @@ export default function ProjectsScreen() {
         </View>
       </ScrollView>
 
-      <Modal transparent visible={isCreating} animationType="fade">
+      <Modal
+        transparent
+        visible={isCreating}
+        animationType="fade"
+        onRequestClose={() => setIsCreating(false)}
+      >
         <Pressable
           onPress={() => setIsCreating(false)}
           style={styles.modalBackdrop}
@@ -196,6 +208,7 @@ export default function ProjectsScreen() {
           <Pressable
             onPress={(event) => event.stopPropagation()}
             style={[styles.modalCard, { backgroundColor: colors.card }]}
+            accessibilityViewIsModal
           >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>
               New project
@@ -279,26 +292,26 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     fontFamily: "Inter_600SemiBold",
-    fontSize: 11,
-    letterSpacing: 1.2,
+    fontSize: 12,
+    letterSpacing: 0,
     marginBottom: 7,
   },
   title: { fontFamily: "Inter_600SemiBold", fontSize: 24, letterSpacing: -0.7 },
   createButton: {
     alignItems: "center",
-    borderRadius: 18,
-    height: 42,
+    borderRadius: 22,
+    height: 44,
     justifyContent: "center",
-    width: 42,
+    width: 44,
   },
   list: { gap: 10 },
   projectCard: {
     alignItems: "center",
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     flexDirection: "row",
     minHeight: 84,
-    padding: 16,
+    padding: 17,
   },
   projectMark: { borderRadius: 8, height: 16, marginRight: 13, width: 16 },
   projectCopy: { flex: 1 },
@@ -309,6 +322,14 @@ const styles = StyleSheet.create({
   },
   projectDescription: { fontFamily: "Inter_400Regular", fontSize: 13 },
   projectMeta: { alignItems: "flex-end", gap: 7, marginLeft: 12 },
+  deleteButton: {
+    width: 44,
+    height: 44,
+    marginRight: -12,
+    marginBottom: -12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   metaText: { fontFamily: "Inter_500Medium", fontSize: 11 },
   modalBackdrop: {
     alignItems: "center",
@@ -317,14 +338,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 20,
   },
-  modalCard: { borderRadius: 20, padding: 20, width: "100%" },
+  modalCard: { borderRadius: 26, padding: 22, width: "100%", maxWidth: 440 },
   modalTitle: {
     fontFamily: "Inter_600SemiBold",
     fontSize: 20,
     marginBottom: 18,
   },
   input: {
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     fontFamily: "Inter_400Regular",
     fontSize: 15,
@@ -340,6 +361,11 @@ const styles = StyleSheet.create({
     gap: 22,
   },
   cancel: { fontFamily: "Inter_500Medium", fontSize: 14 },
-  saveButton: { borderRadius: 10, paddingHorizontal: 18, paddingVertical: 11 },
+  saveButton: {
+    borderRadius: 14,
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
   saveText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
 });

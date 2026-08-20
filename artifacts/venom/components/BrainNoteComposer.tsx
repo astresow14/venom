@@ -820,9 +820,8 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     fontFamily: "Inter_600SemiBold",
-    fontSize: 11,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
+    fontSize: 12,
+    letterSpacing: 0,
     marginBottom: 4,
   },
   title: {

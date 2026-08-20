@@ -43,6 +43,23 @@ if (!publishableKey) {
 }
 const clerkPublishableKey: string = publishableKey;
 
+function AppLoading() {
+  const colors = useColors();
+
+  return (
+    <View
+      accessibilityLabel="Loading Venom"
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: colors.background,
+      }}
+    >
+      <ActivityIndicator size="small" color={colors.primary} />
+    </View>
+  );
+}
 function RootLayoutNav() {
   const { getToken, isSignedIn, userId } = useAuth();
   const effectiveUserId = IS_UI_TEST ? UI_TEST_USER_ID : (userId ?? null);
@@ -126,16 +143,7 @@ export default function RootLayout() {
               proxyUrl={proxyUrl}
             >
               <ClerkLoading>
-                <View
-                  style={{
-                    flex: 1,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#050908",
-                  }}
-                >
-                  <ActivityIndicator size="small" color="#b4f536" />
-                </View>
+                <AppLoading />
               </ClerkLoading>
               <ClerkLoaded>
                 <GestureHandlerRootView style={{ flex: 1 }}>
