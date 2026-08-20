@@ -65,6 +65,12 @@ type VenomContextType = {
     conversation: Pick<Conversation, "id" | "title" | "projectId">,
     insights: KnowledgeInsight[],
   ) => void;
+  renameKnowledgeCluster: (clusterId: string, label: string) => void;
+  deleteKnowledgeCluster: (clusterId: string) => void;
+  mergeKnowledgeClusters: (
+    targetClusterId: string,
+    sourceClusterId: string,
+  ) => void;
 };
 
 const VenomContext = createContext<VenomContextType | null>(null);
@@ -367,6 +373,108 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     [generateId],
   );
 
+  const renameKnowledgeCluster = useCallback(
+    (clusterId: string, label: string) => {
+      const cleanedLabel = label.trim();
+      if (!cleanedLabel) return;
+
+      setState((s) => {
+        const cluster = s.clusters.find((item) => item.id === clusterId);
+        if (!cluster) return s;
+
+        const conflictsWithExistingLabel = s.clusters.some(
+          (item) =>
+            item.id !== clusterId &&
+            item.projectId === cluster.projectId &&
+            normalizeLabel(item.label) === normalizeLabel(cleanedLabel),
+        );
+        if (conflictsWithExistingLabel) return s;
+
+        return {
+          ...s,
+          clusters: s.clusters.map((item) =>
+            item.id === clusterId ? { ...item, label: cleanedLabel } : item,
+          ),
+        };
+      });
+    },
+    [],
+  );
+
+  const deleteKnowledgeCluster = useCallback((clusterId: string) => {
+    const updatedAt = Date.now();
+
+    setState((s) => {
+      const cluster = s.clusters.find((item) => item.id === clusterId);
+      if (!cluster) return s;
+
+      const clusters = reconcileKnowledgeLinks(
+        s.clusters.filter((item) => item.id !== clusterId),
+      );
+      return {
+        ...s,
+        clusters,
+        projects: updateProjectKnowledgeSourceCount(
+          s.projects,
+          clusters,
+          cluster.projectId,
+          updatedAt,
+        ),
+      };
+    });
+  }, []);
+
+  const mergeKnowledgeClusters = useCallback(
+    (targetClusterId: string, sourceClusterId: string) => {
+      if (targetClusterId === sourceClusterId) return;
+      const updatedAt = Date.now();
+
+      setState((s) => {
+        const target = s.clusters.find((item) => item.id === targetClusterId);
+        const source = s.clusters.find((item) => item.id === sourceClusterId);
+        if (!target || !source || target.projectId !== source.projectId)
+          return s;
+
+        const mergedTarget: KnowledgeCluster = {
+          ...target,
+          sources: mergeKnowledgeSources(target.sources, source.sources),
+          links: [...new Set([...target.links, ...source.links])].filter(
+            (linkId) => linkId !== target.id && linkId !== source.id,
+          ),
+          strength: Math.max(target.strength, source.strength),
+          mentionCount: target.mentionCount + source.mentionCount,
+          lastUpdatedAt: updatedAt,
+        };
+
+        const clusters = reconcileKnowledgeLinks(
+          s.clusters
+            .filter((item) => item.id !== sourceClusterId)
+            .map((item) => {
+              if (item.id === targetClusterId) return mergedTarget;
+              return {
+                ...item,
+                links: item.links.map((linkId) =>
+                  linkId === sourceClusterId ? targetClusterId : linkId,
+                ),
+              };
+            }),
+        );
+
+        return {
+          ...s,
+          clusters,
+          projects: updateProjectKnowledgeSourceCount(
+            s.projects,
+            clusters,
+            target.projectId,
+            updatedAt,
+          ),
+        };
+      });
+    },
+    [],
+  );
+
   return (
     <VenomContext.Provider
       value={{
@@ -385,6 +493,9 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         clearConversation,
         createNewConversation,
         applyKnowledgeInsights,
+        renameKnowledgeCluster,
+        deleteKnowledgeCluster,
+        mergeKnowledgeClusters,
       }}
     >
       {children}
@@ -396,4 +507,88 @@ export function useVenom() {
   const context = useContext(VenomContext);
   if (!context) throw new Error("useVenom must be used within VenomProvider");
   return context;
+}
+
+function updateProjectKnowledgeSourceCount(
+  projects: Project[],
+  clusters: KnowledgeCluster[],
+  projectId: string | null,
+  updatedAt: number,
+) {
+  if (!projectId) return projects;
+
+  const conversationIds = new Set(
+    clusters
+      .filter((cluster) => cluster.projectId === projectId)
+      .flatMap((cluster) =>
+        cluster.sources.map((source) => source.conversationId),
+      ),
+  );
+
+  return projects.map((project) =>
+    project.id === projectId
+      ? {
+          ...project,
+          sourceCount: conversationIds.size,
+          updatedAt,
+        }
+      : project,
+  );
+}
+
+function reconcileKnowledgeLinks(clusters: KnowledgeCluster[]) {
+  const clusterById = new Map(clusters.map((cluster) => [cluster.id, cluster]));
+  const linkedIds = new Map(
+    clusters.map((cluster) => [cluster.id, new Set<string>()]),
+  );
+
+  for (const cluster of clusters) {
+    for (const linkId of cluster.links) {
+      const linkedCluster = clusterById.get(linkId);
+      if (
+        !linkedCluster ||
+        linkedCluster.id === cluster.id ||
+        linkedCluster.projectId !== cluster.projectId
+      ) {
+        continue;
+      }
+      linkedIds.get(cluster.id)?.add(linkedCluster.id);
+      linkedIds.get(linkedCluster.id)?.add(cluster.id);
+    }
+  }
+
+  return clusters.map((cluster) => ({
+    ...cluster,
+    links: [...(linkedIds.get(cluster.id) ?? [])],
+  }));
+}
+
+function mergeKnowledgeSources(
+  targetSources: KnowledgeSource[],
+  sourceSources: KnowledgeSource[],
+) {
+  const sourcesByConversation = new Map<string, KnowledgeSource>();
+
+  for (const source of [...targetSources, ...sourceSources]) {
+    const existing = sourcesByConversation.get(source.conversationId);
+    if (!existing) {
+      sourcesByConversation.set(source.conversationId, {
+        ...source,
+        messageIds: [...new Set(source.messageIds)],
+      });
+      continue;
+    }
+
+    const newerSource =
+      source.updatedAt >= existing.updatedAt ? source : existing;
+    sourcesByConversation.set(source.conversationId, {
+      ...newerSource,
+      messageIds: [...new Set([...existing.messageIds, ...source.messageIds])],
+      updatedAt: Math.max(existing.updatedAt, source.updatedAt),
+    });
+  }
+
+  return [...sourcesByConversation.values()].sort(
+    (a, b) => b.updatedAt - a.updatedAt,
+  );
 }

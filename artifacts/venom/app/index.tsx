@@ -431,10 +431,20 @@ function KnowledgeWorkspace({
   onOpenConversation: (conversationId: string) => void;
 }) {
   const colors = useColors();
-  const { state } = useVenom();
+  const {
+    state,
+    renameKnowledgeCluster,
+    deleteKnowledgeCluster,
+    mergeKnowledgeClusters,
+  } = useVenom();
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(
     null,
   );
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [isChoosingMerge, setIsChoosingMerge] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const visibleClusters = state.clusters.filter(
     (cluster) => cluster.projectId === state.activeProjectId,
   );
@@ -452,6 +462,75 @@ function KnowledgeWorkspace({
     }),
     [CENTER],
   );
+
+  const closeDetails = () => {
+    setSelectedClusterId(null);
+    setIsRenaming(false);
+    setIsChoosingMerge(false);
+    setIsConfirmingDelete(false);
+    setEditError(null);
+  };
+
+  const openCluster = (clusterId: string) => {
+    setSelectedClusterId(clusterId);
+    setIsRenaming(false);
+    setIsChoosingMerge(false);
+    setIsConfirmingDelete(false);
+    setEditError(null);
+  };
+
+  const startRename = () => {
+    if (!selectedCluster) return;
+    setRenameDraft(selectedCluster.label);
+    setEditError(null);
+    setIsChoosingMerge(false);
+    setIsConfirmingDelete(false);
+    setIsRenaming(true);
+  };
+
+  const saveRename = () => {
+    if (!selectedCluster) return;
+    const label = renameDraft.trim();
+    if (!label) {
+      setEditError("Give this cluster a name before saving.");
+      return;
+    }
+    const hasDuplicateLabel = visibleClusters.some(
+      (cluster) =>
+        cluster.id !== selectedCluster.id &&
+        cluster.label.trim().toLocaleLowerCase() === label.toLocaleLowerCase(),
+    );
+    if (hasDuplicateLabel) {
+      setEditError("That name already exists. Merge the duplicates instead.");
+      return;
+    }
+
+    renameKnowledgeCluster(selectedCluster.id, label);
+    setIsRenaming(false);
+    setEditError(null);
+    if (Platform.OS !== "web") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  const selectMergeSource = (sourceCluster: KnowledgeCluster) => {
+    if (!selectedCluster) return;
+    mergeKnowledgeClusters(selectedCluster.id, sourceCluster.id);
+    setIsChoosingMerge(false);
+    setEditError(null);
+    if (Platform.OS !== "web") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (!selectedCluster) return;
+    deleteKnowledgeCluster(selectedCluster.id);
+    closeDetails();
+    if (Platform.OS !== "web") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    }
+  };
 
   return (
     <View style={styles.workspaceContainer}>
@@ -570,7 +649,7 @@ function KnowledgeWorkspace({
                       ]}
                       onPress={() => {
                         if (Platform.OS !== "web") Haptics.selectionAsync();
-                        setSelectedClusterId(cluster.id);
+                        openCluster(cluster.id);
                       }}
                       activeOpacity={0.8}
                     >
@@ -645,7 +724,13 @@ function KnowledgeWorkspace({
               },
             ]}
           >
-            <View style={styles.knowledgeInfoContent}>
+            <ScrollView
+              style={styles.knowledgeInfoScroll}
+              contentContainerStyle={styles.knowledgeInfoContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
               <View style={styles.knowledgeInfoHeader}>
                 <Text
                   style={[
@@ -656,7 +741,7 @@ function KnowledgeWorkspace({
                   {selectedCluster.label}
                 </Text>
                 <TouchableOpacity
-                  onPress={() => setSelectedClusterId(null)}
+                  onPress={closeDetails}
                   hitSlop={12}
                   accessibilityRole="button"
                   accessibilityLabel="Close cluster details"
@@ -672,6 +757,316 @@ function KnowledgeWorkspace({
               >
                 {selectedCluster.summary}
               </Text>
+              <View style={styles.knowledgeEditActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.knowledgeEditButton,
+                    { borderColor: colors.border },
+                  ]}
+                  onPress={startRename}
+                  testID="knowledge-rename-cluster-button"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Rename ${selectedCluster.label}`}
+                >
+                  <Feather name="edit-2" size={15} color={colors.foreground} />
+                  <Text
+                    style={[
+                      styles.knowledgeEditButtonText,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Rename
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.knowledgeEditButton,
+                    { borderColor: colors.border },
+                  ]}
+                  onPress={() => {
+                    setIsRenaming(false);
+                    setIsConfirmingDelete(false);
+                    setEditError(null);
+                    setIsChoosingMerge((value) => !value);
+                  }}
+                  testID="knowledge-merge-cluster-button"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Merge another cluster into ${selectedCluster.label}`}
+                >
+                  <Feather name="git-merge" size={15} color={colors.foreground} />
+                  <Text
+                    style={[
+                      styles.knowledgeEditButtonText,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Merge
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.knowledgeEditButton,
+                    { borderColor: colors.destructive },
+                  ]}
+                  onPress={() => {
+                    setIsRenaming(false);
+                    setIsChoosingMerge(false);
+                    setEditError(null);
+                    setIsConfirmingDelete((value) => !value);
+                  }}
+                  testID="knowledge-delete-cluster-button"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete ${selectedCluster.label}`}
+                >
+                  <Feather name="trash-2" size={15} color={colors.destructive} />
+                  <Text
+                    style={[
+                      styles.knowledgeEditButtonText,
+                      { color: colors.destructive },
+                    ]}
+                  >
+                    Delete
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {isRenaming && (
+                <View
+                  style={[
+                    styles.knowledgeEditCard,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.knowledgeEditLabel,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Rename cluster
+                  </Text>
+                  <TextInput
+                    value={renameDraft}
+                    onChangeText={(value) => {
+                      setRenameDraft(value);
+                      if (editError) setEditError(null);
+                    }}
+                    style={[
+                      styles.knowledgeRenameInput,
+                      {
+                        color: colors.foreground,
+                        borderColor: editError
+                          ? colors.destructive
+                          : colors.border,
+                      },
+                    ]}
+                    placeholder="Cluster name"
+                    placeholderTextColor={colors.mutedForeground}
+                    autoFocus
+                    maxLength={80}
+                    returnKeyType="done"
+                    onSubmitEditing={saveRename}
+                    testID="knowledge-rename-input"
+                    accessibilityLabel="New cluster name"
+                  />
+                  {editError && (
+                    <Text
+                      accessibilityRole="alert"
+                      style={[
+                        styles.knowledgeEditError,
+                        { color: colors.destructive },
+                      ]}
+                    >
+                      {editError}
+                    </Text>
+                  )}
+                  <View style={styles.knowledgeEditCardActions}>
+                    <TouchableOpacity
+                      style={styles.knowledgeTextAction}
+                      onPress={() => {
+                        setIsRenaming(false);
+                        setEditError(null);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel rename"
+                    >
+                      <Text
+                        style={[
+                          styles.knowledgeEditCancelText,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.knowledgeTextAction}
+                      onPress={saveRename}
+                      disabled={!renameDraft.trim()}
+                      testID="knowledge-save-rename-button"
+                      accessibilityRole="button"
+                      accessibilityLabel="Save cluster name"
+                    >
+                      <Text
+                        style={[
+                          styles.knowledgeEditSaveText,
+                          {
+                            color: renameDraft.trim()
+                              ? colors.primary
+                              : colors.mutedForeground,
+                          },
+                        ]}
+                      >
+                        Save
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              {isChoosingMerge && (
+                <View
+                  style={[
+                    styles.knowledgeEditCard,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.knowledgeEditLabel,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Merge a duplicate into {selectedCluster.label}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.knowledgeEditHelp,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    Its sources, connections, and importance will be retained.
+                  </Text>
+                  {visibleClusters.length === 1 ? (
+                    <Text
+                      style={[
+                        styles.knowledgeEditHelp,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      There are no other clusters to merge yet.
+                    </Text>
+                  ) : (
+                    <ScrollView
+                      style={styles.knowledgeMergeOptions}
+                      showsVerticalScrollIndicator={false}
+                      nestedScrollEnabled
+                    >
+                      {visibleClusters
+                        .filter((cluster) => cluster.id !== selectedCluster.id)
+                        .map((cluster) => (
+                          <TouchableOpacity
+                            key={cluster.id}
+                            style={[
+                              styles.knowledgeMergeOption,
+                              { borderColor: colors.border },
+                            ]}
+                            onPress={() => selectMergeSource(cluster)}
+                            testID={`knowledge-merge-source-${cluster.id}`}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Merge ${cluster.label} into ${selectedCluster.label}`}
+                          >
+                            <View style={styles.knowledgeMergeOptionCopy}>
+                              <Text
+                                numberOfLines={1}
+                                style={[
+                                  styles.knowledgeMergeOptionTitle,
+                                  { color: colors.foreground },
+                                ]}
+                              >
+                                {cluster.label}
+                              </Text>
+                              <Text
+                                numberOfLines={1}
+                                style={[
+                                  styles.knowledgeMergeOptionMeta,
+                                  { color: colors.mutedForeground },
+                                ]}
+                              >
+                                {cluster.sources.length} sources ·{" "}
+                                {cluster.links.length} connections
+                              </Text>
+                            </View>
+                            <Feather
+                              name="arrow-down-left"
+                              size={16}
+                              color={colors.primary}
+                            />
+                          </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                  )}
+                </View>
+              )}
+              {isConfirmingDelete && (
+                <View
+                  style={[
+                    styles.knowledgeDeleteConfirm,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.destructive,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.knowledgeEditLabel,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Delete {selectedCluster.label}?
+                  </Text>
+                  <Text
+                    style={[
+                      styles.knowledgeEditHelp,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    This removes the cluster and its saved sources from the map.
+                  </Text>
+                  <View style={styles.knowledgeEditCardActions}>
+                    <TouchableOpacity
+                      style={styles.knowledgeTextAction}
+                      onPress={() => setIsConfirmingDelete(false)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel deleting cluster"
+                    >
+                      <Text
+                        style={[
+                          styles.knowledgeEditCancelText,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.knowledgeTextAction}
+                      onPress={confirmDelete}
+                      testID="knowledge-confirm-delete-cluster-button"
+                      accessibilityRole="button"
+                      accessibilityLabel={`Confirm deletion of ${selectedCluster.label}`}
+                    >
+                      <Text
+                        style={[
+                          styles.knowledgeEditSaveText,
+                          { color: colors.destructive },
+                        ]}
+                      >
+                        Delete cluster
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
               <View style={styles.knowledgeInfoMeta}>
                 <View
                   style={[
@@ -706,10 +1101,7 @@ function KnowledgeWorkspace({
               >
                 Sources · {selectedCluster.sources.length}
               </Text>
-              <ScrollView
-                style={styles.knowledgeSourcesList}
-                showsVerticalScrollIndicator={false}
-              >
+              <View style={styles.knowledgeSourcesList}>
                 {selectedCluster.sources.map((source) => (
                   <TouchableOpacity
                     key={source.conversationId}
@@ -749,8 +1141,8 @@ function KnowledgeWorkspace({
                     />
                   </TouchableOpacity>
                 ))}
-              </ScrollView>
-            </View>
+              </View>
+            </ScrollView>
           </View>
         )}
       </View>
@@ -1353,6 +1745,9 @@ const styles = StyleSheet.create({
     paddingBottom: 34, // Safe area roughly
     maxHeight: "72%",
   },
+  knowledgeInfoScroll: {
+    flexShrink: 1,
+  },
   knowledgeInfoContent: {
     padding: 20,
   },
@@ -1370,6 +1765,105 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 14,
     lineHeight: 22,
+    marginBottom: 16,
+  },
+  knowledgeEditActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+  },
+  knowledgeEditButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    minHeight: 44,
+  },
+  knowledgeEditButtonText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+  },
+  knowledgeEditCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  knowledgeEditLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+  },
+  knowledgeEditHelp: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+  knowledgeRenameInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  knowledgeEditError: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 6,
+  },
+  knowledgeEditCardActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: 18,
+    marginTop: 12,
+  },
+  knowledgeTextAction: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  knowledgeEditCancelText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+  },
+  knowledgeEditSaveText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+  },
+  knowledgeMergeOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 1,
+    marginTop: 10,
+    paddingTop: 10,
+  },
+  knowledgeMergeOptions: {
+    maxHeight: 180,
+  },
+  knowledgeMergeOptionCopy: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  knowledgeMergeOptionTitle: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+  },
+  knowledgeMergeOptionMeta: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  knowledgeDeleteConfirm: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 16,
   },
   knowledgeInfoMeta: {
