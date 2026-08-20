@@ -20,6 +20,8 @@ import {
   Platform,
   Keyboard,
   Modal,
+  AccessibilityInfo,
+  findNodeHandle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -58,7 +60,7 @@ import {
   KanbanStage,
 } from "@/context/VenomContext";
 import { extractVenomKnowledge } from "@workspace/api-client-react";
-
+import { BrainNoteComposer } from "@/components/BrainNoteComposer";
 let messageCounter = 0;
 function generateUniqueId(): string {
   messageCounter++;
@@ -777,6 +779,11 @@ function KnowledgeWorkspace({
     deleteKnowledgeCluster,
     mergeKnowledgeClusters,
   } = useVenom();
+  const captureButtonRef =
+    useRef<React.ElementRef<typeof TouchableOpacity>>(null);
+  const [composerProjectId, setComposerProjectId] = useState<string | null>(
+    null,
+  );
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(
     null,
   );
@@ -795,6 +802,8 @@ function KnowledgeWorkspace({
   );
   const selectedCluster =
     visibleClusters.find((cluster) => cluster.id === selectedClusterId) ?? null;
+  const composerProject =
+    state.projects.find((project) => project.id === composerProjectId) ?? null;
 
   const MAP_SIZE = 800;
   const CENTER = MAP_SIZE / 2;
@@ -971,6 +980,28 @@ function KnowledgeWorkspace({
     setIsChoosingMerge(false);
     setIsConfirmingDelete(false);
     setEditError(null);
+  };
+
+  const openNoteComposer = () => {
+    if (!state.activeProjectId) return;
+    closeDetails();
+    setComposerProjectId(state.activeProjectId);
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const closeNoteComposer = () => {
+    setComposerProjectId(null);
+    setTimeout(() => {
+      const captureButton = captureButtonRef.current;
+      if (Platform.OS === "web") {
+        captureButton?.focus?.();
+        return;
+      }
+      const node = findNodeHandle(captureButton);
+      if (node) AccessibilityInfo.setAccessibilityFocus(node);
+    }, 120);
   };
 
   const openCluster = (clusterId: string) => {
@@ -1729,6 +1760,49 @@ function KnowledgeWorkspace({
               </View>
             </ScrollView>
           </View>
+        )}
+        {!selectedCluster && (
+          <TouchableOpacity
+            ref={captureButtonRef}
+            style={[
+              styles.knowledgeCaptureButton,
+              {
+                backgroundColor:
+                  visibleClusters.length > 0
+                    ? colors.symbioteHighlight
+                    : colors.primary,
+                borderColor:
+                  visibleClusters.length > 0
+                    ? colors.symbioteSoft
+                    : colors.border,
+              },
+            ]}
+            onPress={openNoteComposer}
+            disabled={!state.activeProjectId}
+            accessibilityRole="button"
+            accessibilityLabel="Capture a note into this project's Brain"
+            accessibilityHint="Opens a reviewable multiline note composer"
+            accessibilityState={{ disabled: !state.activeProjectId }}
+            testID="brain-note-open"
+          >
+            <Feather
+              name="plus"
+              size={22}
+              color={
+                visibleClusters.length > 0
+                  ? colors.symbioteSurface
+                  : colors.primaryForeground
+              }
+            />
+          </TouchableOpacity>
+        )}
+        {composerProjectId && (
+          <BrainNoteComposer
+            projectId={composerProjectId}
+            projectName={composerProject?.name ?? "Selected project"}
+            onClose={closeNoteComposer}
+            onRetargetProject={setComposerProjectId}
+          />
         )}
       </View>
     </View>
@@ -4257,6 +4331,22 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textAlign: "center",
     maxWidth: 340,
+  },
+  knowledgeCaptureButton: {
+    position: "absolute",
+    left: 16,
+    bottom: 14,
+    zIndex: 30,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
   },
   symbioteStage: {
     flex: 1,

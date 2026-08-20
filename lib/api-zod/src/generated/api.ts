@@ -101,6 +101,31 @@ export const ExtractVenomKnowledgeResponse = zod.object({
 
 
 /**
+ * @summary Improve the grammar and organization of a draft project note
+ */
+export const improveVenomNoteBodyNoteMax = 5000;
+
+
+
+export const ImproveVenomNoteBody = zod.object({
+  "note": zod.string().min(1).max(improveVenomNoteBodyNoteMax)
+})
+
+export const improveVenomNoteResponseSuggestionMax = 5000;
+
+export const improveVenomNoteResponseChangeNotesItemMax = 160;
+
+export const improveVenomNoteResponseChangeNotesMax = 6;
+
+
+
+export const ImproveVenomNoteResponse = zod.object({
+  "suggestion": zod.string().min(1).max(improveVenomNoteResponseSuggestionMax),
+  "changeNotes": zod.array(zod.string().min(1).max(improveVenomNoteResponseChangeNotesItemMax)).max(improveVenomNoteResponseChangeNotesMax)
+})
+
+
+/**
  * @summary Get the signed-in user's workspace
  */
 export const getVenomWorkspaceResponseStateOneProjectsItemIdMax = 120;
@@ -993,5 +1018,3 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "revision": zod.number().min(saveVenomWorkspaceResponseRevisionMin).multipleOf(saveVenomWorkspaceResponseRevisionMultipleOf),
   "updatedAt": zod.coerce.date().nullable()
 })
-
-

@@ -25,6 +25,8 @@ import type {
   KnowledgeExtractionInput,
   SaveVenomWorkspace413,
   VenomChatRequest,
+  VenomNoteImprovement,
+  VenomNoteInput,
   VenomWorkspaceSaveInput,
   VenomWorkspaceSnapshot
 } from './api.schemas';
@@ -274,6 +276,77 @@ export const useExtractVenomKnowledge = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getExtractVenomKnowledgeMutationOptions(options));
+    }
+
+export const getImproveVenomNoteUrl = () => {
+
+
+
+
+  return `/api/venom/notes/improve`
+}
+
+/**
+ * @summary Improve the grammar and organization of a draft project note
+ */
+export const improveVenomNote = async (venomNoteInput: VenomNoteInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomNoteImprovement> => {
+
+  return customFetch<VenomNoteImprovement>(getImproveVenomNoteUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomNoteInput)
+  }
+);}
+
+
+
+
+
+export const getImproveVenomNoteMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof improveVenomNote>>, TError,{data: BodyType<VenomNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof improveVenomNote>>, TError,{data: BodyType<VenomNoteInput>}, TContext> => {
+
+const mutationKey = ['improveVenomNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof improveVenomNote>>, {data: BodyType<VenomNoteInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  improveVenomNote(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImproveVenomNoteMutationResult = NonNullable<Awaited<ReturnType<typeof improveVenomNote>>>
+    export type ImproveVenomNoteMutationBody = BodyType<VenomNoteInput>
+    export type ImproveVenomNoteMutationError = ErrorType<void>
+
+    /**
+ * @summary Improve the grammar and organization of a draft project note
+ */
+export const useImproveVenomNote = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof improveVenomNote>>, TError,{data: BodyType<VenomNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof improveVenomNote>>,
+        TError,
+        {data: BodyType<VenomNoteInput>},
+        TContext
+      > => {
+      return useMutation(getImproveVenomNoteMutationOptions(options));
     }
 
 export const getGetVenomWorkspaceUrl = () => {

@@ -2,6 +2,8 @@ import { Router, type IRouter } from "express";
 import {
   ExtractVenomKnowledgeBody,
   ExtractVenomKnowledgeResponse,
+  ImproveVenomNoteBody,
+  ImproveVenomNoteResponse,
   SendVenomMessageBody,
 } from "@workspace/api-zod";
 import {
@@ -9,6 +11,13 @@ import {
   type ChatCompletionMessageParam,
 } from "@workspace/integrations-openai-ai-server";
 import { getAuth } from "@clerk/express";
+import {
+  buildNoteImprovementUserMessage,
+  normalizeNoteImprovement,
+  NOTE_IMPROVEMENT_SYSTEM_PROMPT,
+  takeNoteRateLimitSlot,
+  type NoteRateLimitRecord,
+} from "./venom-note";
 
 const router: IRouter = Router();
 
@@ -24,7 +33,11 @@ Use concise title-case labels and a practical category such as decision, feature
 For each cluster, cite one or more exact source message IDs from the supplied conversation. Only use source IDs that were supplied. Use relatedLabels only for labels you also return. If no durable knowledge is present, return {"clusters":[]}.`;
 const KNOWLEDGE_RATE_LIMIT_WINDOW_MS = 60_000;
 const KNOWLEDGE_RATE_LIMIT_MAX = 12;
-const knowledgeRateLimits = new Map<string, { count: number; resetAt: number }>();
+const knowledgeRateLimits = new Map<
+  string,
+  { count: number; resetAt: number }
+>();
+const noteRateLimits = new Map<string, NoteRateLimitRecord>();
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -56,12 +69,10 @@ router.post("/venom/respond", async (req, res): Promise<void> => {
 
   const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: `${SYSTEM_PROMPT}${contextSuffix}` },
-    ...parsed.data.messages.map(
-      (message): ChatCompletionMessageParam => ({
-        role: message.role,
-        content: message.content,
-      }),
-    ),
+    ...parsed.data.messages.map((message): ChatCompletionMessageParam => ({
+      role: message.role,
+      content: message.content,
+    })),
   ];
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -173,7 +184,9 @@ router.post("/venom/knowledge/extract", async (req, res): Promise<void> => {
     const content = completion.choices[0]?.message?.content;
     if (!content) {
       req.log.warn("Knowledge extraction returned no content");
-      res.status(502).json({ error: "Knowledge extraction returned no content" });
+      res
+        .status(502)
+        .json({ error: "Knowledge extraction returned no content" });
       return;
     }
 
@@ -182,7 +195,9 @@ router.post("/venom/knowledge/extract", async (req, res): Promise<void> => {
       responseData = JSON.parse(content);
     } catch {
       req.log.warn("Knowledge extraction returned invalid JSON");
-      res.status(502).json({ error: "Knowledge extraction returned invalid data" });
+      res
+        .status(502)
+        .json({ error: "Knowledge extraction returned invalid data" });
       return;
     }
 
@@ -254,7 +269,9 @@ router.post("/venom/knowledge/extract", async (req, res): Promise<void> => {
         { validationErrors: extraction.error.issues },
         "Knowledge extraction returned invalid data",
       );
-      res.status(502).json({ error: "Knowledge extraction returned invalid data" });
+      res
+        .status(502)
+        .json({ error: "Knowledge extraction returned invalid data" });
       return;
     }
 
@@ -262,6 +279,130 @@ router.post("/venom/knowledge/extract", async (req, res): Promise<void> => {
   } catch (error) {
     req.log.error({ err: error }, "Venom knowledge extraction failed");
     res.status(502).json({ error: "Knowledge extraction unavailable" });
+  }
+});
+
+router.post("/venom/notes/improve", async (req, res): Promise<void> => {
+  const auth = getAuth(req);
+  if (!auth.userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const parsed = ImproveVenomNoteBody.safeParse(req.body);
+  if (!parsed.success) {
+    req.log.warn(
+      {
+        operation: "venom_note_improvement",
+        validationIssueCount: parsed.error.issues.length,
+      },
+      "Invalid Venom note improvement request",
+    );
+    res.status(400).json({ error: "Invalid note improvement request" });
+    return;
+  }
+
+  const now = Date.now();
+  const rateLimit = takeNoteRateLimitSlot(noteRateLimits, auth.userId, now);
+  if (!rateLimit.allowed) {
+    res.setHeader("Retry-After", rateLimit.retryAfterSeconds);
+    req.log.warn(
+      { operation: "venom_note_improvement" },
+      "Venom note improvement rate limited",
+    );
+    res.status(429).json({ error: "Too many note improvement requests" });
+    return;
+  }
+
+  if (noteRateLimits.size > 1_000) {
+    for (const [key, limit] of noteRateLimits) {
+      if (limit.resetAt <= now) noteRateLimits.delete(key);
+    }
+  }
+
+  const startedAt = Date.now();
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-5.6-terra",
+      max_completion_tokens: 1800,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: NOTE_IMPROVEMENT_SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: buildNoteImprovementUserMessage(parsed.data.note),
+        },
+      ],
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      req.log.warn(
+        {
+          operation: "venom_note_improvement",
+          noteLength: parsed.data.note.length,
+          durationMs: Date.now() - startedAt,
+        },
+        "Venom note improvement returned no content",
+      );
+      res.status(502).json({ error: "Note improvement unavailable" });
+      return;
+    }
+
+    let modelData: unknown;
+    try {
+      modelData = JSON.parse(content);
+    } catch {
+      req.log.warn(
+        {
+          operation: "venom_note_improvement",
+          noteLength: parsed.data.note.length,
+          durationMs: Date.now() - startedAt,
+        },
+        "Venom note improvement returned invalid JSON",
+      );
+      res.status(502).json({ error: "Note improvement unavailable" });
+      return;
+    }
+
+    const normalized = normalizeNoteImprovement(modelData);
+    const response = ImproveVenomNoteResponse.safeParse(normalized);
+    if (!response.success) {
+      req.log.warn(
+        {
+          operation: "venom_note_improvement",
+          noteLength: parsed.data.note.length,
+          durationMs: Date.now() - startedAt,
+          validationIssueCount: response.error.issues.length,
+        },
+        "Venom note improvement returned invalid data",
+      );
+      res.status(502).json({ error: "Note improvement unavailable" });
+      return;
+    }
+
+    req.log.info(
+      {
+        operation: "venom_note_improvement",
+        noteLength: parsed.data.note.length,
+        suggestionLength: response.data.suggestion.length,
+        changeNoteCount: response.data.changeNotes.length,
+        durationMs: Date.now() - startedAt,
+      },
+      "Venom note improvement completed",
+    );
+    res.json(response.data);
+  } catch (error) {
+    req.log.error(
+      {
+        err: error,
+        operation: "venom_note_improvement",
+        noteLength: parsed.data.note.length,
+        durationMs: Date.now() - startedAt,
+      },
+      "Venom note improvement failed",
+    );
+    res.status(502).json({ error: "Note improvement unavailable" });
   }
 });
 

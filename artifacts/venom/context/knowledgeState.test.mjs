@@ -5,6 +5,7 @@ import {
   applyKnowledgeInsightsToState,
   clearConversationKnowledge,
   deleteProjectKnowledge,
+  fileKnowledgeNoteToState,
   hydrateVenomState,
 } from "./knowledgeState.ts";
 
@@ -204,4 +205,126 @@ test("hydration scopes legacy clusters to their live project conversations", () 
       cluster.sources.every((source) => source.projectId === cluster.projectId),
     ),
   );
+});
+
+test("filing a note is atomic, project-scoped, and preserves chat selection", () => {
+  const alphaChat = conversation("alpha-chat", "alpha");
+  const betaChat = conversation("beta-chat", "beta");
+  const initialState = {
+    projects: [project("alpha"), project("beta")],
+    conversations: [alphaChat, betaChat],
+    clusters: [],
+    activeProjectId: "alpha",
+    activeConversationId: alphaChat.id,
+  };
+  let idCounter = 0;
+
+  const result = fileKnowledgeNoteToState({
+    state: initialState,
+    projectId: "beta",
+    note: "  Ship the beta release after accessibility review.  ",
+    insights: [
+      {
+        ...insight("Accessibility review", "temporary-source"),
+        sourceMessageIds: ["temporary-source"],
+      },
+    ],
+    now: 200,
+    generateId: (prefix) => `${prefix}-${++idCounter}`,
+  });
+
+  assert.equal(result.status, "filed");
+  assert.equal(result.state.activeProjectId, "alpha");
+  assert.equal(result.state.activeConversationId, alphaChat.id);
+  assert.equal(result.state.clusters.length, 1);
+  assert.equal(result.state.clusters[0].projectId, "beta");
+
+  const noteConversation = result.state.conversations.find(
+    (item) => item.title === "Captured note",
+  );
+  assert.ok(noteConversation);
+  assert.equal(noteConversation.projectId, "beta");
+  assert.equal(
+    noteConversation.messages[0].content,
+    "Ship the beta release after accessibility review.",
+  );
+  assert.deepEqual(result.state.clusters[0].sources[0].messageIds, [
+    noteConversation.messages[0].id,
+  ]);
+  assert.equal(
+    result.state.clusters[0].sources[0].conversationId,
+    noteConversation.id,
+  );
+});
+
+test("note filing rejects missing projects and no-concept results without residue", () => {
+  const initialState = {
+    projects: [project("alpha")],
+    conversations: [conversation("alpha-chat", "alpha")],
+    clusters: [],
+    activeProjectId: "alpha",
+    activeConversationId: "alpha-chat",
+  };
+  const options = {
+    state: initialState,
+    note: "A durable note",
+    now: 200,
+    generateId: (prefix) => `${prefix}-unused`,
+  };
+
+  const missingProject = fileKnowledgeNoteToState({
+    ...options,
+    projectId: "deleted",
+    insights: [insight("Plan", "temporary-source")],
+  });
+  assert.equal(missingProject.status, "project_unavailable");
+  assert.strictEqual(missingProject.state, initialState);
+
+  const noConcepts = fileKnowledgeNoteToState({
+    ...options,
+    projectId: "alpha",
+    insights: [],
+  });
+  assert.equal(noConcepts.status, "no_concepts");
+  assert.strictEqual(noConcepts.state, initialState);
+});
+
+test("filing a duplicate concept updates only the initiating project", () => {
+  const alphaChat = conversation("alpha-chat", "alpha");
+  const betaChat = conversation("beta-chat", "beta");
+  const seededState = apply(
+    apply(
+      {
+        projects: [project("alpha"), project("beta")],
+        conversations: [alphaChat, betaChat],
+        clusters: [],
+        activeProjectId: "alpha",
+        activeConversationId: alphaChat.id,
+      },
+      alphaChat,
+      [insight("Roadmap", "alpha-chat-message")],
+    ),
+    betaChat,
+    [insight("Roadmap", "beta-chat-message")],
+  );
+
+  const result = fileKnowledgeNoteToState({
+    state: seededState,
+    projectId: "beta",
+    note: "The roadmap now prioritizes the mobile release.",
+    insights: [insight("Roadmap", "temporary-source")],
+    now: 300,
+    generateId: (prefix) => `${prefix}-new`,
+  });
+
+  assert.equal(result.status, "filed");
+  const alphaRoadmap = result.state.clusters.find(
+    (cluster) => cluster.projectId === "alpha",
+  );
+  const betaRoadmap = result.state.clusters.find(
+    (cluster) => cluster.projectId === "beta",
+  );
+  assert.equal(alphaRoadmap.mentionCount, 1);
+  assert.equal(betaRoadmap.mentionCount, 2);
+  assert.equal(betaRoadmap.sources.length, 2);
 });

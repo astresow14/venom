@@ -319,6 +319,10 @@ export function clearConversationKnowledge(
   };
 }
 
+export type FileKnowledgeNoteStatus =
+  | "filed"
+  | "no_concepts"
+  | "project_unavailable";
 type ApplyKnowledgeOptions = {
   state: VenomState;
   conversation: Pick<Conversation, "id" | "title" | "projectId">;
@@ -471,4 +475,73 @@ export function applyKnowledgeInsightsToState({
   );
 
   return { ...state, clusters, projects };
+}
+
+type FileKnowledgeNoteOptions = {
+  state: VenomState;
+  projectId: string;
+  note: string;
+  insights: KnowledgeInsight[];
+  now: number;
+  generateId: (prefix: string) => string;
+};
+
+export function fileKnowledgeNoteToState({
+  state,
+  projectId,
+  note,
+  insights,
+  now,
+  generateId,
+}: FileKnowledgeNoteOptions): {
+  state: VenomState;
+  status: FileKnowledgeNoteStatus;
+} {
+  if (!state.projects.some((project) => project.id === projectId)) {
+    return { state, status: "project_unavailable" };
+  }
+
+  const finalNote = note.trim();
+  if (!finalNote || finalNote.length > 5000 || !insights.length) {
+    return { state, status: "no_concepts" };
+  }
+
+  const conversationId = generateId("note");
+  const messageId = generateId("note_msg");
+  const conversation: Conversation = {
+    id: conversationId,
+    title: "Captured note",
+    projectId,
+    updatedAt: now,
+    messages: [
+      {
+        id: messageId,
+        role: "user",
+        content: finalNote,
+        createdAt: now,
+        status: "sent",
+      },
+    ],
+  };
+  const noteInsights = insights.map((insight) => ({
+    ...insight,
+    sourceMessageIds: [messageId],
+  }));
+  const stagedState = {
+    ...state,
+    conversations: [...state.conversations, conversation],
+  };
+  const filedState = applyKnowledgeInsightsToState({
+    state: stagedState,
+    conversation,
+    insights: noteInsights,
+    now,
+    generateId,
+  });
+
+  if (filedState.clusters === stagedState.clusters) {
+    return { state, status: "no_concepts" };
+  }
+
+  return { state: filedState, status: "filed" };
 }

@@ -66,6 +66,28 @@ paths:
           description: Authentication required
         "429":
           description: Too many extraction requests
+  /venom/notes/improve:
+    post:
+      operationId: improveVenomNote
+      tags: [venom]
+      summary: Improve the grammar and organization of a draft project note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomNoteInput"
+      responses:
+        "200":
+          description: An editable suggestion and concise summary of changes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomNoteImprovement"
+        "401":
+          description: Authentication required
+        "429":
+          description: Too many note improvement requests
   /venom/workspace:
     get:
       operationId: getVenomWorkspace
@@ -246,6 +268,31 @@ components:
           maxItems: 8
           items:
             $ref: "#/components/schemas/KnowledgeCandidate"
+    VenomNoteInput:
+      type: object
+      additionalProperties: false
+      required: [note]
+      properties:
+        note:
+          type: string
+          minLength: 1
+          maxLength: 5000
+    VenomNoteImprovement:
+      type: object
+      additionalProperties: false
+      required: [suggestion, changeNotes]
+      properties:
+        suggestion:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        changeNotes:
+          type: array
+          maxItems: 6
+          items:
+            type: string
+            minLength: 1
+            maxLength: 160
     VenomTask:
       type: object
       additionalProperties: false
@@ -638,4 +685,3 @@ components:
           type: [string, "null"]
           format: date-time
       required: [state, revision, updatedAt]
-

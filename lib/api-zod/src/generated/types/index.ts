@@ -27,6 +27,8 @@ export * from './venomKnowledgeSource';
 export * from './venomMessage';
 export * from './venomMessageRole';
 export * from './venomMessageStatus';
+export * from './venomNoteImprovement';
+export * from './venomNoteInput';
 export * from './venomProject';
 export * from './venomTask';
 export * from './venomTaskStatus';

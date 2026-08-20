@@ -1,3 +1,4 @@
 - [Knowledge extraction contracts](knowledge-extraction-contracts.md) — JSON-only model output still needs server-side normalization, source checks, and schema validation.
 - [Mobile workspace paging](mobile-workspace-paging.md) — keep workspace screens mounted and isolated; RN Web scroll paging can expose adjacent screens at artifact widths.
 - [Workspace sync identity boundaries](workspace-sync-identity-boundaries.md) — bind saves to the initiating account; never let a later session authorize stale work.
+- [Durable draft cleanup](durable-draft-cleanup.md) — serialize draft autosaves with success cleanup so an in-flight write cannot resurrect filed content.

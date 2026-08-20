@@ -122,6 +122,28 @@ export interface KnowledgeExtraction {
   clusters: KnowledgeCandidate[];
 }
 
+export interface VenomNoteInput {
+  /**
+     * @minLength 1
+     * @maxLength 5000
+     */
+  note: string;
+}
+
+export interface VenomNoteImprovement {
+  /**
+     * @minLength 1
+     * @maxLength 5000
+     */
+  suggestion: string;
+  /**
+     * @maxItems 6
+     * @items.minLength 1
+     * @items.maxLength 160
+     */
+  changeNotes: string[];
+}
+
 /**
  * Legacy task status retained solely for snapshot migration.
  */
@@ -443,4 +465,3 @@ export type SaveVenomWorkspace413 = {
   /** @minimum 1 */
   maxBytes: number;
 };
-

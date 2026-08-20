@@ -13,6 +13,8 @@ import { useAuth } from '@clerk/expo';
 import {
   applyKnowledgeInsightsToState,
   clearConversationKnowledge,
+  fileKnowledgeNoteToState,
+  type FileKnowledgeNoteStatus,
 } from './knowledgeState';
 import {
   compactBoardPositions,
@@ -156,6 +158,12 @@ type VenomContextType = {
     conversation: Pick<Conversation, 'id' | 'title' | 'projectId'>,
     insights: KnowledgeInsight[],
   ) => void;
+  fileKnowledgeNote: (input: {
+    userId: string;
+    projectId: string;
+    note: string;
+    insights: KnowledgeInsight[];
+  }) => FileKnowledgeNoteStatus | 'account_changed';
   renameKnowledgeCluster: (clusterId: string, label: string) => void;
   deleteKnowledgeCluster: (clusterId: string) => void;
   mergeKnowledgeClusters: (
@@ -1922,6 +1930,37 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const fileKnowledgeNote = useCallback(
+    (input: {
+      userId: string;
+      projectId: string;
+      note: string;
+      insights: KnowledgeInsight[];
+    }): FileKnowledgeNoteStatus | 'account_changed' => {
+      if (
+        activeUserIdRef.current !== input.userId ||
+        hydratedUserRef.current !== input.userId
+      ) {
+        return 'account_changed';
+      }
+
+      const result = fileKnowledgeNoteToState({
+        state: latestStateRef.current,
+        projectId: input.projectId,
+        note: input.note,
+        insights: input.insights,
+        now: Date.now(),
+        generateId,
+      });
+      if (result.status === 'filed') {
+        latestStateRef.current = result.state;
+        setState(result.state);
+      }
+      return result.status;
+    },
+    [],
+  );
+
   const renameKnowledgeCluster = useCallback(
     (clusterId: string, label: string) => {
       const cleanedLabel = label.trim();
@@ -2076,6 +2115,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       clearConversation,
       createNewConversation,
       applyKnowledgeInsights,
+      fileKnowledgeNote,
       renameKnowledgeCluster,
       deleteKnowledgeCluster,
       mergeKnowledgeClusters,
@@ -2095,6 +2135,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       importDeviceWorkspace,
       isReady,
       lastSyncedAt,
+      fileKnowledgeNote,
       mergeKnowledgeClusters,
       moveTask,
       renameKnowledgeCluster,
