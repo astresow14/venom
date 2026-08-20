@@ -3,6 +3,7 @@
  * App.tsx imports from this path.
  */
 export {
+  IS_UI_TEST,
   VenomWorkspaceProvider,
   useVenomWorkspace,
 } from './VenomWorkspaceContext';

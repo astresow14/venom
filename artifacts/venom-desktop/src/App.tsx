@@ -141,6 +141,8 @@ function HomeRedirect() {
 }
 
 function ProtectedWorkspace({ children }: { children: ReactNode }) {
+  if (IS_UI_TEST) return children;
+
   return (
     <>
       <Show when="signed-in">{children}</Show>

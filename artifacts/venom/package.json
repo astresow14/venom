@@ -8,7 +8,7 @@
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm run test:unit && pnpm run test:web",
+    "test": "pnpm run test:unit && pnpm run test:web && pnpm --filter @workspace/venom-desktop run test:web",
     "test:unit": "node --test --experimental-strip-types context/**/*.test.mjs",
     "pretest:web": "playwright install chromium",
     "test:web": "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$(command -v chromium || true) playwright test",

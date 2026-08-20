@@ -261,7 +261,7 @@ export default function BrainPage() {
       <main
         ref={canvasRef}
         className="flex-1 bg-background relative overflow-hidden touch-none select-none cursor-grab active:cursor-grabbing"
-        aria-label="Knowledge map. Drag to orbit, use the zoom controls or mouse wheel to change depth."
+        aria-label={`Knowledge map with ${clusters.length} nodes. Drag to orbit, use the zoom controls or mouse wheel to change depth. Camera yaw ${camera.yaw.toFixed(3)}, pitch ${camera.pitch.toFixed(3)}, zoom ${camera.zoom.toFixed(3)}.`}
         role="region"
         onPointerDown={(event) => {
           if (event.button !== 0) return;

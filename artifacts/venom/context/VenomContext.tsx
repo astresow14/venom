@@ -452,6 +452,19 @@ function pruneKnowledgeSources(
 function createDefaultState(): VenomState {
   const now = Date.now();
   const boardStages = createDefaultBoardStages('proj_default', now);
+  const brainFixture =
+    IS_UI_TEST && typeof globalThis.location?.search === 'string'
+      ? new URLSearchParams(globalThis.location.search).get('brainFixture')
+      : null;
+  const fixtureClusters =
+    brainFixture === 'sparse'
+      ? defaultClusters.slice(0, 2).map((cluster) => ({
+          ...cluster,
+          links: cluster.links.filter((id) =>
+            defaultClusters.slice(0, 2).some((candidate) => candidate.id === id),
+          ),
+        }))
+      : defaultClusters;
   return {
     projects: [
       {
@@ -503,7 +516,7 @@ function createDefaultState(): VenomState {
         messages: [],
       },
     ],
-    clusters: defaultClusters,
+    clusters: fixtureClusters,
     activeProjectId: 'proj_default',
     activeConversationId: 'conv_default',
     tombstones: createEmptyTombstones(),

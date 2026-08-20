@@ -54,24 +54,6 @@ import {
   type WorkspaceState,
 } from '@/lib/workspaceState';
 
-// ---------------------------------------------------------------------------
-// Re-export types so pages can import from one place
-// ---------------------------------------------------------------------------
-export type {
-  Conversation,
-  KnowledgeCluster,
-  KnowledgeInsight,
-  KnowledgeSource,
-  Project,
-  SyncStatus,
-  WorkspaceState,
-};
-export type { VenomTask as Task, VenomTaskStatus as TaskStatus, VenomMessage as Message, VenomMessageStatus };
-
-// ---------------------------------------------------------------------------
-// Context shape
-// ---------------------------------------------------------------------------
-
 export type VenomWorkspaceContextType = {
   state: WorkspaceState;
   isReady: boolean;
@@ -153,12 +135,15 @@ type SyncController = {
 // ---------------------------------------------------------------------------
 
 export function VenomWorkspaceProvider({ children }: { children: React.ReactNode }) {
-  const { userId } = useAuth();
+  const { userId: authenticatedUserId } = useAuth();
+  const userId = IS_UI_TEST ? UI_TEST_USER_ID : authenticatedUserId;
 
   // ── core state ────────────────────────────────────────────────────────────
-  const [state, setState] = useState<WorkspaceState>(() => createDefaultState());
-  const [isReady, setIsReady] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('loading');
+  const [state, setState] = useState<WorkspaceState>(createInitialWorkspaceState);
+  const [isReady, setIsReady] = useState(IS_UI_TEST);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(
+    IS_UI_TEST ? 'synced' : 'loading',
+  );
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   // ── refs that must survive re-renders without triggering them ─────────────
@@ -187,7 +172,7 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
   // ── cloud query – enabled only when signed in ─────────────────────────────
   const workspaceQuery = useGetVenomWorkspace({
     query: {
-      enabled: Boolean(userId),
+      enabled: Boolean(userId) && !IS_UI_TEST,
       queryKey: [...getGetVenomWorkspaceQueryKey(), userId ?? 'signed-out'],
       retry: 2,
       refetchOnMount: 'always',
@@ -296,6 +281,8 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
 
   // ── initialise / reset when userId changes ────────────────────────────────
   useEffect(() => {
+    if (IS_UI_TEST) return;
+
     if (!userId) {
       // Signed out – reset everything immediately
       hydratedUserRef.current = null;
@@ -322,6 +309,8 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
 
   // ── hydrate once cloud query settles ─────────────────────────────────────
   useEffect(() => {
+    if (IS_UI_TEST) return;
+
     if (
       !userId ||
       hydratedUserRef.current === userId ||
@@ -399,6 +388,7 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
 
   // ── debounced sync on state changes ──────────────────────────────────────
   useEffect(() => {
+    if (IS_UI_TEST) return;
     if (!isReady || !userId || hydratedUserRef.current !== userId) return;
 
     const serialized = JSON.stringify(state);
@@ -863,4 +853,28 @@ export function useVenomWorkspace(): VenomWorkspaceContextType {
     throw new Error('useVenomWorkspace must be used within VenomWorkspaceProvider');
   }
   return context;
+}
+
+export const IS_UI_TEST =
+  import.meta.env.DEV && import.meta.env.VITE_VENOM_UI_TEST === 'true';
+
+const UI_TEST_USER_ID = 'venom-desktop-ui-test';
+
+function createInitialWorkspaceState(): WorkspaceState {
+  const state = createDefaultState();
+  if (!IS_UI_TEST) return state;
+
+  const brainFixture = new URLSearchParams(window.location.search).get(
+    'brainFixture',
+  );
+  if (brainFixture !== 'sparse') return state;
+
+  const clusterIds = new Set(state.clusters.slice(0, 2).map(({ id }) => id));
+  return {
+    ...state,
+    clusters: state.clusters.slice(0, 2).map((cluster) => ({
+      ...cluster,
+      links: cluster.links.filter((id) => clusterIds.has(id)),
+    })),
+  };
 }
