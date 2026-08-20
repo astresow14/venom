@@ -24,6 +24,7 @@ import {
   normalizeProjectBoard,
   type BoardValue,
 } from './boardState';
+import { workspaceSyncRetryDelay } from './workspaceSyncRetry';
 import {
   ApiError,
   getGetVenomWorkspaceQueryKey,
@@ -720,7 +721,27 @@ type SyncController = {
   userId: string | null;
   inFlight: boolean;
   queued: VenomState | null;
+  retryAttempt: number;
+  retryTimer: ReturnType<typeof setTimeout> | null;
 };
+
+function createSyncController(userId: string | null): SyncController {
+  return {
+    userId,
+    inFlight: false,
+    queued: null,
+    retryAttempt: 0,
+    retryTimer: null,
+  };
+}
+
+function cancelSyncController(controller: SyncController) {
+  if (controller.retryTimer) {
+    clearTimeout(controller.retryTimer);
+  }
+  controller.retryTimer = null;
+  controller.queued = null;
+}
 
 const VenomContext = createContext<VenomContextType | null>(null);
 
@@ -743,19 +764,15 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
   const hydratedUserRef = useRef<string | null>(null);
   const lastSerializedRef = useRef('');
   const activeUserIdRef = useRef<string | null>(userId ?? null);
-  const syncControllerRef = useRef<SyncController>({
-    userId: userId ?? null,
-    inFlight: false,
-    queued: null,
-  });
+  const syncControllerRef = useRef<SyncController>(
+    createSyncController(userId ?? null),
+  );
+  const flushCloudStateRef = useRef<(nextState: VenomState) => void>(() => {});
 
   if (activeUserIdRef.current !== (userId ?? null)) {
+    cancelSyncController(syncControllerRef.current);
     activeUserIdRef.current = userId ?? null;
-    syncControllerRef.current = {
-      userId: userId ?? null,
-      inFlight: false,
-      queued: null,
-    };
+    syncControllerRef.current = createSyncController(userId ?? null);
   }
 
   const workspaceQuery = useGetVenomWorkspace({
@@ -819,7 +836,9 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
             scopedStateIsValid = true;
           }
         } catch {
-          setSyncStatus('error');
+          if (!cancelled && activeUserIdRef.current === userId) {
+            setSyncStatus('error');
+          }
         }
       }
 
@@ -830,7 +849,9 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
             restoredLegacy = normalizeWorkspaceState(parsed);
           }
         } catch {
-          setSyncStatus('error');
+          if (!cancelled && activeUserIdRef.current === userId) {
+            setSyncStatus('error');
+          }
         }
       }
 
@@ -846,6 +867,33 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, [userId]);
+
+  const scheduleCloudRetry = useCallback(
+    (controller: SyncController, syncUserId: string) => {
+      if (
+        controller.retryTimer ||
+        syncControllerRef.current !== controller ||
+        activeUserIdRef.current !== syncUserId
+      ) {
+        return;
+      }
+
+      const delay = workspaceSyncRetryDelay(controller.retryAttempt);
+      controller.retryAttempt += 1;
+      controller.retryTimer = setTimeout(() => {
+        controller.retryTimer = null;
+        if (
+          syncControllerRef.current !== controller ||
+          activeUserIdRef.current !== syncUserId ||
+          !controller.queued
+        ) {
+          return;
+        }
+        flushCloudStateRef.current(controller.queued);
+      }, delay);
+    },
+    [],
+  );
 
   const flushCloudState = useCallback(
     async (nextState: VenomState) => {
@@ -880,6 +928,16 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
               syncControllerRef.current !== controller ||
               activeUserIdRef.current !== syncUserId
             ) {
+              if (
+                syncControllerRef.current === controller &&
+                activeUserIdRef.current === syncUserId
+              ) {
+                controller.queued = controller.queued
+                  ? mergeWorkspaceStates(stateToSave, controller.queued)
+                  : stateToSave;
+                setSyncStatus('error');
+                scheduleCloudRetry(controller, syncUserId);
+              }
               return;
             }
 
@@ -903,10 +961,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
             lastSerializedRef.current = serialized;
             setLastSyncedAt(saved.updatedAt);
             setSyncStatus('synced');
-            await AsyncStorage.setItem(
-              storageKeyFor(syncUserId),
-              serialized,
-            );
+            controller.retryAttempt = 0;
 
             const queued = controller.queued;
             controller.queued = null;
@@ -916,6 +971,12 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
               candidate = null;
             }
           } catch (error) {
+            if (
+              syncControllerRef.current !== controller ||
+              activeUserIdRef.current !== syncUserId
+            ) {
+              return;
+            }
             if (error instanceof ApiError && error.status === 413) {
               controller.queued = null;
               setSyncStatus('too_large');
@@ -941,8 +1002,11 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
               }
             }
 
-            controller.queued = null;
+            controller.queued = controller.queued
+              ? mergeWorkspaceStates(stateToSave, controller.queued)
+              : stateToSave;
             setSyncStatus('error');
+            scheduleCloudRetry(controller, syncUserId);
             candidate = null;
           }
         }
@@ -950,8 +1014,35 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         controller.inFlight = false;
       }
     },
-    [getToken, userId],
+    [getToken, scheduleCloudRetry, userId],
   );
+
+  flushCloudStateRef.current = (nextState) => {
+    void flushCloudState(nextState);
+  };
+
+  useEffect(() => {
+    const effectUserId = userId ?? null;
+    if (
+      activeUserIdRef.current !== effectUserId ||
+      syncControllerRef.current.userId !== effectUserId
+    ) {
+      cancelSyncController(syncControllerRef.current);
+      activeUserIdRef.current = effectUserId;
+      syncControllerRef.current = createSyncController(effectUserId);
+    }
+    const controller = syncControllerRef.current;
+
+    return () => {
+      cancelSyncController(controller);
+      if (syncControllerRef.current === controller) {
+        syncControllerRef.current = createSyncController(null);
+      }
+      if (activeUserIdRef.current === effectUserId) {
+        activeUserIdRef.current = null;
+      }
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (
