@@ -37,6 +37,7 @@ import Animated, {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { useColors } from "@/hooks/useColors";
+import { useTheme } from "@/context/ThemeContext";
 import {
   useVenom,
   Message,
@@ -817,6 +818,7 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
 
 export default function WorkspaceScreen() {
   const colors = useColors();
+  const { theme, toggleTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const { state } = useVenom();
 
@@ -900,19 +902,36 @@ export default function WorkspaceScreen() {
             );
           })}
         </View>
-        <TouchableOpacity style={styles.navProject} activeOpacity={0.7}>
-          <Text
-            style={[styles.navProjectText, { color: colors.foreground }]}
-            numberOfLines={1}
+        <View style={styles.navActions}>
+          <TouchableOpacity
+            onPress={toggleTheme}
+            style={styles.themeButton}
+            accessibilityRole="switch"
+            accessibilityLabel={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+            accessibilityState={{ checked: theme === "dark" }}
+            testID="theme-toggle"
+            hitSlop={8}
           >
-            {activeProject?.name || "Workspace"}
-          </Text>
-          <Feather
-            name="chevron-down"
-            size={14}
-            color={colors.mutedForeground}
-          />
-        </TouchableOpacity>
+            <Feather
+              name={theme === "light" ? "moon" : "sun"}
+              size={17}
+              color={colors.foreground}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navProject} activeOpacity={0.7}>
+            <Text
+              style={[styles.navProjectText, { color: colors.foreground }]}
+              numberOfLines={1}
+            >
+              {activeProject?.name || "Workspace"}
+            </Text>
+            <Feather
+              name="chevron-down"
+              size={14}
+              color={colors.mutedForeground}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Swipeable Workspaces */}
@@ -983,7 +1002,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     flexShrink: 1,
-    marginLeft: 12,
+    marginLeft: 4,
+  },
+  navActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+    marginLeft: 8,
+  },
+  themeButton: {
+    width: 30,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   navProjectText: {
     fontSize: 13,
