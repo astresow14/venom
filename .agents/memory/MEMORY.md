@@ -2,6 +2,7 @@
 - [Orval generated EOF normalization](orval-generated-eof.md) — codegen may add blank EOF lines that fail diff checks; normalize generated tails after regeneration.
 - [Workspace dependency lock ownership](workspace-dependency-lock-ownership.md) — root package callbacks cannot repair a child package’s pnpm importer; regenerate the workspace lock after scoped manifest changes.
 - [Mobile workspace paging](mobile-workspace-paging.md) — keep workspace screens mounted and isolated; RN Web scroll paging can expose adjacent screens at artifact widths.
+- [API server TypeScript test bundling](api-server-ts-test-bundling.md) — strip-types can't load extensionless TS imports; bundle route tests with esbuild in CJS when Express is involved.
 - [Playwright on Replit Nix](playwright-on-replit-nix.md) — downloaded Chromium still needs explicit Nix runtime libraries before browser validation can launch.
 - [Workspace sync identity boundaries](workspace-sync-identity-boundaries.md) — bind saves to the initiating account; never let a later session authorize stale work.
 - [Expo Worklets under pnpm](expo-worklets-pnpm.md) — own the matching Babel preset, clear Metro caches, and verify served Worklets metadata after Babel changes.

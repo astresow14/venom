@@ -51,6 +51,8 @@ import { useTheme } from "@/context/ThemeContext";
 import {
   useVenom,
   IS_READ_ONLY_UI_TEST,
+  IS_UI_TEST,
+  UI_TEST_USER_ID,
   Message,
   KnowledgeCluster,
   Task,
@@ -62,6 +64,10 @@ import {
 import { extractVenomKnowledge } from "@workspace/api-client-react";
 import { BrainNoteComposer } from "@/components/BrainNoteComposer";
 import { buildChatProjectContextBundle } from "@/context/sourceContext";
+
+// Browser UI tests run without a Clerk session, so chat uses a stand-in
+// identity and token that only exist in the development UI-test bundle.
+const UI_TEST_CHAT_TOKEN = "venom-ui-test-chat-token";
 
 let messageCounter = 0;
 function generateUniqueId(): string {
@@ -78,7 +84,10 @@ function ChatWorkspace({
   isActive: boolean;
   activeProject: any;
 }) {
-  const { getToken, userId } = useAuth();
+  const { getToken, userId: authenticatedUserId } = useAuth();
+  const userId = IS_UI_TEST
+    ? UI_TEST_USER_ID
+    : (authenticatedUserId ?? null);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const {
@@ -184,7 +193,7 @@ function ChatWorkspace({
     try {
       const domain = process.env.EXPO_PUBLIC_DOMAIN;
       if (!domain) throw new Error("API domain is unavailable");
-      const token = await getToken();
+      const token = IS_UI_TEST ? UI_TEST_CHAT_TOKEN : await getToken();
       if (
         !token ||
         activeUserIdRef.current !== initiatingUserId ||
