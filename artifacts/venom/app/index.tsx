@@ -2119,7 +2119,7 @@ export default function WorkspaceScreen() {
         ]}
       >
         <View style={styles.navTabs}>
-          {["Chat", "Feed", "Notes", "To-Do"].map((title, i) => {
+          {["Chat", "Feed", "Brain", "To-Do"].map((title, i) => {
             const isActive = activeIndex === i;
             return (
               <TouchableOpacity
