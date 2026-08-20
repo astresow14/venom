@@ -44,6 +44,29 @@ async function expectTabStops(
     );
 }
 
+async function expectVisibleTabFocus(
+  page: Page,
+  title: (typeof WORKSPACE_TABS)[number],
+) {
+  const workspaceTab = tab(page, title);
+  await expect(workspaceTab).toBeFocused();
+
+  const focusRing = await workspaceTab.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      color: style.outlineColor,
+      offset: Number.parseFloat(style.outlineOffset),
+      style: style.outlineStyle,
+      width: Number.parseFloat(style.outlineWidth),
+    };
+  });
+
+  expect(focusRing.style).toBe("solid");
+  expect(focusRing.width).toBeGreaterThanOrEqual(2);
+  expect(focusRing.offset).toBeGreaterThanOrEqual(2);
+  expect(focusRing.color).not.toBe("rgba(0, 0, 0, 0)");
+}
+
 async function swipeWorkspaceLeft(page: Page) {
   const workspace = page.getByTestId("workspace-chat");
   const bounds = await workspace.boundingBox();
@@ -114,4 +137,25 @@ test("supports a predictable keyboard tab pattern", async ({ page }) => {
   await page.keyboard.press("ArrowLeft");
   await expect(tab(page, "To-Do")).toBeFocused();
   await expectOnlySelected(page, "Brain");
+});
+
+test("keeps keyboard focus visible in forced colors without selecting the tab", async ({
+  page,
+}) => {
+  await page.emulateMedia({ forcedColors: "active" });
+  await page.goto("/");
+  await expect
+    .poll(() => page.evaluate(() => matchMedia("(forced-colors: active)").matches))
+    .toBe(true);
+
+  await tab(page, "Chat").focus();
+  await page.keyboard.press("ArrowRight");
+  await expectVisibleTabFocus(page, "Feed");
+  await expectOnlySelected(page, "Chat");
+
+  await page.getByTestId("theme-toggle").click();
+  await tab(page, "Chat").focus();
+  await page.keyboard.press("ArrowRight");
+  await expectVisibleTabFocus(page, "Feed");
+  await expectOnlySelected(page, "Chat");
 });

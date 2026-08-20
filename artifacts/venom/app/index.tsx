@@ -3947,7 +3947,13 @@ export default function WorkspaceScreen() {
                     currentIndex === i ? null : currentIndex,
                   )
                 }
-                style={[styles.navTab, isFocused && styles.navTabFocused]}
+                style={[
+                  styles.navTab,
+                  isFocused && [
+                    styles.navTabFocused,
+                    { outlineColor: colors.foreground },
+                  ],
+                ]}
                 hitSlop={10}
                 testID={`workspace-tab-${title.toLowerCase().replace("-", "")}`}
                 accessibilityRole="tab"
@@ -4195,6 +4201,9 @@ const styles = StyleSheet.create({
   },
   navTabFocused: {
     backgroundColor: "rgba(128, 128, 128, 0.2)",
+    outlineStyle: "solid",
+    outlineWidth: 2,
+    outlineOffset: 2,
   },
   navTabText: {
     fontSize: 15,
