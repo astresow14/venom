@@ -41,3 +41,7 @@ test-results/
 .vercel
 
 .env
+
+# Browser test output
+test-results/
+playwright-report/
