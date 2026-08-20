@@ -64,6 +64,12 @@ test("Kanban editing stays connected, accessible, and persistent", async ({
   await page.goto("/?venomUiTest=true");
   await openBoard(page);
 
+  // TEMPORARY: intentional regression used to verify that the required
+  // "Kanban browser regression" check blocks merging. Reverted after verification.
+  await expect(
+    page.getByRole("button", { name: "Intentional CI guard regression" }),
+  ).toBeVisible({ timeout: 5_000 });
+
   await page.getByRole("button", { name: "Add card to To Do" }).click();
   const newTaskInput = page.getByLabel("New task title for To Do");
   await expect(newTaskInput).toBeFocused();
