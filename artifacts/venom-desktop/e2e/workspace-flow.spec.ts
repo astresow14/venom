@@ -201,3 +201,5 @@ test('starts a new thread from the drawer and keeps it in recent threads', async
     secondDrawer.locator('button[aria-current="page"]'),
   ).toHaveCount(1);
 });
+
+// ci guard verification: desktop-scoped change
