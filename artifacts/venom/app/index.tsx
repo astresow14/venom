@@ -2321,6 +2321,7 @@ export default function WorkspaceScreen() {
                 accessibilityRole="tab"
                 accessibilityLabel={`Open ${title} workspace`}
                 accessibilityState={{ selected: isActive }}
+                aria-selected={isActive}
               >
                 <Text
                   style={[
