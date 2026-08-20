@@ -361,6 +361,7 @@ function createBoardWorkspace() {
     ],
     conversations: [],
     clusters: [],
+    sources: [],
     activeProjectId: "project-board",
     activeConversationId: null,
     tombstones: {
@@ -371,6 +372,7 @@ function createBoardWorkspace() {
       clusters: [],
       stages: [],
       fields: [],
+      sources: [],
     },
   };
 }

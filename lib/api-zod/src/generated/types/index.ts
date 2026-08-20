@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './attestedSourceSnapshot';
+export * from './gitHubRepository';
+export * from './gitHubSourceInput';
 export * from './healthStatus';
 export * from './knowledgeCandidate';
 export * from './knowledgeConversation';
@@ -13,7 +16,14 @@ export * from './knowledgeExtraction';
 export * from './knowledgeExtractionInput';
 export * from './knowledgeMessage';
 export * from './knowledgeMessageRole';
+export * from './projectSource';
+export * from './projectSourceProvider';
+export * from './projectSourceStatus';
 export * from './saveVenomWorkspace413';
+export * from './sourceCitation';
+export * from './sourceCitationKind';
+export * from './sourceCitationProvider';
+export * from './sourceCluster';
 export * from './venomChatMessage';
 export * from './venomChatMessageRole';
 export * from './venomChatRequest';
@@ -37,3 +47,4 @@ export * from './venomWorkspaceSaveInput';
 export * from './venomWorkspaceSnapshot';
 export * from './venomWorkspaceState';
 export * from './venomWorkspaceTombstones';
+export * from './websiteSourceInput';

@@ -22,14 +22,98 @@ export interface VenomChatMessage {
   content: string;
 }
 
+export type SourceCitationProvider = typeof SourceCitationProvider[keyof typeof SourceCitationProvider];
+
+
+export const SourceCitationProvider = {
+  github: 'github',
+  website: 'website',
+} as const;
+
+export type SourceCitationKind = typeof SourceCitationKind[keyof typeof SourceCitationKind];
+
+
+export const SourceCitationKind = {
+  repository: 'repository',
+  issue: 'issue',
+  pull_request: 'pull_request',
+  website: 'website',
+} as const;
+
+export interface SourceCitation {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     * @pattern ^[A-Za-z0-9_-]{1,160}$
+     */
+  id: string;
+  provider: SourceCitationProvider;
+  kind: SourceCitationKind;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  title: string;
+  /** @maxLength 2048 */
+  url: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  excerpt: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     * @nullable
+     */
+  reference: string | null;
+}
+
+export interface AttestedSourceSnapshot {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     * @pattern ^[A-Za-z0-9_-]{1,160}$
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  context: string;
+  /**
+     * @minItems 1
+     * @maxItems 50
+     */
+  citations: SourceCitation[];
+  /**
+     * @minLength 1
+     * @maxLength 2048
+     * @pattern ^v1\.[A-Za-z0-9_-]{2,214}\.[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$
+     */
+  attestation: string;
+}
+
 export interface VenomChatRequest {
   /**
      * @minItems 1
      * @maxItems 24
      */
   messages: VenomChatMessage[];
-  /** @maxLength 1000 */
+  /** @maxLength 8000 */
   projectContext?: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  projectId: string;
+  /**
+     * @maxItems 200
+     * @items.pattern ^[A-Za-z0-9_-]{1,160}$
+     */
+  sourceCitationIds?: string[];
+  /** @maxItems 32 */
+  sourceSnapshots?: AttestedSourceSnapshot[];
 }
 
 export interface KnowledgeConversation {
@@ -142,6 +226,103 @@ export interface VenomNoteImprovement {
      * @items.maxLength 160
      */
   changeNotes: string[];
+}
+
+export interface GitHubRepository {
+  fullName: string;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  url: string;
+  updatedAt: string;
+}
+
+export interface GitHubSourceInput {
+  /**
+     * @minLength 3
+     * @maxLength 200
+     */
+  repository: string;
+}
+
+export interface WebsiteSourceInput {
+  /** @maxLength 2048 */
+  url: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name?: string;
+}
+
+export interface SourceCluster {
+  id: string;
+  label: string;
+  category: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  strength: number;
+  citationIds: string[];
+}
+
+export type ProjectSourceProvider = typeof ProjectSourceProvider[keyof typeof ProjectSourceProvider];
+
+
+export const ProjectSourceProvider = {
+  github: 'github',
+  website: 'website',
+} as const;
+
+export type ProjectSourceStatus = typeof ProjectSourceStatus[keyof typeof ProjectSourceStatus];
+
+
+export const ProjectSourceStatus = {
+  connected: 'connected',
+  error: 'error',
+} as const;
+
+export interface ProjectSource {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  projectId: string;
+  provider: ProjectSourceProvider;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  name: string;
+  /** @maxLength 2048 */
+  url: string;
+  status: ProjectSourceStatus;
+  syncedAt: string;
+  /** @maxLength 1000 */
+  summary: string;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  context: string;
+  /**
+     * @minItems 1
+     * @maxItems 50
+     */
+  citations: SourceCitation[];
+  clusters: SourceCluster[];
+  /**
+     * @minLength 1
+     * @maxLength 2048
+     * @pattern ^v1\.[A-Za-z0-9_-]{2,214}\.[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$
+     */
+  attestation?: string;
 }
 
 /**
@@ -424,6 +605,8 @@ export interface VenomWorkspaceTombstones {
   stages: VenomDeletionMarker[];
   /** @maxItems 20000 */
   fields: VenomDeletionMarker[];
+  /** @maxItems 2000 */
+  sources: VenomDeletionMarker[];
 }
 
 export interface VenomWorkspaceState {
@@ -433,6 +616,8 @@ export interface VenomWorkspaceState {
   conversations: VenomConversation[];
   /** @maxItems 1000 */
   clusters: VenomKnowledgeCluster[];
+  /** @maxItems 500 */
+  sources: ProjectSource[];
   /**
      * @maxLength 120
      * @nullable

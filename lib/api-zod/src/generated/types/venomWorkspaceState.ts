@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ProjectSource } from './projectSource';
 import type { VenomConversation } from './venomConversation';
 import type { VenomKnowledgeCluster } from './venomKnowledgeCluster';
 import type { VenomProject } from './venomProject';
@@ -17,6 +18,8 @@ export interface VenomWorkspaceState {
   conversations: VenomConversation[];
   /** @maxItems 1000 */
   clusters: VenomKnowledgeCluster[];
+  /** @maxItems 500 */
+  sources: ProjectSource[];
   /**
      * @maxLength 120
      * @nullable

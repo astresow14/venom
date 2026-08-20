@@ -11,6 +11,7 @@ A mobile-first AI intelligence workspace combining live chat, local projects, an
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
+- Required for the shared GitHub source connector: `VENOM_GITHUB_MEMBER_IDS` — comma-separated Clerk user IDs explicitly approved to use the workspace GitHub connection. This allowlist fails closed; update it whenever workspace membership changes.
 
 ## Stack
 
@@ -32,7 +33,7 @@ A mobile-first AI intelligence workspace combining live chat, local projects, an
 
 - The first release persists projects and conversation history on-device with AsyncStorage.
 - AI responses stream through the shared API server using Replit's managed OpenAI integration.
-- External databases and software connections are future workspace capabilities; the current UI never claims a source is connected when it is not.
+- Public websites can be connected by signed-in users. The deployment's GitHub connector is a shared workspace credential and is available only to Clerk users listed in `VENOM_GITHUB_MEMBER_IDS`.
 
 ## Product
 

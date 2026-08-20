@@ -41,6 +41,7 @@ import {
   saveWorkspaceForSyncTest,
   WORKSPACE_SYNC_UI_TEST_USER_ID,
 } from './workspaceSyncTestHarness';
+import { mergeProjectSources } from './sourceState';
 import {
   ApiError,
   getGetVenomWorkspaceQueryKey,
@@ -55,11 +56,16 @@ import {
   type VenomKanbanStage,
   type VenomMessage,
   type VenomProject,
+  type ProjectSource,
+  type SourceCitation,
+  type SourceCluster,
   type VenomTask,
   type VenomTaskStatus,
   type VenomWorkspaceSnapshot,
   type VenomWorkspaceState,
 } from '@workspace/api-client-react';
+
+export type { ProjectSource, SourceCitation, SourceCluster };
 
 export type Project = VenomProject;
 export type Task = VenomTask;
@@ -94,10 +100,12 @@ type VenomContextType = {
       Project,
       'id' | 'updatedAt' | 'tasks' | 'boardStages' | 'fieldDefinitions'
     >,
-  ) => void;
+  ) => string;
   updateProject: (id: string, project: Partial<Project>) => void;
   deleteProject: (id: string) => void;
   setActiveProject: (id: string | null) => void;
+  addSource: (source: ProjectSource) => void;
+  removeSource: (sourceId: string) => void;
   addTask: (projectId: string, title: string, stageId?: string) => void;
   updateTask: (
     projectId: string,
@@ -265,6 +273,7 @@ const defaultClusters: KnowledgeCluster[] = [
 
 const LEGACY_STORAGE_KEYS = ['@venom_state_v3', '@venom_state_v1'] as const;
 const storageKeyFor = (userId: string) => `@venom_state_v2:${userId}`;
+const sourcesKeyFor = (userId: string) => `@venom_sources_v1:${userId}`;
 const generateId = (prefix: string) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 const normalizeLabel = (label: string) => label.trim().toLocaleLowerCase();
@@ -395,6 +404,7 @@ function createDefaultState(): VenomState {
       },
     ],
     clusters: fixtureClusters,
+    sources: [],
     activeProjectId: 'proj_default',
     activeConversationId: 'conv_default',
     tombstones: createEmptyTombstones(),
@@ -523,9 +533,10 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     lastSerializedRef.current = '';
 
     void (async () => {
-      const [scopedData, legacyEntries] = await Promise.all([
+      const [scopedData, legacyEntries, sourcesData] = await Promise.all([
         AsyncStorage.getItem(storageKeyFor(userId)),
         AsyncStorage.multiGet([...LEGACY_STORAGE_KEYS]),
+        AsyncStorage.getItem(sourcesKeyFor(userId)),
       ]);
       const legacyData =
         legacyEntries.find(([, storedValue]) => storedValue !== null)?.[1] ??
@@ -533,6 +544,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       let restored = createDefaultState();
       let restoredLegacy: VenomState | null = null;
       let scopedStateIsValid = false;
+      let migratedSources: ProjectSource[] = [];
 
       if (scopedData) {
         try {
@@ -561,8 +573,26 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      if (sourcesData) {
+        try {
+          const parsedSources: unknown = JSON.parse(sourcesData);
+          if (Array.isArray(parsedSources)) {
+            migratedSources = parsedSources as ProjectSource[];
+          }
+        } catch {
+          // Legacy connected-source storage is optional.
+        }
+      }
+
       if (!cancelled) {
-        setLocalState(restored);
+        setLocalState({
+          ...restored,
+          sources: mergeProjectSources(
+            restored.sources,
+            migratedSources,
+            restored.tombstones?.sources ?? [],
+          ),
+        });
         setLegacyState(restoredLegacy);
         setHasScopedState(scopedStateIsValid);
         setLocalUserId(userId);
@@ -857,6 +887,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         ...current,
         projects: [...current.projects, newProject],
       }));
+      return id;
     },
     [],
   );
@@ -885,6 +916,9 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       const removedClusters = current.clusters.filter(
         (cluster) => cluster.projectId === id,
       );
+      const removedSources = current.sources.filter(
+        (source) => source.projectId === id,
+      );
       const conversations = current.conversations.filter(
         (conversation) => conversation.projectId !== id,
       );
@@ -899,6 +933,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         clusters: current.clusters.filter(
           (cluster) => cluster.projectId !== id,
         ),
+        sources: current.sources.filter((source) => source.projectId !== id),
         activeProjectId:
           current.activeProjectId === id ? null : current.activeProjectId,
         activeConversationId: activeConversationExists
@@ -932,6 +967,10 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
             project?.fieldDefinitions.map((field) => field.id) ?? [],
             deletedAt,
           ),
+          sources: createDeletionMarkers(
+            removedSources.map((source) => source.id),
+            deletedAt,
+          ),
         }),
       };
     });
@@ -939,6 +978,59 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
   const setActiveProject = useCallback((id: string | null) => {
     setState((current) => ({ ...current, activeProjectId: id }));
+  }, []);
+
+  const addSource = useCallback((source: ProjectSource) => {
+    setState((current) => {
+      const sources = mergeProjectSources(
+        current.sources,
+        [source],
+        current.tombstones?.sources ?? [],
+      );
+      return {
+        ...current,
+        sources,
+        projects: current.projects.map((project) =>
+          project.id === source.projectId
+            ? {
+                ...project,
+                sourceCount: sources.filter(
+                  (item) => item.projectId === source.projectId,
+                ).length,
+                updatedAt: Date.now(),
+              }
+            : project,
+        ),
+      };
+    });
+  }, []);
+
+  const removeSource = useCallback((sourceId: string) => {
+    setState((current) => {
+      const removed = current.sources.find((source) => source.id === sourceId);
+      if (!removed) return current;
+
+      const deletedAt = Date.now();
+      const sources = current.sources.filter((source) => source.id !== sourceId);
+      return {
+        ...current,
+        sources,
+        projects: current.projects.map((project) =>
+          project.id === removed.projectId
+            ? {
+                ...project,
+                sourceCount: sources.filter(
+                  (source) => source.projectId === removed.projectId,
+                ).length,
+                updatedAt: deletedAt,
+              }
+            : project,
+        ),
+        tombstones: mergeTombstones(current.tombstones, {
+          sources: createDeletionMarkers([sourceId], deletedAt),
+        }),
+      };
+    });
   }, []);
 
   const addTask = useCallback(
@@ -1629,6 +1721,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         .map((cluster) => cluster.id);
 
       return {
+        ...current,
         ...cleared,
         conversations: cleared.conversations.map((item) =>
           item.id === id ? { ...item, updatedAt: deletedAt } : item,
@@ -1657,15 +1750,16 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       insights: KnowledgeInsight[],
     ) => {
       const now = Date.now();
-      setState((current) =>
-        applyKnowledgeInsightsToState({
+      setState((current) => ({
+        ...current,
+        ...applyKnowledgeInsightsToState({
           state: current,
           conversation,
           insights,
           now,
           generateId,
         }),
-      );
+      }));
     },
     [],
   );
@@ -1693,8 +1787,12 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         generateId,
       });
       if (result.status === 'filed') {
-        latestStateRef.current = result.state;
-        setState(result.state);
+        const filedState = {
+          ...latestStateRef.current,
+          ...result.state,
+        };
+        latestStateRef.current = filedState;
+        setState(filedState);
       }
       return result.status;
     },
@@ -1837,6 +1935,8 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       updateProject,
       deleteProject,
       setActiveProject,
+      addSource,
+      removeSource,
       addTask,
       updateTask,
       moveTask,
@@ -1864,6 +1964,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       addMessage,
       addFieldDefinition,
       addProject,
+      addSource,
       addStage,
       addTask,
       applyKnowledgeInsights,
@@ -1880,6 +1981,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       moveTask,
       renameKnowledgeCluster,
       removeFieldDefinition,
+      removeSource,
       removeStage,
       reorderFieldDefinition,
       reorderStage,

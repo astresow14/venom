@@ -20,15 +20,19 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  GitHubRepository,
+  GitHubSourceInput,
   HealthStatus,
   KnowledgeExtraction,
   KnowledgeExtractionInput,
+  ProjectSource,
   SaveVenomWorkspace413,
   VenomChatRequest,
   VenomNoteImprovement,
   VenomNoteInput,
   VenomWorkspaceSaveInput,
-  VenomWorkspaceSnapshot
+  VenomWorkspaceSnapshot,
+  WebsiteSourceInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -349,6 +353,227 @@ export const useImproveVenomNote = <TError = ErrorType<void>,
       return useMutation(getImproveVenomNoteMutationOptions(options));
     }
 
+export const getGetGitHubRepositoriesUrl = () => {
+
+
+
+
+  return `/api/venom/github/repositories`
+}
+
+/**
+ * @summary List repositories available through the connected GitHub account
+ */
+export const getGitHubRepositories = async ( options?: Parameters<typeof customFetch>[1]): Promise<GitHubRepository[]> => {
+
+  return customFetch<GitHubRepository[]>(getGetGitHubRepositoriesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGitHubRepositoriesQueryKey = () => {
+    return [
+    `/api/venom/github/repositories`
+    ] as const;
+    }
+
+
+export const getGetGitHubRepositoriesQueryOptions = <TData = Awaited<ReturnType<typeof getGitHubRepositories>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGitHubRepositories>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGitHubRepositoriesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGitHubRepositories>>> = ({ signal }) => getGitHubRepositories({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGitHubRepositories>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGitHubRepositoriesQueryResult = NonNullable<Awaited<ReturnType<typeof getGitHubRepositories>>>
+export type GetGitHubRepositoriesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List repositories available through the connected GitHub account
+ */
+
+export function useGetGitHubRepositories<TData = Awaited<ReturnType<typeof getGitHubRepositories>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGitHubRepositories>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGitHubRepositoriesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getConnectGitHubSourceUrl = (projectId: string,) => {
+
+
+
+
+  return `/api/venom/projects/${projectId}/sources/github`
+}
+
+/**
+ * @summary Sync selected GitHub repository context into a project source
+ */
+export const connectGitHubSource = async (projectId: string,
+    gitHubSourceInput: GitHubSourceInput, options?: Parameters<typeof customFetch>[1]): Promise<ProjectSource> => {
+
+  return customFetch<ProjectSource>(getConnectGitHubSourceUrl(projectId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(gitHubSourceInput)
+  }
+);}
+
+
+
+
+
+export const getConnectGitHubSourceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectGitHubSource>>, TError,{projectId: string;data: BodyType<GitHubSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof connectGitHubSource>>, TError,{projectId: string;data: BodyType<GitHubSourceInput>}, TContext> => {
+
+const mutationKey = ['connectGitHubSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof connectGitHubSource>>, {projectId: string;data: BodyType<GitHubSourceInput>}> = (props) => {
+          const {projectId,data} = props ?? {};
+
+          return  connectGitHubSource(projectId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConnectGitHubSourceMutationResult = NonNullable<Awaited<ReturnType<typeof connectGitHubSource>>>
+    export type ConnectGitHubSourceMutationBody = BodyType<GitHubSourceInput>
+    export type ConnectGitHubSourceMutationError = ErrorType<void>
+
+    /**
+ * @summary Sync selected GitHub repository context into a project source
+ */
+export const useConnectGitHubSource = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectGitHubSource>>, TError,{projectId: string;data: BodyType<GitHubSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof connectGitHubSource>>,
+        TError,
+        {projectId: string;data: BodyType<GitHubSourceInput>},
+        TContext
+      > => {
+      return useMutation(getConnectGitHubSourceMutationOptions(options));
+    }
+
+export const getConnectWebsiteSourceUrl = (projectId: string,) => {
+
+
+
+
+  return `/api/venom/projects/${projectId}/sources/website`
+}
+
+/**
+ * @summary Add publicly available website context to a project source
+ */
+export const connectWebsiteSource = async (projectId: string,
+    websiteSourceInput: WebsiteSourceInput, options?: Parameters<typeof customFetch>[1]): Promise<ProjectSource> => {
+
+  return customFetch<ProjectSource>(getConnectWebsiteSourceUrl(projectId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(websiteSourceInput)
+  }
+);}
+
+
+
+
+
+export const getConnectWebsiteSourceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectWebsiteSource>>, TError,{projectId: string;data: BodyType<WebsiteSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof connectWebsiteSource>>, TError,{projectId: string;data: BodyType<WebsiteSourceInput>}, TContext> => {
+
+const mutationKey = ['connectWebsiteSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof connectWebsiteSource>>, {projectId: string;data: BodyType<WebsiteSourceInput>}> = (props) => {
+          const {projectId,data} = props ?? {};
+
+          return  connectWebsiteSource(projectId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConnectWebsiteSourceMutationResult = NonNullable<Awaited<ReturnType<typeof connectWebsiteSource>>>
+    export type ConnectWebsiteSourceMutationBody = BodyType<WebsiteSourceInput>
+    export type ConnectWebsiteSourceMutationError = ErrorType<void>
+
+    /**
+ * @summary Add publicly available website context to a project source
+ */
+export const useConnectWebsiteSource = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof connectWebsiteSource>>, TError,{projectId: string;data: BodyType<WebsiteSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof connectWebsiteSource>>,
+        TError,
+        {projectId: string;data: BodyType<WebsiteSourceInput>},
+        TContext
+      > => {
+      return useMutation(getConnectWebsiteSourceMutationOptions(options));
+    }
+
 export const getGetVenomWorkspaceUrl = () => {
 
 
@@ -496,4 +721,3 @@ export const useSaveVenomWorkspace = <TError = ErrorType<void | VenomWorkspaceSn
       > => {
       return useMutation(getSaveVenomWorkspaceMutationOptions(options));
     }
-

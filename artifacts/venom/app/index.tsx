@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
   Platform,
   Keyboard,
+  Linking,
   Modal,
   AccessibilityInfo,
   findNodeHandle,
@@ -56,9 +57,11 @@ import {
   KanbanField,
   KanbanFieldType,
   KanbanStage,
+  type ProjectSource,
 } from "@/context/VenomContext";
 import { extractVenomKnowledge } from "@workspace/api-client-react";
 import { BrainNoteComposer } from "@/components/BrainNoteComposer";
+import { buildChatProjectContextBundle } from "@/context/sourceContext";
 
 let messageCounter = 0;
 function generateUniqueId(): string {
@@ -112,6 +115,15 @@ function ChatWorkspace({
     (c) => c.id === state.activeConversationId,
   );
   const contextMessages = activeConv?.messages || [];
+  const projectSources = (state.sources ?? []).filter(
+    (source: ProjectSource) =>
+      source.projectId === activeProject?.id && source.status === "connected",
+  );
+  const citationsById = new Map(
+    projectSources.flatMap((source: ProjectSource) =>
+      source.citations.map((citation) => [citation.id, citation] as const),
+    ),
+  );
 
   const displayMessages = localStreamingMessage
     ? [...contextMessages, localStreamingMessage]
@@ -188,6 +200,15 @@ function ChatWorkspace({
           .map((m) => ({ role: m.role, content: m.content })),
         { role: "user", content: trimmed },
       ];
+      const {
+        context: projectContext,
+        citationIds: sourceCitationIds,
+        sourceSnapshots,
+      } = buildChatProjectContextBundle({
+        projectName: activeProject?.name,
+        projectDescription: activeProject?.description,
+        sources: projectSources,
+      });
 
       const response = await fetch(`${baseUrl}/api/venom/respond`, {
         method: "POST",
@@ -198,9 +219,10 @@ function ChatWorkspace({
         },
         body: JSON.stringify({
           messages: chatHistory,
-          projectContext: activeProject
-            ? `Project: ${activeProject.name}\n${activeProject.description}`
-            : undefined,
+          projectId: initiatingProjectId,
+          projectContext,
+          sourceCitationIds,
+          sourceSnapshots,
         }),
         signal: abortController.signal,
       });
@@ -344,6 +366,25 @@ function ChatWorkspace({
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
+    const content = !isUser
+      ? item.content.split(/(\[source:[^\]]+\])/g).map((part, index) => {
+          const match = part.match(/^\[source:([^\]]+)\]$/);
+          const citation = match ? citationsById.get(match[1]) : undefined;
+          return citation ? (
+            <Text
+              key={`${citation.id}-${index}`}
+              onPress={() => Linking.openURL(citation.url)}
+              accessibilityRole="link"
+              accessibilityLabel={`Open source: ${citation.title}`}
+              style={[styles.citationLink, { color: colors.primary }]}
+            >
+              {citation.title}
+            </Text>
+          ) : (
+            part
+          );
+        })
+      : item.content;
     return (
       <View
         style={[
@@ -369,7 +410,7 @@ function ChatWorkspace({
               { color: isUser ? colors.foreground : colors.foreground },
             ]}
           >
-            {item.content}
+            {content}
           </Text>
         </View>
       </View>
@@ -4394,6 +4435,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     lineHeight: 24,
+  },
+  citationLink: {
+    fontFamily: "Inter_600SemiBold",
+    textDecorationLine: "underline",
   },
   typingContainer: {
     paddingVertical: 12,

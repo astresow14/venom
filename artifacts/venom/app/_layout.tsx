@@ -90,6 +90,7 @@ function RootLayoutNav() {
             <Stack.Screen name="index" />
             <Stack.Screen name="projects" />
             <Stack.Screen name="settings" />
+            <Stack.Screen name="knowledge" />
           </Stack.Protected>
         </Stack>
       </VenomProvider>

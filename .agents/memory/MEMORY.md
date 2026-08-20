@@ -1,7 +1,10 @@
 - [Knowledge extraction contracts](knowledge-extraction-contracts.md) — JSON-only model output still needs server-side normalization, source checks, and schema validation.
+- [Orval generated EOF normalization](orval-generated-eof.md) — codegen may add blank EOF lines that fail diff checks; normalize generated tails after regeneration.
+- [Workspace dependency lock ownership](workspace-dependency-lock-ownership.md) — root package callbacks cannot repair a child package’s pnpm importer; regenerate the workspace lock after scoped manifest changes.
 - [Mobile workspace paging](mobile-workspace-paging.md) — keep workspace screens mounted and isolated; RN Web scroll paging can expose adjacent screens at artifact widths.
 - [Playwright on Replit Nix](playwright-on-replit-nix.md) — downloaded Chromium still needs explicit Nix runtime libraries before browser validation can launch.
 - [Workspace sync identity boundaries](workspace-sync-identity-boundaries.md) — bind saves to the initiating account; never let a later session authorize stale work.
+- [Expo Worklets under pnpm](expo-worklets-pnpm.md) — own the matching Babel preset, clear Metro caches, and verify served Worklets metadata after Babel changes.
 - [Durable draft cleanup](durable-draft-cleanup.md) — serialize draft autosaves with success cleanup so an in-flight write cannot resurrect filed content.
 - [React Native Web checked state](react-native-web-checked-state.md) — mirror checkbox/radio state to web ARIA; accessibilityState alone may not update the browser tree.
 - [React Native Web keyboard events](react-native-web-keyboard-events.md) — raw key handlers on touchables may be filtered; verify the rendered DOM behavior in a browser.

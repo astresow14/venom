@@ -5,6 +5,7 @@ import { SaveVenomWorkspaceBody } from '../../../../lib/api-zod/src/generated/ap
 import { validateVenomBoardState } from '../../../api-server/src/routes/venom-board-validation.ts';
 import {
   availableTaskStatuses,
+  createDefaultState,
   mergeWorkspaceStates,
   normalizeWorkspaceState,
   prepareWorkspaceStateForSave,
@@ -386,4 +387,39 @@ test('oversized board collections are blocked before save without truncation', (
     reason: 'board_limits',
   });
   assert.equal(oversized.projects[0].boardStages.length, 31);
+});
+
+test('connected-source tombstones survive desktop workspace merging', () => {
+  const source = {
+    id: 'source_example',
+    projectId: 'proj_default',
+    provider: 'website',
+    name: 'Example',
+    url: 'https://example.com',
+    status: 'connected',
+    syncedAt: new Date(1_000).toISOString(),
+    summary: 'Example source',
+    context: '[source:example] Example source',
+    citations: [],
+    clusters: [],
+  };
+  const cloud = {
+    ...createDefaultState(),
+    sources: [source],
+  };
+  const device = {
+    ...createDefaultState(),
+    sources: [],
+    tombstones: {
+      ...createDefaultState().tombstones,
+      sources: [{ id: source.id, deletedAt: 2_000 }],
+    },
+  };
+
+  const merged = mergeWorkspaceStates(cloud, device);
+
+  assert.deepEqual(merged.sources, []);
+  assert.deepEqual(merged.tombstones?.sources, [
+    { id: source.id, deletedAt: 2_000 },
+  ]);
 });

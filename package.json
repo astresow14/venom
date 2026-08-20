@@ -10,9 +10,6 @@
     "test:e2e:venom": "pnpm --filter @workspace/venom run test:e2e && pnpm --filter @workspace/venom-desktop run test:e2e"
   },
   "private": true,
-  "dependencies": {
-    "@replit/connectors-sdk": "^0.4.1"
-  },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "prettier": "^3.9.6",

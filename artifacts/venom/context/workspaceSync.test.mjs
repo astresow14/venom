@@ -72,6 +72,7 @@ function state({
   projects,
   conversations,
   clusters,
+  sources = [],
   activeProjectId,
   activeConversationId,
 }) {
@@ -79,6 +80,7 @@ function state({
     projects,
     conversations,
     clusters,
+    sources,
     activeProjectId,
     activeConversationId,
     tombstones: createEmptyTombstones(),
@@ -131,6 +133,47 @@ test("merges both devices after they edit the same account revision", () => {
   );
   assert.equal(merged.activeProjectId, "device-project");
   assert.equal(merged.activeConversationId, "device-chat");
+});
+
+test("source tombstones prevent stale connected sources returning", () => {
+  const connectedSource = {
+    id: "source-example",
+    projectId: "shared",
+    provider: "website",
+    name: "Example",
+    url: "https://example.com",
+    status: "connected",
+    syncedAt: new Date(1_000).toISOString(),
+    summary: "Example source",
+    context: "[source:example] Example source",
+    citations: [],
+    clusters: [],
+  };
+  const cloudState = state({
+    projects: [project("shared", 10)],
+    conversations: [],
+    clusters: [],
+    sources: [connectedSource],
+    activeProjectId: "shared",
+    activeConversationId: null,
+  });
+  const deviceState = state({
+    projects: [project("shared", 10)],
+    conversations: [],
+    clusters: [],
+    activeProjectId: "shared",
+    activeConversationId: null,
+  });
+  deviceState.tombstones.sources = [
+    { id: connectedSource.id, deletedAt: 2_000 },
+  ];
+
+  const merged = mergeWorkspaceStates(cloudState, deviceState);
+
+  assert.deepEqual(merged.sources, []);
+  assert.deepEqual(merged.tombstones.sources, [
+    { id: connectedSource.id, deletedAt: 2_000 },
+  ]);
 });
 
 test("rejects a delayed account save before requesting with a new session", async () => {
@@ -433,4 +476,57 @@ test("restores the complete cloud workspace on a fresh device", () => {
   );
   assert.equal(hydration.state.activeProjectId, "restored-project");
   assert.equal(hydration.state.activeConversationId, "restored-chat");
+});
+
+test("cloud hydration keeps local source deletion without mixing local projects", () => {
+  const connectedSource = {
+    id: "source-example",
+    projectId: "restored-project",
+    provider: "website",
+    name: "Example",
+    url: "https://example.com",
+    status: "connected",
+    syncedAt: new Date(1_000).toISOString(),
+    summary: "Example source",
+    context: "[source:example] Example source",
+    citations: [],
+    clusters: [],
+  };
+  const cloudState = state({
+    projects: [project("restored-project", 100)],
+    conversations: [],
+    clusters: [],
+    sources: [connectedSource],
+    activeProjectId: "restored-project",
+    activeConversationId: null,
+  });
+  const localState = state({
+    projects: [project("stale-local-project", 200)],
+    conversations: [],
+    clusters: [],
+    activeProjectId: "stale-local-project",
+    activeConversationId: null,
+  });
+  localState.tombstones.sources = [
+    { id: connectedSource.id, deletedAt: 2_000 },
+  ];
+
+  const hydration = resolveSuccessfulWorkspaceHydration({
+    cloudState,
+    localState,
+    legacyState: null,
+    hasScopedState: true,
+    createFreshState: () => localState,
+  });
+
+  assert.deepEqual(
+    hydration.state.projects.map((item) => item.id),
+    ["restored-project"],
+  );
+  assert.deepEqual(hydration.state.sources, []);
+  assert.deepEqual(hydration.state.tombstones.sources, [
+    { id: connectedSource.id, deletedAt: 2_000 },
+  ]);
+  assert.equal(hydration.shouldUpload, true);
+  assert.equal(hydration.syncStatus, "syncing");
 });

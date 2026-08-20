@@ -16,13 +16,43 @@ export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
 
-
 /**
  * @summary Stream a response from the Venom assistant
  */
 export const sendVenomMessageBodyMessagesMax = 24;
 
-export const sendVenomMessageBodyProjectContextMax = 1000;
+export const sendVenomMessageBodyProjectContextMax = 8000;
+
+export const sendVenomMessageBodyProjectIdMax = 160;
+
+export const sendVenomMessageBodySourceCitationIdsItemRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const sendVenomMessageBodySourceCitationIdsMax = 200;
+
+export const sendVenomMessageBodySourceSnapshotsItemIdMax = 160;
+
+
+export const sendVenomMessageBodySourceSnapshotsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const sendVenomMessageBodySourceSnapshotsItemContextMax = 8000;
+
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemIdMax = 160;
+
+
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemTitleMax = 300;
+
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemUrlMax = 2048;
+
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemExcerptMax = 1000;
+
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemReferenceMax = 200;
+
+export const sendVenomMessageBodySourceSnapshotsItemCitationsMax = 50;
+
+export const sendVenomMessageBodySourceSnapshotsItemAttestationMax = 2048;
+
+
+export const sendVenomMessageBodySourceSnapshotsItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const sendVenomMessageBodySourceSnapshotsMax = 32;
 
 
 
@@ -31,7 +61,23 @@ export const SendVenomMessageBody = zod.object({
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string()
 })).min(1).max(sendVenomMessageBodyMessagesMax),
-  "projectContext": zod.string().max(sendVenomMessageBodyProjectContextMax).optional()
+  "projectContext": zod.string().max(sendVenomMessageBodyProjectContextMax).optional(),
+  "projectId": zod.string().min(1).max(sendVenomMessageBodyProjectIdMax),
+  "sourceCitationIds": zod.array(zod.string().regex(sendVenomMessageBodySourceCitationIdsItemRegExp)).max(sendVenomMessageBodySourceCitationIdsMax).optional(),
+  "sourceSnapshots": zod.array(zod.object({
+  "id": zod.string().min(1).max(sendVenomMessageBodySourceSnapshotsItemIdMax).regex(sendVenomMessageBodySourceSnapshotsItemIdRegExp),
+  "context": zod.string().min(1).max(sendVenomMessageBodySourceSnapshotsItemContextMax),
+  "citations": zod.array(zod.object({
+  "id": zod.string().min(1).max(sendVenomMessageBodySourceSnapshotsItemCitationsItemIdMax).regex(sendVenomMessageBodySourceSnapshotsItemCitationsItemIdRegExp),
+  "provider": zod.enum(['github', 'website']),
+  "kind": zod.enum(['repository', 'issue', 'pull_request', 'website']),
+  "title": zod.string().min(1).max(sendVenomMessageBodySourceSnapshotsItemCitationsItemTitleMax),
+  "url": zod.string().max(sendVenomMessageBodySourceSnapshotsItemCitationsItemUrlMax),
+  "excerpt": zod.string().min(1).max(sendVenomMessageBodySourceSnapshotsItemCitationsItemExcerptMax),
+  "reference": zod.string().min(1).max(sendVenomMessageBodySourceSnapshotsItemCitationsItemReferenceMax).nullable()
+})).min(1).max(sendVenomMessageBodySourceSnapshotsItemCitationsMax),
+  "attestation": zod.string().min(1).max(sendVenomMessageBodySourceSnapshotsItemAttestationMax).regex(sendVenomMessageBodySourceSnapshotsItemAttestationRegExp)
+})).max(sendVenomMessageBodySourceSnapshotsMax).optional()
 })
 
 export const SendVenomMessageResponse = zod.unknown()
@@ -122,6 +168,191 @@ export const improveVenomNoteResponseChangeNotesMax = 6;
 export const ImproveVenomNoteResponse = zod.object({
   "suggestion": zod.string().min(1).max(improveVenomNoteResponseSuggestionMax),
   "changeNotes": zod.array(zod.string().min(1).max(improveVenomNoteResponseChangeNotesItemMax)).max(improveVenomNoteResponseChangeNotesMax)
+})
+
+
+/**
+ * @summary List repositories available through the connected GitHub account
+ */
+export const GetGitHubRepositoriesResponseItem = zod.object({
+  "fullName": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "url": zod.string(),
+  "updatedAt": zod.coerce.date()
+})
+export const GetGitHubRepositoriesResponse = zod.array(GetGitHubRepositoriesResponseItem)
+
+
+/**
+ * @summary Sync selected GitHub repository context into a project source
+ */
+export const connectGitHubSourcePathProjectIdMax = 120;
+
+
+
+export const ConnectGitHubSourceParams = zod.object({
+  "projectId": zod.coerce.string().min(1).max(connectGitHubSourcePathProjectIdMax)
+})
+
+export const connectGitHubSourceBodyRepositoryMin = 3;
+export const connectGitHubSourceBodyRepositoryMax = 200;
+
+
+
+export const ConnectGitHubSourceBody = zod.object({
+  "repository": zod.string().min(connectGitHubSourceBodyRepositoryMin).max(connectGitHubSourceBodyRepositoryMax)
+})
+
+export const connectGitHubSourceResponseIdMax = 160;
+
+export const connectGitHubSourceResponseProjectIdMax = 160;
+
+export const connectGitHubSourceResponseNameMax = 300;
+
+export const connectGitHubSourceResponseUrlMax = 2048;
+
+export const connectGitHubSourceResponseSummaryMax = 1000;
+
+export const connectGitHubSourceResponseContextMax = 8000;
+
+export const connectGitHubSourceResponseCitationsItemIdMax = 160;
+
+
+export const connectGitHubSourceResponseCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const connectGitHubSourceResponseCitationsItemTitleMax = 300;
+
+export const connectGitHubSourceResponseCitationsItemUrlMax = 2048;
+
+export const connectGitHubSourceResponseCitationsItemExcerptMax = 1000;
+
+export const connectGitHubSourceResponseCitationsItemReferenceMax = 200;
+
+export const connectGitHubSourceResponseCitationsMax = 50;
+
+export const connectGitHubSourceResponseClustersItemStrengthMin = 0;
+export const connectGitHubSourceResponseClustersItemStrengthMax = 1;
+
+export const connectGitHubSourceResponseAttestationMax = 2048;
+
+
+export const connectGitHubSourceResponseAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+
+
+export const ConnectGitHubSourceResponse = zod.object({
+  "id": zod.string().min(1).max(connectGitHubSourceResponseIdMax),
+  "projectId": zod.string().min(1).max(connectGitHubSourceResponseProjectIdMax),
+  "provider": zod.enum(['github', 'website']),
+  "name": zod.string().min(1).max(connectGitHubSourceResponseNameMax),
+  "url": zod.string().max(connectGitHubSourceResponseUrlMax),
+  "status": zod.enum(['connected', 'error']),
+  "syncedAt": zod.coerce.date(),
+  "summary": zod.string().max(connectGitHubSourceResponseSummaryMax),
+  "context": zod.string().min(1).max(connectGitHubSourceResponseContextMax),
+  "citations": zod.array(zod.object({
+  "id": zod.string().min(1).max(connectGitHubSourceResponseCitationsItemIdMax).regex(connectGitHubSourceResponseCitationsItemIdRegExp),
+  "provider": zod.enum(['github', 'website']),
+  "kind": zod.enum(['repository', 'issue', 'pull_request', 'website']),
+  "title": zod.string().min(1).max(connectGitHubSourceResponseCitationsItemTitleMax),
+  "url": zod.string().max(connectGitHubSourceResponseCitationsItemUrlMax),
+  "excerpt": zod.string().min(1).max(connectGitHubSourceResponseCitationsItemExcerptMax),
+  "reference": zod.string().min(1).max(connectGitHubSourceResponseCitationsItemReferenceMax).nullable()
+})).min(1).max(connectGitHubSourceResponseCitationsMax),
+  "clusters": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "category": zod.string(),
+  "strength": zod.number().min(connectGitHubSourceResponseClustersItemStrengthMin).max(connectGitHubSourceResponseClustersItemStrengthMax),
+  "citationIds": zod.array(zod.string())
+})),
+  "attestation": zod.string().min(1).max(connectGitHubSourceResponseAttestationMax).regex(connectGitHubSourceResponseAttestationRegExp).optional()
+})
+
+
+/**
+ * @summary Add publicly available website context to a project source
+ */
+export const connectWebsiteSourcePathProjectIdMax = 120;
+
+
+
+export const ConnectWebsiteSourceParams = zod.object({
+  "projectId": zod.coerce.string().min(1).max(connectWebsiteSourcePathProjectIdMax)
+})
+
+export const connectWebsiteSourceBodyUrlMax = 2048;
+
+export const connectWebsiteSourceBodyNameMax = 120;
+
+
+
+export const ConnectWebsiteSourceBody = zod.object({
+  "url": zod.string().max(connectWebsiteSourceBodyUrlMax),
+  "name": zod.string().min(1).max(connectWebsiteSourceBodyNameMax).optional()
+})
+
+export const connectWebsiteSourceResponseIdMax = 160;
+
+export const connectWebsiteSourceResponseProjectIdMax = 160;
+
+export const connectWebsiteSourceResponseNameMax = 300;
+
+export const connectWebsiteSourceResponseUrlMax = 2048;
+
+export const connectWebsiteSourceResponseSummaryMax = 1000;
+
+export const connectWebsiteSourceResponseContextMax = 8000;
+
+export const connectWebsiteSourceResponseCitationsItemIdMax = 160;
+
+
+export const connectWebsiteSourceResponseCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const connectWebsiteSourceResponseCitationsItemTitleMax = 300;
+
+export const connectWebsiteSourceResponseCitationsItemUrlMax = 2048;
+
+export const connectWebsiteSourceResponseCitationsItemExcerptMax = 1000;
+
+export const connectWebsiteSourceResponseCitationsItemReferenceMax = 200;
+
+export const connectWebsiteSourceResponseCitationsMax = 50;
+
+export const connectWebsiteSourceResponseClustersItemStrengthMin = 0;
+export const connectWebsiteSourceResponseClustersItemStrengthMax = 1;
+
+export const connectWebsiteSourceResponseAttestationMax = 2048;
+
+
+export const connectWebsiteSourceResponseAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+
+
+export const ConnectWebsiteSourceResponse = zod.object({
+  "id": zod.string().min(1).max(connectWebsiteSourceResponseIdMax),
+  "projectId": zod.string().min(1).max(connectWebsiteSourceResponseProjectIdMax),
+  "provider": zod.enum(['github', 'website']),
+  "name": zod.string().min(1).max(connectWebsiteSourceResponseNameMax),
+  "url": zod.string().max(connectWebsiteSourceResponseUrlMax),
+  "status": zod.enum(['connected', 'error']),
+  "syncedAt": zod.coerce.date(),
+  "summary": zod.string().max(connectWebsiteSourceResponseSummaryMax),
+  "context": zod.string().min(1).max(connectWebsiteSourceResponseContextMax),
+  "citations": zod.array(zod.object({
+  "id": zod.string().min(1).max(connectWebsiteSourceResponseCitationsItemIdMax).regex(connectWebsiteSourceResponseCitationsItemIdRegExp),
+  "provider": zod.enum(['github', 'website']),
+  "kind": zod.enum(['repository', 'issue', 'pull_request', 'website']),
+  "title": zod.string().min(1).max(connectWebsiteSourceResponseCitationsItemTitleMax),
+  "url": zod.string().max(connectWebsiteSourceResponseCitationsItemUrlMax),
+  "excerpt": zod.string().min(1).max(connectWebsiteSourceResponseCitationsItemExcerptMax),
+  "reference": zod.string().min(1).max(connectWebsiteSourceResponseCitationsItemReferenceMax).nullable()
+})).min(1).max(connectWebsiteSourceResponseCitationsMax),
+  "clusters": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "category": zod.string(),
+  "strength": zod.number().min(connectWebsiteSourceResponseClustersItemStrengthMin).max(connectWebsiteSourceResponseClustersItemStrengthMax),
+  "citationIds": zod.array(zod.string())
+})),
+  "attestation": zod.string().min(1).max(connectWebsiteSourceResponseAttestationMax).regex(connectWebsiteSourceResponseAttestationRegExp).optional()
 })
 
 
@@ -258,6 +489,41 @@ export const getVenomWorkspaceResponseStateOneClustersItemSourcesMax = 8;
 
 export const getVenomWorkspaceResponseStateOneClustersMax = 1000;
 
+export const getVenomWorkspaceResponseStateOneSourcesItemIdMax = 160;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemProjectIdMax = 160;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemNameMax = 300;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemUrlMax = 2048;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemSummaryMax = 1000;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemContextMax = 8000;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdMax = 160;
+
+
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemTitleMax = 300;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemUrlMax = 2048;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemExcerptMax = 1000;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemReferenceMax = 200;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsMax = 50;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMin = 0;
+export const getVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMax = 1;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemAttestationMax = 2048;
+
+
+export const getVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const getVenomWorkspaceResponseStateOneSourcesMax = 500;
+
 export const getVenomWorkspaceResponseStateOneActiveProjectIdMax = 120;
 
 export const getVenomWorkspaceResponseStateOneActiveConversationIdMax = 120;
@@ -310,6 +576,13 @@ export const getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin =
 export const getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf = 1;
 
 export const getVenomWorkspaceResponseStateOneTombstonesFieldsMax = 20000;
+
+export const getVenomWorkspaceResponseStateOneTombstonesSourcesItemIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneTombstonesSourcesMax = 2000;
 
 export const getVenomWorkspaceResponseRevisionMin = 0;
 export const getVenomWorkspaceResponseRevisionMultipleOf = 1;
@@ -387,6 +660,34 @@ export const GetVenomWorkspaceResponse = zod.object({
   "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf)
 })).max(getVenomWorkspaceResponseStateOneClustersItemSourcesMax)
 })).max(getVenomWorkspaceResponseStateOneClustersMax),
+  "sources": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemIdMax),
+  "projectId": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemProjectIdMax),
+  "provider": zod.enum(['github', 'website']),
+  "name": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemNameMax),
+  "url": zod.string().max(getVenomWorkspaceResponseStateOneSourcesItemUrlMax),
+  "status": zod.enum(['connected', 'error']),
+  "syncedAt": zod.coerce.date(),
+  "summary": zod.string().max(getVenomWorkspaceResponseStateOneSourcesItemSummaryMax),
+  "context": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemContextMax),
+  "citations": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdMax).regex(getVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdRegExp),
+  "provider": zod.enum(['github', 'website']),
+  "kind": zod.enum(['repository', 'issue', 'pull_request', 'website']),
+  "title": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemCitationsItemTitleMax),
+  "url": zod.string().max(getVenomWorkspaceResponseStateOneSourcesItemCitationsItemUrlMax),
+  "excerpt": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemCitationsItemExcerptMax),
+  "reference": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemCitationsItemReferenceMax).nullable()
+})).min(1).max(getVenomWorkspaceResponseStateOneSourcesItemCitationsMax),
+  "clusters": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "category": zod.string(),
+  "strength": zod.number().min(getVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMin).max(getVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMax),
+  "citationIds": zod.array(zod.string())
+})),
+  "attestation": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemAttestationMax).regex(getVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp).optional()
+})).max(getVenomWorkspaceResponseStateOneSourcesMax),
   "activeProjectId": zod.string().max(getVenomWorkspaceResponseStateOneActiveProjectIdMax).nullable(),
   "activeConversationId": zod.string().max(getVenomWorkspaceResponseStateOneActiveConversationIdMax).nullable(),
   "tombstones": zod.object({
@@ -417,7 +718,11 @@ export const GetVenomWorkspaceResponse = zod.object({
   "fields": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax),
   "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf)
-})).max(getVenomWorkspaceResponseStateOneTombstonesFieldsMax)
+})).max(getVenomWorkspaceResponseStateOneTombstonesFieldsMax),
+  "sources": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesSourcesItemIdMax),
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneTombstonesSourcesMax)
 }).optional()
 }),zod.null()]),
   "revision": zod.number().min(getVenomWorkspaceResponseRevisionMin).multipleOf(getVenomWorkspaceResponseRevisionMultipleOf),
@@ -558,6 +863,41 @@ export const saveVenomWorkspaceBodyStateClustersItemSourcesMax = 8;
 
 export const saveVenomWorkspaceBodyStateClustersMax = 1000;
 
+export const saveVenomWorkspaceBodyStateSourcesItemIdMax = 160;
+
+export const saveVenomWorkspaceBodyStateSourcesItemProjectIdMax = 160;
+
+export const saveVenomWorkspaceBodyStateSourcesItemNameMax = 300;
+
+export const saveVenomWorkspaceBodyStateSourcesItemUrlMax = 2048;
+
+export const saveVenomWorkspaceBodyStateSourcesItemSummaryMax = 1000;
+
+export const saveVenomWorkspaceBodyStateSourcesItemContextMax = 8000;
+
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemIdMax = 160;
+
+
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemTitleMax = 300;
+
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemUrlMax = 2048;
+
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemExcerptMax = 1000;
+
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemReferenceMax = 200;
+
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsMax = 50;
+
+export const saveVenomWorkspaceBodyStateSourcesItemClustersItemStrengthMin = 0;
+export const saveVenomWorkspaceBodyStateSourcesItemClustersItemStrengthMax = 1;
+
+export const saveVenomWorkspaceBodyStateSourcesItemAttestationMax = 2048;
+
+
+export const saveVenomWorkspaceBodyStateSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const saveVenomWorkspaceBodyStateSourcesMax = 500;
+
 export const saveVenomWorkspaceBodyStateActiveProjectIdMax = 120;
 
 export const saveVenomWorkspaceBodyStateActiveConversationIdMax = 120;
@@ -610,6 +950,13 @@ export const saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMin = 0;
 export const saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMultipleOf = 1;
 
 export const saveVenomWorkspaceBodyStateTombstonesFieldsMax = 20000;
+
+export const saveVenomWorkspaceBodyStateTombstonesSourcesItemIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateTombstonesSourcesMax = 2000;
 
 export const saveVenomWorkspaceBodyBaseRevisionMin = 0;
 export const saveVenomWorkspaceBodyBaseRevisionMultipleOf = 1;
@@ -687,6 +1034,34 @@ export const SaveVenomWorkspaceBody = zod.object({
   "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMultipleOf)
 })).max(saveVenomWorkspaceBodyStateClustersItemSourcesMax)
 })).max(saveVenomWorkspaceBodyStateClustersMax),
+  "sources": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemIdMax),
+  "projectId": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemProjectIdMax),
+  "provider": zod.enum(['github', 'website']),
+  "name": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemNameMax),
+  "url": zod.string().max(saveVenomWorkspaceBodyStateSourcesItemUrlMax),
+  "status": zod.enum(['connected', 'error']),
+  "syncedAt": zod.coerce.date(),
+  "summary": zod.string().max(saveVenomWorkspaceBodyStateSourcesItemSummaryMax),
+  "context": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemContextMax),
+  "citations": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemCitationsItemIdMax).regex(saveVenomWorkspaceBodyStateSourcesItemCitationsItemIdRegExp),
+  "provider": zod.enum(['github', 'website']),
+  "kind": zod.enum(['repository', 'issue', 'pull_request', 'website']),
+  "title": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemCitationsItemTitleMax),
+  "url": zod.string().max(saveVenomWorkspaceBodyStateSourcesItemCitationsItemUrlMax),
+  "excerpt": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemCitationsItemExcerptMax),
+  "reference": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemCitationsItemReferenceMax).nullable()
+})).min(1).max(saveVenomWorkspaceBodyStateSourcesItemCitationsMax),
+  "clusters": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "category": zod.string(),
+  "strength": zod.number().min(saveVenomWorkspaceBodyStateSourcesItemClustersItemStrengthMin).max(saveVenomWorkspaceBodyStateSourcesItemClustersItemStrengthMax),
+  "citationIds": zod.array(zod.string())
+})),
+  "attestation": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemAttestationMax).regex(saveVenomWorkspaceBodyStateSourcesItemAttestationRegExp).optional()
+})).max(saveVenomWorkspaceBodyStateSourcesMax),
   "activeProjectId": zod.string().max(saveVenomWorkspaceBodyStateActiveProjectIdMax).nullable(),
   "activeConversationId": zod.string().max(saveVenomWorkspaceBodyStateActiveConversationIdMax).nullable(),
   "tombstones": zod.object({
@@ -717,7 +1092,11 @@ export const SaveVenomWorkspaceBody = zod.object({
   "fields": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesFieldsItemIdMax),
   "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMultipleOf)
-})).max(saveVenomWorkspaceBodyStateTombstonesFieldsMax)
+})).max(saveVenomWorkspaceBodyStateTombstonesFieldsMax),
+  "sources": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesSourcesItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateTombstonesSourcesMax)
 }).optional()
 }),
   "baseRevision": zod.number().min(saveVenomWorkspaceBodyBaseRevisionMin).multipleOf(saveVenomWorkspaceBodyBaseRevisionMultipleOf)
@@ -853,6 +1232,41 @@ export const saveVenomWorkspaceResponseStateOneClustersItemSourcesMax = 8;
 
 export const saveVenomWorkspaceResponseStateOneClustersMax = 1000;
 
+export const saveVenomWorkspaceResponseStateOneSourcesItemIdMax = 160;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemProjectIdMax = 160;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemNameMax = 300;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemUrlMax = 2048;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemSummaryMax = 1000;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemContextMax = 8000;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdMax = 160;
+
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemTitleMax = 300;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemUrlMax = 2048;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemExcerptMax = 1000;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemReferenceMax = 200;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsMax = 50;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMin = 0;
+export const saveVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMax = 1;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemAttestationMax = 2048;
+
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const saveVenomWorkspaceResponseStateOneSourcesMax = 500;
+
 export const saveVenomWorkspaceResponseStateOneActiveProjectIdMax = 120;
 
 export const saveVenomWorkspaceResponseStateOneActiveConversationIdMax = 120;
@@ -905,6 +1319,13 @@ export const saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin 
 export const saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf = 1;
 
 export const saveVenomWorkspaceResponseStateOneTombstonesFieldsMax = 20000;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesSourcesItemIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneTombstonesSourcesMax = 2000;
 
 export const saveVenomWorkspaceResponseRevisionMin = 0;
 export const saveVenomWorkspaceResponseRevisionMultipleOf = 1;
@@ -982,6 +1403,34 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf)
 })).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesMax)
 })).max(saveVenomWorkspaceResponseStateOneClustersMax),
+  "sources": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemIdMax),
+  "projectId": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemProjectIdMax),
+  "provider": zod.enum(['github', 'website']),
+  "name": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemNameMax),
+  "url": zod.string().max(saveVenomWorkspaceResponseStateOneSourcesItemUrlMax),
+  "status": zod.enum(['connected', 'error']),
+  "syncedAt": zod.coerce.date(),
+  "summary": zod.string().max(saveVenomWorkspaceResponseStateOneSourcesItemSummaryMax),
+  "context": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemContextMax),
+  "citations": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdMax).regex(saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdRegExp),
+  "provider": zod.enum(['github', 'website']),
+  "kind": zod.enum(['repository', 'issue', 'pull_request', 'website']),
+  "title": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemTitleMax),
+  "url": zod.string().max(saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemUrlMax),
+  "excerpt": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemExcerptMax),
+  "reference": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemReferenceMax).nullable()
+})).min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemCitationsMax),
+  "clusters": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "category": zod.string(),
+  "strength": zod.number().min(saveVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMin).max(saveVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMax),
+  "citationIds": zod.array(zod.string())
+})),
+  "attestation": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemAttestationMax).regex(saveVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp).optional()
+})).max(saveVenomWorkspaceResponseStateOneSourcesMax),
   "activeProjectId": zod.string().max(saveVenomWorkspaceResponseStateOneActiveProjectIdMax).nullable(),
   "activeConversationId": zod.string().max(saveVenomWorkspaceResponseStateOneActiveConversationIdMax).nullable(),
   "tombstones": zod.object({
@@ -1012,9 +1461,15 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "fields": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax),
   "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf)
-})).max(saveVenomWorkspaceResponseStateOneTombstonesFieldsMax)
+})).max(saveVenomWorkspaceResponseStateOneTombstonesFieldsMax),
+  "sources": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesSourcesItemIdMax),
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneTombstonesSourcesMax)
 }).optional()
 }),zod.null()]),
   "revision": zod.number().min(saveVenomWorkspaceResponseRevisionMin).multipleOf(saveVenomWorkspaceResponseRevisionMultipleOf),
   "updatedAt": zod.coerce.date().nullable()
 })
+
+export {};

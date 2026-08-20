@@ -10,6 +10,10 @@ import {
   mergeProjectBoardSnapshots,
   normalizeProjectBoard,
 } from './boardState.ts';
+import {
+  mergeProjectSources,
+  mergeSourceDeletionMarkers,
+} from './sourceState.ts';
 
 type WorkspaceTombstones = VenomWorkspaceTombstones;
 type TombstoneCollection = keyof WorkspaceTombstones;
@@ -22,6 +26,7 @@ const TOMBSTONE_LIMITS: Record<TombstoneCollection, number> = {
   clusters: 2000,
   stages: 15000,
   fields: 20000,
+  sources: 2000,
 };
 
 export type SyncController = {
@@ -90,6 +95,7 @@ export function createEmptyTombstones(): WorkspaceTombstones {
     clusters: [],
     stages: [],
     fields: [],
+    sources: [],
   };
 }
 
@@ -144,6 +150,10 @@ export function normalizeTombstones(
       TOMBSTONE_LIMITS.fields,
       tombstones.fields ?? [],
     ),
+    sources: mergeSourceDeletionMarkers(
+      TOMBSTONE_LIMITS.sources,
+      tombstones.sources ?? [],
+    ),
   };
 }
 
@@ -188,6 +198,11 @@ export function mergeTombstones(
       normalized.fields,
       additions.fields ?? [],
     ),
+    sources: mergeSourceDeletionMarkers(
+      TOMBSTONE_LIMITS.sources,
+      normalized.sources,
+      additions.sources ?? [],
+    ),
   };
 }
 
@@ -217,6 +232,7 @@ export function normalizeWorkspaceState(
   return {
     ...value,
     projects: value.projects.map((project) => normalizeProjectBoard(project)),
+    sources: Array.isArray(value.sources) ? value.sources : [],
     clusters: value.clusters.map((cluster) => {
       const legacyDescription =
         typeof cluster.description === 'string'
@@ -416,6 +432,11 @@ export function mergeWorkspaceStates(
           cluster.lastUpdatedAt,
     ),
   );
+  const liveSources = mergeProjectSources(
+    cloudState.sources ?? [],
+    deviceState.sources ?? [],
+    tombstones.sources,
+  ).filter((source) => projectIds.has(source.projectId));
   const preferredProjectId =
     deviceState.activeProjectId &&
     projectIds.has(deviceState.activeProjectId)
@@ -437,6 +458,7 @@ export function mergeWorkspaceStates(
     projects,
     conversations: liveConversations,
     clusters: liveClusters,
+    sources: liveSources,
     activeProjectId: preferredProjectId,
     activeConversationId: preferredConversationId,
     tombstones,
@@ -580,11 +602,38 @@ export function resolveSuccessfulWorkspaceHydration({
   createFreshState: () => VenomWorkspaceState;
 }): SuccessfulWorkspaceHydration {
   if (cloudState) {
+    const normalizedCloud = normalizeWorkspaceState(cloudState);
+    const cloudTombstones = normalizeTombstones(
+      normalizedCloud.tombstones,
+    );
+    const localTombstones = normalizeTombstones(localState.tombstones);
+    const sourceTombstones = mergeSourceDeletionMarkers(
+      TOMBSTONE_LIMITS.sources,
+      cloudTombstones.sources,
+      localTombstones.sources,
+    );
+    const projectIds = new Set(
+      normalizedCloud.projects.map((project) => project.id),
+    );
+    const state = {
+      ...normalizedCloud,
+      sources: mergeProjectSources(
+        normalizedCloud.sources,
+        localState.sources ?? [],
+        sourceTombstones,
+      ).filter((source) => projectIds.has(source.projectId)),
+      tombstones: {
+        ...cloudTombstones,
+        sources: sourceTombstones,
+      },
+    };
+    const shouldUpload =
+      JSON.stringify(state) !== JSON.stringify(normalizedCloud);
     return {
-      state: cloudState,
+      state,
       pendingLegacyImport: false,
-      shouldUpload: false,
-      syncStatus: 'synced',
+      shouldUpload,
+      syncStatus: shouldUpload ? 'syncing' : 'synced',
     };
   }
 

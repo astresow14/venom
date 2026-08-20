@@ -9,6 +9,7 @@ import type {
   VenomDeletionMarker,
   VenomKnowledgeCluster,
   VenomKnowledgeSource,
+  ProjectSource,
   VenomProject,
   VenomWorkspaceState,
   VenomWorkspaceTombstones,
@@ -78,6 +79,7 @@ const TOMBSTONE_LIMITS: Record<TombstoneCollection, number> = {
   clusters: 2000,
   stages: 15000,
   fields: 20000,
+  sources: 2000,
 };
 
 export function createEmptyTombstones(): WorkspaceTombstones {
@@ -89,6 +91,7 @@ export function createEmptyTombstones(): WorkspaceTombstones {
     clusters: [],
     stages: [],
     fields: [],
+    sources: [],
   };
 }
 
@@ -124,6 +127,7 @@ export function normalizeTombstones(
     clusters: mergeDeletionMarkers(TOMBSTONE_LIMITS.clusters, tombstones.clusters ?? []),
     stages: mergeDeletionMarkers(TOMBSTONE_LIMITS.stages, tombstones.stages ?? []),
     fields: mergeDeletionMarkers(TOMBSTONE_LIMITS.fields, tombstones.fields ?? []),
+    sources: mergeDeletionMarkers(TOMBSTONE_LIMITS.sources, tombstones.sources ?? []),
   };
 }
 
@@ -167,6 +171,11 @@ export function mergeTombstones(
       TOMBSTONE_LIMITS.fields,
       normalized.fields,
       additions.fields ?? [],
+    ),
+    sources: mergeDeletionMarkers(
+      TOMBSTONE_LIMITS.sources,
+      normalized.sources,
+      additions.sources ?? [],
     ),
   };
 }
@@ -316,6 +325,7 @@ export function createDefaultState(): WorkspaceState {
       },
     ],
     clusters: defaultClusters,
+    sources: [],
     activeProjectId: 'proj_default',
     activeConversationId: 'conv_default',
     tombstones: createEmptyTombstones(),
@@ -336,6 +346,7 @@ export function normalizeWorkspaceState(value: WorkspaceState): WorkspaceState {
   return {
     ...value,
     projects: value.projects.map((project) => normalizeProjectBoard(project)),
+    sources: Array.isArray(value.sources) ? value.sources : [],
     clusters: value.clusters.map((cluster) => {
       const legacyDescription =
         typeof cluster.description === 'string'
@@ -473,6 +484,27 @@ function mergeConversations(
   return merged;
 }
 
+function mergeProjectSources(
+  cloudItems: ProjectSource[],
+  deviceItems: ProjectSource[],
+  deletionMarkers: DeletionMarker[],
+): ProjectSource[] {
+  const deletedAtById = deletionTimeMap(deletionMarkers);
+  const merged = new Map<string, ProjectSource>();
+
+  for (const source of [...cloudItems, ...deviceItems]) {
+    const existing = merged.get(source.id);
+    if (!existing || source.syncedAt >= existing.syncedAt) {
+      merged.set(source.id, source);
+    }
+  }
+
+  return [...merged.values()].filter(
+    (source) =>
+      (deletedAtById.get(source.id) ?? -1) < Date.parse(source.syncedAt),
+  );
+}
+
 export function mergeWorkspaceStates(
   cloudState: WorkspaceState,
   deviceState: WorkspaceState,
@@ -513,6 +545,11 @@ export function mergeWorkspaceStates(
         (clusterDeletionTimes.get(c.id) ?? -1) < c.lastUpdatedAt,
     ),
   );
+  const liveSources = mergeProjectSources(
+    normalizedCloud.sources,
+    normalizedDevice.sources,
+    tombstones.sources,
+  ).filter((source) => projectIds.has(source.projectId));
 
   const preferredProjectId =
     normalizedDevice.activeProjectId && projectIds.has(normalizedDevice.activeProjectId)
@@ -534,6 +571,7 @@ export function mergeWorkspaceStates(
     projects,
     conversations: liveConversations,
     clusters: liveClusters,
+    sources: liveSources,
     activeProjectId: preferredProjectId,
     activeConversationId: preferredConversationId,
     tombstones,

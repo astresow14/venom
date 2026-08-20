@@ -88,6 +88,82 @@ paths:
           description: Authentication required
         "429":
           description: Too many note improvement requests
+  /venom/github/repositories:
+    get:
+      operationId: getGitHubRepositories
+      tags: [venom]
+      summary: List repositories available through the connected GitHub account
+      responses:
+        "200":
+          description: Repositories available to connect
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GitHubRepository"
+        "401":
+          description: Sign-in required
+        "403":
+          description: Signed-in user is not authorized for the workspace GitHub connection
+        "502":
+          description: GitHub connection unavailable
+  /venom/projects/{projectId}/sources/github:
+    post:
+      operationId: connectGitHubSource
+      tags: [venom]
+      summary: Sync selected GitHub repository context into a project source
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitHubSourceInput"
+      responses:
+        "200":
+          description: Connected project source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSource"
+        "400":
+          description: Invalid repository identifier
+        "401":
+          description: Sign-in required
+        "403":
+          description: Signed-in user is not authorized for the workspace GitHub connection
+        "404":
+          description: Repository unavailable
+        "502":
+          description: GitHub connection unavailable
+  /venom/projects/{projectId}/sources/website:
+    post:
+      operationId: connectWebsiteSource
+      tags: [venom]
+      summary: Add publicly available website context to a project source
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebsiteSourceInput"
+      responses:
+        "200":
+          description: Connected project source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSource"
+        "400":
+          description: Invalid or unsafe website URL
+        "422":
+          description: Website content could not be read
+        "502":
+          description: Website could not be reached
   /venom/workspace:
     get:
       operationId: getVenomWorkspace
@@ -143,6 +219,15 @@ paths:
                     minimum: 1
                 required: [error, maxBytes]
 components:
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 120
   schemas:
     HealthStatus:
       type: object
@@ -164,6 +249,7 @@ components:
         - content
     VenomChatRequest:
       type: object
+      additionalProperties: false
       properties:
         messages:
           type: array
@@ -173,9 +259,26 @@ components:
             $ref: "#/components/schemas/VenomChatMessage"
         projectContext:
           type: string
-          maxLength: 1000
+          maxLength: 8000
+        projectId:
+          type: string
+          minLength: 1
+          maxLength: 160
+        sourceCitationIds:
+          type: array
+          maxItems: 200
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^[A-Za-z0-9_-]{1,160}$"
+        sourceSnapshots:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/AttestedSourceSnapshot"
       required:
         - messages
+        - projectId
     KnowledgeConversation:
       type: object
       additionalProperties: false
@@ -293,6 +396,165 @@ components:
             type: string
             minLength: 1
             maxLength: 160
+    GitHubRepository:
+      type: object
+      required: [fullName, name, url, updatedAt]
+      properties:
+        fullName:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        url:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    GitHubSourceInput:
+      type: object
+      required: [repository]
+      properties:
+        repository:
+          type: string
+          minLength: 3
+          maxLength: 200
+    WebsiteSourceInput:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          maxLength: 2048
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    SourceCitation:
+      type: object
+      additionalProperties: false
+      required: [id, provider, kind, title, url, excerpt, reference]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 160
+          pattern: "^[A-Za-z0-9_-]{1,160}$"
+        provider:
+          type: string
+          enum: [github, website]
+        kind:
+          type: string
+          enum: [repository, issue, pull_request, website]
+        title:
+          type: string
+          minLength: 1
+          maxLength: 300
+        url:
+          type: string
+          maxLength: 2048
+        excerpt:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        reference:
+          type: ["string", "null"]
+          minLength: 1
+          maxLength: 200
+    SourceCluster:
+      type: object
+      required: [id, label, category, strength, citationIds]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        category:
+          type: string
+        strength:
+          type: number
+          minimum: 0
+          maximum: 1
+        citationIds:
+          type: array
+          items:
+            type: string
+    AttestedSourceSnapshot:
+      type: object
+      additionalProperties: false
+      required: [id, context, citations, attestation]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 160
+          pattern: "^[A-Za-z0-9_-]{1,160}$"
+        context:
+          type: string
+          minLength: 1
+          maxLength: 8000
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/SourceCitation"
+        attestation:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          pattern: "^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$"
+    ProjectSource:
+      type: object
+      required:
+        [id, projectId, provider, name, url, status, syncedAt, summary, context, citations, clusters]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 160
+        projectId:
+          type: string
+          minLength: 1
+          maxLength: 160
+        provider:
+          type: string
+          enum: [github, website]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 300
+        url:
+          type: string
+          maxLength: 2048
+        status:
+          type: string
+          enum: [connected, error]
+        syncedAt:
+          type: string
+          format: date-time
+        summary:
+          type: string
+          maxLength: 1000
+        context:
+          type: string
+          minLength: 1
+          maxLength: 8000
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/SourceCitation"
+        clusters:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourceCluster"
+        attestation:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          pattern: "^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$"
     VenomTask:
       type: object
       additionalProperties: false
@@ -624,7 +886,12 @@ components:
           maxItems: 20000
           items:
             $ref: "#/components/schemas/VenomDeletionMarker"
-      required: [projects, tasks, conversations, messages, clusters, stages, fields]
+        sources:
+          type: array
+          maxItems: 2000
+          items:
+            $ref: "#/components/schemas/VenomDeletionMarker"
+      required: [projects, tasks, conversations, messages, clusters, stages, fields, sources]
     VenomWorkspaceState:
       type: object
       additionalProperties: false
@@ -644,6 +911,11 @@ components:
           maxItems: 1000
           items:
             $ref: "#/components/schemas/VenomKnowledgeCluster"
+        sources:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/ProjectSource"
         activeProjectId:
           type: [string, "null"]
           maxLength: 120
@@ -656,6 +928,7 @@ components:
         - projects
         - conversations
         - clusters
+        - sources
         - activeProjectId
         - activeConversationId
     VenomWorkspaceSaveInput:

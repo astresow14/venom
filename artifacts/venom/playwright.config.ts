@@ -49,7 +49,7 @@ export default defineConfig({
           `EXPO_PACKAGER_PROXY_URL=${baseURL}`,
           `EXPO_PUBLIC_DOMAIN=127.0.0.1:${port}`,
           "REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1",
-          `pnpm exec expo start --web --localhost --port ${port}`,
+          `pnpm exec expo start --web --localhost --port ${port} --clear`,
         ].join(" "),
         url: baseURL,
         timeout: 180_000,
