@@ -26,6 +26,12 @@ import {
 } from './boardState';
 import { workspaceSyncRetryDelay } from './workspaceSyncRetry';
 import {
+  initializeWorkspaceSyncTestHarness,
+  IS_WORKSPACE_SYNC_UI_TEST,
+  saveWorkspaceForSyncTest,
+  WORKSPACE_SYNC_UI_TEST_USER_ID,
+} from './workspaceSyncTestHarness';
+import {
   ApiError,
   getGetVenomWorkspaceQueryKey,
   saveVenomWorkspace,
@@ -747,7 +753,14 @@ const VenomContext = createContext<VenomContextType | null>(null);
 
 export function VenomProvider({ children }: { children: React.ReactNode }) {
   const { getToken, userId: authenticatedUserId } = useAuth();
-  const userId = IS_UI_TEST ? UI_TEST_USER_ID : authenticatedUserId;
+  const [workspaceSyncTestUserId, setWorkspaceSyncTestUserId] = useState(
+    WORKSPACE_SYNC_UI_TEST_USER_ID,
+  );
+  const userId = IS_WORKSPACE_SYNC_UI_TEST
+    ? workspaceSyncTestUserId
+    : IS_UI_TEST
+      ? UI_TEST_USER_ID
+      : authenticatedUserId;
   const [state, setState] = useState<VenomState>(() => createDefaultState());
   const [localState, setLocalState] = useState<VenomState | null>(null);
   const [legacyState, setLegacyState] = useState<VenomState | null>(null);
@@ -768,6 +781,29 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     createSyncController(userId ?? null),
   );
   const flushCloudStateRef = useRef<(nextState: VenomState) => void>(() => {});
+
+  useEffect(() => {
+    if (!IS_WORKSPACE_SYNC_UI_TEST) return;
+
+    initializeWorkspaceSyncTestHarness();
+    const handleAccountChange = (event: Event) => {
+      const nextUserId = (event as CustomEvent<{ userId?: unknown }>).detail
+        ?.userId;
+      if (typeof nextUserId === 'string' && nextUserId) {
+        setWorkspaceSyncTestUserId(nextUserId);
+      }
+    };
+    globalThis.addEventListener(
+      'venom-workspace-sync-test-account-change',
+      handleAccountChange,
+    );
+    return () => {
+      globalThis.removeEventListener(
+        'venom-workspace-sync-test-account-change',
+        handleAccountChange,
+      );
+    };
+  }, []);
 
   if (activeUserIdRef.current !== (userId ?? null)) {
     cancelSyncController(syncControllerRef.current);
@@ -897,7 +933,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
   const flushCloudState = useCallback(
     async (nextState: VenomState) => {
-      if (!userId || IS_UI_TEST) return;
+      if (!userId || (IS_UI_TEST && !IS_WORKSPACE_SYNC_UI_TEST)) return;
 
       const syncUserId = userId;
       const controller = syncControllerRef.current;
@@ -922,34 +958,42 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
           setSyncStatus('syncing');
 
           try {
-            const token = await getToken();
-            if (
-              !token ||
-              syncControllerRef.current !== controller ||
-              activeUserIdRef.current !== syncUserId
-            ) {
+            let saved: Awaited<ReturnType<typeof saveVenomWorkspace>>;
+            if (IS_WORKSPACE_SYNC_UI_TEST) {
+              saved = await saveWorkspaceForSyncTest(
+                syncUserId,
+                stateToSave,
+                revisionRef.current,
+              );
+            } else {
+              const token = await getToken();
               if (
-                syncControllerRef.current === controller &&
-                activeUserIdRef.current === syncUserId
+                !token ||
+                syncControllerRef.current !== controller ||
+                activeUserIdRef.current !== syncUserId
               ) {
-                controller.queued = controller.queued
-                  ? mergeWorkspaceStates(stateToSave, controller.queued)
-                  : stateToSave;
-                setSyncStatus('error');
-                scheduleCloudRetry(controller, syncUserId);
+                if (
+                  syncControllerRef.current === controller &&
+                  activeUserIdRef.current === syncUserId
+                ) {
+                  controller.queued = controller.queued
+                    ? mergeWorkspaceStates(stateToSave, controller.queued)
+                    : stateToSave;
+                  setSyncStatus('error');
+                  scheduleCloudRetry(controller, syncUserId);
+                }
+                return;
               }
-              return;
+              saved = await saveVenomWorkspace(
+                {
+                  state: stateToSave,
+                  baseRevision: revisionRef.current,
+                },
+                {
+                  headers: { Authorization: `Bearer ${token}` },
+                },
+              );
             }
-
-            const saved = await saveVenomWorkspace(
-              {
-                state: stateToSave,
-                baseRevision: revisionRef.current,
-              },
-              {
-                headers: { Authorization: `Bearer ${token}` },
-              },
-            );
             if (
               syncControllerRef.current !== controller ||
               activeUserIdRef.current !== syncUserId
@@ -1057,6 +1101,15 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
     hydratedUserRef.current = userId;
 
+    if (IS_WORKSPACE_SYNC_UI_TEST) {
+      lastSerializedRef.current = JSON.stringify(localState);
+      latestStateRef.current = localState;
+      setState(localState);
+      setSyncStatus('synced');
+      setIsReady(true);
+      return;
+    }
+
     if (workspaceQuery.isSuccess) {
       const cloud = workspaceQuery.data;
       revisionRef.current = cloud.revision;
@@ -1125,7 +1178,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     const serialized = JSON.stringify(state);
     void AsyncStorage.setItem(storageKeyFor(userId), serialized);
 
-    if (IS_UI_TEST) {
+    if (IS_UI_TEST && !IS_WORKSPACE_SYNC_UI_TEST) {
       lastSerializedRef.current = serialized;
       setSyncStatus('offline');
       return;
