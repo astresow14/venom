@@ -1,11 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  ClerkLoaded,
-  ClerkLoading,
-  ClerkProvider,
-  useAuth,
-} from "@clerk/expo";
+import { ClerkLoaded, ClerkLoading, ClerkProvider, useAuth } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ActivityIndicator, View } from "react-native";
@@ -23,13 +18,10 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
-import { VenomProvider } from "@/context/VenomContext";
+import { IS_READ_ONLY_UI_TEST, VenomProvider } from "@/context/VenomContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { useColors } from "@/hooks/useColors";
-import {
-  setAuthTokenGetter,
-  setBaseUrl,
-} from "@workspace/api-client-react";
+import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -51,6 +43,7 @@ function RootLayoutNav() {
   const colors = useColors();
   const { theme } = useTheme();
   const previousUserId = useRef<string | null | undefined>(undefined);
+  const canOpenWorkspace = Boolean(isSignedIn) || IS_READ_ONLY_UI_TEST;
 
   useEffect(() => {
     setAuthTokenGetter(isSignedIn ? () => getToken() : null);
@@ -82,10 +75,10 @@ function RootLayoutNav() {
             animation: "fade",
           }}
         >
-          <Stack.Protected guard={!isSignedIn}>
+          <Stack.Protected guard={!canOpenWorkspace}>
             <Stack.Screen name="(auth)" />
           </Stack.Protected>
-          <Stack.Protected guard={Boolean(isSignedIn)}>
+          <Stack.Protected guard={canOpenWorkspace}>
             <Stack.Screen name="index" />
             <Stack.Screen name="projects" />
             <Stack.Screen name="settings" />
