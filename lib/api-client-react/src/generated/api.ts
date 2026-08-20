@@ -21,6 +21,8 @@ import type {
 
 import type {
   HealthStatus,
+  KnowledgeExtraction,
+  KnowledgeExtractionInput,
   VenomChatRequest
 } from './api.schemas';
 
@@ -198,5 +200,76 @@ export const useSendVenomMessage = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSendVenomMessageMutationOptions(options));
+    }
+
+export const getExtractVenomKnowledgeUrl = () => {
+
+
+
+
+  return `/api/venom/knowledge/extract`
+}
+
+/**
+ * @summary Extract knowledge clusters from a project conversation
+ */
+export const extractVenomKnowledge = async (knowledgeExtractionInput: KnowledgeExtractionInput, options?: Parameters<typeof customFetch>[1]): Promise<KnowledgeExtraction> => {
+
+  return customFetch<KnowledgeExtraction>(getExtractVenomKnowledgeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(knowledgeExtractionInput)
+  }
+);}
+
+
+
+
+
+export const getExtractVenomKnowledgeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractVenomKnowledge>>, TError,{data: BodyType<KnowledgeExtractionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof extractVenomKnowledge>>, TError,{data: BodyType<KnowledgeExtractionInput>}, TContext> => {
+
+const mutationKey = ['extractVenomKnowledge'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof extractVenomKnowledge>>, {data: BodyType<KnowledgeExtractionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  extractVenomKnowledge(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExtractVenomKnowledgeMutationResult = NonNullable<Awaited<ReturnType<typeof extractVenomKnowledge>>>
+    export type ExtractVenomKnowledgeMutationBody = BodyType<KnowledgeExtractionInput>
+    export type ExtractVenomKnowledgeMutationError = ErrorType<void>
+
+    /**
+ * @summary Extract knowledge clusters from a project conversation
+ */
+export const useExtractVenomKnowledge = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractVenomKnowledge>>, TError,{data: BodyType<KnowledgeExtractionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof extractVenomKnowledge>>,
+        TError,
+        {data: BodyType<KnowledgeExtractionInput>},
+        TContext
+      > => {
+      return useMutation(getExtractVenomKnowledgeMutationOptions(options));
     }
 

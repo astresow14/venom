@@ -7,6 +7,12 @@
  */
 
 export * from './healthStatus';
+export * from './knowledgeCandidate';
+export * from './knowledgeConversation';
+export * from './knowledgeExtraction';
+export * from './knowledgeExtractionInput';
+export * from './knowledgeMessage';
+export * from './knowledgeMessageRole';
 export * from './venomChatMessage';
 export * from './venomChatMessageRole';
 export * from './venomChatRequest';

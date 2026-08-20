@@ -42,6 +42,26 @@ paths:
           description: SSE stream of assistant text chunks
           content:
             text/event-stream: {}
+  /venom/knowledge/extract:
+    post:
+      operationId: extractVenomKnowledge
+      tags: [venom]
+      summary: Extract knowledge clusters from a project conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KnowledgeExtractionInput"
+      responses:
+        "200":
+          description: Knowledge clusters found in the conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeExtraction"
+        "429":
+          description: Too many extraction requests
 components:
   schemas:
     HealthStatus:
@@ -76,4 +96,90 @@ components:
           maxLength: 1000
       required:
         - messages
+    KnowledgeConversation:
+      type: object
+      required: [id, title]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 160
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        projectId:
+          type: ["string", "null"]
+          maxLength: 160
+    KnowledgeMessage:
+      type: object
+      required: [id, role, content]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 160
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+          minLength: 1
+          maxLength: 8000
+    KnowledgeExtractionInput:
+      type: object
+      required: [conversation, messages]
+      properties:
+        conversation:
+          $ref: "#/components/schemas/KnowledgeConversation"
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 48
+          items:
+            $ref: "#/components/schemas/KnowledgeMessage"
+    KnowledgeCandidate:
+      type: object
+      required: [label, category, confidence, summary, sourceMessageIds, relatedLabels]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 64
+        category:
+          type: string
+          minLength: 1
+          maxLength: 32
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 240
+        sourceMessageIds:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items:
+            type: string
+            minLength: 1
+            maxLength: 160
+        relatedLabels:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+    KnowledgeExtraction:
+      type: object
+      required: [clusters]
+      properties:
+        clusters:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/KnowledgeCandidate"
 

@@ -45,6 +45,7 @@ import {
   Task,
   TaskStatus,
 } from "@/context/VenomContext";
+import { useExtractVenomKnowledge } from "@workspace/api-client-react";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -71,7 +72,9 @@ function ChatWorkspace({
     addMessage,
     setActiveConversation,
     createNewConversation,
+    applyKnowledgeInsights,
   } = useVenom();
+  const extractKnowledge = useExtractVenomKnowledge();
 
   const [text, setText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -122,7 +125,9 @@ function ChatWorkspace({
       setActiveConversation(targetConvId);
     }
 
+    const userMessageId = generateUniqueId();
     addMessage(targetConvId, {
+      id: userMessageId,
       role: "user",
       content: trimmed,
       status: "sent",
@@ -132,13 +137,16 @@ function ChatWorkspace({
     setShowTyping(true);
 
     let fullContent = "";
+    let requestFailed = false;
     let hasReceivedFirstChunk = false;
-    let streamId = generateUniqueId();
+    const streamId = generateUniqueId();
 
     try {
       const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
       const chatHistory = [
-        ...contextMessages.map((m) => ({ role: m.role, content: m.content })),
+        ...contextMessages
+          .slice(-23)
+          .map((m) => ({ role: m.role, content: m.content })),
         { role: "user", content: trimmed },
       ];
 
@@ -201,6 +209,7 @@ function ChatWorkspace({
       }
     } catch (error) {
       console.error(error);
+      requestFailed = true;
       setShowTyping(false);
       setLocalStreamingMessage({
         id: streamId,
@@ -216,12 +225,64 @@ function ChatWorkspace({
 
       if (fullContent) {
         addMessage(targetConvId, {
+          id: streamId,
           role: "assistant",
           content: fullContent,
           status: "sent",
         });
       }
       setLocalStreamingMessage(null);
+
+      if (fullContent && !requestFailed) {
+        const conversation = state.conversations.find(
+          (item) => item.id === targetConvId,
+        );
+        const conversationTitle =
+          conversation?.title === "New Session"
+            ? `${trimmed.slice(0, 30)}...`
+            : conversation?.title ?? "New Session";
+
+        void extractKnowledge
+          .mutateAsync({
+            data: {
+              conversation: {
+                id: targetConvId,
+                title: conversationTitle,
+                projectId: activeProject?.id ?? null,
+              },
+              messages: [
+                ...contextMessages.slice(-46).map((message) => ({
+                  id: message.id,
+                  role: message.role,
+                  content: message.content.slice(0, 8000),
+                })),
+                {
+                  id: userMessageId,
+                  role: "user",
+                  content: trimmed,
+                },
+                {
+                  id: streamId,
+                  role: "assistant",
+                  content: fullContent.slice(0, 8000),
+                },
+              ],
+            },
+          })
+          .then((result) => {
+            applyKnowledgeInsights(
+              {
+                id: targetConvId,
+                title: conversationTitle,
+                projectId: activeProject?.id ?? null,
+              },
+              result.clusters,
+            );
+          })
+          .catch(() => {
+            // Chat remains usable when background extraction is unavailable.
+          });
+      }
 
       if (isActive && Platform.OS !== "web") {
         setTimeout(() => inputRef.current?.focus(), 100);
@@ -323,6 +384,8 @@ function ChatWorkspace({
         >
           <TextInput
             ref={inputRef}
+            testID="chat-input"
+            accessibilityLabel="Message Venom"
             style={[styles.input, { color: colors.foreground }]}
             placeholder="Message..."
             placeholderTextColor={colors.mutedForeground}
@@ -345,6 +408,8 @@ function ChatWorkspace({
             disabled={!text.trim() || isStreaming}
             hitSlop={12}
             testID="send-message-button"
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
           >
             <Feather
               name="arrow-up"
@@ -360,11 +425,22 @@ function ChatWorkspace({
   );
 }
 
-function KnowledgeWorkspace({ isActive }: { isActive: boolean }) {
+function KnowledgeWorkspace({
+  onOpenConversation,
+}: {
+  onOpenConversation: (conversationId: string) => void;
+}) {
   const colors = useColors();
   const { state } = useVenom();
-  const [selectedCluster, setSelectedCluster] =
-    useState<KnowledgeCluster | null>(null);
+  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(
+    null,
+  );
+  const visibleClusters = state.clusters.filter(
+    (cluster) => cluster.projectId === state.activeProjectId,
+  );
+  const selectedCluster =
+    visibleClusters.find((cluster) => cluster.id === selectedClusterId) ??
+    null;
 
   const MAP_SIZE = 800;
   const CENTER = MAP_SIZE / 2;
@@ -380,151 +456,183 @@ function KnowledgeWorkspace({ isActive }: { isActive: boolean }) {
   return (
     <View style={styles.workspaceContainer}>
       <View style={styles.knowledgeContainer}>
-        <ScrollView
-          horizontal
-          bounces={false}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ width: MAP_SIZE }}
-          centerContent
-        >
+        {visibleClusters.length === 0 ? (
+          <View style={styles.knowledgeEmpty}>
+            <View
+              style={[
+                styles.knowledgeEmptyIcon,
+                { backgroundColor: colors.secondary },
+              ]}
+            >
+              <Feather name="git-branch" size={24} color={colors.primary} />
+            </View>
+            <Text
+              style={[styles.knowledgeEmptyTitle, { color: colors.foreground }]}
+            >
+              Your knowledge map will grow here
+            </Text>
+            <Text
+              style={[
+                styles.knowledgeEmptyCopy,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              Finish a project conversation and Venom will map its topics,
+              decisions, and dependencies.
+            </Text>
+          </View>
+        ) : (
           <ScrollView
+            horizontal
             bounces={false}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ height: MAP_SIZE, width: MAP_SIZE }}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ width: MAP_SIZE }}
             centerContent
           >
-            <View style={{ width: MAP_SIZE, height: MAP_SIZE }}>
-              {/* SVG Lines - Simplified for web compatibility/expo go without react-native-svg if needed,
+            <ScrollView
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ height: MAP_SIZE, width: MAP_SIZE }}
+              centerContent
+            >
+              <View style={{ width: MAP_SIZE, height: MAP_SIZE }}>
+                {/* SVG Lines - Simplified for web compatibility/expo go without react-native-svg if needed,
                     using absolute views for simple lines */}
-              {state.clusters.map((cluster) => {
-                const p1 = getPos(cluster);
-                return cluster.links.map((targetId) => {
-                  const target = state.clusters.find((c) => c.id === targetId);
-                  if (!target) return null;
-                  if (cluster.id > target.id) return null;
+                {visibleClusters.map((cluster) => {
+                  const p1 = getPos(cluster);
+                  return cluster.links.map((targetId) => {
+                    const target = visibleClusters.find(
+                      (candidate) => candidate.id === targetId,
+                    );
+                    if (!target) return null;
+                    if (cluster.id > target.id) return null;
 
-                  const p2 = getPos(target);
-                  const dx = p2.x - p1.x;
-                  const dy = p2.y - p1.y;
-                  const length = Math.sqrt(dx * dx + dy * dy);
-                  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+                    const p2 = getPos(target);
+                    const dx = p2.x - p1.x;
+                    const dy = p2.y - p1.y;
+                    const length = Math.sqrt(dx * dx + dy * dy);
+                    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+                    return (
+                      <View
+                        key={`${cluster.id}-${targetId}`}
+                        style={{
+                          position: "absolute",
+                          left: p1.x,
+                          top: p1.y,
+                          width: length,
+                          height: 1,
+                          backgroundColor: colors.border,
+                          transform: [
+                            { translateX: -length / 2 + dx / 2 },
+                            { translateY: dy / 2 },
+                            { rotate: `${angle}deg` },
+                          ],
+                        }}
+                      />
+                    );
+                  });
+                })}
+
+                {/* Nodes */}
+                {visibleClusters.map((cluster) => {
+                  const p = getPos(cluster);
+                  const isSelected = selectedCluster?.id === cluster.id;
+                  const size = 32 + cluster.strength * 16;
+
+                  return (
+                    <TouchableOpacity
+                      key={cluster.id}
+                      testID={`knowledge-cluster-${cluster.id}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${cluster.label} knowledge cluster`}
+                      style={[
+                        styles.node,
+                        {
+                          left: p.x - size / 2,
+                          top: p.y - size / 2,
+                          width: size,
+                          height: size,
+                          borderRadius: size / 2,
+                          backgroundColor: isSelected
+                            ? colors.primary
+                            : colors.card,
+                          borderColor: isSelected
+                            ? colors.primary
+                            : colors.border,
+                          borderWidth: 2,
+                          shadowColor: colors.foreground,
+                          shadowOpacity: isSelected ? 0.1 : 0.05,
+                          shadowRadius: 8,
+                          shadowOffset: { width: 0, height: 4 },
+                          elevation: isSelected ? 4 : 2,
+                        },
+                      ]}
+                      onPress={() => {
+                        if (Platform.OS !== "web") Haptics.selectionAsync();
+                        setSelectedClusterId(cluster.id);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Feather
+                        name={
+                          cluster.category === "core"
+                            ? "cpu"
+                            : cluster.category === "data"
+                              ? "database"
+                              : "folder"
+                        }
+                        size={14}
+                        color={
+                          isSelected
+                            ? colors.primaryForeground
+                            : colors.mutedForeground
+                        }
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {/* Labels */}
+                {visibleClusters.map((cluster) => {
+                  const p = getPos(cluster);
+                  const isSelected = selectedCluster?.id === cluster.id;
+                  const size = 32 + cluster.strength * 16;
 
                   return (
                     <View
-                      key={`${cluster.id}-${targetId}`}
-                      style={{
-                        position: "absolute",
-                        left: p1.x,
-                        top: p1.y,
-                        width: length,
-                        height: 1,
-                        backgroundColor: colors.border,
-                        transform: [
-                          { translateX: -length / 2 + dx / 2 },
-                          { translateY: dy / 2 },
-                          { rotate: `${angle}deg` },
-                        ],
-                      }}
-                    />
-                  );
-                });
-              })}
-
-              {/* Nodes */}
-              {state.clusters.map((cluster) => {
-                const p = getPos(cluster);
-                const isSelected = selectedCluster?.id === cluster.id;
-                const size = 32 + cluster.strength * 16;
-
-                return (
-                  <TouchableOpacity
-                    key={cluster.id}
-                    style={[
-                      styles.node,
-                      {
-                        left: p.x - size / 2,
-                        top: p.y - size / 2,
-                        width: size,
-                        height: size,
-                        borderRadius: size / 2,
-                        backgroundColor: isSelected
-                          ? colors.primary
-                          : colors.card,
-                        borderColor: isSelected
-                          ? colors.primary
-                          : colors.border,
-                        borderWidth: 2,
-                        shadowColor: colors.foreground,
-                        shadowOpacity: isSelected ? 0.1 : 0.05,
-                        shadowRadius: 8,
-                        shadowOffset: { width: 0, height: 4 },
-                        elevation: isSelected ? 4 : 2,
-                      },
-                    ]}
-                    onPress={() => {
-                      if (Platform.OS !== "web") Haptics.selectionAsync();
-                      setSelectedCluster(cluster);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Feather
-                      name={
-                        cluster.category === "core"
-                          ? "cpu"
-                          : cluster.category === "data"
-                            ? "database"
-                            : "folder"
-                      }
-                      size={14}
-                      color={
-                        isSelected
-                          ? colors.primaryForeground
-                          : colors.mutedForeground
-                      }
-                    />
-                  </TouchableOpacity>
-                );
-              })}
-
-              {/* Labels */}
-              {state.clusters.map((cluster) => {
-                const p = getPos(cluster);
-                const isSelected = selectedCluster?.id === cluster.id;
-                const size = 32 + cluster.strength * 16;
-
-                return (
-                  <View
-                    key={`label-${cluster.id}`}
-                    style={[
-                      styles.nodeLabelContainer,
-                      {
-                        left: p.x - 75,
-                        top: p.y + size / 2 + 8,
-                      },
-                    ]}
-                    pointerEvents="none"
-                  >
-                    <Text
+                      key={`label-${cluster.id}`}
                       style={[
-                        styles.nodeLabel,
+                        styles.nodeLabelContainer,
                         {
-                          color: isSelected
-                            ? colors.foreground
-                            : colors.mutedForeground,
-                          fontFamily: isSelected
-                            ? "Inter_600SemiBold"
-                            : "Inter_500Medium",
+                          left: p.x - 75,
+                          top: p.y + size / 2 + 8,
                         },
                       ]}
+                      pointerEvents="none"
                     >
-                      {cluster.label}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
+                      <Text
+                        style={[
+                          styles.nodeLabel,
+                          {
+                            color: isSelected
+                              ? colors.foreground
+                              : colors.mutedForeground,
+                            fontFamily: isSelected
+                              ? "Inter_600SemiBold"
+                              : "Inter_500Medium",
+                          },
+                        ]}
+                      >
+                        {cluster.label}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
           </ScrollView>
-        </ScrollView>
+        )}
 
         {/* Info Panel Overlay */}
         {selectedCluster && (
@@ -548,8 +656,10 @@ function KnowledgeWorkspace({ isActive }: { isActive: boolean }) {
                   {selectedCluster.label}
                 </Text>
                 <TouchableOpacity
-                  onPress={() => setSelectedCluster(null)}
+                  onPress={() => setSelectedClusterId(null)}
                   hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close cluster details"
                 >
                   <Feather name="x" size={20} color={colors.mutedForeground} />
                 </TouchableOpacity>
@@ -560,7 +670,7 @@ function KnowledgeWorkspace({ isActive }: { isActive: boolean }) {
                   { color: colors.mutedForeground },
                 ]}
               >
-                {selectedCluster.description}
+                {selectedCluster.summary}
               </Text>
               <View style={styles.knowledgeInfoMeta}>
                 <View
@@ -588,6 +698,58 @@ function KnowledgeWorkspace({ isActive }: { isActive: boolean }) {
                   </Text>
                 </View>
               </View>
+              <Text
+                style={[
+                  styles.knowledgeSourcesLabel,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                Sources · {selectedCluster.sources.length}
+              </Text>
+              <ScrollView
+                style={styles.knowledgeSourcesList}
+                showsVerticalScrollIndicator={false}
+              >
+                {selectedCluster.sources.map((source) => (
+                  <TouchableOpacity
+                    key={source.conversationId}
+                    style={[
+                      styles.knowledgeSourceRow,
+                      { borderColor: colors.border },
+                    ]}
+                    onPress={() => onOpenConversation(source.conversationId)}
+                    testID={`knowledge-source-${source.conversationId}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open source conversation ${source.conversationTitle}`}
+                  >
+                    <View style={styles.knowledgeSourceCopy}>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.knowledgeSourceTitle,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {source.conversationTitle}
+                      </Text>
+                      <Text
+                        numberOfLines={2}
+                        style={[
+                          styles.knowledgeSourceExcerpt,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        {source.excerpt}
+                      </Text>
+                    </View>
+                    <Feather
+                      name="arrow-up-right"
+                      size={16}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           </View>
         )}
@@ -820,7 +982,7 @@ export default function WorkspaceScreen() {
   const colors = useColors();
   const { theme, toggleTheme } = useTheme();
   const insets = useSafeAreaInsets();
-  const { state } = useVenom();
+  const { state, setActiveConversation, setActiveProject } = useVenom();
 
   const [activeIndex, setActiveIndex] = useState(0);
   const activeProject =
@@ -846,6 +1008,17 @@ export default function WorkspaceScreen() {
     if (index !== activeIndex && index >= 0 && index < 3) {
       setActiveIndex(index);
     }
+  };
+
+  const handleOpenConversation = (conversationId: string) => {
+    const conversation = state.conversations.find(
+      (item) => item.id === conversationId,
+    );
+    if (!conversation) return;
+
+    setActiveProject(conversation.projectId);
+    setActiveConversation(conversation.id);
+    handleTabPress(0);
   };
 
   return (
@@ -953,7 +1126,7 @@ export default function WorkspaceScreen() {
           />
         </View>
         <View style={[styles.workspacePage, { width: SCREEN_WIDTH }]}>
-          <KnowledgeWorkspace isActive={activeIndex === 1} />
+          <KnowledgeWorkspace onOpenConversation={handleOpenConversation} />
         </View>
         <View style={[styles.workspacePage, { width: SCREEN_WIDTH }]}>
           <BoardWorkspace activeProject={activeProject} />
@@ -1130,6 +1303,33 @@ const styles = StyleSheet.create({
     flex: 1,
     position: "relative",
   },
+  knowledgeEmpty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 36,
+  },
+  knowledgeEmptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  knowledgeEmptyTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 18,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  knowledgeEmptyCopy: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+    maxWidth: 340,
+  },
   node: {
     position: "absolute",
     alignItems: "center",
@@ -1151,6 +1351,7 @@ const styles = StyleSheet.create({
     right: 0,
     borderTopWidth: 1,
     paddingBottom: 34, // Safe area roughly
+    maxHeight: "72%",
   },
   knowledgeInfoContent: {
     padding: 20,
@@ -1183,6 +1384,37 @@ const styles = StyleSheet.create({
   metaBadgeText: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
+  },
+  knowledgeSourcesLabel: {
+    marginTop: 16,
+    marginBottom: 6,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  knowledgeSourcesList: {
+    flexShrink: 1,
+  },
+  knowledgeSourceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 1,
+    paddingVertical: 10,
+  },
+  knowledgeSourceCopy: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  knowledgeSourceTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+  },
+  knowledgeSourceExcerpt: {
+    marginTop: 3,
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 17,
   },
 
   // Board Styles

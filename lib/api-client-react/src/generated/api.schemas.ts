@@ -32,3 +32,93 @@ export interface VenomChatRequest {
   projectContext?: string;
 }
 
+export interface KnowledgeConversation {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  title: string;
+  /**
+     * @maxLength 160
+     * @nullable
+     */
+  projectId?: string | null;
+}
+
+export type KnowledgeMessageRole = typeof KnowledgeMessageRole[keyof typeof KnowledgeMessageRole];
+
+
+export const KnowledgeMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export interface KnowledgeMessage {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  id: string;
+  role: KnowledgeMessageRole;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  content: string;
+}
+
+export interface KnowledgeExtractionInput {
+  conversation: KnowledgeConversation;
+  /**
+     * @minItems 1
+     * @maxItems 48
+     */
+  messages: KnowledgeMessage[];
+}
+
+export interface KnowledgeCandidate {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  label: string;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  category: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  confidence: number;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  summary: string;
+  /**
+     * @minItems 1
+     * @maxItems 12
+     * @items.minLength 1
+     * @items.maxLength 160
+     */
+  sourceMessageIds: string[];
+  /**
+     * @maxItems 8
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  relatedLabels: string[];
+}
+
+export interface KnowledgeExtraction {
+  /** @maxItems 8 */
+  clusters: KnowledgeCandidate[];
+}
+

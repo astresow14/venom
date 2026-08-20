@@ -37,3 +37,66 @@ export const SendVenomMessageBody = zod.object({
 export const SendVenomMessageResponse = zod.unknown()
 
 
+/**
+ * @summary Extract knowledge clusters from a project conversation
+ */
+export const extractVenomKnowledgeBodyConversationIdMax = 160;
+
+export const extractVenomKnowledgeBodyConversationTitleMax = 160;
+
+export const extractVenomKnowledgeBodyConversationProjectIdMax = 160;
+
+export const extractVenomKnowledgeBodyMessagesItemIdMax = 160;
+
+export const extractVenomKnowledgeBodyMessagesItemContentMax = 8000;
+
+export const extractVenomKnowledgeBodyMessagesMax = 48;
+
+
+
+export const ExtractVenomKnowledgeBody = zod.object({
+  "conversation": zod.object({
+  "id": zod.string().min(1).max(extractVenomKnowledgeBodyConversationIdMax),
+  "title": zod.string().min(1).max(extractVenomKnowledgeBodyConversationTitleMax),
+  "projectId": zod.string().max(extractVenomKnowledgeBodyConversationProjectIdMax).nullish()
+}),
+  "messages": zod.array(zod.object({
+  "id": zod.string().min(1).max(extractVenomKnowledgeBodyMessagesItemIdMax),
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().min(1).max(extractVenomKnowledgeBodyMessagesItemContentMax)
+})).min(1).max(extractVenomKnowledgeBodyMessagesMax)
+})
+
+export const extractVenomKnowledgeResponseClustersItemLabelMax = 64;
+
+export const extractVenomKnowledgeResponseClustersItemCategoryMax = 32;
+
+export const extractVenomKnowledgeResponseClustersItemConfidenceMin = 0;
+export const extractVenomKnowledgeResponseClustersItemConfidenceMax = 1;
+
+export const extractVenomKnowledgeResponseClustersItemSummaryMax = 240;
+
+export const extractVenomKnowledgeResponseClustersItemSourceMessageIdsItemMax = 160;
+
+export const extractVenomKnowledgeResponseClustersItemSourceMessageIdsMax = 12;
+
+export const extractVenomKnowledgeResponseClustersItemRelatedLabelsItemMax = 64;
+
+export const extractVenomKnowledgeResponseClustersItemRelatedLabelsMax = 8;
+
+export const extractVenomKnowledgeResponseClustersMax = 8;
+
+
+
+export const ExtractVenomKnowledgeResponse = zod.object({
+  "clusters": zod.array(zod.object({
+  "label": zod.string().min(1).max(extractVenomKnowledgeResponseClustersItemLabelMax),
+  "category": zod.string().min(1).max(extractVenomKnowledgeResponseClustersItemCategoryMax),
+  "confidence": zod.number().min(extractVenomKnowledgeResponseClustersItemConfidenceMin).max(extractVenomKnowledgeResponseClustersItemConfidenceMax),
+  "summary": zod.string().min(1).max(extractVenomKnowledgeResponseClustersItemSummaryMax),
+  "sourceMessageIds": zod.array(zod.string().min(1).max(extractVenomKnowledgeResponseClustersItemSourceMessageIdsItemMax)).min(1).max(extractVenomKnowledgeResponseClustersItemSourceMessageIdsMax),
+  "relatedLabels": zod.array(zod.string().min(1).max(extractVenomKnowledgeResponseClustersItemRelatedLabelsItemMax)).max(extractVenomKnowledgeResponseClustersItemRelatedLabelsMax)
+})).max(extractVenomKnowledgeResponseClustersMax)
+})
+
+

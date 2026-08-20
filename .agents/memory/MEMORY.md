@@ -1,0 +1,1 @@
+- [Knowledge extraction contracts](knowledge-extraction-contracts.md) — JSON-only model output still needs server-side normalization, source checks, and schema validation.
