@@ -9,7 +9,8 @@
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "test:e2e:venom": "pnpm --filter @workspace/venom run test:e2e",
     "test:e2e:venom-desktop": "pnpm --filter @workspace/venom-desktop run test:e2e",
-    "sync:github": "pnpm --filter @workspace/scripts run sync:github"
+    "sync:github": "pnpm --filter @workspace/scripts run sync:github",
+    "check:github-sync": "pnpm --filter @workspace/scripts run check:github-sync"
   },
   "private": true,
   "devDependencies": {

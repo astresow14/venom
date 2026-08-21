@@ -7,6 +7,9 @@ const usesExternalTarget = Boolean(process.env.VENOM_DESKTOP_E2E_BASE_URL);
 
 export default defineConfig({
   testDir: './e2e',
+  // The live Clerk auth suite has its own server and config
+  // (playwright.auth.config.ts); keep this suite hermetic.
+  testIgnore: '**/auth/**',
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,

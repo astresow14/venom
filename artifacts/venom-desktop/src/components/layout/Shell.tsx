@@ -1,21 +1,23 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, Link, useRoute } from "wouter";
-import { motion } from "framer-motion";
 import {
   Activity,
   AlertTriangle,
+  AudioLines,
+  Bell,
   BrainCircuit,
   CheckSquare,
   ChevronDown,
-  Combine,
+  Hexagon,
   LogOut,
   Menu,
   MessageSquare,
   Moon,
   Plus,
   RefreshCw,
+  ScrollText,
+  SquarePen,
   Sun,
-  Hexagon,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -26,10 +28,16 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { VenomWordmark } from "@/components/venom-wordmark";
 import { useVenomWorkspace } from "@/context/venom-workspace";
 import { useClerk, useUser } from "@clerk/react";
 import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
+import ProjectSopsDialog from "@/components/workspace/sops/ProjectSopsDialog";
+import VoicePreferencesDialog from "@/components/workspace/VoicePreferencesDialog";
+import WorkspaceSwitcher from "@/components/workspace/shared/WorkspaceSwitcher";
+import { useGetCommunityNotificationUnreadCount, getGetCommunityNotificationUnreadCountQueryKey, useGetVenomIdentity, getGetVenomIdentityQueryKey } from "@workspace/api-client-react";
+
 
 type NavItemProps = {
   href: string;
@@ -38,6 +46,7 @@ type NavItemProps = {
   isActive: boolean;
   shortcut: string;
   onNavigate: () => void;
+  badge?: number;
 };
 
 type ShellProject = {
@@ -59,30 +68,30 @@ function NavItem({
   isActive,
   shortcut,
   onNavigate,
+  badge,
 }: NavItemProps) {
   return (
     <Link
       href={href}
       onClick={onNavigate}
+      data-testid={`link-nav-${label.toLowerCase().replace(/[^a-z]+/g, "-")}`}
       className={cn(
-        "relative flex min-h-12 items-center gap-4 rounded-none px-4 text-[15px] font-bold uppercase tracking-wider transition-all group outline-none focus-visible:ring-2 focus-visible:ring-ring border-l-2",
+        "flex min-h-10 items-center gap-3 rounded-md px-3 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring relative",
         isActive
-          ? "text-background bg-foreground border-foreground"
-          : "text-sidebar-foreground/70 border-transparent hover:bg-foreground/5 hover:text-sidebar-foreground",
+          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+          : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
       )}
       aria-current={isActive ? "page" : undefined}
-      title={`${label} (${shortcut})`}
+      title={`${label} (${shortcut})${badge ? ` - ${badge} unread` : ""}`}
+      aria-label={`${label}${badge ? ` (${badge} unread)` : ""}`}
     >
-      <Icon
-        className={cn(
-          "h-4 w-4 shrink-0 transition-transform",
-          isActive
-            ? "scale-110"
-            : "group-hover:scale-110 motion-reduce:group-hover:scale-100",
-        )}
-        strokeWidth={isActive ? 2.5 : 2}
-      />
-      <span>{label}</span>
+      <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+      <span className="truncate flex-1">{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span className="flex h-5 items-center justify-center rounded-full bg-foreground px-2 text-xs font-semibold tabular-nums text-background">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -98,12 +107,32 @@ export default function WorkspaceLayout({
   const drawerFocusTimerRef = useRef<number | null>(null);
   const [isChat] = useRoute("/workspace/chat");
   const [isFeed] = useRoute("/workspace/feed");
+  const [isFeedThread] = useRoute("/workspace/feed/thread/:threadId");
+  const isFeedActive = isFeed || isFeedThread;
+  const [isNotifications] = useRoute("/workspace/notifications");
   const [isBrain] = useRoute("/workspace/brain");
   const [isTasks] = useRoute("/workspace/tasks");
   const [isApps] = useRoute("/workspace/apps/*?");
+  const [isSops] = useRoute("/workspace/sops/*?");
 
   const { signOut } = useClerk();
   const { user } = useUser();
+  // Who Venom recognizes this account as: the server identity record is the
+  // same one stamped onto captured knowledge. The Clerk client profile fills
+  // in while it loads (or when the API is unreachable) so the account row
+  // never goes blank.
+  const { data: identity } = useGetVenomIdentity({
+    query: {
+      queryKey: getGetVenomIdentityQueryKey(),
+      enabled: Boolean(user),
+      staleTime: 5 * 60_000,
+      retry: 1,
+    },
+  });
+  const accountName =
+    identity?.displayName || user?.fullName || user?.firstName || null;
+  const accountEmail =
+    identity?.email || user?.primaryEmailAddress?.emailAddress || null;
   const { theme, setTheme } = useTheme();
 
   const {
@@ -116,14 +145,20 @@ export default function WorkspaceLayout({
     createNewConversation,
   } = useVenomWorkspace();
 
+  const { data: unreadData } = useGetCommunityNotificationUnreadCount({
+    query: {
+      queryKey: [
+        ...getGetCommunityNotificationUnreadCountQueryKey(),
+        "account",
+        user?.id ?? "signed-out",
+      ],
+      refetchInterval: 30000, // Poll every 30 seconds
+    },
+  });
+
   const handleSignOut = () => {
     const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
     void signOut({ redirectUrl: basePath || "/" });
-  };
-
-  const navigateTo = (path: string) => {
-    setLocation(path);
-    handleDrawerOpenChange(false);
   };
 
   useEffect(() => {
@@ -154,6 +189,14 @@ export default function WorkspaceLayout({
         e.preventDefault();
         setLocation("/workspace/apps");
       }
+      if (e.altKey && e.key === "6") {
+        e.preventDefault();
+        setLocation("/workspace/sops");
+      }
+      if (e.altKey && e.key === "7") {
+        e.preventDefault();
+        setLocation("/workspace/notifications");
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -175,13 +218,20 @@ export default function WorkspaceLayout({
 
   if (!isReady || !state) {
     return (
-      <div className="flex h-[100dvh] flex-col bg-background">
-        <div className="flex h-14 items-center gap-3 border-b border-border px-4">
-          <Skeleton className="h-8 w-8 rounded-none" />
-          <Skeleton className="h-5 w-32" />
+      <div className="flex h-[100dvh] bg-background">
+        <div className="hidden w-[270px] shrink-0 flex-col gap-3 border-r border-sidebar-border bg-sidebar p-4 md:flex">
+          <Skeleton className="h-9 w-full rounded-lg" />
+          <Skeleton className="h-9 w-full rounded-lg" />
+          <Skeleton className="h-40 w-full rounded-lg" />
         </div>
-        <div className="flex-1 p-4 md:p-8">
-          <Skeleton className="h-full w-full rounded-none" />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex h-14 items-center gap-3 border-b border-border px-4 md:hidden">
+            <Skeleton className="h-8 w-8 rounded-lg" />
+            <Skeleton className="h-5 w-32 rounded-md" />
+          </div>
+          <div className="flex-1 p-4 md:p-8">
+            <Skeleton className="h-full w-full rounded-xl" />
+          </div>
         </div>
       </div>
     );
@@ -198,6 +248,11 @@ export default function WorkspaceLayout({
   const sortedProjectConversations = [...projectConvs].sort(
     (a, b) => b.updatedAt - a.updatedAt,
   );
+
+  const navigateTo = (path: string) => {
+    setLocation(path);
+    handleDrawerOpenChange(false);
+  };
 
   const handleProjectChange = (nextProjectId: string) => {
     const nextConversation = conversations
@@ -222,7 +277,7 @@ export default function WorkspaceLayout({
     navigateTo("/workspace/chat");
   };
 
-  const handleDrawerOpenChange = (open: boolean) => {
+  function handleDrawerOpenChange(open: boolean) {
     if (drawerFocusTimerRef.current !== null) {
       window.clearTimeout(drawerFocusTimerRef.current);
       drawerFocusTimerRef.current = null;
@@ -236,37 +291,54 @@ export default function WorkspaceLayout({
         drawerFocusTimerRef.current = null;
       }, 350);
     }
-  };
+  }
 
-  const DrawerContent = (
-    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground w-full">
-      <SheetHeader className="sr-only">
-        <SheetTitle>Navigation Menu</SheetTitle>
-        <SheetDescription>
-          Access workspace features and settings
-        </SheetDescription>
-      </SheetHeader>
+  const syncLabel =
+    syncStatus === "syncing"
+      ? "Syncing"
+      : syncStatus === "too_large"
+        ? "Workspace too large to sync"
+        : syncStatus === "error"
+          ? "Sync failed"
+          : syncStatus === "offline"
+            ? "Offline"
+            : syncStatus === "loading"
+              ? "Loading"
+              : "Saved";
+  const syncNeedsAttention = syncStatus === "error" || syncStatus === "offline";
 
-      <header className="flex shrink-0 items-center justify-between px-5 pb-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] border-b border-border/50">
-        <div className="flex items-center gap-3 text-2xl font-black uppercase tracking-tighter group cursor-pointer">
-          <div className="relative flex items-center justify-center w-8 h-8 bg-sidebar-foreground text-sidebar overflow-hidden group-hover:scale-105 transition-transform duration-500 ease-out">
-            <Combine className="w-4 h-4 relative z-10" />
-          </div>
-          Venom
-        </div>
-      </header>
+  const sidebarBody = (idPrefix: string) => (
+    <div className="flex h-full min-h-0 w-full flex-col bg-sidebar text-sidebar-foreground">
+      <div className="flex shrink-0 items-center px-3 pb-2 pt-[calc(env(safe-area-inset-top)+0.75rem)] md:pt-3">
+        <VenomWordmark className="h-8 shrink-0" />
+      </div>
 
-      <div className="px-5 py-4 shrink-0 border-b border-border/50">
-        <label htmlFor="drawer-project-context" className="sr-only">
+      <div className="shrink-0 px-3 pb-2">
+        <button
+          type="button"
+          onClick={handleNewConversation}
+          data-testid={`button-new-chat-${idPrefix}`}
+          className="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-3 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        >
+          <SquarePen className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+          New chat
+        </button>
+      </div>
+
+      <WorkspaceSwitcher idPrefix={idPrefix} />
+
+      <div className="shrink-0 px-3 pb-2">
+        <label htmlFor={`${idPrefix}-project`} className="sr-only">
           Active project
         </label>
         <div className="relative">
           <select
-            id="drawer-project-context"
+            id={`${idPrefix}-project`}
+            data-testid={`select-project-${idPrefix}`}
             value={activeProject?.id ?? ""}
             onChange={(event) => handleProjectChange(event.target.value)}
-            className="h-11 w-full appearance-none rounded-none border border-border/50 bg-background/50 px-4 pr-10 text-sm font-bold uppercase tracking-wider outline-none transition-colors hover:bg-background hover:border-sidebar-foreground/50 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-            title={activeProject?.name || "Global Workspace"}
+            className="h-10 w-full appearance-none rounded-lg border border-sidebar-border bg-transparent px-3 pr-9 text-sm text-sidebar-foreground outline-none transition-colors hover:bg-sidebar-accent/50 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            title={activeProject?.name || "Workspace"}
           >
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
@@ -274,85 +346,48 @@ export default function WorkspaceLayout({
               </option>
             ))}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sidebar-foreground" />
+          <ChevronDown
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sidebar-foreground/70"
+            aria-hidden="true"
+          />
         </div>
+
+        {activeProject && (
+          <ProjectSopsDialog projectId={activeProject.id}>
+            <button
+              type="button"
+              data-testid={`button-project-sops-${idPrefix}`}
+              className="mt-1 flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-sm text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              aria-label="Manage project SOPs"
+            >
+              <ScrollText className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+              Project SOPs
+            </button>
+          </ProjectSopsDialog>
+        )}
       </div>
 
-      <nav
-        className="grid gap-1 px-3 py-4 shrink-0 border-b border-border/50"
-        aria-label="Workspace navigation"
-      >
-        <NavItem
-          href="/workspace/chat"
-          icon={MessageSquare}
-          label="Chats"
-          isActive={!!isChat}
-          shortcut="Alt+1"
-          onNavigate={() => handleDrawerOpenChange(false)}
-        />
-        <NavItem
-          href="/workspace/feed"
-          icon={Activity}
-          label="Feed"
-          isActive={!!isFeed}
-          shortcut="Alt+2"
-          onNavigate={() => handleDrawerOpenChange(false)}
-        />
-        <NavItem
-          href="/workspace/brain"
-          icon={BrainCircuit}
-          label="Brain"
-          isActive={!!isBrain}
-          shortcut="Alt+3"
-          onNavigate={() => handleDrawerOpenChange(false)}
-        />
-        <NavItem
-          href="/workspace/tasks"
-          icon={CheckSquare}
-          label="To-Do"
-          isActive={!!isTasks}
-          shortcut="Alt+4"
-          onNavigate={() => handleDrawerOpenChange(false)}
-        />
-        <NavItem
-          href="/workspace/apps"
-          icon={Hexagon}
-          label="Apps"
-          isActive={!!isApps}
-          shortcut="Alt+5"
-          onNavigate={() => handleDrawerOpenChange(false)}
-        />
-      </nav>
-
-      <div className="flex min-h-0 flex-1 flex-col pt-4">
-        <div className="flex items-center justify-between px-5 pb-3 shrink-0">
-          <span className="text-xs font-bold uppercase tracking-widest text-sidebar-foreground/50">
-            Recent Threads
-          </span>
-          <button
-            type="button"
-            onClick={handleNewConversation}
-            className="grid h-7 w-7 place-items-center rounded-none border border-transparent bg-sidebar-foreground/5 text-sidebar-foreground transition-all hover:bg-sidebar-foreground hover:text-sidebar focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-            aria-label="New chat"
-            title="New chat"
-          >
-            <Plus className="h-3 w-3" />
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <h2 className="shrink-0 px-4 pb-1.5 pt-3 text-xs font-medium text-sidebar-foreground/70">
+          Chats
+        </h2>
+        <div
+          className="min-h-0 flex-1 overflow-y-auto px-2 pb-2"
+          data-testid={`list-conversations-${idPrefix}`}
+        >
           {sortedProjectConversations.length > 0 ? (
-            <div className="grid gap-1">
+            <div className="grid gap-0.5">
               {sortedProjectConversations.map((conversation) => (
                 <button
                   type="button"
                   key={conversation.id}
                   onClick={() => handleConversationSelect(conversation.id)}
+                  data-testid={`button-conversation-${conversation.id}`}
                   className={cn(
-                    "min-h-10 truncate rounded-none px-3 text-left text-[13px] font-mono transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring border-l-2",
+                    "min-h-9 truncate rounded-lg px-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
                     state.activeConversationId === conversation.id
-                      ? "border-sidebar-foreground bg-sidebar-foreground/10 text-sidebar-foreground font-bold"
-                      : "border-transparent text-sidebar-foreground/70 hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground hover:border-sidebar-foreground/30",
+                      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
                   )}
                   aria-current={
                     state.activeConversationId === conversation.id
@@ -360,92 +395,166 @@ export default function WorkspaceLayout({
                       : undefined
                   }
                 >
-                  {conversation.title || "Untitled Thread"}
+                  {conversation.title || "New chat"}
                 </button>
               ))}
             </div>
           ) : (
-            <p className="px-3 py-2 text-sm font-mono text-sidebar-foreground/50">
-              Silence.
+            <p className="px-3 py-2 text-sm text-sidebar-foreground/70">
+              No chats yet
             </p>
           )}
         </div>
+
+        <nav
+          className="shrink-0 border-t border-sidebar-border/70 px-2 py-2"
+          aria-label="Workspace navigation"
+        >
+          <div className="grid gap-0.5">
+            <NavItem
+              href="/workspace/chat"
+              icon={MessageSquare}
+              label="Chat"
+              isActive={!!isChat}
+              shortcut="Alt+1"
+              onNavigate={() => handleDrawerOpenChange(false)}
+            />
+            <NavItem
+              href="/workspace/feed"
+              icon={Activity}
+              label="Feed"
+              isActive={!!isFeedActive}
+              shortcut="Alt+2"
+              onNavigate={() => handleDrawerOpenChange(false)}
+            />
+            <NavItem
+              href="/workspace/brain"
+              icon={BrainCircuit}
+              label="Brain"
+              isActive={!!isBrain}
+              shortcut="Alt+3"
+              onNavigate={() => handleDrawerOpenChange(false)}
+            />
+            <NavItem
+              href="/workspace/tasks"
+              icon={CheckSquare}
+              label="To-Do"
+              isActive={!!isTasks}
+              shortcut="Alt+4"
+              onNavigate={() => handleDrawerOpenChange(false)}
+            />
+            <NavItem
+              href="/workspace/apps"
+              icon={Hexagon}
+              label="Apps"
+              isActive={!!isApps}
+              shortcut="Alt+5"
+              onNavigate={() => handleDrawerOpenChange(false)}
+            />
+            <NavItem
+              href="/workspace/sops"
+              icon={ScrollText}
+              label="SOPs"
+              isActive={!!isSops}
+              shortcut="Alt+6"
+              onNavigate={() => handleDrawerOpenChange(false)}
+            />
+            <NavItem
+              href="/workspace/notifications"
+              icon={Bell}
+              label="Notifications"
+              isActive={!!isNotifications}
+              shortcut="Alt+7"
+              badge={unreadData?.count}
+              onNavigate={() => handleDrawerOpenChange(false)}
+            />
+          </div>
+        </nav>
       </div>
 
-      <div className="shrink-0 border-t border-border/50 bg-sidebar px-5 pt-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
+      <div className="shrink-0 border-t border-sidebar-border/70 px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
         <div
-          className="mb-4 flex min-h-9 items-center gap-2 px-1 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/60"
+          className="flex min-h-8 items-center gap-2 px-1 text-xs text-sidebar-foreground/75"
           aria-live="polite"
-          title={`Workspace sync: ${syncStatus}`}
+          data-testid={`status-sync-${idPrefix}`}
         >
           {syncStatus === "syncing" ? (
-            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-          ) : syncStatus === "error" ||
-            syncStatus === "offline" ||
-            syncStatus === "too_large" ? (
-            <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
-          ) : (
-            <span
-              className="h-2 w-2 bg-sidebar-foreground animate-pulse"
-              aria-hidden="true"
-            />
-          )}
-          <span>{syncStatus.replace("_", " ")}</span>
-          {(syncStatus === "error" || syncStatus === "offline") && (
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          ) : syncNeedsAttention || syncStatus === "too_large" ? (
+            <AlertTriangle className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />
+          ) : null}
+          <span>{syncLabel}</span>
+          {syncNeedsAttention && (
             <button
               type="button"
               onClick={retrySync}
-              className="ml-auto underline underline-offset-4 text-sidebar-foreground font-bold"
+              data-testid={`button-retry-sync-${idPrefix}`}
+              className="ml-auto rounded-md px-2 py-1 font-medium text-sidebar-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
             >
               Retry
             </button>
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={handleNewConversation}
-          className="mb-5 flex h-12 w-full items-center justify-center gap-2 rounded-none bg-sidebar-foreground px-4 text-sm font-black uppercase tracking-widest text-sidebar transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-        >
-          <Plus className="h-4 w-4" />
-          New chat
-        </button>
-
-        <div className="flex items-center gap-3">
+        <div className="mt-1 flex items-center gap-2">
           <div
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-none bg-sidebar-foreground text-sidebar text-lg font-black uppercase"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sidebar-accent text-sm font-semibold text-sidebar-accent-foreground"
             aria-hidden="true"
           >
-            {user?.firstName?.charAt(0) ||
-              user?.primaryEmailAddress?.emailAddress?.charAt(0) ||
-              "V"}
+            {(accountName || accountEmail || "V").charAt(0).toUpperCase()}
           </div>
-          <div className="min-w-0 flex-1 truncate text-sm font-bold uppercase tracking-wide">
-            {user?.firstName ||
-              user?.primaryEmailAddress?.emailAddress ||
-              "Host"}
+          <div className="min-w-0 flex-1 text-sm text-sidebar-foreground/85">
+            <div
+              className="truncate font-medium text-sidebar-foreground"
+              data-testid={`text-account-${idPrefix}`}
+            >
+              {accountName || accountEmail || "Your account"}
+            </div>
+            {accountName && accountEmail ? (
+              <div
+                className="truncate text-xs text-sidebar-foreground/60"
+                data-testid={`text-account-email-${idPrefix}`}
+              >
+                {accountEmail}
+              </div>
+            ) : null}
           </div>
+          <VoicePreferencesDialog
+            trigger={
+              <button
+                type="button"
+                data-testid={`button-voice-preferences-${idPrefix}`}
+                className="grid h-9 w-9 place-items-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                aria-label="Voice mode preferences"
+                title="Voice mode preferences"
+              >
+                <AudioLines className="h-4 w-4" aria-hidden="true" />
+              </button>
+            }
+          />
           <button
             type="button"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="grid h-10 w-10 place-items-center border border-border/50 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-foreground hover:text-sidebar focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            data-testid={`button-theme-${idPrefix}`}
+            className="grid h-9 w-9 place-items-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
             aria-label={theme === "dark" ? "Use light mode" : "Use dark mode"}
             title={theme === "dark" ? "Use light mode" : "Use dark mode"}
           >
             {theme === "dark" ? (
-              <Sun className="h-4 w-4" />
+              <Sun className="h-4 w-4" aria-hidden="true" />
             ) : (
-              <Moon className="h-4 w-4" />
+              <Moon className="h-4 w-4" aria-hidden="true" />
             )}
           </button>
           <button
             type="button"
             onClick={handleSignOut}
-            className="grid h-10 w-10 place-items-center border border-border/50 text-sidebar-foreground/70 transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            data-testid={`button-sign-out-${idPrefix}`}
+            className="grid h-9 w-9 place-items-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
             aria-label="Sign out"
             title="Sign out"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -453,69 +562,84 @@ export default function WorkspaceLayout({
   );
 
   return (
-    <div className="flex h-[100dvh] w-full overflow-hidden bg-background text-foreground relative">
-      {/* Main Content Area */}
-      <div className="flex flex-1 flex-col min-w-0 h-full relative z-10">
-        {/* Universal Header */}
-        <header className="sticky top-0 z-30 flex h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b-2 border-border/40 bg-background/80 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl md:px-6">
-          <div className="flex items-center gap-4">
-            <Sheet open={drawerOpen} onOpenChange={handleDrawerOpenChange}>
-              <SheetTrigger asChild>
-                <button
-                  ref={drawerTriggerRef}
-                  type="button"
-                  className="grid h-12 w-12 place-items-center bg-transparent border border-transparent hover:border-foreground/20 text-foreground transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring -ml-3"
-                  aria-label="Open navigation"
-                >
-                  <Menu className="h-6 w-6" />
-                </button>
-              </SheetTrigger>
-              <SheetContent
-                side="left"
-                onCloseAutoFocus={(event) => {
-                  event.preventDefault();
-                }}
-                className="h-[100dvh] w-[85vw] max-w-[340px] border-r border-border p-0 shadow-2xl [&>button]:top-[calc(env(safe-area-inset-top)+1.25rem)] [&>button]:right-5"
-              >
-                {DrawerContent}
-              </SheetContent>
-            </Sheet>
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-background text-foreground">
+      <aside
+        className="hidden w-[270px] shrink-0 border-r border-sidebar-border md:flex"
+        aria-label="Chat history and workspace"
+        data-testid="sidebar-desktop"
+      >
+        {sidebarBody("desktop")}
+      </aside>
 
-            <div className="flex items-center gap-3">
-              <Combine className="h-5 w-5 text-foreground hidden sm:block" />
-              <span className="text-sm font-black uppercase tracking-widest truncate max-w-[140px] md:max-w-[400px]">
-                {activeProject?.name || "Global Workspace"}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3" aria-live="polite">
-            {syncStatus === "syncing" ? (
-              <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
-            ) : syncStatus === "error" ||
-              syncStatus === "offline" ||
-              syncStatus === "too_large" ? (
+      <div className="relative flex h-full min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-2 border-b border-border bg-background/90 px-2 pt-[env(safe-area-inset-top)] backdrop-blur-xl md:hidden">
+          <Sheet open={drawerOpen} onOpenChange={handleDrawerOpenChange}>
+            <SheetTrigger asChild>
               <button
+                ref={drawerTriggerRef}
                 type="button"
-                onClick={retrySync}
-                className="grid h-9 w-9 place-items-center border border-destructive bg-destructive/10 text-destructive focus-visible:outline-none focus-visible:ring-2"
-                aria-label="Retry sync"
+                data-testid="button-open-navigation"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Open navigation"
               >
-                <AlertTriangle className="h-4 w-4" />
+                <Menu className="h-5 w-5" aria-hidden="true" />
               </button>
-            ) : (
-              <div className="flex items-center gap-2 px-2 py-1 bg-foreground text-background font-mono text-[10px] font-bold uppercase tracking-widest">
-                <span
-                  className="h-1.5 w-1.5 bg-background animate-pulse"
-                  aria-label="Synced"
-                />
-                Synced
-              </div>
-            )}
-          </div>
+            </SheetTrigger>
+            <SheetContent
+              side="left"
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+              }}
+              className="h-[100dvh] w-[85vw] max-w-[320px] border-r border-sidebar-border bg-sidebar p-0"
+              data-testid="drawer-navigation"
+            >
+              <SheetHeader className="sr-only">
+                <SheetTitle>Navigation</SheetTitle>
+                <SheetDescription>
+                  Chats, projects, and workspace destinations
+                </SheetDescription>
+              </SheetHeader>
+              {sidebarBody("drawer")}
+            </SheetContent>
+          </Sheet>
+
+          <span
+            className="min-w-0 flex-1 truncate text-sm font-medium"
+            data-testid="text-active-project"
+          >
+            {activeProject?.name || "Workspace"}
+          </span>
+
+          {syncStatus === "syncing" ? (
+            <RefreshCw
+              className="h-4 w-4 shrink-0 text-muted-foreground motion-safe:animate-spin"
+              aria-label="Syncing"
+            />
+          ) : syncNeedsAttention || syncStatus === "too_large" ? (
+            <button
+              type="button"
+              onClick={retrySync}
+              data-testid="button-retry-sync-header"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={`${syncLabel}. Retry sync`}
+            >
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleNewConversation}
+            data-testid="button-new-chat-header"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="New chat"
+            title="New chat"
+          >
+            <Plus className="h-5 w-5" aria-hidden="true" />
+          </button>
         </header>
 
-        {/* Page Content */}
-        <main className="relative flex-1 flex flex-col min-h-0 bg-transparent overflow-hidden">
+        <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           {children}
         </main>
       </div>

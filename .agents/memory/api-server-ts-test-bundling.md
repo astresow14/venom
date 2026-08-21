@@ -1,26 +1,18 @@
 ---
 name: API server TypeScript test bundling
-description: How to run node:test suites that import the api-server's TypeScript modules, and why plain type stripping fails.
+description: Why api-server route tests must be esbuild-bundled CJS inside the package, not stripped or /tmp-bundled
 ---
 
-Node's `--experimental-strip-types` runner can only load a `.ts` module whose
-relative imports are fully specified (`./x.ts`). Production code in this repo
-imports extensionless (`../lib/website-safety`), so a `.test.mjs` that imports
-such a module fails with `ERR_MODULE_NOT_FOUND`. Any test that touches those
-modules must be written as a `.test.ts` and bundled with esbuild first, the way
-the existing `test:*` scripts do.
+Node's type stripping cannot load this repo's extensionless TS imports or workspace specifiers, so route-level suites must be `.test.ts` bundled with esbuild before `node --test`. Bundle as CJS (an ESM bundle breaks on Express' CommonJS dependency chain) and keep the outfile inside the package: pino's pretty transport resolves its worker relative to the bundle location, so a bundle outside the package crashes after the tests pass.
 
-Bundle format matters: `--format=esm` turns Express' CommonJS dependency chain
-into `Dynamic require of "tty" is not supported` at runtime. Use
-`--format=cjs` with a `.cjs` outfile for any suite that pulls in Express (or
-other CJS-heavy packages); the pure-library suites get away with ESM.
+**Why:** Each of these three failure modes (module-not-found, dynamic-require, post-suite transport crash) looks like a broken test rather than a loader/bundler constraint, and each burned real debugging time before the pattern settled.
 
-**Why:** the workspace mixes extensionless TS imports, workspace package
-specifiers that resolve inside `node_modules` (which Node refuses to strip),
-and CJS runtime dependencies — bundling sidesteps all three at once.
+**How to apply:** New HTTP-level suites follow the existing `test:*` scripts: bundle to the package's own dist, run with `NODE_ENV=test` and a silent log level (module-level loggers otherwise spawn the transport), and append the script to the aggregate test chain so it cannot be orphaned. Only dependency-free suites belong in the auto-discovered `.test.mjs` glob.
 
-**How to apply:** new HTTP-level route tests go in `src/routes/*.test.ts`,
-bundled to `/tmp/*.test.cjs` and run with `node --test`; register the command
-as its own package script and append it to the aggregate security suite so it
-is not orphaned. Only dependency-free suites belong in the auto-discovered
-`src/**/*.test.mjs` glob.
+## The aggregate suite is provider-hermetic
+
+The whole api-server aggregate test chain runs with only `DATABASE_URL` plus dead-end OpenAI placeholders (`AI_INTEGRATIONS_OPENAI_BASE_URL`/`_API_KEY` pointing at an unroutable localhost port). The OpenAI integration lib asserts those two at import time but no suite actually calls a provider, and a fresh empty Postgres works after `drizzle-kit push --force` (some integration suites also self-create their tables).
+
+**Why:** placeholders passing is a proof, not a hack — if a test ever reaches a real provider it fails instantly against the dead-end URL instead of silently spending money or flaking on network. This is what makes the suite runnable in hermetic CI with a service container.
+
+**How to apply:** keep CI/validation environments to `DATABASE_URL` + the two placeholders; if a new suite starts requiring more env, treat that as a hermeticity regression to fix in the test, not new CI config. Verify locally with `env -i HOME PATH DATABASE_URL + placeholders` before touching CI.

@@ -7,11 +7,21 @@ import {
   CreateVenomAppImportBody,
   CreateVenomAppImportParams,
   CreateVenomAppImportResponse,
+  CreateVenomAppIterationBody,
+  CreateVenomAppIterationParams,
+  CreateVenomAppIterationResponse,
   CreateVenomAppResponse,
   DeleteVenomAppParams,
+  DismissVenomAppImprovementSuggestionParams,
+  DismissVenomAppImprovementSuggestionResponse,
   GetVenomAppImportParams,
   GetVenomAppImportResponse,
+  GetVenomAppIterationContextParams,
+  GetVenomAppIterationContextResponse,
   GetVenomAppParams,
+  GetVenomAppTimelineParams,
+  GetVenomAppTimelineQueryParams,
+  GetVenomAppTimelineResponse,
   GetVenomAppResponse,
   ListVenomAppsResponse,
   ListVenomAppVersionsParams,
@@ -24,12 +34,19 @@ import {
 } from "@workspace/api-zod";
 import {
   db,
+  venomBuildPackageRevisionsTable,
+  venomCandidateReleasesTable,
+  venomPortfolioAppIterationsTable,
   venomPortfolioAppsTable,
   venomPortfolioDeploymentLinksTable,
   venomPortfolioImportJobsTable,
   venomPortfolioSourceConnectionsTable,
   venomPortfolioSourceVersionsTable,
+  venomSopRevisionsTable,
+  venomSopsTable,
+  type VenomCandidateRelease,
   type VenomPortfolioApp,
+  type VenomPortfolioAppIteration,
   type VenomPortfolioImportJob,
   type VenomPortfolioSourceVersion,
 } from "@workspace/db";
@@ -49,12 +66,41 @@ import {
   inspectPortfolioZip,
   PortfolioArchiveError,
 } from "../lib/portfolio-zip";
+import {
+  assembleFullAppTimeline,
+  TIMELINE_MAX_ENTRIES,
+  buildChangesSummary,
+  computeImprovementSignals,
+  computeProjectDelta,
+  EMPTY_WORKSPACE_VIEW,
+  latestIterationStats,
+  loadWorkspaceIterationView,
+  resolveWorkspaceProject,
+  type ImprovementSignalPayload,
+} from "../lib/venom-app-iterations";
+import {
+  createVenomBuildRunForUser,
+  runPayload as buildRunPayload,
+} from "./venom-build-runs";
 
 const router: IRouter = Router();
 const STALE_IMPORT_AFTER_MS = 5 * 60 * 1_000;
 
+let resolveAppPortfolioUserId = (request: Request): string | null =>
+  getAuth(request).userId;
+
 function userIdFor(request: Request): string | null {
-  return getAuth(request).userId;
+  return resolveAppPortfolioUserId(request);
+}
+
+export function overrideVenomAppPortfolioUserIdResolverForTests(
+  resolver: (request: Request) => string | null,
+): () => void {
+  const previous = resolveAppPortfolioUserId;
+  resolveAppPortfolioUserId = resolver;
+  return () => {
+    resolveAppPortfolioUserId = previous;
+  };
 }
 
 function safeDeploymentUrl(value: unknown): string | null | undefined {
@@ -77,7 +123,23 @@ function safeDeploymentUrl(value: unknown): string | null | undefined {
   }
 }
 
-function appPayload(app: VenomPortfolioApp, deploymentUrl: string | null) {
+type AppPayloadContext = {
+  linkedProjectName: string | null;
+  latestIterationNumber: number;
+  improvementSignal: ImprovementSignalPayload | null;
+};
+
+const EMPTY_APP_CONTEXT: AppPayloadContext = {
+  linkedProjectName: null,
+  latestIterationNumber: 0,
+  improvementSignal: null,
+};
+
+function appPayload(
+  app: VenomPortfolioApp,
+  deploymentUrl: string | null,
+  context: AppPayloadContext,
+) {
   return {
     id: app.id,
     name: app.name,
@@ -90,9 +152,180 @@ function appPayload(app: VenomPortfolioApp, deploymentUrl: string | null) {
     deploymentUrl,
     importStatus: app.latestImportStatus,
     sourceUpdatedAt: app.sourceUpdatedAt?.toISOString() ?? null,
+    linkedProjectId: app.linkedProjectId,
+    linkedProjectName: context.linkedProjectName,
+    latestIterationNumber: context.latestIterationNumber,
+    improvementSignal: context.improvementSignal,
     createdAt: app.createdAt.toISOString(),
     updatedAt: app.updatedAt.toISOString(),
   };
+}
+
+/**
+ * Batch-computes the linked-project and iteration context for app payloads:
+ * the live project name (null when the link dangles), the latest approved
+ * package number, and the review-first improvement signal. Read-only.
+ */
+async function appPayloadContexts(
+  userId: string,
+  apps: VenomPortfolioApp[],
+): Promise<Map<string, AppPayloadContext>> {
+  const contexts = new Map<string, AppPayloadContext>();
+  if (apps.length === 0) return contexts;
+  const stats = await latestIterationStats(
+    userId,
+    apps.map((app) => app.id),
+  );
+  const needsView = apps.some((app) => app.linkedProjectId !== null);
+  const view = needsView
+    ? await loadWorkspaceIterationView(userId)
+    : EMPTY_WORKSPACE_VIEW;
+  const signals = await computeImprovementSignals(userId, apps, view, stats);
+  for (const app of apps) {
+    contexts.set(app.id, {
+      linkedProjectName: app.linkedProjectId
+        ? (resolveWorkspaceProject(view, app.linkedProjectId)?.name ?? null)
+        : null,
+      latestIterationNumber: stats.get(app.id)?.latestIterationNumber ?? 0,
+      improvementSignal: signals.get(app.id) ?? null,
+    });
+  }
+  return contexts;
+}
+
+function iterationPayloads(iterations: VenomPortfolioAppIteration[]) {
+  const numberById = new Map(
+    iterations.map((iteration) => [iteration.id, iteration.iterationNumber]),
+  );
+  return iterations.map((iteration) => ({
+    id: iteration.id,
+    iterationNumber: iteration.iterationNumber,
+    buildRunId: iteration.buildRunId,
+    revisionId: iteration.revisionId,
+    packageTitle: iteration.packageTitle,
+    packageChecksum: iteration.packageChecksum,
+    runKind: iteration.runKind,
+    reason: iteration.reason,
+    changesSummary: iteration.changesSummary,
+    baselineIterationNumber: iteration.baselineIterationId
+      ? (numberById.get(iteration.baselineIterationId) ?? null)
+      : null,
+    createdBy: iteration.createdBy,
+    createdAt: iteration.createdAt.toISOString(),
+  }));
+}
+
+async function latestAppIteration(userId: string, appId: string) {
+  const [iteration] = await db
+    .select()
+    .from(venomPortfolioAppIterationsTable)
+    .where(
+      and(
+        eq(venomPortfolioAppIterationsTable.appId, appId),
+        eq(venomPortfolioAppIterationsTable.clerkUserId, userId),
+      ),
+    )
+    .orderBy(desc(venomPortfolioAppIterationsTable.iterationNumber))
+    .limit(1);
+  return iteration;
+}
+
+async function baselineRevisionFor(userId: string, revisionId: string) {
+  const [revision] = await db
+    .select()
+    .from(venomBuildPackageRevisionsTable)
+    .where(
+      and(
+        eq(venomBuildPackageRevisionsTable.id, revisionId),
+        eq(venomBuildPackageRevisionsTable.clerkUserId, userId),
+      ),
+    )
+    .limit(1);
+  return revision;
+}
+
+async function latestSourceVersionFor(
+  userId: string,
+  app: VenomPortfolioApp,
+): Promise<VenomPortfolioSourceVersion | null> {
+  if (app.currentSourceVersion <= 0) return null;
+  const [version] = await db
+    .select()
+    .from(venomPortfolioSourceVersionsTable)
+    .where(
+      and(
+        eq(venomPortfolioSourceVersionsTable.appId, app.id),
+        eq(venomPortfolioSourceVersionsTable.clerkUserId, userId),
+        eq(
+          venomPortfolioSourceVersionsTable.versionNumber,
+          app.currentSourceVersion,
+        ),
+      ),
+    )
+    .limit(1);
+  return version ?? null;
+}
+
+/**
+ * Maps the baseline package's SOP references to their current active
+ * revisions. SOPs that were archived or deleted since the baseline drop out;
+ * newer active revisions replace the pinned ones.
+ */
+async function resolveSuggestedSops(
+  userId: string,
+  baselinePackage: { sopReferences: { sopId: string }[] },
+): Promise<
+  { sopId: string; revisionId: string; revisionNumber: number; title: string }[]
+> {
+  const sopIds = [
+    ...new Set(baselinePackage.sopReferences.map((ref) => ref.sopId)),
+  ].slice(0, 20);
+  if (sopIds.length === 0) return [];
+  const sops = await db
+    .select()
+    .from(venomSopsTable)
+    .where(
+      and(
+        eq(venomSopsTable.clerkUserId, userId),
+        inArray(venomSopsTable.id, sopIds),
+      ),
+    );
+  const activeSops = sops.filter(
+    (sop) => sop.activeRevisionId !== null && sop.archivedAt === null,
+  );
+  if (activeSops.length === 0) return [];
+  const revisions = await db
+    .select()
+    .from(venomSopRevisionsTable)
+    .where(
+      and(
+        eq(venomSopRevisionsTable.clerkUserId, userId),
+        inArray(
+          venomSopRevisionsTable.id,
+          activeSops.map((sop) => sop.activeRevisionId as string),
+        ),
+      ),
+    );
+  const revisionById = new Map(
+    revisions.map((revision) => [revision.id, revision]),
+  );
+  return activeSops
+    .flatMap((sop) => {
+      const revision = sop.activeRevisionId
+        ? revisionById.get(sop.activeRevisionId)
+        : undefined;
+      return revision
+        ? [
+            {
+              sopId: sop.id,
+              revisionId: revision.id,
+              revisionNumber: revision.versionNumber,
+              title: revision.title.slice(0, 160),
+            },
+          ]
+        : [];
+    })
+    .slice(0, 20);
 }
 
 function jobPayload(job: VenomPortfolioImportJob) {
@@ -122,6 +355,29 @@ function versionPayload(version: VenomPortfolioSourceVersion) {
     checksumSha256: version.checksumSha256,
     manifest: version.manifest,
     createdAt: version.createdAt.toISOString(),
+  };
+}
+
+function provisioningReleasePayload(release: VenomCandidateRelease) {
+  return {
+    id: release.id,
+    provisioningRunId: release.provisioningRunId,
+    buildRunId: release.buildRunId,
+    approvedRevisionId: release.approvedRevisionId,
+    appId: release.appId,
+    targetName: release.targetName,
+    providerProjectId: release.providerProjectId,
+    providerCandidateId: release.providerCandidateId,
+    providerReleaseId: release.providerReleaseId,
+    launchUrl: release.launchUrl,
+    status: release.status,
+    rollbackSupported: release.rollbackSupported,
+    publishIdempotencyKey: release.publishIdempotencyKey,
+    rollbackIdempotencyKey: release.rollbackIdempotencyKey,
+    publishedAt: release.publishedAt,
+    rolledBackAt: release.rolledBackAt,
+    createdAt: release.createdAt,
+    updatedAt: release.updatedAt,
   };
 }
 
@@ -518,13 +774,22 @@ router.get("/venom/apps", async (req, res): Promise<void> => {
     .where(eq(venomPortfolioAppsTable.clerkUserId, userId))
     .orderBy(desc(venomPortfolioAppsTable.updatedAt))
     .limit(500);
-  const deployments = await primaryDeploymentUrls(
-    userId,
-    apps.map((app) => app.id),
-  );
+  const [deployments, contexts] = await Promise.all([
+    primaryDeploymentUrls(
+      userId,
+      apps.map((app) => app.id),
+    ),
+    appPayloadContexts(userId, apps),
+  ]);
   res.json(
     ListVenomAppsResponse.parse(
-      apps.map((app) => appPayload(app, deployments.get(app.id) ?? null)),
+      apps.map((app) =>
+        appPayload(
+          app,
+          deployments.get(app.id) ?? null,
+          contexts.get(app.id) ?? EMPTY_APP_CONTEXT,
+        ),
+      ),
     ),
   );
 });
@@ -563,7 +828,11 @@ router.post("/venom/apps", async (req, res): Promise<void> => {
   req.log.info({ appId: app.id }, "Portfolio app created");
   res
     .status(201)
-    .json(CreateVenomAppResponse.parse(appPayload(app, deploymentUrl ?? null)));
+    .json(
+      CreateVenomAppResponse.parse(
+        appPayload(app, deploymentUrl ?? null, EMPTY_APP_CONTEXT),
+      ),
+    );
 });
 
 router.get("/venom/apps/:appId", async (req, res): Promise<void> => {
@@ -582,46 +851,78 @@ router.get("/venom/apps/:appId", async (req, res): Promise<void> => {
     res.status(404).json({ error: "App not found" });
     return;
   }
-  const [versions, jobs, links] = await Promise.all([
-    db
-      .select()
-      .from(venomPortfolioSourceVersionsTable)
-      .where(
-        and(
-          eq(venomPortfolioSourceVersionsTable.appId, app.id),
-          eq(venomPortfolioSourceVersionsTable.clerkUserId, userId),
-        ),
-      )
-      .orderBy(desc(venomPortfolioSourceVersionsTable.versionNumber))
-      .limit(500),
-    db
-      .select()
-      .from(venomPortfolioImportJobsTable)
-      .where(
-        and(
-          eq(venomPortfolioImportJobsTable.appId, app.id),
-          eq(venomPortfolioImportJobsTable.clerkUserId, userId),
-        ),
-      )
-      .orderBy(desc(venomPortfolioImportJobsTable.createdAt))
-      .limit(100),
-    db
-      .select()
-      .from(venomPortfolioDeploymentLinksTable)
-      .where(
-        and(
-          eq(venomPortfolioDeploymentLinksTable.appId, app.id),
-          eq(venomPortfolioDeploymentLinksTable.clerkUserId, userId),
-        ),
-      )
-      .orderBy(desc(venomPortfolioDeploymentLinksTable.isPrimary)),
-  ]);
+  const [versions, jobs, links, releases, iterations, contexts] =
+    await Promise.all([
+      db
+        .select()
+        .from(venomPortfolioSourceVersionsTable)
+        .where(
+          and(
+            eq(venomPortfolioSourceVersionsTable.appId, app.id),
+            eq(venomPortfolioSourceVersionsTable.clerkUserId, userId),
+          ),
+        )
+        .orderBy(desc(venomPortfolioSourceVersionsTable.versionNumber)),
+      db
+        .select()
+        .from(venomPortfolioImportJobsTable)
+        .where(
+          and(
+            eq(venomPortfolioImportJobsTable.appId, app.id),
+            eq(venomPortfolioImportJobsTable.clerkUserId, userId),
+          ),
+        )
+        .orderBy(desc(venomPortfolioImportJobsTable.createdAt))
+        .limit(100),
+      db
+        .select()
+        .from(venomPortfolioDeploymentLinksTable)
+        .where(
+          and(
+            eq(venomPortfolioDeploymentLinksTable.appId, app.id),
+            eq(venomPortfolioDeploymentLinksTable.clerkUserId, userId),
+          ),
+        )
+        .orderBy(desc(venomPortfolioDeploymentLinksTable.isPrimary)),
+      db
+        .select()
+        .from(venomCandidateReleasesTable)
+        .where(
+          and(
+            eq(venomCandidateReleasesTable.appId, app.id),
+            eq(venomCandidateReleasesTable.clerkUserId, userId),
+          ),
+        )
+        .orderBy(desc(venomCandidateReleasesTable.createdAt)),
+      db
+        .select()
+        .from(venomPortfolioAppIterationsTable)
+        .where(
+          and(
+            eq(venomPortfolioAppIterationsTable.appId, app.id),
+            eq(venomPortfolioAppIterationsTable.clerkUserId, userId),
+          ),
+        )
+        .orderBy(desc(venomPortfolioAppIterationsTable.iterationNumber)),
+      appPayloadContexts(userId, [app]),
+    ]);
   const primary = links.find((link) => link.isPrimary)?.url ?? null;
   await recoverStaleImportJobs(userId, jobs);
+  // The timeline is assembled from UNCAPPED history so its total is honest;
+  // the embedded view stays bounded and the paged endpoint serves the rest.
+  const fullTimeline = assembleFullAppTimeline({
+    versions,
+    iterations,
+    releases,
+  });
   res.json(
     GetVenomAppResponse.parse({
-      app: appPayload(app, primary),
-      versions: versions.map(versionPayload),
+      app: appPayload(
+        app,
+        primary,
+        contexts.get(app.id) ?? EMPTY_APP_CONTEXT,
+      ),
+      versions: versions.slice(0, 500).map(versionPayload),
       importJobs: jobs.map(jobPayload),
       deploymentLinks: links.map((link) => ({
         id: link.id,
@@ -630,9 +931,122 @@ router.get("/venom/apps/:appId", async (req, res): Promise<void> => {
         isPrimary: link.isPrimary,
         createdAt: link.createdAt.toISOString(),
       })),
+      provisioningReleases: releases
+        .slice(0, 500)
+        .map(provisioningReleasePayload),
+      iterations: iterationPayloads(iterations.slice(0, 200)),
+      timeline: fullTimeline.slice(0, TIMELINE_MAX_ENTRIES),
+      timelineTotal: fullTimeline.length,
+      timelineTruncated: fullTimeline.length > TIMELINE_MAX_ENTRIES,
     }),
   );
 });
+
+router.get(
+  "/venom/apps/:appId/timeline",
+  async (req, res): Promise<void> => {
+    const userId = userIdFor(req);
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const params = GetVenomAppTimelineParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(404).json({ error: "App not found" });
+      return;
+    }
+    const query = GetVenomAppTimelineQueryParams.safeParse(req.query);
+    if (!query.success) {
+      res.status(400).json({ error: "Invalid cursor or limit" });
+      return;
+    }
+    const app = await ownedApp(userId, params.data.appId);
+    if (!app) {
+      res.status(404).json({ error: "App not found" });
+      return;
+    }
+    const [versions, releases, iterations] = await Promise.all([
+      db
+        .select()
+        .from(venomPortfolioSourceVersionsTable)
+        .where(
+          and(
+            eq(venomPortfolioSourceVersionsTable.appId, app.id),
+            eq(venomPortfolioSourceVersionsTable.clerkUserId, userId),
+          ),
+        )
+        .orderBy(desc(venomPortfolioSourceVersionsTable.versionNumber)),
+      db
+        .select()
+        .from(venomCandidateReleasesTable)
+        .where(
+          and(
+            eq(venomCandidateReleasesTable.appId, app.id),
+            eq(venomCandidateReleasesTable.clerkUserId, userId),
+          ),
+        )
+        .orderBy(desc(venomCandidateReleasesTable.createdAt)),
+      db
+        .select()
+        .from(venomPortfolioAppIterationsTable)
+        .where(
+          and(
+            eq(venomPortfolioAppIterationsTable.appId, app.id),
+            eq(venomPortfolioAppIterationsTable.clerkUserId, userId),
+          ),
+        )
+        .orderBy(desc(venomPortfolioAppIterationsTable.iterationNumber)),
+    ]);
+    const full = assembleFullAppTimeline({ versions, iterations, releases });
+    const limit = query.data.limit ?? 100;
+    const cursor = query.data.cursor ?? null;
+    // Keyset cursor `${occurredAt}~${entryId}`: page from the first entry
+    // strictly after that position in (occurredAt desc, id asc) order, so
+    // paging stays stable even if the cursor entry itself disappears.
+    let start = 0;
+    if (cursor !== null && cursor !== undefined) {
+      const separator = cursor.indexOf("~");
+      if (separator <= 0) {
+        res.status(400).json({ error: "Invalid cursor or limit" });
+        return;
+      }
+      const cursorAt = cursor.slice(0, separator);
+      const cursorId = cursor.slice(separator + 1);
+      // The timestamp half must be a canonical ISO instant (timeline entries
+      // serialize occurredAt via toISOString) and the id half non-empty;
+      // anything else is a malformed cursor, not a seek position.
+      const parsedAt = new Date(cursorAt);
+      if (
+        cursorId.length === 0 ||
+        Number.isNaN(parsedAt.getTime()) ||
+        parsedAt.toISOString() !== cursorAt
+      ) {
+        res.status(400).json({ error: "Invalid cursor or limit" });
+        return;
+      }
+      const index = full.findIndex(
+        (entry) =>
+          entry.occurredAt < cursorAt ||
+          (entry.occurredAt === cursorAt &&
+            entry.id.localeCompare(cursorId) > 0),
+      );
+      start = index === -1 ? full.length : index;
+    }
+    const entries = full.slice(start, start + limit);
+    const lastEntry = entries[entries.length - 1];
+    const hasMore = start + entries.length < full.length;
+    res.json(
+      GetVenomAppTimelineResponse.parse({
+        entries,
+        nextCursor:
+          hasMore && lastEntry
+            ? `${lastEntry.occurredAt}~${lastEntry.id}`
+            : null,
+        total: full.length,
+      }),
+    );
+  },
+);
 
 router.patch("/venom/apps/:appId", async (req, res): Promise<void> => {
   const userId = userIdFor(req);
@@ -658,6 +1072,29 @@ router.patch("/venom/apps/:appId", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Deployment URL must use HTTP or HTTPS" });
     return;
   }
+  // Linking an app to a Venom project is validated server-side against the
+  // caller's own workspace projects. Changing or clearing the link resets the
+  // suggestion dismissal so signals are recomputed for the new context.
+  let linkedProjectPatch: {
+    linkedProjectId: string | null;
+    improvementSuggestionDismissedAt: null;
+  } | null = null;
+  if (Object.hasOwn(parsed.data, "linkedProjectId")) {
+    const requested = parsed.data.linkedProjectId ?? null;
+    if (requested !== null) {
+      const view = await loadWorkspaceIterationView(userId);
+      if (!resolveWorkspaceProject(view, requested)) {
+        res
+          .status(400)
+          .json({ error: "Linked project was not found in this workspace" });
+        return;
+      }
+    }
+    linkedProjectPatch = {
+      linkedProjectId: requested,
+      improvementSuggestionDismissedAt: null,
+    };
+  }
   const updated = await db.transaction(async (transaction) => {
     const [app] = await transaction
       .update(venomPortfolioAppsTable)
@@ -674,6 +1111,7 @@ router.patch("/venom/apps/:appId", async (req, res): Promise<void> => {
         ...(parsed.data.status === undefined
           ? {}
           : { status: parsed.data.status }),
+        ...(linkedProjectPatch ?? {}),
         updatedAt: new Date(),
       })
       .where(
@@ -696,10 +1134,17 @@ router.patch("/venom/apps/:appId", async (req, res): Promise<void> => {
     res.status(404).json({ error: "App not found" });
     return;
   }
-  const deployments = await primaryDeploymentUrls(userId, [updated.id]);
+  const [deployments, contexts] = await Promise.all([
+    primaryDeploymentUrls(userId, [updated.id]),
+    appPayloadContexts(userId, [updated]),
+  ]);
   res.json(
     UpdateVenomAppResponse.parse(
-      appPayload(updated, deployments.get(updated.id) ?? null),
+      appPayload(
+        updated,
+        deployments.get(updated.id) ?? null,
+        contexts.get(updated.id) ?? EMPTY_APP_CONTEXT,
+      ),
     ),
   );
 });
@@ -763,6 +1208,283 @@ router.delete("/venom/apps/:appId", async (req, res): Promise<void> => {
   req.log.info({ appId: app.id }, "Portfolio app deleted");
   res.sendStatus(204);
 });
+
+router.get(
+  "/venom/apps/:appId/iteration-context",
+  async (req, res): Promise<void> => {
+    const userId = userIdFor(req);
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const params = GetVenomAppIterationContextParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(404).json({ error: "App not found" });
+      return;
+    }
+    const app = await ownedApp(userId, params.data.appId);
+    if (!app) {
+      res.status(404).json({ error: "App not found" });
+      return;
+    }
+    const view = app.linkedProjectId
+      ? await loadWorkspaceIterationView(userId)
+      : EMPTY_WORKSPACE_VIEW;
+    const linkedProject = app.linkedProjectId
+      ? (resolveWorkspaceProject(view, app.linkedProjectId) ?? null)
+      : null;
+    const latestIteration = await latestAppIteration(userId, app.id);
+    const baselineRevision = latestIteration
+      ? await baselineRevisionFor(userId, latestIteration.revisionId)
+      : undefined;
+    const latestSourceVersion = await latestSourceVersionFor(userId, app);
+    const suggestedSops = baselineRevision
+      ? await resolveSuggestedSops(userId, baselineRevision.package)
+      : [];
+    let changes: {
+      knowledgeChanges: number;
+      sourceChanges: number;
+      summary: string;
+      since: string;
+    } | null = null;
+    if (latestIteration && linkedProject) {
+      const sinceMs = latestIteration.createdAt.getTime();
+      const delta = await computeProjectDelta(
+        userId,
+        linkedProject.id,
+        sinceMs,
+        view,
+      );
+      changes = {
+        knowledgeChanges: delta.knowledgeChanges,
+        sourceChanges: delta.sourceChanges,
+        summary: buildChangesSummary(delta, {
+          sinceLabel: `version ${latestIteration.iterationNumber}`,
+          projectName: linkedProject.name,
+        }),
+        since: latestIteration.createdAt.toISOString(),
+      };
+    }
+    const blockedReason = !latestIteration
+      ? ("no_baseline" as const)
+      : !baselineRevision
+        ? ("baseline_unresolvable" as const)
+        : null;
+    res.json(
+      GetVenomAppIterationContextResponse.parse({
+        appId: app.id,
+        appName: app.name,
+        linkedProject: linkedProject
+          ? { id: linkedProject.id, name: linkedProject.name }
+          : null,
+        baseline: latestIteration
+          ? {
+              iterationId: latestIteration.id,
+              iterationNumber: latestIteration.iterationNumber,
+              buildRunId: latestIteration.buildRunId,
+              revisionId: latestIteration.revisionId,
+              packageTitle: latestIteration.packageTitle,
+              resolvable: Boolean(baselineRevision),
+              approvedAt: latestIteration.createdAt.toISOString(),
+            }
+          : null,
+        latestSourceVersion: latestSourceVersion
+          ? {
+              id: latestSourceVersion.id,
+              versionNumber: latestSourceVersion.versionNumber,
+              archiveFilename: latestSourceVersion.archiveFilename,
+            }
+          : null,
+        suggestedSops,
+        changes,
+        canIterate: blockedReason === null,
+        blockedReason,
+      }),
+    );
+  },
+);
+
+router.post(
+  "/venom/apps/:appId/iterations",
+  async (req, res): Promise<void> => {
+    const userId = userIdFor(req);
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const params = CreateVenomAppIterationParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(404).json({ error: "App not found" });
+      return;
+    }
+    const parsed = CreateVenomAppIterationBody.safeParse(req.body);
+    if (!parsed.success || parsed.data.instruction.trim().length === 0) {
+      res.status(400).json({ error: "Invalid iteration request" });
+      return;
+    }
+    const app = await ownedApp(userId, params.data.appId);
+    if (!app) {
+      res.status(404).json({ error: "App not found" });
+      return;
+    }
+    const latestIteration = await latestAppIteration(userId, app.id);
+    if (!latestIteration) {
+      res.status(409).json({
+        error:
+          "This app has no approved package yet. Approve a build for it first to establish a baseline.",
+      });
+      return;
+    }
+    const baselineRevision = await baselineRevisionFor(
+      userId,
+      latestIteration.revisionId,
+    );
+    if (!baselineRevision) {
+      res.status(409).json({
+        error:
+          "The baseline package for this app can no longer be resolved. Approve a new build for this app to set a fresh baseline.",
+      });
+      return;
+    }
+    const view = app.linkedProjectId
+      ? await loadWorkspaceIterationView(userId)
+      : EMPTY_WORKSPACE_VIEW;
+    const linkedProject = app.linkedProjectId
+      ? (resolveWorkspaceProject(view, app.linkedProjectId) ?? null)
+      : null;
+    let changesSummary =
+      "No linked Venom project; this iteration is driven by the owner's request only.";
+    if (linkedProject) {
+      const delta = await computeProjectDelta(
+        userId,
+        linkedProject.id,
+        latestIteration.createdAt.getTime(),
+        view,
+      );
+      changesSummary = buildChangesSummary(delta, {
+        sinceLabel: `version ${latestIteration.iterationNumber}`,
+        projectName: linkedProject.name,
+      });
+    }
+    const latestSourceVersion = await latestSourceVersionFor(userId, app);
+    const sopRevisionIds =
+      parsed.data.sopRevisionIds ??
+      (await resolveSuggestedSops(userId, baselineRevision.package)).map(
+        (sop) => sop.revisionId,
+      );
+    const creation = await createVenomBuildRunForUser(
+      userId,
+      {
+        targetType: baselineRevision.package.targetType,
+        targetName: app.name.slice(0, 200),
+        requirements: parsed.data.instruction,
+        constraints: parsed.data.constraints ?? "",
+        brandDirection: baselineRevision.package.brandDirection
+          .join("\n")
+          .slice(0, 3000),
+        appId: app.id,
+        sourceVersionId: latestSourceVersion?.id ?? null,
+        projectId: linkedProject?.id ?? null,
+        sopRevisionIds,
+        idempotencyKey: parsed.data.idempotencyKey,
+      },
+      {
+        runKind: "app_iteration",
+        baselineIterationId: latestIteration.id,
+        baselineRevisionId: latestIteration.revisionId,
+        changesSummary,
+      },
+    );
+    if (creation.kind === "invalid_reference") {
+      res.status(400).json({
+        error: "One or more source or SOP revision references are unavailable",
+      });
+      return;
+    }
+    if (creation.kind === "busy") {
+      res.status(409).json({
+        error:
+          "Two package generations are already active. Wait or cancel one.",
+      });
+      return;
+    }
+    if (creation.kind === "conflict") {
+      res.status(409).json({ error: "Idempotency key is already in use" });
+      return;
+    }
+    if (creation.kind === "iteration_required") {
+      // Unreachable: the baseline guard only applies to standard runs, and
+      // this endpoint always creates app_iteration runs. Kept for exhaustive
+      // narrowing so the compiler protects future outcome changes.
+      res.status(409).json({
+        error: "This app must be improved through an iteration run.",
+      });
+      return;
+    }
+    req.log.info(
+      {
+        operation: "venom_app_iteration_create",
+        appId: app.id,
+        runId: creation.run.id,
+        baselineIterationId: latestIteration.id,
+        linkedProjectId: linkedProject?.id ?? null,
+      },
+      "App improvement iteration started",
+    );
+    res
+      .status(201)
+      .json(
+        CreateVenomAppIterationResponse.parse(
+          await buildRunPayload(creation.run),
+        ),
+      );
+  },
+);
+
+router.post(
+  "/venom/apps/:appId/improvement-suggestion/dismiss",
+  async (req, res): Promise<void> => {
+    const userId = userIdFor(req);
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const params = DismissVenomAppImprovementSuggestionParams.safeParse(
+      req.params,
+    );
+    if (!params.success) {
+      res.status(404).json({ error: "App not found" });
+      return;
+    }
+    const [updated] = await db
+      .update(venomPortfolioAppsTable)
+      .set({ improvementSuggestionDismissedAt: new Date() })
+      .where(
+        and(
+          eq(venomPortfolioAppsTable.id, params.data.appId),
+          eq(venomPortfolioAppsTable.clerkUserId, userId),
+        ),
+      )
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "App not found" });
+      return;
+    }
+    const [deployments, contexts] = await Promise.all([
+      primaryDeploymentUrls(userId, [updated.id]),
+      appPayloadContexts(userId, [updated]),
+    ]);
+    res.json(
+      DismissVenomAppImprovementSuggestionResponse.parse(
+        appPayload(
+          updated,
+          deployments.get(updated.id) ?? null,
+          contexts.get(updated.id) ?? EMPTY_APP_CONTEXT,
+        ),
+      ),
+    );
+  },
+);
 
 router.get(
   "/venom/apps/:appId/versions",

@@ -27,6 +27,39 @@ if (!basePath) {
   );
 }
 
+/**
+ * Split the three largest always-needed vendors out of the entry chunk.
+ *
+ * Route-level `import()` already keeps page code off the first load, but every
+ * route still needs React, Clerk and Motion, so Rollup would otherwise inline
+ * all three into a single ~550 kB entry file. As separate chunks the browser
+ * fetches them in parallel and keeps them cached across deploys, since they
+ * only change when the dependency itself changes.
+ *
+ * Only packages that are already reachable from the entry are listed here.
+ * Adding a route-only package would drag it back onto the critical path.
+ */
+function vendorChunk(id: string): string | undefined {
+  const marker = 'node_modules/';
+  const index = id.lastIndexOf(marker);
+  if (index === -1) return undefined;
+
+  const subpath = id.slice(index + marker.length);
+  const segments = subpath.split('/');
+  const pkg = subpath.startsWith('@')
+    ? `${segments[0]}/${segments[1]}`
+    : segments[0];
+
+  if (pkg === 'react' || pkg === 'react-dom' || pkg === 'scheduler') {
+    return 'vendor-react';
+  }
+  if (pkg.startsWith('@clerk/')) return 'vendor-clerk';
+  if (pkg === 'framer-motion' || pkg.startsWith('motion-')) {
+    return 'vendor-motion';
+  }
+  return undefined;
+}
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -63,6 +96,11 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist/public'),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: vendorChunk,
+      },
+    },
   },
   server: {
     port,

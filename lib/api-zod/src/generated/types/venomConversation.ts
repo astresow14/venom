@@ -5,7 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VenomConversationBlend } from './venomConversationBlend';
 import type { VenomMessage } from './venomMessage';
+import type { VenomResponseMode } from './venomResponseMode';
 
 export interface VenomConversation {
   /**
@@ -27,4 +29,11 @@ export interface VenomConversation {
   updatedAt: number;
   /** @maxItems 1000 */
   messages: VenomMessage[];
+  responseMode?: VenomResponseMode;
+  blend?: VenomConversationBlend;
+  /**
+     * When the response mode or blend last changed on any device; the newer block wins in cross-device merges.
+     * @minimum 0
+     */
+  modeUpdatedAt?: number;
 }

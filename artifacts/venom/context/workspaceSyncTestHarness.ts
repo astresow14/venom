@@ -18,6 +18,12 @@ export type WorkspaceSyncTestHarness = {
   snapshots: Record<string, WorkspaceSyncTestSnapshot>;
   failNextSaves: (count: number) => void;
   switchAccount: (userId: string) => void;
+  /**
+   * Replaces the cloud snapshot an account restores from, so a test can stand
+   * in for what another device left behind. Saved snapshots survive a reload,
+   * which is what lets a test exercise the signed-in restore path.
+   */
+  seedSnapshot: (userId: string, state: VenomWorkspaceState) => void;
 };
 
 type WorkspaceSyncTestGlobal = typeof globalThis & {
@@ -42,6 +48,40 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/**
+ * Where the fake cloud lives between page loads. The real cloud outlives a
+ * reload, so a harness that only kept snapshots in memory could never stand in
+ * for the signed-in restore path.
+ */
+const SNAPSHOT_STORAGE_KEY = "@venom_workspace_sync_test_cloud";
+
+function readPersistedSnapshots(): Record<string, WorkspaceSyncTestSnapshot> {
+  try {
+    const raw = globalThis.localStorage?.getItem(SNAPSHOT_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return parsed as Record<string, WorkspaceSyncTestSnapshot>;
+  } catch {
+    return {};
+  }
+}
+
+function persistSnapshots(
+  snapshots: Record<string, WorkspaceSyncTestSnapshot>,
+) {
+  try {
+    globalThis.localStorage?.setItem(
+      SNAPSHOT_STORAGE_KEY,
+      JSON.stringify(snapshots),
+    );
+  } catch {
+    // The fake cloud is best-effort; a storage failure must not break the app.
+  }
+}
+
 function createHarness(): WorkspaceSyncTestHarness {
   let failuresRemaining = Math.max(
     0,
@@ -49,7 +89,7 @@ function createHarness(): WorkspaceSyncTestHarness {
   );
   const harness: WorkspaceSyncTestHarness = {
     attempts: [],
-    snapshots: {},
+    snapshots: readPersistedSnapshots(),
     failNextSaves(count) {
       failuresRemaining = Math.max(0, Math.floor(count));
     },
@@ -59,6 +99,14 @@ function createHarness(): WorkspaceSyncTestHarness {
           detail: { userId },
         }),
       );
+    },
+    seedSnapshot(userId, state) {
+      harness.snapshots[userId] = {
+        state: clone(state),
+        revision: (harness.snapshots[userId]?.revision ?? 0) + 1,
+        updatedAt: new Date().toISOString(),
+      };
+      persistSnapshots(harness.snapshots);
     },
   };
 
@@ -117,5 +165,17 @@ export async function saveWorkspaceForSyncTest(
     updatedAt: new Date().toISOString(),
   };
   testHarness.snapshots[userId] = saved;
+  persistSnapshots(testHarness.snapshots);
   return saved;
+}
+
+/**
+ * The cloud snapshot a signed-in restore reads, or null when this account has
+ * never saved. Mirrors the shape the workspace endpoint returns so the test
+ * mode can run the same hydration the real sign-in runs.
+ */
+export function loadWorkspaceForSyncTest(
+  userId: string,
+): WorkspaceSyncTestSnapshot | null {
+  return harness().snapshots[userId] ?? null;
 }

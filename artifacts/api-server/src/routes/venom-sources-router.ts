@@ -335,6 +335,115 @@ export function websiteText(html: string): {
   return { title, excerpt: text, keywords };
 }
 
+/**
+ * Fetches a repository snapshot and builds the connected source for it. The
+ * connect route and the server-side scheduled sync share this so a scheduled
+ * refresh can never drift from what connecting the source would produce.
+ */
+export async function fetchGitHubConnectedSource(
+  githubRequest: GitHubRequest,
+  projectId: string,
+  repositoryPath: string,
+) {
+  const [repository, issueResponse, pullRequests] = await Promise.all([
+    githubRequest<GitHubRepo>(`/repos/${repositoryPath}`),
+    githubRequest<GitHubIssue[]>(
+      `/repos/${repositoryPath}/issues?state=open&per_page=20`,
+    ),
+    githubRequest<GitHubPullRequest[]>(
+      `/repos/${repositoryPath}/pulls?state=open&per_page=10`,
+    ),
+  ]);
+
+  const issues = issueResponse.filter((issue) => !issue.pull_request);
+
+  return githubSource(projectId, repository, issues, pullRequests);
+}
+
+/**
+ * Validates, fetches, and builds a website source. Shared by the connect
+ * route and the server-side scheduled sync (see fetchGitHubConnectedSource).
+ */
+export async function fetchWebsiteConnectedSource(
+  {
+    resolveAddresses,
+    fetchWebsite,
+  }: Pick<SourcesRouterOptions, "resolveAddresses" | "fetchWebsite">,
+  projectId: string,
+  rawUrl: string,
+  requestedName?: string,
+) {
+  const { url, address } = await parsePublicWebsiteUrl(rawUrl, resolveAddresses);
+  const websiteResponse = await fetchWebsite(url, address);
+
+  const contentType = websiteResponse.contentType;
+  if (
+    websiteResponse.status < 200 ||
+    websiteResponse.status >= 300 ||
+    (!contentType.includes("text/html") &&
+      !contentType.includes("application/xhtml"))
+  ) {
+    throw new SourceRequestError(
+      `Website returned an unexpected response (${websiteResponse.status}).`,
+      422,
+    );
+  }
+
+  return websiteSource(
+    projectId,
+    url,
+    websiteText(websiteResponse.html),
+    requestedName,
+  );
+}
+
+export function websiteSource(
+  projectId: string,
+  url: URL,
+  content: { title: string; excerpt: string; keywords: string[] },
+  requestedName?: string,
+) {
+  const id = sourceId(projectId, `website:${url.href}`);
+  const citation = {
+    id: citationId(id, "website"),
+    provider: "website" as const,
+    kind: "website" as const,
+    title: requestedName?.trim() || content.title || url.hostname,
+    url: url.href,
+    excerpt: compactText(content.excerpt, 800) || "Public website reference",
+    reference: null,
+  };
+
+  return {
+    id,
+    projectId,
+    provider: "website" as const,
+    name: citation.title,
+    url: url.href,
+    status: "connected" as const,
+    syncedAt: new Date(),
+    summary: `${citation.title} • public website • ${content.keywords.join(", ") || "reference material"}`,
+    context: `[source:${citation.id}] website: ${citation.title}. ${compactText(content.excerpt, 7200)} (${url.href})`,
+    citations: [citation],
+    clusters: [
+      {
+        id: `${id}_website`,
+        label: citation.title,
+        category: "website",
+        strength: 0.8,
+        citationIds: [citation.id],
+      },
+      ...content.keywords.map((keyword, index) => ({
+        id: `${id}_topic_${keyword}`,
+        label: keyword,
+        category: "topic",
+        strength: Math.max(0.45, 0.68 - index * 0.08),
+        citationIds: [citation.id],
+      })),
+    ],
+  };
+}
+
 export function githubSource(
   projectId: string,
   repository: GitHubRepo,
@@ -547,23 +656,10 @@ export function createVenomSourcesRouter({
       }
 
       try {
-        const [repository, issueResponse, pullRequests] = await Promise.all([
-          githubRequest<GitHubRepo>(`/repos/${repositoryPath}`),
-          githubRequest<GitHubIssue[]>(
-            `/repos/${repositoryPath}/issues?state=open&per_page=20`,
-          ),
-          githubRequest<GitHubPullRequest[]>(
-            `/repos/${repositoryPath}/pulls?state=open&per_page=10`,
-          ),
-        ]);
-
-        const issues = issueResponse.filter((issue) => !issue.pull_request);
-
-        const connectedSource = githubSource(
+        const connectedSource = await fetchGitHubConnectedSource(
+          githubRequest,
           params.data.projectId,
-          repository,
-          issues,
-          pullRequests,
+          repositoryPath,
         );
         const source = {
           ...connectedSource,
@@ -620,68 +716,12 @@ export function createVenomSourcesRouter({
       }
 
       try {
-        const { url, address } = await parsePublicWebsiteUrl(
+        const connectedSource = await fetchWebsiteConnectedSource(
+          { resolveAddresses, fetchWebsite },
+          params.data.projectId,
           body.data.url,
-          resolveAddresses,
+          body.data.name ?? undefined,
         );
-        const websiteResponse = await fetchWebsite(url, address);
-
-        const contentType = websiteResponse.contentType;
-        const html = websiteResponse.html;
-
-        if (
-          websiteResponse.status < 200 ||
-          websiteResponse.status >= 300 ||
-          (!contentType.includes("text/html") &&
-            !contentType.includes("application/xhtml"))
-        ) {
-          throw new SourceRequestError(
-            `Website returned an unexpected response (${websiteResponse.status}).`,
-            422,
-          );
-        }
-
-        const content = websiteText(html);
-        const id = sourceId(params.data.projectId, `website:${url.href}`);
-        const citation = {
-          id: citationId(id, "website"),
-          provider: "website" as const,
-          kind: "website" as const,
-          title: body.data.name?.trim() || content.title || url.hostname,
-          url: url.href,
-          excerpt:
-            compactText(content.excerpt, 800) || "Public website reference",
-          reference: null,
-        };
-
-        const connectedSource = {
-          id,
-          projectId: params.data.projectId,
-          provider: "website" as const,
-          name: citation.title,
-          url: url.href,
-          status: "connected" as const,
-          syncedAt: new Date(),
-          summary: `${citation.title} • public website • ${content.keywords.join(", ") || "reference material"}`,
-          context: `[source:${citation.id}] website: ${citation.title}. ${compactText(content.excerpt, 7200)} (${url.href})`,
-          citations: [citation],
-          clusters: [
-            {
-              id: `${id}_website`,
-              label: citation.title,
-              category: "website",
-              strength: 0.8,
-              citationIds: [citation.id],
-            },
-            ...content.keywords.map((keyword, index) => ({
-              id: `${id}_topic_${keyword}`,
-              label: keyword,
-              category: "topic",
-              strength: Math.max(0.45, 0.68 - index * 0.08),
-              citationIds: [citation.id],
-            })),
-          ],
-        };
         const source = {
           ...connectedSource,
           attestation: createAttestation({

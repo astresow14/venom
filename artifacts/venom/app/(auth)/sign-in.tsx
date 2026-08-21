@@ -5,15 +5,20 @@ import * as AuthSession from 'expo-auth-session';
 import { type Href, Link, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import {
-  ActivityIndicator,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
-  TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { AuthScreenShell } from '@/components/AuthScreenShell';
+import {
+  AuthErrorText,
+  AuthPillButton,
+  AuthQuietButton,
+  AuthTextField,
+} from '@/components/AuthUi';
+import { SymbioteHero } from '@/components/SymbioteHero';
 import { useColors } from '@/hooks/useColors';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -40,19 +45,15 @@ export default function SignInScreen() {
   useWarmUpBrowser();
   const colors = useColors();
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
   const { signIn, errors, fetchStatus } = useSignIn();
   const { startSSOFlow } = useSSO();
+  const [view, setView] = useState<'welcome' | 'email'>('welcome');
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [focusedButton, setFocusedButton] = useState<
-    'google' | 'reset' | 'submit' | 'verify' | null
-  >(null);
-  const [focusedField, setFocusedField] = useState<
-    'email' | 'password' | 'code' | null
-  >(null);
 
   const finishSignIn = useCallback(async () => {
     await signIn.finalize({
@@ -144,343 +145,169 @@ export default function SignInScreen() {
   const isVerification =
     signIn.status === 'needs_client_trust' ||
     signIn.status === 'needs_second_factor';
+  const step = isVerification ? 'verify' : view;
   const isBusy = fetchStatus === 'fetching' || isGoogleLoading;
   const clerkError =
     errors.fields.identifier?.message ??
     errors.fields.password?.message ??
     errors.fields.code?.message;
-  const visibleError = formError ?? clerkError;
+  // Field-level Clerk errors belong to the credentials/code forms; the
+  // welcome state only surfaces its own (e.g. Google) errors.
+  const visibleError =
+    step === 'welcome' ? formError : (formError ?? clerkError);
+
+  const heroSize = Math.round(
+    Math.min(Math.min(width, 480) * 0.72, height * 0.32, 300),
+  );
+
+  const footerLink = (
+    <Text style={[styles.footerText, { color: colors.symbioteMuted }]}>
+      New to Venom?{' '}
+      <Link
+        href={'/(auth)/sign-up' as Href}
+        style={[styles.footerLink, { color: colors.symbioteHighlight }]}
+      >
+        Create an account
+      </Link>
+    </Text>
+  );
 
   return (
     <AuthScreenShell
-      eyebrow={isVerification ? 'Security check' : 'Welcome back'}
-      title={isVerification ? 'Verify this device' : 'Resume your workspace'}
-      subtitle={
-        isVerification
-          ? 'Enter the security code sent to your account.'
-          : 'Sign in to restore projects, conversations, and your knowledge map on this device.'
+      stateKey={step}
+      hero={step === 'welcome' ? <SymbioteHero size={heroSize} /> : undefined}
+      headline={
+        step === 'welcome'
+          ? 'Strike first'
+          : step === 'email'
+            ? 'Sign in'
+            : 'Verify this device'
       }
-      footer={
-        <Text style={[styles.footerText, { color: colors.symbioteMuted }]}>
-          New to Venom?{' '}
-             <Link
-               href={'/(auth)/sign-up' as Href}
-               style={[
-                 styles.footerLink,
-                 { color: colors.symbioteHighlight },
-               ]}
-             >
-            Create an account
-          </Link>
-        </Text>
-      }
+      supportText={step === 'verify' ? 'We emailed you a code.' : undefined}
+      footer={step === 'verify' ? undefined : footerLink}
     >
-      {isVerification ? (
-        <>
-          <Text style={[styles.label, { color: colors.foreground }]}>
-            Security code
-          </Text>
-          <TextInput
-            testID="sign-in-code"
-            accessibilityLabel="Security code"
-            style={[
-              styles.input,
-              {
-                color: colors.foreground,
-                borderColor:
-                  focusedField === 'code' ? colors.foreground : colors.border,
-                backgroundColor: colors.background,
-              },
-              focusedField === 'code' && styles.inputFocused,
-            ]}
-            value={code}
-            onChangeText={setCode}
-            onFocus={() => setFocusedField('code')}
-            onBlur={() => setFocusedField(null)}
-            placeholder="000000"
-            placeholderTextColor={colors.mutedForeground}
-            keyboardType="number-pad"
-            autoComplete="one-time-code"
+      {step === 'welcome' ? (
+        <View style={styles.stack}>
+          <AuthPillButton
+            testID="google-sign-in"
+            accessibilityLabel="Continue with Google"
+            label="Continue with Google"
+            onPress={handleGoogle}
+            busy={isGoogleLoading}
+            disabled={isBusy}
+            icon={
+              <Ionicons
+                name="logo-google"
+                size={18}
+                color={colors.symbioteBackdrop}
+              />
+            }
           />
-          <Pressable
-            testID="verify-sign-in"
-            accessibilityRole="button"
-            accessibilityLabel="Verify device"
-            style={({ pressed }) => [
-              styles.primaryButton,
-              { backgroundColor: colors.primary },
-              pressed && styles.pressed,
-              (!code || isBusy) && styles.disabled,
-              focusedButton === 'verify' && styles.buttonFocused,
-              focusedButton === 'verify' && { outlineColor: colors.foreground },
-            ]}
-            onPress={handleVerify}
-            onFocus={() => setFocusedButton('verify')}
-            onBlur={() => setFocusedButton(null)}
-            disabled={!code || isBusy}
-          >
-            {isBusy ? (
-              <ActivityIndicator color={colors.primaryForeground} />
-            ) : (
-              <Text
-                style={[
-                  styles.primaryButtonText,
-                  { color: colors.primaryForeground },
-                ]}
-              >
-                Verify device
-              </Text>
-            )}
-          </Pressable>
-          <Pressable
-            style={[
-              styles.resetButton,
-              focusedButton === 'reset' && styles.buttonFocused,
-              focusedButton === 'reset' && { outlineColor: colors.foreground },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Start sign-in over"
+          <AuthPillButton
+            variant="ghost"
+            testID="continue-with-email"
+            accessibilityLabel="Continue with email"
+            label="Continue with email"
             onPress={() => {
-              void signIn.reset();
-              setCode('');
               setFormError(null);
+              setView('email');
             }}
-            onFocus={() => setFocusedButton('reset')}
-            onBlur={() => setFocusedButton(null)}
-          >
-            <Text style={[styles.resetText, { color: colors.mutedForeground }]}>
-              Start over
-            </Text>
-          </Pressable>
-        </>
-      ) : (
-        <>
-          <Text style={[styles.label, { color: colors.foreground }]}>Email</Text>
-          <TextInput
+            disabled={isBusy}
+          />
+        </View>
+      ) : null}
+
+      {step === 'email' ? (
+        <View>
+          <AuthTextField
+            label="Email"
             testID="sign-in-email"
             accessibilityLabel="Email"
-            style={[
-              styles.input,
-              {
-                color: colors.foreground,
-                borderColor:
-                  focusedField === 'email' ? colors.foreground : colors.border,
-                backgroundColor: colors.background,
-              },
-              focusedField === 'email' && styles.inputFocused,
-            ]}
             value={emailAddress}
             onChangeText={setEmailAddress}
-            onFocus={() => setFocusedField('email')}
-            onBlur={() => setFocusedField(null)}
             placeholder="you@example.com"
-            placeholderTextColor={colors.mutedForeground}
             keyboardType="email-address"
             textContentType="emailAddress"
             autoComplete="email"
             autoCapitalize="none"
           />
-          <Text style={[styles.label, { color: colors.foreground }]}>
-            Password
-          </Text>
-          <TextInput
+          <AuthTextField
+            label="Password"
             testID="sign-in-password"
             accessibilityLabel="Password"
-            style={[
-              styles.input,
-              {
-                color: colors.foreground,
-                borderColor:
-                  focusedField === 'password'
-                    ? colors.foreground
-                    : colors.border,
-                backgroundColor: colors.background,
-              },
-              focusedField === 'password' && styles.inputFocused,
-            ]}
             value={password}
             onChangeText={setPassword}
-            onFocus={() => setFocusedField('password')}
-            onBlur={() => setFocusedField(null)}
-            placeholder="Enter your password"
-            placeholderTextColor={colors.mutedForeground}
+            placeholder="Your password"
             secureTextEntry
             textContentType="password"
             autoComplete="current-password"
           />
-          <Pressable
-            testID="submit-sign-in"
-            accessibilityRole="button"
-            accessibilityLabel="Sign in"
-            style={({ pressed }) => [
-              styles.primaryButton,
-              { backgroundColor: colors.primary },
-              pressed && styles.pressed,
-              (!emailAddress || !password || isBusy) && styles.disabled,
-              focusedButton === 'submit' && styles.buttonFocused,
-              focusedButton === 'submit' && { outlineColor: colors.foreground },
-            ]}
-            onPress={handleSubmit}
-            onFocus={() => setFocusedButton('submit')}
-            onBlur={() => setFocusedButton(null)}
-            disabled={!emailAddress || !password || isBusy}
-          >
-            {fetchStatus === 'fetching' ? (
-              <ActivityIndicator color={colors.primaryForeground} />
-            ) : (
-              <Text
-                style={[
-                  styles.primaryButtonText,
-                  { color: colors.primaryForeground },
-                ]}
-              >
-                Sign in
-              </Text>
-            )}
-          </Pressable>
-          <View style={styles.dividerRow}>
-            <View
-              style={[styles.divider, { backgroundColor: colors.border }]}
+          <View style={styles.stack}>
+            <AuthPillButton
+              testID="submit-sign-in"
+              accessibilityLabel="Sign in"
+              label="Sign in"
+              onPress={handleSubmit}
+              busy={fetchStatus === 'fetching'}
+              disabled={!emailAddress || !password || isBusy}
             />
-            <Text
-              style={[styles.dividerText, { color: colors.mutedForeground }]}
-            >
-              Or
-            </Text>
-            <View
-              style={[styles.divider, { backgroundColor: colors.border }]}
+            <AuthQuietButton
+              accessibilityLabel="Back to all sign-in options"
+              label="All sign-in options"
+              onPress={() => {
+                setFormError(null);
+                setView('welcome');
+              }}
             />
           </View>
-          <Pressable
-            testID="google-sign-in"
-            accessibilityRole="button"
-            accessibilityLabel="Continue with Google"
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              { borderColor: colors.border, backgroundColor: colors.accent },
-              pressed && styles.pressed,
-              isBusy && styles.disabled,
-              focusedButton === 'google' && styles.buttonFocused,
-              focusedButton === 'google' && { outlineColor: colors.foreground },
-            ]}
-            onPress={handleGoogle}
-            onFocus={() => setFocusedButton('google')}
-            onBlur={() => setFocusedButton(null)}
-            disabled={isBusy}
-          >
-            {isGoogleLoading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (
-              <>
-                <Ionicons
-                  name="logo-google"
-                  size={18}
-                  color={colors.foreground}
-                />
-                <Text
-                  style={[
-                    styles.secondaryButtonText,
-                    { color: colors.foreground },
-                  ]}
-                >
-                  Continue with Google
-                </Text>
-              </>
-            )}
-          </Pressable>
-        </>
-      )}
+        </View>
+      ) : null}
+
+      {step === 'verify' ? (
+        <View>
+          <AuthTextField
+            label="Security code"
+            testID="sign-in-code"
+            accessibilityLabel="Security code"
+            value={code}
+            onChangeText={setCode}
+            placeholder="000000"
+            keyboardType="number-pad"
+            autoComplete="one-time-code"
+          />
+          <View style={styles.stack}>
+            <AuthPillButton
+              testID="verify-sign-in"
+              accessibilityLabel="Verify device"
+              label="Verify device"
+              onPress={handleVerify}
+              busy={isBusy}
+              disabled={!code || isBusy}
+            />
+            <AuthQuietButton
+              accessibilityLabel="Start sign-in over"
+              label="Start over"
+              onPress={() => {
+                void signIn.reset();
+                setCode('');
+                setFormError(null);
+                setView('welcome');
+              }}
+            />
+          </View>
+        </View>
+      ) : null}
 
       {visibleError ? (
-        <Text
-          testID="sign-in-error"
-          accessibilityLiveRegion="polite"
-          role="alert"
-          style={[styles.error, { color: colors.destructive }]}
-        >
-          {visibleError}
-        </Text>
+        <AuthErrorText testID="sign-in-error">{visibleError}</AuthErrorText>
       ) : null}
     </AuthScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  label: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    letterSpacing: 0,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 15,
-    minHeight: 52,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    marginBottom: 20,
-  },
-  inputFocused: {
-    borderWidth: 2,
-  },
-  primaryButton: {
-    minHeight: 52,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    letterSpacing: 0,
-  },
-  secondaryButton: {
-    minHeight: 52,
-    borderWidth: 1,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  secondaryButtonText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    letterSpacing: 0,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  stack: {
     gap: 12,
-    marginVertical: 18,
-  },
-  divider: {
-    height: 1,
-    flex: 1,
-  },
-  dividerText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    letterSpacing: 0,
-  },
-  error: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 16,
-  },
-  resetButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-    marginTop: 8,
-  },
-  resetText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    letterSpacing: 0,
   },
   footerText: {
     fontFamily: 'Inter_400Regular',
@@ -489,17 +316,5 @@ const styles = StyleSheet.create({
   footerLink: {
     fontFamily: 'Inter_600SemiBold',
     textDecorationLine: 'underline',
-  },
-  pressed: {
-    opacity: 0.82,
-    transform: [{ scale: 0.985 }],
-  },
-  disabled: {
-    opacity: 0.45,
-  },
-  buttonFocused: {
-    outlineStyle: 'solid',
-    outlineWidth: 3,
-    outlineOffset: 3,
   },
 });

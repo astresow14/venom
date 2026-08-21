@@ -7,8 +7,20 @@ import {
   type WorkspaceStore,
 } from "./venom-workspace-router";
 import { validateVenomBoardState } from "./venom-board-validation";
+import { stripClustersFromState } from "../lib/venom-ontology-core";
+import {
+  absorbWorkspaceStateKnowledge,
+  ensureOntologyOwner,
+  hydrateWorkspaceStateWithKnowledge,
+  userOwner,
+} from "../lib/venom-ontology-store";
 
-const databaseWorkspaceStore: WorkspaceStore = {
+/**
+ * Also used by the scheduled source sync worker, which re-syncs due sources
+ * against these same rows so a workspace is already fresh when a client next
+ * loads it.
+ */
+export const databaseWorkspaceStore: WorkspaceStore = {
   async get(userId) {
     const [workspace] = await db
       .select()
@@ -64,4 +76,10 @@ export default createVenomWorkspaceRouter({
       : { success: true, data: parsed.data };
   },
   store: databaseWorkspaceStore,
+  ontology: {
+    strip: stripClustersFromState,
+    ensureOwner: (userId) => ensureOntologyOwner(userOwner(userId)),
+    absorb: absorbWorkspaceStateKnowledge,
+    hydrate: hydrateWorkspaceStateWithKnowledge,
+  },
 });

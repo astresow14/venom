@@ -5,15 +5,22 @@
  */
 
 import type {
+  VenomArchivedCitation,
   VenomConversation,
   VenomDeletionMarker,
   VenomKnowledgeCluster,
   VenomKnowledgeSource,
   ProjectSource,
+  ProjectSourceSchedule,
   VenomProject,
   VenomWorkspaceState,
   VenomWorkspaceTombstones,
   KnowledgeCandidate,
+  VenomModelPreferences,
+  VenomModelId,
+  VenomVoicePreferences,
+  VenomVoicePresetId,
+  VenomVoiceTalkativeness,
 } from '@workspace/api-client-react';
 import {
   availableTaskStatuses,
@@ -23,6 +30,14 @@ import {
   stageIdForTaskStatus,
   taskStatusForProject,
 } from './boardState.ts';
+import {
+  mergeConversationResponsePrefs,
+  normalizeConversationResponsePrefs,
+} from './blend.ts';
+import {
+  citationUrlIdentity,
+  citedCitationIds,
+} from './messageCitations.ts';
 
 export {
   availableTaskStatuses,
@@ -43,7 +58,80 @@ export type KnowledgeInsight = KnowledgeCandidate;
 export type WorkspaceTombstones = VenomWorkspaceTombstones;
 export type DeletionMarker = VenomDeletionMarker;
 export type TombstoneCollection = keyof WorkspaceTombstones;
+export type ModelPreferences = VenomModelPreferences;
+export type { VenomModelId };
 
+export type VoicePreferences = VenomVoicePreferences;
+const DEFAULT_MODEL_ID: VenomModelId = 'venom-gpt';
+
+/** All known model IDs in display order */
+export const ALL_MODEL_IDS: VenomModelId[] = [
+  'venom-gpt',
+  'venom-claude',
+  'venom-gemini',
+  'venom-grok',
+];
+
+export function createDefaultModelPreferences(): ModelPreferences {
+  return {
+    enabledModelIds: [DEFAULT_MODEL_ID],
+    defaultModelId: DEFAULT_MODEL_ID,
+    activeModelId: DEFAULT_MODEL_ID,
+    updatedAt: 0,
+  };
+}
+
+/**
+ * Normalize model preferences, guarding against stale / missing data.
+ * Keeps the contract: at least one enabled model, active/default are enabled.
+ */
+export function normalizeModelPreferences(
+  raw: Partial<ModelPreferences> | null | undefined,
+): ModelPreferences {
+  if (!raw) return createDefaultModelPreferences();
+
+  const validIds = new Set<string>(ALL_MODEL_IDS);
+  const enabled = (raw.enabledModelIds ?? []).filter((id) =>
+    validIds.has(id),
+  ) as VenomModelId[];
+  if (enabled.length === 0) enabled.push(DEFAULT_MODEL_ID);
+
+  const defaultId: VenomModelId = validIds.has(raw.defaultModelId ?? '')
+    ? (raw.defaultModelId as VenomModelId)
+    : enabled[0];
+  const effectiveDefault = enabled.includes(defaultId) ? defaultId : enabled[0];
+
+  const activeId: VenomModelId = validIds.has(raw.activeModelId ?? '')
+    ? (raw.activeModelId as VenomModelId)
+    : effectiveDefault;
+  const effectiveActive = enabled.includes(activeId) ? activeId : effectiveDefault;
+
+  return {
+    enabledModelIds: enabled,
+    defaultModelId: effectiveDefault,
+    activeModelId: effectiveActive,
+    updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : 0,
+  };
+}
+
+/**
+ * Merge two ModelPreferences snapshots. The one with higher `updatedAt`
+ * wins, but we always ensure at least one enabled model survives.
+ */
+export function mergeModelPreferences(
+  cloud: ModelPreferences | undefined,
+  device: ModelPreferences | undefined,
+): ModelPreferences {
+  if (!cloud && !device) return createDefaultModelPreferences();
+  if (!cloud) return normalizeModelPreferences(device);
+  if (!device) return normalizeModelPreferences(cloud);
+
+  // Higher updatedAt wins
+  const winner = device.updatedAt >= cloud.updatedAt ? device : cloud;
+  return normalizeModelPreferences(winner);
+}
+
+const DEFAULT_VOICE_PRESET_ID: VenomVoicePresetId = 'sam';
 export type SyncStatus =
   | 'loading'
   | 'pending'
@@ -102,13 +190,36 @@ function mergeDeletionMarkers(
   const merged = new Map<string, DeletionMarker>();
   for (const marker of markerLists.flat()) {
     const existing = merged.get(marker.id);
-    if (!existing || marker.deletedAt > existing.deletedAt) {
-      merged.set(marker.id, marker);
-    }
+    const winner = !existing || marker.deletedAt > existing.deletedAt ? marker : existing;
+    // A "replaced" tombstone (a source retired by a refresh) is permanent, so
+    // the flag is sticky: a later plain deletion marker for the same id must
+    // not downgrade it into one a stale snapshot can outlive.
+    const replaced = isReplacementMarker(marker) || (!!existing && isReplacementMarker(existing));
+    merged.set(
+      marker.id,
+      replaced === isReplacementMarker(winner) ? winner : { ...winner, replaced: true },
+    );
   }
-  return [...merged.values()]
-    .sort((a, b) => b.deletedAt - a.deletedAt)
-    .slice(0, limit);
+  return boundDeletionMarkers([...merged.values()], limit);
+}
+
+/**
+ * Caps a tombstone list without dropping a permanent retirement. Plain
+ * deletion markers are evicted oldest-first as before, but a "replaced" marker
+ * outranks them: losing one would let a stale device hand back a source a
+ * refresh already replaced. Only replacement markers filling the whole cap can
+ * shed one, and then the newest survive.
+ */
+function boundDeletionMarkers(markers: DeletionMarker[], limit: number): DeletionMarker[] {
+  const newestFirst = [...markers].sort((a, b) => b.deletedAt - a.deletedAt);
+  if (newestFirst.length <= limit) return newestFirst;
+
+  const replaced = newestFirst.filter(isReplacementMarker);
+  if (replaced.length >= limit) return replaced.slice(0, limit);
+
+  const deleted = newestFirst.filter((marker) => !isReplacementMarker(marker));
+  const kept = new Set([...replaced, ...deleted.slice(0, limit - replaced.length)]);
+  return newestFirst.filter((marker) => kept.has(marker));
 }
 
 export function normalizeTombstones(
@@ -186,6 +297,15 @@ export function createDeletionMarkers(ids: string[], deletedAt: number): Deletio
 
 function deletionTimeMap(markers: DeletionMarker[]): Map<string, number> {
   return new Map(markers.map((m) => [m.id, m.deletedAt]));
+}
+
+/**
+ * True for a source retired because a refresh put a newer snapshot in its
+ * place. Such an id can never legitimately return, unlike a plain removal that
+ * a later reconnect is allowed to undo.
+ */
+function isReplacementMarker(marker: DeletionMarker): boolean {
+  return marker.replaced === true;
 }
 
 // ---------------------------------------------------------------------------
@@ -329,7 +449,89 @@ export function createDefaultState(): WorkspaceState {
     activeProjectId: 'proj_default',
     activeConversationId: 'conv_default',
     tombstones: createEmptyTombstones(),
+    modelPreferences: createDefaultModelPreferences(),
+    voicePreferences: createDefaultVoicePreferences(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Retired-citation archive (mirrors artifacts/venom/context/workspaceSync.ts)
+// ---------------------------------------------------------------------------
+
+export const ARCHIVED_CITATION_LIMIT = 500;
+
+export function mergeArchivedCitations(
+  ...archiveLists: (VenomArchivedCitation[] | undefined)[]
+): VenomArchivedCitation[] {
+  const merged = new Map<string, VenomArchivedCitation>();
+  for (const entry of archiveLists.flatMap((list) => list ?? [])) {
+    if (
+      !entry ||
+      typeof entry.id !== 'string' ||
+      !entry.id ||
+      typeof entry.title !== 'string' ||
+      !entry.title ||
+      typeof entry.url !== 'string' ||
+      typeof entry.retiredAt !== 'number'
+    ) {
+      continue;
+    }
+    const existing = merged.get(entry.id);
+    if (!existing || entry.retiredAt > existing.retiredAt) {
+      merged.set(entry.id, entry);
+    }
+  }
+  return [...merged.values()]
+    .sort((left, right) => right.retiredAt - left.retiredAt)
+    .slice(0, ARCHIVED_CITATION_LIMIT);
+}
+
+/**
+ * Drops archive entries a refreshed source covers again, so evidence that came
+ * back stops consuming the bounded archive and the workspace payload. An entry
+ * whose id is live once more is pure dead weight: the renderer always prefers
+ * the live citation for that id. An entry the refresh only covers under a new
+ * id is dropped once nothing cites the archived id any more (a refresh remaps
+ * those markers onto the live citation first), so no answer loses the title it
+ * was rendering.
+ */
+export function dropRestoredArchivedCitations(
+  archivedCitations: VenomArchivedCitation[] | undefined,
+  refreshedCitations: readonly { id: string; url: string }[],
+  isStillCited: (citationId: string) => boolean = () => false,
+): VenomArchivedCitation[] {
+  const restoredIds = new Set(
+    refreshedCitations.map((citation) => citation.id),
+  );
+  const restoredUrls = new Set(
+    refreshedCitations
+      .map((citation) => citationUrlIdentity(citation.url))
+      .filter(Boolean),
+  );
+
+  return (archivedCitations ?? []).filter((entry) => {
+    if (!entry?.id) return false;
+    if (restoredIds.has(entry.id)) return false;
+    const identity = citationUrlIdentity(entry.url);
+    if (identity && restoredUrls.has(identity) && !isStillCited(entry.id)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Drops archive entries no saved answer can reference any more — the evidence
+ * that only the conversations of a deleted project (or an unused source) ever
+ * cited.
+ */
+export function dropUncitedArchivedCitations(
+  archivedCitations: VenomArchivedCitation[] | undefined,
+  isStillCited: (citationId: string) => boolean,
+): VenomArchivedCitation[] {
+  return (archivedCitations ?? []).filter(
+    (entry) => Boolean(entry?.id) && isStillCited(entry.id),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -346,6 +548,9 @@ export function normalizeWorkspaceState(value: WorkspaceState): WorkspaceState {
   return {
     ...value,
     projects: value.projects.map((project) => normalizeProjectBoard(project)),
+    conversations: value.conversations.map((conversation) =>
+      normalizeConversationResponsePrefs(conversation),
+    ),
     sources: Array.isArray(value.sources) ? value.sources : [],
     clusters: value.clusters.map((cluster) => {
       const legacyDescription =
@@ -366,6 +571,9 @@ export function normalizeWorkspaceState(value: WorkspaceState): WorkspaceState {
       };
     }),
     tombstones: normalizeTombstones(value.tombstones),
+    modelPreferences: normalizeModelPreferences(value.modelPreferences),
+    voicePreferences: normalizeVoicePreferences(value.voicePreferences),
+    archivedCitations: mergeArchivedCitations(value.archivedCitations),
   };
 }
 
@@ -474,14 +682,122 @@ function mergeConversations(
     const messages = new Map((older?.messages ?? []).map((m) => [m.id, m]));
     for (const m of newest.messages) messages.set(m.id, m);
 
-    merged.push({
-      ...newest,
-      messages: [...messages.values()]
-        .filter((m) => (msgDeletionTimes.get(m.id) ?? -1) < m.createdAt)
-        .sort((a, b) => a.createdAt - b.createdAt),
-    });
+    // The response-mode preference block (mode, blend, stamp) merges on its
+    // own clock: the copy that changed it last wins, independent of which
+    // copy carried the newest message.
+    merged.push(
+      mergeConversationResponsePrefs(
+        {
+          ...newest,
+          messages: [...messages.values()]
+            .filter((m) => (msgDeletionTimes.get(m.id) ?? -1) < m.createdAt)
+            .sort((a, b) => a.createdAt - b.createdAt),
+        },
+        cloudItem,
+        deviceItem,
+      ),
+    );
   }
   return merged;
+}
+
+/**
+ * Mirrors the mobile app's scheduled-sync claim lease
+ * (artifacts/venom/context/sourceState.ts). Desktop never runs scheduled
+ * syncs itself, but its conflict merges must not hand a claimed slot to a
+ * second device by dropping the claim.
+ */
+const SCHEDULED_SYNC_CLAIM_LEASE_MS = 10 * 60_000;
+
+type ScheduledSyncClaim = { claimedAt: number; claimedBy: string };
+
+function scheduleUpdatedAt(schedule: ProjectSourceSchedule): number {
+  return typeof schedule.updatedAt === 'number' && Number.isFinite(schedule.updatedAt)
+    ? schedule.updatedAt
+    : 0;
+}
+
+function scheduleAttemptAt(schedule: ProjectSourceSchedule): number | null {
+  return typeof schedule.lastAttemptAt === 'number' && Number.isFinite(schedule.lastAttemptAt)
+    ? schedule.lastAttemptAt
+    : null;
+}
+
+/** A claim already resolved by an attempt recorded at or after it is spent. */
+function scheduleSyncClaim(schedule: ProjectSourceSchedule): ScheduledSyncClaim | null {
+  const claimedAt =
+    typeof schedule.claimedAt === 'number' && Number.isFinite(schedule.claimedAt)
+      ? schedule.claimedAt
+      : null;
+  const claimedBy =
+    typeof schedule.claimedBy === 'string' && schedule.claimedBy ? schedule.claimedBy : null;
+  if (claimedAt === null || claimedBy === null) return null;
+  if (claimedAt <= (scheduleAttemptAt(schedule) ?? -1)) return null;
+  return { claimedAt, claimedBy };
+}
+
+/**
+ * A claim staked a full lease after another is a takeover of a lease that ran
+ * out; anything closer is two devices racing for the same slot, and the copy
+ * already in place (the cloud side of a conflict merge) wins.
+ */
+function mergeScheduleSyncClaims(
+  current: ProjectSourceSchedule,
+  incoming: ProjectSourceSchedule,
+): ScheduledSyncClaim | null {
+  const left = scheduleSyncClaim(current);
+  const right = scheduleSyncClaim(incoming);
+  if (!left || !right) return left ?? right;
+  if (Math.abs(left.claimedAt - right.claimedAt) >= SCHEDULED_SYNC_CLAIM_LEASE_MS) {
+    return left.claimedAt >= right.claimedAt ? left : right;
+  }
+  return left;
+}
+
+/**
+ * Picks the schedule a user set most recently across two copies of the same
+ * source, keeping the newest attempt bookkeeping and the surviving sync claim.
+ * Mirrors mergeSourceSchedules in artifacts/venom/context/sourceState.ts: a
+ * desktop save that dropped a phone's schedule or claim would re-enable the
+ * double syncs the claim exists to prevent.
+ */
+function mergeSourceSchedules(
+  current: ProjectSource,
+  incoming: ProjectSource,
+): ProjectSourceSchedule | null {
+  const left = current.schedule;
+  const right = incoming.schedule;
+  if (!left || !right) return right ?? left ?? null;
+
+  const winner = scheduleUpdatedAt(right) >= scheduleUpdatedAt(left) ? right : left;
+  if (winner.cadence === 'off') return winner;
+
+  const attempt =
+    (scheduleAttemptAt(right) ?? -1) >= (scheduleAttemptAt(left) ?? -1) ? right : left;
+  const claim = mergeScheduleSyncClaims(left, right);
+  const liveClaim =
+    claim && claim.claimedAt > (scheduleAttemptAt(attempt) ?? -1) ? claim : null;
+
+  return {
+    cadence: winner.cadence,
+    updatedAt: scheduleUpdatedAt(winner),
+    ...(scheduleAttemptAt(attempt) !== null ? { lastAttemptAt: attempt.lastAttemptAt } : {}),
+    ...(attempt.lastError ? { lastError: attempt.lastError } : {}),
+    ...(liveClaim ? { claimedAt: liveClaim.claimedAt, claimedBy: liveClaim.claimedBy } : {}),
+  };
+}
+
+function withSchedule(
+  source: ProjectSource,
+  schedule: ProjectSourceSchedule | null,
+): ProjectSource {
+  if (!schedule) {
+    if (!source.schedule) return source;
+    const { schedule: _unscheduled, ...withoutSchedule } = source;
+    return withoutSchedule;
+  }
+
+  return source.schedule === schedule ? source : { ...source, schedule };
 }
 
 function mergeProjectSources(
@@ -489,20 +805,34 @@ function mergeProjectSources(
   deviceItems: ProjectSource[],
   deletionMarkers: DeletionMarker[],
 ): ProjectSource[] {
-  const deletedAtById = deletionTimeMap(deletionMarkers);
-  const merged = new Map<string, ProjectSource>();
+  const markersById = new Map(deletionMarkers.map((marker) => [marker.id, marker] as const));
+  const merged = new Map<string, ProjectSource>(
+    cloudItems.map((source) => [source.id, source]),
+  );
 
-  for (const source of [...cloudItems, ...deviceItems]) {
+  for (const source of deviceItems) {
     const existing = merged.get(source.id);
-    if (!existing || source.syncedAt >= existing.syncedAt) {
+    if (!existing) {
       merged.set(source.id, source);
+      continue;
     }
+
+    // The snapshot and the schedule are edited independently: a cadence change
+    // never moves syncedAt, so picking the newer snapshot must not silently
+    // discard the newer schedule (or the other way round).
+    const winner = source.syncedAt >= existing.syncedAt ? source : existing;
+    merged.set(source.id, withSchedule(winner, mergeSourceSchedules(existing, source)));
   }
 
-  return [...merged.values()].filter(
-    (source) =>
-      (deletedAtById.get(source.id) ?? -1) < Date.parse(source.syncedAt),
-  );
+  return [...merged.values()].filter((source) => {
+    const marker = markersById.get(source.id);
+    if (!marker) return true;
+    // A refresh already replaced this source, so a device claiming a newer
+    // snapshot (clock skew, or a sync of the old id that started before the
+    // refresh) must not bring the retired id back.
+    if (isReplacementMarker(marker)) return false;
+    return marker.deletedAt < Date.parse(source.syncedAt);
+  });
 }
 
 export function mergeWorkspaceStates(
@@ -551,6 +881,30 @@ export function mergeWorkspaceStates(
     tombstones.sources,
   ).filter((source) => projectIds.has(source.projectId));
 
+  // The bounded archive exists only so retired markers keep their titles, and
+  // the merged snapshot says exactly which markers those are. Recomputing the
+  // prune against the merged state (same rules as the mobile client) keeps a
+  // cleanup one device already ran from being undone by a device that still
+  // holds the stale entries. An entry survives only while a merged answer
+  // still cites it and no merged source serves its citation live again, so
+  // live rendering is unchanged. Pruning runs before the size cap so stale
+  // entries cannot evict evidence answers still need.
+  const stillCitedIds = citedCitationIds(liveConversations);
+  const isStillCited = (citationId: string) => stillCitedIds.has(citationId);
+  const archivedCitations = mergeArchivedCitations(
+    dropUncitedArchivedCitations(
+      dropRestoredArchivedCitations(
+        [
+          ...(normalizedCloud.archivedCitations ?? []),
+          ...(normalizedDevice.archivedCitations ?? []),
+        ],
+        liveSources.flatMap((source) => source.citations ?? []),
+        isStillCited,
+      ),
+      isStillCited,
+    ),
+  );
+
   const preferredProjectId =
     normalizedDevice.activeProjectId && projectIds.has(normalizedDevice.activeProjectId)
       ? normalizedDevice.activeProjectId
@@ -575,6 +929,15 @@ export function mergeWorkspaceStates(
     activeProjectId: preferredProjectId,
     activeConversationId: preferredConversationId,
     tombstones,
+    modelPreferences: mergeModelPreferences(
+      normalizedCloud.modelPreferences,
+      normalizedDevice.modelPreferences,
+    ),
+    voicePreferences: mergeVoicePreferences(
+      normalizedCloud.voicePreferences,
+      normalizedDevice.voicePreferences,
+    ),
+    archivedCitations,
   };
 }
 
@@ -807,3 +1170,134 @@ export function applyKnowledgeInsightsToState({
 
   return { ...state, clusters, projects };
 }
+
+type ApplyFiledClustersOptions = {
+  state: WorkspaceState;
+  conversation: Pick<Conversation, 'id' | 'title' | 'projectId'>;
+  filed: KnowledgeCluster[];
+  now: number;
+};
+
+// Applies clusters the server already filed into the ontology store. The
+// server runs the exact normalization and merge rules the local path uses,
+// so its records are canonical: replace matching ids wholesale, add new
+// ones, and decay untouched same-project clusters exactly like a local
+// filing would so both sides stay aligned.
+export function applyFiledClustersToState({
+  state,
+  conversation,
+  filed,
+  now,
+}: ApplyFiledClustersOptions): WorkspaceState {
+  if (!filed.length) return state;
+  const liveConversation = state.conversations.find((c) => c.id === conversation.id);
+  if (!liveConversation || liveConversation.projectId !== conversation.projectId) return state;
+
+  const filedIds = new Set(filed.map((cluster) => cluster.id));
+  const clusters = state.clusters
+    .filter((cluster) => !filedIds.has(cluster.id))
+    .map((cluster) =>
+      cluster.projectId === liveConversation.projectId
+        ? { ...cluster, strength: Math.max(0.12, cluster.strength * 0.96) }
+        : cluster,
+    );
+  for (const cluster of filed) {
+    clusters.push({
+      ...cluster,
+      links: [...cluster.links],
+      sources: cluster.sources.map((source) => ({
+        ...source,
+        messageIds: [...source.messageIds],
+      })),
+    });
+  }
+
+  const reconciled = reconcileKnowledgeLinks(clusters);
+
+  const projectConvIds = new Set(
+    reconciled
+      .filter((c) => c.projectId === liveConversation.projectId)
+      .flatMap((c) => c.sources.map((s) => s.conversationId)),
+  );
+  const projects = state.projects.map((p) =>
+    p.id === liveConversation.projectId
+      ? { ...p, sourceCount: projectConvIds.size, updatedAt: now }
+      : p,
+  );
+
+  return { ...state, clusters: reconciled, projects };
+}
+
+/** All known voice preset IDs in display order */
+export const ALL_VOICE_PRESET_IDS: VenomVoicePresetId[] = [
+  'sam',
+  'marcus',
+  'rowan',
+  'elijah',
+  'maya',
+  'isla',
+];
+
+/** Talkativeness levels, mirrored from the mobile picker (chatty → reserved) */
+export const ALL_VOICE_TALKATIVENESS_LEVELS: VenomVoiceTalkativeness[] = [
+  'chatty',
+  'balanced',
+  'reserved',
+];
+/**
+ * Normalize voice preferences, guarding against stale / missing data. An
+ * unknown preset id recovers to the default voice; the timestamp is clamped
+ * to a non-negative integer so a corrupt value cannot win merges forever.
+ */
+export function normalizeVoicePreferences(raw: unknown): VoicePreferences {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return createDefaultVoicePreferences();
+  }
+  const candidate = raw as Partial<VoicePreferences>;
+  const presetId =
+    typeof candidate.presetId === 'string' &&
+    (ALL_VOICE_PRESET_IDS as string[]).includes(candidate.presetId)
+      ? (candidate.presetId as VenomVoicePresetId)
+      : DEFAULT_VOICE_PRESET_ID;
+  const talkativeness =
+    typeof candidate.talkativeness === 'string' &&
+    (ALL_VOICE_TALKATIVENESS_LEVELS as string[]).includes(candidate.talkativeness)
+      ? (candidate.talkativeness as VenomVoiceTalkativeness)
+      : DEFAULT_VOICE_TALKATIVENESS;
+  return {
+    presetId,
+    talkativeness,
+    updatedAt:
+      typeof candidate.updatedAt === 'number' &&
+      Number.isFinite(candidate.updatedAt) &&
+      candidate.updatedAt >= 0
+        ? Math.floor(candidate.updatedAt)
+        : 0,
+  };
+}
+
+/**
+ * Merge two VoicePreferences snapshots. The one with higher `updatedAt`
+ * wins; the device side wins on a tie.
+ */
+export function mergeVoicePreferences(
+  cloud: VoicePreferences | undefined,
+  device: VoicePreferences | undefined,
+): VoicePreferences {
+  if (!cloud && !device) return createDefaultVoicePreferences();
+  if (!cloud) return normalizeVoicePreferences(device);
+  if (!device) return normalizeVoicePreferences(cloud);
+
+  const winner = device.updatedAt >= cloud.updatedAt ? device : cloud;
+  return normalizeVoicePreferences(winner);
+}
+
+export function createDefaultVoicePreferences(): VoicePreferences {
+  return {
+    presetId: DEFAULT_VOICE_PRESET_ID,
+    talkativeness: DEFAULT_VOICE_TALKATIVENESS,
+    updatedAt: 0,
+  };
+}
+
+export const DEFAULT_VOICE_TALKATIVENESS: VenomVoiceTalkativeness = 'balanced';

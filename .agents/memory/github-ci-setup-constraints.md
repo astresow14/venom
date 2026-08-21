@@ -1,96 +1,114 @@
 ---
 name: GitHub CI setup constraints
-description: Why the Replit GitHub connector cannot configure CI, and what a token/ruleset setup actually needs to succeed.
+description: Durable permission, test-isolation, and branch-protection rules for GitHub CI.
 ---
 
-# Writing CI config to GitHub from this workspace
+# GitHub CI identity and protection
 
-## The connector cannot create or update workflow files
+## Test the current source of truth
 
-The Replit GitHub connector authenticates fine and writes ordinary files, but it
-cannot be used to install or change anything under `.github/workflows`:
+Browser checks must run against the current workspace source rather than a mirror branch that may lag behind it.
 
-- Any request whose **path contains `.github/workflows`** is rejected by an edge
-  proxy with a **403 HTML page** — not a GitHub JSON error. Single- and
-  double-URL-encoding the path does not evade it.
-- The connector's OAuth token lacks GitHub's **`workflow`** scope, so GraphQL
-  `createCommitOnBranch` refuses workflow-file commits with a misleading
-  "does not have the correct permissions" message.
-- Git **tree creation** (`POST /git/trees`) returns 404 through the connector
-  even though `POST /git/blobs` succeeds, so building a commit server-side is
-  not a workaround.
-- The connector proxy throttles at roughly **10 requests/sec** (429s on parallel
-  file uploads), so file-by-file imports are slow and abort partway.
+**Why:** tests based on stale product code can fail for behavior that no longer exists.
 
-**Why:** these are proxy/scope limits outside GitHub, so they cannot be fixed by
-reauthorizing the connection.
+**How to apply:** establish that the tested branch contains the current product changes before diagnosing or enforcing its result.
 
-**How to apply:** for CI work (workflow files, Actions secrets, rulesets), ask
-the user for a temporary **fine-grained PAT** scoped to the one repository with
-**Contents**, **Workflows**, **Administration**, and **Secrets** at
-*Read and write*. Push with the token held only in process memory via
-`GIT_CONFIG_COUNT` + `http.extraheader`, never written to `.git/config` or echoed.
+## A red required check may be a deliberate guard test
 
-## The connector token *can* push ordinary commits over git
+Before diagnosing CI infrastructure from a failed required check, read the diff
+of the failing head commit. Verification branches in this repo intentionally add
+an assertion that cannot pass (to prove the check blocks merges) and are then
+closed unmerged, so the "only failing run" can be by design.
 
-The 403 proxy wall applies to the connector's REST/GraphQL file writes, not to
-git transport. A plain `git push` over HTTPS authenticated with the connector's
-OAuth token succeeds for any commit that does **not** touch `.github/workflows`,
-so routine repo syncing needs no PAT at all.
+**Why:** the failure looks identical to a broken job in the run list, and
+chasing it wastes a full diagnosis cycle on a working pipeline.
 
-**Why:** the connector token carries the `repo` scope (not `workflow`), and git
-push is checked against scopes by GitHub itself rather than the connector proxy.
+**How to apply:** list recent runs for the same workflow first — a later run
+whose real test step succeeded on an ordinary branch proves the pipeline is
+healthy — then confirm with the failing commit's patch before changing anything.
 
-**How to apply:** fetch the token at run time from the connector endpoint, pass
-it to git via `GIT_CONFIG_COUNT` + `http.extraheader` (never in the remote URL or
-`.git/config`), and pre-check the diff for workflow paths so the push fails with
-a clear message instead of a scope error. Reserve a fine-grained PAT for the rare
-workflow-file change.
+## Path-filter detection breaks on merge_group unless base/head are passed in
 
-## Diagnose permission failures from the response header, not by guessing
+`dorny/paths-filter` only reads a base from the event payload for pull-request
+events. On a `merge_group` event it falls back to the repository default branch
+as base and `github.ref` as head — and a merge-queue checkout has no local
+`main`, so the step fails outright with
+`Could not determine what is main - fetch works but it's not a branch, tag or commit SHA`.
+A failing detect job means the dependent required check never reports, which is
+exactly how a queue entry gets stuck.
 
-A fine-grained PAT returns `403 "Resource not accessible by personal access token"`
-for every missing permission, but the response header
-**`x-accepted-github-permissions`** names the exact one (e.g. `contents=write`).
+**Why:** the queue branch is the only ref `actions/checkout` fetches, and its
+default depth of 1 leaves neither the base commit nor the base branch available.
 
-**Why:** the 403 body is identical regardless of which permission is missing, and
-a repo the token cannot see at all returns 404 instead — so a 403 plus that
-header proves repo access is fine and isolates the single missing toggle.
+**How to apply:** pass `base: merge_group.base_sha` and `ref: merge_group.head_sha`
+(guarded by `github.event_name`, empty string otherwise — pull-request runs ignore
+both inputs), and check out full history on merge-queue runs so no fetch-by-SHA is
+needed. Note GitHub coerces bare `0` to false in expressions, so write the
+event-conditional as `github.event_name == 'pull_request' && 1 || 0`; the
+`&& '0' || '1'` shape is ambiguous.
 
-**How to apply:** probe with one cheap write (creating a loose blob is harmless
-and unreferenced), read the header, and tell the user the one row to change
-rather than asking them to re-check the whole permission list.
+**Verifiable without a queue:** run the action's published `dist/index.js` against
+a synthetic repo with `GITHUB_EVENT_NAME=merge_group` and a hand-written event
+payload. That reproduces the failure and proves the fix when GitHub's merge queue
+cannot be enabled.
 
-## Rulesets require a public repo on GitHub Free
+## Observe required-check identity before enforcing it
 
-Branch rulesets and protected branches are unavailable on private repositories
-for Free accounts. Making a repo public to gain them is a **user decision** —
-confirm explicitly, and audit tracked files for secrets before publishing.
+Create branch rules from the check name and provider identity reported by a successful run, not from a guessed workflow label.
 
-## Required status check context is the job name
+**Why:** a required context that never matches a reported check can block every merge.
 
-A ruleset's `required_status_checks[].context` must be the **job's** name
-(e.g. `Kanban browser regression`), even though GitHub's UI displays it as
-`Workflow name / Job name`. Pair it with `integration_id: 15368` (GitHub Actions)
-so an outside app cannot satisfy the requirement.
+**How to apply:** let the workflow run once, inspect its check run, then configure and verify enforcement.
 
-**Why:** a context string that never matches a reported check silently blocks
-every pull request forever with "waiting for status to be reported".
+## Keep sync-health markers outside the tracked tree
 
-**How to apply:** let the workflow run **once** first, read the real check-run
-name and app id from `GET /commits/{sha}/check-runs`, and only then create the
-ruleset. Verify enforcement by attempting the merge through the API — a genuine
-block returns **405 "Repository rule violations found"**.
+Sync timestamps and health markers must be untracked operational state.
 
-## Path-filter CI with a job-level `if:`, never workflow-level `paths:`
+**Why:** a tracked marker changes on every sync and manufactures the drift it is meant to detect.
 
-A required check that is filtered out at the **workflow** level never reports and
-blocks unrelated pull requests permanently. A job skipped by an `if:` condition
-still reports a `skipped` check run, which satisfies the requirement.
+**How to apply:** store markers in ignored local state, and do not let marker-write failures fail the sync.
 
-## Sealing Actions secrets in this container
+## Treat workflow writes as a separate capability
 
-PyNaCl is not available. Use `libsodium-wrappers` installed into a scratch
-directory outside the repo, and run it from a **`.cjs` file** — a `require()`
-plus top-level `await` inside a `node <<EOF` heredoc fails with
-`ERR_AMBIGUOUS_MODULE_SYNTAX`.
+Routine repository write access does not imply permission to change CI workflows.
+
+**Why:** GitHub can accept source commits from an identity while rejecting commits that change workflow definitions.
+
+**How to apply:** classify the outgoing diff before choosing credentials, require explicit workflow-write capability, and never persist credentials in repository configuration.
+
+## Keep path filtering inside required jobs
+
+Keep a required workflow active and skip irrelevant work at the job level instead of filtering out the whole workflow.
+
+**Why:** a job-level skip reports a conclusion, while a workflow that never starts may leave its required check pending.
+
+**How to apply:** use an always-running detection job and condition expensive jobs on its output.
+
+## Stub every backend read in browser checks
+
+Browser suites that run without an API server must provide deterministic responses for every request made by a covered route.
+
+**Why:** a local API can hide an undeclared test dependency that later breaks a hermetic CI run.
+
+**How to apply:** audit route-level reads, stub them at the network boundary, and verify the suite without relying on a live backend.
+
+## Only a GitHub App avoids an expiring credential for workflow pushes
+
+Pushing `.github/workflows/**` needs workflow write, which the connector will
+never have. The two workable credentials are a **GitHub App installation token**
+(minted per run from a private key that does not expire) or a fine-grained PAT
+created with *No expiration*; anything else stalls CI changes when it lapses.
+
+**Why:** GitHub Actions' own `GITHUB_TOKEN` cannot modify workflow files either,
+so there is no in-CI escape hatch, and a short-lived PAT quietly turns "sync
+failed" into unsynced CI config. The REST APIs are closed too: with a token
+lacking workflow write, creating a blob succeeds and creating a *tree* that
+places it under `.github/workflows/` fails with a bare `404`, so an unexplained
+404 from the git data API is a permission answer, not a missing object.
+
+**How to apply:** prefer the app. Read an installation token's capability from
+the `permissions` object returned when it is minted — installation tokens cannot
+call `/user`. A fine-grained PAT reports no `x-oauth-scopes` and has no cheap
+probe for the workflows permission, so treat it as "maybe" and let the push be
+the test; `/user` does return `github-authentication-token-expiration`, which is
+enough to warn before a stored token lapses.

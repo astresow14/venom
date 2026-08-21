@@ -5,8 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VenomMessageDeliberation } from './venomMessageDeliberation';
 import type { VenomMessageRole } from './venomMessageRole';
 import type { VenomMessageStatus } from './venomMessageStatus';
+import type { VenomModelId } from './venomModelId';
 
 export interface VenomMessage {
   /**
@@ -20,4 +22,23 @@ export interface VenomMessage {
   /** @minimum 0 */
   createdAt: number;
   status: VenomMessageStatus;
+  modelId?: VenomModelId;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  modelName?: string;
+  deliberation?: VenomMessageDeliberation;
+  /**
+     * Debate voice identity behind this assistant turn. Absent for ordinary replies, so older clients render debate turns as plain assistant messages.
+     * @minLength 1
+     * @maxLength 64
+     */
+  speakerId?: string;
+  /**
+     * Display name of the debate voice behind this assistant turn.
+     * @minLength 1
+     * @maxLength 80
+     */
+  speakerName?: string;
 }

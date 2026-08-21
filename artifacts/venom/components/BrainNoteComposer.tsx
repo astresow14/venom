@@ -335,6 +335,11 @@ export function BrainNoteComposer({
     setError(null);
 
     try {
+      // Deliberately not `file: true`: the note's conversation and message
+      // ids are created locally only after extraction succeeds, so server
+      // filing here would anchor evidence to this throwaway conversation id.
+      // Local filing keeps the anchoring right; the ontology store absorbs
+      // the result on the next workspace sync.
       const extraction = await extractVenomKnowledge(
         {
           conversation: {

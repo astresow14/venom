@@ -1,32 +1,27 @@
-import { type ReactNode, useEffect, useRef } from "react";
-import { ClerkProvider, Show, useAuth, useClerk } from "@clerk/react";
+import { type ReactNode, Suspense, lazy, useEffect, useRef } from "react";
+import { ClerkProvider, Show, useClerk } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import {
+  MutationCache,
+  QueryCache,
   QueryClient,
   QueryClientProvider,
   useQueryClient,
 } from "@tanstack/react-query";
+import {
+  isWorkspaceAccessDeniedError,
+  notifyWorkspaceAccessLost,
+} from "@/lib/workspace-access";
+import { MotionConfig } from "framer-motion";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { PageFallback } from "@/components/route-fallback";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import {
-  IS_UI_TEST,
-  VenomWorkspaceProvider,
-} from "@/context/venom-workspace";
+import { prefetchOnIdle } from "@/lib/prefetch-routes";
+import { IS_UI_TEST } from "@/lib/ui-test";
 import NotFound from "@/pages/not-found";
-import LandingPage from "@/pages/landing";
-import SignInPage from "@/pages/auth/sign-in";
-import SignUpPage from "@/pages/auth/sign-up";
-import WorkspaceLayout from "@/components/layout/Shell";
-import ChatPage from "@/pages/workspace/chat";
-import FeedPage from "@/pages/workspace/feed";
-import BrainPage from "@/pages/workspace/brain";
-import TasksPage from "@/pages/workspace/tasks";
-import AppsPage from "@/pages/workspace/apps";
-import AppDetailPage from "@/pages/workspace/apps/[id]";
-import { ThemeProvider } from "@/components/theme-provider";
-import { AnimatePresence } from "framer-motion";
 import {
   Route,
   Switch,
@@ -34,6 +29,22 @@ import {
   Router as WouterRouter,
   Redirect,
 } from "wouter";
+
+/**
+ * Top-level routes are split so a phone only downloads the screen it is
+ * actually on. The signed-out landing page and the Clerk-hosted auth screens
+ * never ship with the workspace, and the workspace shell never ships with the
+ * landing page.
+ */
+const loadLanding = () => import("@/pages/landing");
+const loadSignIn = () => import("@/pages/auth/sign-in");
+const loadSignUp = () => import("@/pages/auth/sign-up");
+const loadWorkspace = () => import("@/routes/workspace-routes");
+
+const LandingPage = lazy(loadLanding);
+const SignInPage = lazy(loadSignIn);
+const SignUpPage = lazy(loadSignUp);
+const WorkspaceRoutes = lazy(loadWorkspace);
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const clerkPubKey = publishableKeyFromHost(
@@ -46,11 +57,22 @@ if (!clerkPubKey) {
   throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
 }
 
+// Revocation of shared-workspace access surfaces as a 403 with a dedicated
+// code on any workspace-scoped request. Every such error funnels through
+// these hooks so cached workspace content is evicted centrally.
+const handleRequestError = (error: unknown) => {
+  if (isWorkspaceAccessDeniedError(error)) notifyWorkspaceAccessLost();
+};
+
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: handleRequestError }),
+  mutationCache: new MutationCache({ onError: handleRequestError }),
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: true,
-      retry: 2,
+      // Access denial is deterministic — retrying cannot help.
+      retry: (failureCount, error) =>
+        !isWorkspaceAccessDeniedError(error) && failureCount < 2,
     },
   },
 });
@@ -131,6 +153,10 @@ function ClerkQueryClientCacheInvalidator() {
 }
 
 function HomeRedirect() {
+  // From the landing page the only two ways forward are the auth screens and
+  // the workspace, so warm both once the page itself has painted.
+  useEffect(() => prefetchOnIdle([loadSignIn, loadSignUp, loadWorkspace]), []);
+
   return (
     <>
       <Show when="signed-in">
@@ -156,55 +182,22 @@ function ProtectedWorkspace({ children }: { children: ReactNode }) {
   );
 }
 
-function AccountScopedWorkspace({ children }: { children: ReactNode }) {
-  const { userId } = useAuth();
-
-  return (
-    <VenomWorkspaceProvider key={userId ?? "signed-out"}>
-      {children}
-    </VenomWorkspaceProvider>
-  );
-}
-
-function WorkspaceRouter() {
-  const [location] = useLocation();
-
-  return (
-    <WorkspaceLayout>
-      <AnimatePresence mode="wait" initial={false}>
-        <Switch location={location} key={location}>
-          <Route path="/workspace">
-            <Redirect to="/workspace/chat" />
-          </Route>
-          <Route path="/workspace/chat" component={ChatPage} />
-          <Route path="/workspace/feed" component={FeedPage} />
-          <Route path="/workspace/brain" component={BrainPage} />
-          <Route path="/workspace/tasks" component={TasksPage} />
-          <Route path="/workspace/apps" component={AppsPage} />
-          <Route path="/workspace/apps/:id" component={AppDetailPage} />
-          <Route component={NotFound} />
-        </Switch>
-      </AnimatePresence>
-    </WorkspaceLayout>
-  );
-}
-
 function Router() {
   return (
     <RoutedErrorBoundary>
-      <Switch>
-        <Route path="/" component={HomeRedirect} />
-        <Route path="/sign-in/*?" component={SignInPage} />
-        <Route path="/sign-up/*?" component={SignUpPage} />
-        <Route path="/workspace/*?">
-          <ProtectedWorkspace>
-            <AccountScopedWorkspace>
-              <WorkspaceRouter />
-            </AccountScopedWorkspace>
-          </ProtectedWorkspace>
-        </Route>
-        <Route component={NotFound} />
-      </Switch>
+      <Suspense fallback={<PageFallback />}>
+        <Switch>
+          <Route path="/" component={HomeRedirect} />
+          <Route path="/sign-in/*?" component={SignInPage} />
+          <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route path="/workspace/*?">
+            <ProtectedWorkspace>
+              <WorkspaceRoutes />
+            </ProtectedWorkspace>
+          </Route>
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
     </RoutedErrorBoundary>
   );
 }
@@ -227,14 +220,14 @@ function App() {
       localization={{
         signIn: {
           start: {
-            title: "Return to Venom",
-            subtitle: "Sign in to continue your workspace",
+            title: "Sign in",
+            subtitle: "Continue to Venom",
           },
         },
         signUp: {
           start: {
-            title: "Create your Venom account",
-            subtitle: "Your workspace stays with you across devices",
+            title: "Create an account",
+            subtitle: "Continue to Venom",
           },
         },
       }}
@@ -242,13 +235,16 @@ function App() {
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
       <ThemeProvider defaultTheme="dark" storageKey="venom-ui-theme">
-        <QueryClientProvider client={queryClient}>
-          <ClerkQueryClientCacheInvalidator />
-          <TooltipProvider>
-            <Router />
-            <Toaster />
-          </TooltipProvider>
-        </QueryClientProvider>
+        {/* Honour the OS reduced-motion setting for script-driven animation. */}
+        <MotionConfig reducedMotion="user">
+          <QueryClientProvider client={queryClient}>
+            <ClerkQueryClientCacheInvalidator />
+            <TooltipProvider>
+              <Router />
+              <Toaster />
+            </TooltipProvider>
+          </QueryClientProvider>
+        </MotionConfig>
       </ThemeProvider>
     </ClerkProvider>
   );

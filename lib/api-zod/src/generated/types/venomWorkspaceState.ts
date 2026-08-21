@@ -6,9 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProjectSource } from './projectSource';
+import type { VenomArchivedCitation } from './venomArchivedCitation';
 import type { VenomConversation } from './venomConversation';
 import type { VenomKnowledgeCluster } from './venomKnowledgeCluster';
+import type { VenomModelPreferences } from './venomModelPreferences';
 import type { VenomProject } from './venomProject';
+import type { VenomVoicePreferences } from './venomVoicePreferences';
 import type { VenomWorkspaceTombstones } from './venomWorkspaceTombstones';
 
 export interface VenomWorkspaceState {
@@ -31,4 +34,8 @@ export interface VenomWorkspaceState {
      */
   activeConversationId: string | null;
   tombstones?: VenomWorkspaceTombstones;
+  modelPreferences?: VenomModelPreferences;
+  voicePreferences?: VenomVoicePreferences;
+  /** @maxItems 500 */
+  archivedCitations?: VenomArchivedCitation[];
 }

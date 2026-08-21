@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -26,6 +27,18 @@ export const venomPortfolioAppsTable = pgTable(
     currentSourceVersion: integer("current_source_version").notNull().default(0),
     latestImportStatus: text("latest_import_status"),
     sourceUpdatedAt: timestamp("source_updated_at", { withTimezone: true }),
+    /**
+     * Optional link to one of the owner's Venom workspace projects (plain
+     * text id from the workspace blob; projects are not a table). The link
+     * tells the parent layer which Brain knowledge and connected sources
+     * feed this app.
+     */
+    linkedProjectId: text("linked_project_id"),
+    /** When the owner last dismissed the "new data" improvement suggestion. */
+    improvementSuggestionDismissedAt: timestamp(
+      "improvement_suggestion_dismissed_at",
+      { withTimezone: true },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -139,6 +152,9 @@ export const venomPortfolioDeploymentLinksTable = pgTable(
       table.clerkUserId,
       table.appId,
     ),
+    uniqueIndex("venom_portfolio_deployment_links_primary_app_idx")
+      .on(table.appId)
+      .where(sql`${table.isPrimary} = true`),
   ],
 );
 
@@ -187,6 +203,55 @@ export const venomPortfolioImportJobsTable = pgTable(
   ],
 );
 
+/**
+ * One row per approved build package registered against an app: the app's
+ * package version history. Rows are written only when a human approves a
+ * build run that is pinned to the app, so every version is traceable to an
+ * explicit approval.
+ */
+export const venomPortfolioAppIterationsTable = pgTable(
+  "venom_portfolio_app_iterations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    appId: uuid("app_id")
+      .notNull()
+      .references(() => venomPortfolioAppsTable.id, { onDelete: "cascade" }),
+    clerkUserId: text("clerk_user_id").notNull(),
+    iterationNumber: integer("iteration_number").notNull(),
+    // Immutable pins into the build pipeline. Deliberately no destructive
+    // foreign keys: deleting a run must never rewrite an app's recorded
+    // history; unresolvable pins fail loudly instead.
+    buildRunId: uuid("build_run_id").notNull(),
+    revisionId: uuid("revision_id").notNull(),
+    packageTitle: text("package_title").notNull(),
+    packageChecksum: text("package_checksum").notNull(),
+    runKind: text("run_kind").notNull().default("standard"),
+    baselineIterationId: uuid("baseline_iteration_id"),
+    baselineRevisionId: uuid("baseline_revision_id"),
+    /** Human-readable request or data change that drove this version. */
+    reason: text("reason").notNull(),
+    changesSummary: text("changes_summary"),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("venom_portfolio_app_iterations_app_number_idx").on(
+      table.appId,
+      table.iterationNumber,
+    ),
+    uniqueIndex("venom_portfolio_app_iterations_build_run_idx").on(
+      table.buildRunId,
+    ),
+    index("venom_portfolio_app_iterations_owner_app_idx").on(
+      table.clerkUserId,
+      table.appId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const insertVenomPortfolioAppSchema = createInsertSchema(
   venomPortfolioAppsTable,
 ).omit({ id: true, createdAt: true, updatedAt: true });
@@ -205,3 +270,5 @@ export type VenomPortfolioSourceVersion =
   typeof venomPortfolioSourceVersionsTable.$inferSelect;
 export type VenomPortfolioImportJob =
   typeof venomPortfolioImportJobsTable.$inferSelect;
+export type VenomPortfolioAppIteration =
+  typeof venomPortfolioAppIterationsTable.$inferSelect;

@@ -2,7 +2,9 @@ import { useRoute, useLocation, Link } from "wouter";
 import {
   useGetVenomApp,
   useDeleteVenomApp,
+  useListVenomBuildRuns,
   getGetVenomAppQueryKey,
+  getListVenomBuildRunsQueryKey,
 } from "@workspace/api-client-react";
 import {
   Hexagon,
@@ -15,8 +17,12 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  History,
   Loader2,
   Plus,
+  Rocket,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,7 +39,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { asList } from "@/lib/as-list";
 import UploadVersionDialog from "@/components/workspace/apps/upload-version-dialog";
+import {
+  EvolutionTimeline,
+  ImproveAppDialog,
+  ImprovementSignalBanner,
+  KnowledgeContextCard,
+} from "@/components/workspace/apps/app-iteration-panels";
 
 export default function AppDetailPage() {
   const [, params] = useRoute("/workspace/apps/:id");
@@ -55,18 +68,26 @@ export default function AppDetailPage() {
     },
   });
 
+  const { data: buildRunsResponse } = useListVenomBuildRuns(
+    { appId: appId! },
+    {
+      query: { enabled: !!appId, queryKey: getListVenomBuildRunsQueryKey({ appId: appId! }) },
+    },
+  );
+  const buildRuns = asList(buildRunsResponse);
+
   const deleteApp = useDeleteVenomApp();
 
   if (isLoading) {
     return (
       <div className="p-8 max-w-5xl mx-auto w-full space-y-8">
-        <Skeleton className="h-12 w-64 rounded-none bg-muted/20" />
+        <Skeleton className="h-12 w-64 rounded-xl bg-muted/20" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="md:col-span-2 space-y-4">
-            <Skeleton className="h-32 rounded-none bg-muted/20" />
-            <Skeleton className="h-64 rounded-none bg-muted/20" />
+            <Skeleton className="h-32 rounded-xl bg-muted/20" />
+            <Skeleton className="h-64 rounded-xl bg-muted/20" />
           </div>
-          <Skeleton className="h-96 rounded-none bg-muted/20" />
+          <Skeleton className="h-96 rounded-xl bg-muted/20" />
         </div>
       </div>
     );
@@ -76,15 +97,15 @@ export default function AppDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <h2 className="text-xl font-black uppercase tracking-tighter">
+        <h2 className="text-xl font-semibold tracking-tight">
           App Not Found
         </h2>
-        <p className="text-muted-foreground font-mono text-sm mt-2 mb-6">
+        <p className="text-muted-foreground text-sm mt-2 mb-6">
           This app record does not exist or belongs to another account.
         </p>
         <Link 
           href="/workspace/apps"
-          className="inline-flex items-center justify-center whitespace-nowrap text-sm h-10 px-4 py-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-none font-bold uppercase"
+          className="inline-flex items-center justify-center whitespace-nowrap text-sm h-10 px-4 py-2 border border-border/60 rounded-md font-medium shadow-soft"
           data-testid="link-return-matrix"
         >
           Return to Portfolio
@@ -93,7 +114,7 @@ export default function AppDetailPage() {
     );
   }
 
-  const { app, versions, importJobs, deploymentLinks } = detail;
+  const { app, versions, importJobs, deploymentLinks, timeline } = detail;
 
   const handleDelete = async () => {
     try {
@@ -122,18 +143,18 @@ export default function AppDetailPage() {
           <div>
             <Link
               href="/workspace/apps"
-              className="inline-flex items-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground mb-4 transition-colors group"
+              className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-4 transition-colors group"
             >
               <ArrowLeft className="mr-2 h-3 w-3 group-hover:-translate-x-1 transition-transform" />
-               App Portfolio
+               App portfolio
             </Link>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-black uppercase tracking-tighter text-foreground">
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground">
                 {app.name}
               </h1>
               <AppStatusBadge status={app.status} />
             </div>
-            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               {app.brand} / {app.id.split("-")[0]}
             </p>
           </div>
@@ -142,7 +163,7 @@ export default function AppDetailPage() {
             {app.deploymentUrl && (
               <a href={app.deploymentUrl} target="_blank" rel="noopener noreferrer">
                 <Button 
-                  className="rounded-none font-bold uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 transition-all"
+                  className="rounded-md font-medium shadow-soft bg-foreground text-background hover:bg-foreground/90 transition-all"
                   data-testid={`link-launch-${app.id}`}
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />
@@ -155,33 +176,33 @@ export default function AppDetailPage() {
               <AlertDialogTrigger asChild>
                 <Button
                   variant="outline"
-                  className="rounded-none font-bold uppercase tracking-widest border-destructive/20 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-all"
+                  className="rounded-md font-medium border-border/60 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-all"
                   data-testid={`button-delete-app-${app.id}`}
                 >
                   <Trash2 className="h-4 w-4 md:mr-2" />
                    <span className="hidden md:inline">Delete</span>
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent className="rounded-none border-border bg-background p-0 sm:max-w-[420px]">
+              <AlertDialogContent className="rounded-2xl border-border/60 surface p-0 sm:max-w-[420px] shadow-lift">
                 <div className="p-6">
                   <AlertDialogHeader>
-                    <AlertDialogTitle className="text-xl font-black uppercase tracking-tighter text-destructive flex items-center gap-2">
+                    <AlertDialogTitle className="text-xl font-semibold tracking-tight text-destructive flex items-center gap-2">
                       <AlertTriangle className="h-5 w-5" />
                        Delete app record?
                     </AlertDialogTitle>
-                    <AlertDialogDescription className="font-mono text-xs mt-2 uppercase tracking-widest">
+                    <AlertDialogDescription className="text-sm mt-2">
                        This cannot be undone. The app record, private source packages,
                        deployment links, and import history will be permanently deleted.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter className="mt-8">
-                    <AlertDialogCancel className="rounded-none font-bold uppercase tracking-widest border-border/50 hover:bg-foreground/[0.05]">
+                    <AlertDialogCancel className="rounded-md font-medium border-border/60 hover:bg-accent hover:text-accent-foreground">
                        Cancel
                     </AlertDialogCancel>
                     <AlertDialogAction
                       onClick={handleDelete}
                       disabled={deleteApp.isPending}
-                      className="rounded-none font-bold uppercase tracking-widest bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      className="rounded-md font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-soft"
                     >
                       {deleteApp.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -198,12 +219,14 @@ export default function AppDetailPage() {
       </header>
 
       <div className="flex-1 overflow-y-auto p-6 relative z-10">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="max-w-6xl mx-auto">
+          <ImprovementSignalBanner app={app} />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
             <section>
-              <h2 className="text-lg font-black uppercase tracking-tighter border-b border-border/40 pb-2 mb-4 flex items-center gap-2">
+              <h2 className="text-base font-semibold tracking-tight border-b border-border/60 pb-2 mb-4 flex items-center gap-2">
                 <FileArchive className="h-4 w-4" />
-                Import Jobs
+                Import jobs
               </h2>
               {importJobs.length === 0 ? (
                 <EmptyState message="No import history found." />
@@ -217,9 +240,9 @@ export default function AppDetailPage() {
             </section>
 
             <section>
-              <h2 className="text-lg font-black uppercase tracking-tighter border-b border-border/40 pb-2 mb-4 flex items-center gap-2">
+              <h2 className="text-base font-semibold tracking-tight border-b border-border/60 pb-2 mb-4 flex items-center gap-2">
                 <Hexagon className="h-4 w-4" />
-                Source Versions
+                Source versions
               </h2>
               {versions.length === 0 ? (
                 <EmptyState message="No source versions available." />
@@ -231,38 +254,104 @@ export default function AppDetailPage() {
                 </div>
               )}
             </section>
+
+            <section>
+              <h2 className="text-base font-semibold tracking-tight border-b border-border/60 pb-2 mb-4 flex items-center gap-2">
+                <History className="h-4 w-4" />
+                Evolution
+              </h2>
+              <EvolutionTimeline
+                appId={app.id}
+                timeline={timeline}
+                timelineTotal={detail.timelineTotal}
+                timelineTruncated={detail.timelineTruncated}
+              />
+            </section>
           </div>
 
           <div className="space-y-6">
-            <div className="border border-border/40 bg-card p-5 shadow-xl">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">
+            <div className="border border-border/60 surface p-5 rounded-xl shadow-soft">
+              <h3 className="text-sm font-semibold tracking-tight mb-4">
                 Operations
               </h3>
-              <UploadVersionDialog appId={app.id}>
-                <Button 
-                  className="w-full rounded-none font-bold uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 transition-transform hover:scale-[1.02] active:scale-[0.98]"
-                  data-testid={`button-upload-source-${app.id}`}
+              <div className="space-y-3">
+                <ImproveAppDialog app={app}>
+                  <Button
+                    className="w-full rounded-md font-medium shadow-soft bg-foreground text-background hover:bg-foreground/90 transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                    data-testid={`button-improve-app-${app.id}`}
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Improve This App
+                  </Button>
+                </ImproveAppDialog>
+                <Link
+                  href={`/workspace/builds/new?appId=${app.id}`}
+                  className="inline-flex w-full"
                 >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Upload Source
-                </Button>
-              </UploadVersionDialog>
+                  <Button
+                    variant="outline"
+                    className="w-full rounded-md font-medium border-border/60 shadow-soft hover:bg-foreground hover:text-background transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <Rocket className="mr-2 h-4 w-4" />
+                    New build
+                  </Button>
+                </Link>
+                <UploadVersionDialog appId={app.id}>
+                  <Button
+                    variant="outline"
+                    className="w-full rounded-md font-medium border-border/60 shadow-soft hover:bg-foreground hover:text-background transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                    data-testid={`button-upload-source-${app.id}`}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Upload Source
+                  </Button>
+                </UploadVersionDialog>
+              </div>
             </div>
 
-            <div className="border border-border/40 bg-card p-5 shadow-xl">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">
+            <KnowledgeContextCard app={app} />
+
+            {buildRuns && buildRuns.length > 0 && (
+              <div className="border border-border/60 surface p-5 rounded-xl shadow-soft">
+                <h3 className="text-sm font-semibold tracking-tight mb-4">
+                  Build runs
+                </h3>
+                <div className="space-y-3">
+                  {buildRuns.slice(0, 5).map(run => (
+                    <Link
+                      key={run.id}
+                      href={`/workspace/builds/${run.id}`}
+                      className="group flex items-center justify-between py-2 border-b border-border/40 last:border-0 hover:bg-foreground/[0.03] transition-colors"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium tracking-tight group-hover:underline underline-offset-2">
+                          {new Date(run.createdAt).toLocaleDateString()}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {run.status}
+                        </span>
+                      </div>
+                      <ArrowLeft className="h-3 w-3 rotate-180 opacity-0 group-hover:opacity-100 transition-all text-foreground transform -translate-x-2 group-hover:translate-x-0" />
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="border border-border/60 surface p-5 rounded-xl shadow-soft">
+              <h3 className="text-sm font-semibold tracking-tight mb-4">
                 Metadata
               </h3>
-              <dl className="space-y-4 text-sm font-mono uppercase tracking-widest">
+              <dl className="space-y-4 text-sm">
                 <div>
-                  <dt className="text-[9px] text-muted-foreground mb-1">Purpose</dt>
+                  <dt className="text-xs text-muted-foreground mb-1 font-medium">Purpose</dt>
                   <dd className="font-medium normal-case tracking-normal">
                     {app.purpose}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[9px] text-muted-foreground mb-1">
-                    Detected Stack
+                  <dt className="text-xs text-muted-foreground mb-1 font-medium">
+                    Detected stack
                   </dt>
                   <dd>
                     {app.detectedStack.length > 0
@@ -271,8 +360,8 @@ export default function AppDetailPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[9px] text-muted-foreground mb-1">
-                    Last Update
+                  <dt className="text-xs text-muted-foreground mb-1 font-medium">
+                    Last update
                   </dt>
                   <dd>
                     {app.updatedAt
@@ -282,6 +371,7 @@ export default function AppDetailPage() {
                 </div>
               </dl>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -297,7 +387,7 @@ function JobCard({ job, appId }: { job: any; appId: string }) {
   return (
     <div
       className={cn(
-        "border p-4 transition-all duration-300",
+        "border border-border/60 p-4 transition-all duration-300 rounded-lg shadow-soft surface",
         isFailed
           ? "border-destructive/30 bg-destructive/5"
           : isComplete
@@ -316,10 +406,10 @@ function JobCard({ job, appId }: { job: any; appId: string }) {
             <XCircle className="h-5 w-5 text-destructive" />
           )}
           <div>
-            <div className="font-bold text-sm uppercase tracking-tight">
+            <div className="font-medium text-sm">
               {job.archiveFilename}
             </div>
-            <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mt-0.5">
+            <div className="text-xs text-muted-foreground mt-0.5">
               {new Date(job.createdAt).toLocaleString()}
             </div>
           </div>
@@ -327,7 +417,7 @@ function JobCard({ job, appId }: { job: any; appId: string }) {
         <div className="text-right flex flex-col items-end">
           <span
             className={cn(
-              "text-[9px] font-black uppercase tracking-widest px-2 py-1 border",
+              "text-xs font-medium px-2 py-1 border rounded-full",
               isFailed
                 ? "text-destructive border-destructive/20 bg-destructive/10"
                 : isComplete
@@ -338,7 +428,7 @@ function JobCard({ job, appId }: { job: any; appId: string }) {
             {job.status}
           </span>
           {isActive && job.progress > 0 && (
-            <span className="text-[10px] font-mono mt-1">
+            <span className="text-xs mt-1">
               {job.progress}%
             </span>
           )}
@@ -347,7 +437,7 @@ function JobCard({ job, appId }: { job: any; appId: string }) {
 
       {isFailed && (
         <div className="mt-4 pt-3 border-t border-destructive/20 flex items-center justify-between">
-          <div className="text-xs font-mono text-destructive uppercase tracking-widest max-w-md">
+          <div className="text-xs text-destructive max-w-md">
             [ERR: {job.failureCode || "UNKNOWN"}] {job.failureMessage}
           </div>
           <UploadVersionDialog
@@ -359,7 +449,7 @@ function JobCard({ job, appId }: { job: any; appId: string }) {
             <Button
               variant="outline"
               size="sm"
-              className="rounded-none border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground font-bold uppercase tracking-widest h-8 text-[10px]"
+              className="rounded-md border-border/60 text-destructive hover:bg-destructive hover:text-destructive-foreground font-medium h-8 text-xs shadow-soft"
             >
               Retry
             </Button>
@@ -372,29 +462,29 @@ function JobCard({ job, appId }: { job: any; appId: string }) {
 
 function VersionCard({ version }: { version: any }) {
   return (
-    <div className="flex items-center justify-between border border-border/40 bg-card p-4">
+    <div className="flex items-center justify-between border border-border/60 surface p-4 rounded-lg shadow-soft">
       <div className="flex items-center gap-4">
-        <div className="grid h-10 w-10 place-items-center bg-foreground text-background font-black text-lg">
+        <div className="grid h-10 w-10 place-items-center bg-foreground text-background font-semibold text-lg rounded-md">
           v{version.versionNumber}
         </div>
         <div>
-          <div className="font-bold text-sm uppercase tracking-tight">
+          <div className="font-medium text-sm">
             {version.archiveFilename}
           </div>
-          <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mt-0.5 flex gap-2">
+          <div className="text-xs text-muted-foreground mt-0.5 flex gap-2 items-center">
             <span>{(version.archiveBytes / 1024 / 1024).toFixed(2)} MB</span>
             <span>&bull;</span>
-            <span title={version.checksumSha256}>
+            <span title={version.checksumSha256} className="font-mono text-[10px]">
               {version.checksumSha256.substring(0, 8)}...
             </span>
           </div>
         </div>
       </div>
       <div className="text-right">
-        <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        <div className="text-xs text-muted-foreground">
           {new Date(version.createdAt).toLocaleDateString()}
         </div>
-        <div className="text-[10px] font-mono font-bold mt-0.5">
+        <div className="text-xs font-medium mt-0.5">
           {version.manifest?.totalEntries || 0} FILES
         </div>
       </div>
@@ -406,7 +496,7 @@ function AppStatusBadge({ status }: { status: string }) {
   return (
     <div
       className={cn(
-        "px-2 py-1 text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5",
+        "px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1.5",
         status === "ready"
           ? "bg-foreground text-background"
           : status === "importing"
@@ -424,7 +514,7 @@ function AppStatusBadge({ status }: { status: string }) {
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="border border-dashed border-border/40 bg-foreground/[0.01] p-8 text-center text-sm font-mono uppercase tracking-widest text-muted-foreground">
+    <div className="border border-dashed border-border/60 bg-foreground/[0.01] p-8 text-center text-sm text-muted-foreground rounded-xl">
       {message}
     </div>
   );

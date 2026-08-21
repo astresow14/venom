@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VenomAppImprovementSignal } from './venomAppImprovementSignal';
 import type { VenomAppSourceType } from './venomAppSourceType';
 import type { VenomAppStatus } from './venomAppStatus';
 import type { VenomImportStatus } from './venomImportStatus';
@@ -45,6 +46,19 @@ export interface VenomApp {
   importStatus: VenomImportStatus | null;
   /** @nullable */
   sourceUpdatedAt: Date | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  linkedProjectId: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  linkedProjectName: string | null;
+  /** @minimum 0 */
+  latestIterationNumber: number;
+  improvementSignal: VenomAppImprovementSignal | null;
   createdAt: Date;
   updatedAt: Date;
 }

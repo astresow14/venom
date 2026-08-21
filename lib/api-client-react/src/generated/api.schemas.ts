@@ -35,6 +35,23 @@ export const VenomAppSourceType = {
   zip: 'zip',
 } as const;
 
+export interface VenomAppImprovementSignal {
+  since: string;
+  /** @minimum 0 */
+  knowledgeChanges: number;
+  /** @minimum 0 */
+  sourceChanges: number;
+  /** @minimum 1 */
+  totalChanges: number;
+  /**
+     * @minLength 1
+     * @maxLength 1500
+     */
+  summary: string;
+  /** @minimum 1 */
+  baselineIterationNumber: number;
+}
+
 export interface VenomApp {
   /** @pattern ^[0-9a-fA-F-]{36}$ */
   id: string;
@@ -71,6 +88,19 @@ export interface VenomApp {
   importStatus: VenomImportStatus | null;
   /** @nullable */
   sourceUpdatedAt: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  linkedProjectId: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  linkedProjectName: string | null;
+  /** @minimum 0 */
+  latestIterationNumber: number;
+  improvementSignal: VenomAppImprovementSignal | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -120,6 +150,11 @@ export interface VenomAppUpdate {
      * @nullable
      */
   deploymentUrl?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  linkedProjectId?: string | null;
 }
 
 export type VenomSourceManifestRootKind = typeof VenomSourceManifestRootKind[keyof typeof VenomSourceManifestRootKind];
@@ -245,6 +280,156 @@ export interface VenomDeploymentLink {
   createdAt: string;
 }
 
+/**
+ * @pattern ^[0-9a-fA-F-]{36}$
+ */
+export type Uuid = string;
+
+export type ProvisioningReleaseStatus = typeof ProvisioningReleaseStatus[keyof typeof ProvisioningReleaseStatus];
+
+
+export const ProvisioningReleaseStatus = {
+  candidate: 'candidate',
+  published: 'published',
+  superseded: 'superseded',
+  rolled_back: 'rolled_back',
+  failed: 'failed',
+} as const;
+
+export interface ProvisioningCandidateRelease {
+  id: Uuid;
+  provisioningRunId: Uuid;
+  buildRunId: Uuid;
+  approvedRevisionId: Uuid;
+  appId: Uuid | null;
+  /** @maxLength 120 */
+  targetName: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  providerProjectId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  providerCandidateId: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  providerReleaseId: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  launchUrl: string | null;
+  status: ProvisioningReleaseStatus;
+  rollbackSupported: boolean;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  publishIdempotencyKey: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  rollbackIdempotencyKey: string | null;
+  /** @nullable */
+  publishedAt: string | null;
+  /** @nullable */
+  rolledBackAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type VenomBuildRunKind = typeof VenomBuildRunKind[keyof typeof VenomBuildRunKind];
+
+
+export const VenomBuildRunKind = {
+  standard: 'standard',
+  app_iteration: 'app_iteration',
+} as const;
+
+export interface VenomAppIteration {
+  id: Uuid;
+  /** @minimum 1 */
+  iterationNumber: number;
+  buildRunId: Uuid;
+  revisionId: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  packageTitle: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  packageChecksum: string;
+  runKind: VenomBuildRunKind;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  reason: string;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  changesSummary: string | null;
+  baselineIterationNumber: number | null;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  createdBy: string;
+  createdAt: string;
+}
+
+export type VenomAppTimelineEntryKind = typeof VenomAppTimelineEntryKind[keyof typeof VenomAppTimelineEntryKind];
+
+
+export const VenomAppTimelineEntryKind = {
+  source_import: 'source_import',
+  package_iteration: 'package_iteration',
+  release_created: 'release_created',
+  release_published: 'release_published',
+  release_rolled_back: 'release_rolled_back',
+} as const;
+
+export interface VenomAppTimelineEntry {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  id: string;
+  kind: VenomAppTimelineEntryKind;
+  occurredAt: string;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  title: string;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  detail: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  actor: string;
+  /**
+     * @minLength 1
+     * @maxLength 60
+     */
+  status: string;
+  buildRunId: Uuid | null;
+  releaseId: Uuid | null;
+  sourceVersionId: Uuid | null;
+  iterationNumber: number | null;
+}
+
 export interface VenomAppDetail {
   app: VenomApp;
   /** @maxItems 500 */
@@ -253,6 +438,135 @@ export interface VenomAppDetail {
   importJobs: VenomImportJob[];
   /** @maxItems 20 */
   deploymentLinks: VenomDeploymentLink[];
+  /** @maxItems 500 */
+  provisioningReleases: ProvisioningCandidateRelease[];
+  /** @maxItems 200 */
+  iterations: VenomAppIteration[];
+  /** @maxItems 400 */
+  timeline: VenomAppTimelineEntry[];
+  /** @minimum 0 */
+  timelineTotal: number;
+  timelineTruncated: boolean;
+}
+
+export interface VenomAppTimelinePage {
+  /** @maxItems 200 */
+  entries: VenomAppTimelineEntry[];
+  /**
+     * @maxLength 300
+     * @nullable
+     */
+  nextCursor: string | null;
+  /** @minimum 0 */
+  total: number;
+}
+
+export interface VenomAppIterationBaseline {
+  iterationId: Uuid;
+  /** @minimum 1 */
+  iterationNumber: number;
+  buildRunId: Uuid;
+  revisionId: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  packageTitle: string;
+  /** @nullable */
+  approvedAt: string | null;
+  resolvable: boolean;
+}
+
+export interface VenomAppIterationChanges {
+  since: string;
+  /** @minimum 0 */
+  knowledgeChanges: number;
+  /** @minimum 0 */
+  sourceChanges: number;
+  /**
+     * @minLength 1
+     * @maxLength 1500
+     */
+  summary: string;
+}
+
+export type VenomAppIterationContextLinkedProject = {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+} | null;
+
+export type VenomAppIterationContextLatestSourceVersion = {
+  id: Uuid;
+  /** @minimum 1 */
+  versionNumber: number;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  archiveFilename: string;
+} | null;
+
+export type VenomAppIterationContextSuggestedSopsItem = {
+  sopId: Uuid;
+  revisionId: Uuid;
+  /** @minimum 1 */
+  revisionNumber: number;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  title: string;
+};
+
+export type VenomAppIterationContextBlockedReason = typeof VenomAppIterationContextBlockedReason[keyof typeof VenomAppIterationContextBlockedReason] | null;
+
+
+export const VenomAppIterationContextBlockedReason = {
+  no_baseline: 'no_baseline',
+  baseline_unresolvable: 'baseline_unresolvable',
+} as const;
+
+export interface VenomAppIterationContext {
+  appId: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  appName: string;
+  linkedProject: VenomAppIterationContextLinkedProject;
+  baseline: VenomAppIterationBaseline | null;
+  latestSourceVersion: VenomAppIterationContextLatestSourceVersion;
+  /** @maxItems 20 */
+  suggestedSops: VenomAppIterationContextSuggestedSopsItem[];
+  changes: VenomAppIterationChanges | null;
+  canIterate: boolean;
+  blockedReason: VenomAppIterationContextBlockedReason;
+}
+
+export interface VenomAppIterationInput {
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  instruction: string;
+  /** @maxLength 4000 */
+  constraints?: string;
+  /** @maxItems 20 */
+  sopRevisionIds?: Uuid[];
+  /**
+     * @minLength 16
+     * @maxLength 120
+     * @pattern ^[A-Za-z0-9_-]+$
+     */
+  idempotencyKey: string;
 }
 
 export interface VenomImportInput {
@@ -283,6 +597,359 @@ export interface VenomImportUploadTicket {
   requiredContentType: 'application/zip';
 }
 
+export type VenomBuildTargetType = typeof VenomBuildTargetType[keyof typeof VenomBuildTargetType];
+
+
+export const VenomBuildTargetType = {
+  app: 'app',
+  website: 'website',
+  brand: 'brand',
+  customer_service_flow: 'customer_service_flow',
+} as const;
+
+export type VenomBuildRunStatus = typeof VenomBuildRunStatus[keyof typeof VenomBuildRunStatus];
+
+
+export const VenomBuildRunStatus = {
+  queued: 'queued',
+  preparing: 'preparing',
+  review_required: 'review_required',
+  approved: 'approved',
+  cancelled: 'cancelled',
+  failed: 'failed',
+  ready_for_provisioning: 'ready_for_provisioning',
+} as const;
+
+export interface VenomBuildRunInput {
+  targetType: VenomBuildTargetType;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  targetName: string;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  requirements: string;
+  /** @maxLength 4000 */
+  constraints: string;
+  /** @maxLength 3000 */
+  brandDirection: string;
+  appId: Uuid | null;
+  sourceVersionId: Uuid | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  projectId: string | null;
+  /** @maxItems 20 */
+  sopRevisionIds: Uuid[];
+  /**
+     * @minLength 16
+     * @maxLength 120
+     * @pattern ^[A-Za-z0-9_-]+$
+     */
+  idempotencyKey: string;
+}
+
+export interface VenomBuildRequestSnapshot {
+  targetType: VenomBuildTargetType;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  targetName: string;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  requirements: string;
+  /** @maxLength 4000 */
+  constraints: string;
+  /** @maxLength 3000 */
+  brandDirection: string;
+  appId: Uuid | null;
+  sourceVersionId: Uuid | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  projectId: string | null;
+  /** @maxItems 20 */
+  sopRevisionIds: Uuid[];
+  baselineIterationId: Uuid | null;
+  baselineRevisionId: Uuid | null;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  changesSummary: string | null;
+}
+
+export interface VenomBuildSourceReference {
+  appId: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  appName: string;
+  sourceVersionId: Uuid;
+  /** @minimum 1 */
+  versionNumber: number;
+  /** @pattern ^[a-f0-9]{64}$ */
+  checksumSha256: string;
+}
+
+export interface VenomBuildSopReference {
+  sopId: Uuid;
+  revisionId: Uuid;
+  /** @minimum 1 */
+  revisionNumber: number;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  title: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  checksumSha256: string;
+}
+
+export interface VenomBuildProductBrief {
+  /**
+     * @minLength 1
+     * @maxLength 3000
+     */
+  summary: string;
+  /**
+     * @maxItems 12
+     * @items.minLength 1
+     * @items.maxLength 300
+     */
+  audience: string[];
+  /**
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 500
+     */
+  outcomes: string[];
+}
+
+export interface VenomBuildPermissionRequest {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  capability: string;
+  /**
+     * @minLength 1
+     * @maxLength 600
+     */
+  reason: string;
+  required: boolean;
+}
+
+export interface VenomBuildPackage {
+  formatVersion: 1;
+  targetType: VenomBuildTargetType;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  title: string;
+  productBrief: VenomBuildProductBrief;
+  /**
+     * @maxItems 40
+     * @items.minLength 1
+     * @items.maxLength 800
+     */
+  functionalScope: string[];
+  /**
+     * @maxItems 30
+     * @items.minLength 1
+     * @items.maxLength 600
+     */
+  brandDirection: string[];
+  /**
+     * @maxItems 30
+     * @items.minLength 1
+     * @items.maxLength 600
+     */
+  contentRequirements: string[];
+  /**
+     * @maxItems 30
+     * @items.minLength 1
+     * @items.maxLength 600
+     */
+  serviceFlowRequirements: string[];
+  /** @maxItems 1 */
+  sourceReferences: VenomBuildSourceReference[];
+  /** @maxItems 20 */
+  sopReferences: VenomBuildSopReference[];
+  /**
+     * @maxItems 30
+     * @items.minLength 1
+     * @items.maxLength 600
+     */
+  dataNeeds: string[];
+  /**
+     * @maxItems 30
+     * @items.minLength 1
+     * @items.maxLength 600
+     */
+  integrationNeeds: string[];
+  /** @maxItems 30 */
+  permissionRequests: VenomBuildPermissionRequest[];
+  /**
+     * @minItems 1
+     * @maxItems 40
+     * @items.minLength 1
+     * @items.maxLength 800
+     */
+  acceptanceChecks: string[];
+  /**
+     * @minItems 1
+     * @maxItems 30
+     * @items.minLength 1
+     * @items.maxLength 600
+     */
+  launchConstraints: string[];
+}
+
+export interface VenomBuildPackageRevision {
+  id: Uuid;
+  /** @minimum 1 */
+  revisionNumber: number;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  reason: string;
+  package: VenomBuildPackage;
+  /** @pattern ^[a-f0-9]{64}$ */
+  checksumSha256: string;
+  createdAt: string;
+  /** @nullable */
+  approvedAt: string | null;
+}
+
+export type VenomBuildRunEventEventType = typeof VenomBuildRunEventEventType[keyof typeof VenomBuildRunEventEventType];
+
+
+export const VenomBuildRunEventEventType = {
+  queued: 'queued',
+  preparing: 'preparing',
+  review_required: 'review_required',
+  revised: 'revised',
+  approved: 'approved',
+  ready_for_provisioning: 'ready_for_provisioning',
+  cancelled: 'cancelled',
+  rejected: 'rejected',
+  failed: 'failed',
+  retried: 'retried',
+} as const;
+
+export interface VenomBuildRunEvent {
+  id: Uuid;
+  eventType: VenomBuildRunEventEventType;
+  status: VenomBuildRunStatus;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  progress: number;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  message: string;
+  createdAt: string;
+}
+
+export interface VenomBuildRunSummary {
+  id: Uuid;
+  correlationId: Uuid;
+  appId: Uuid | null;
+  runKind: VenomBuildRunKind;
+  targetType: VenomBuildTargetType;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  targetName: string;
+  status: VenomBuildRunStatus;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  progress: number;
+  /** @minimum 0 */
+  currentRevisionNumber: number;
+  approvedRevisionId: Uuid | null;
+  /**
+     * @maxLength 240
+     * @nullable
+     */
+  failureMessage: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  cancelledReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type VenomBuildRun = VenomBuildRunSummary & ({
+  request: VenomBuildRequestSnapshot;
+  /** @maxItems 50 */
+  revisions: VenomBuildPackageRevision[];
+  /** @maxItems 200 */
+  events: VenomBuildRunEvent[];
+  /**
+     * @minimum 1
+     * @maximum 10
+     */
+  attempt: number;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  failureCode: string | null;
+  /** @nullable */
+  startedAt: string | null;
+  /** @nullable */
+  completedAt: string | null;
+});
+
+export interface VenomBuildCancellationInput {
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export interface VenomBuildRejectionInput {
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export interface VenomBuildRevisionInput {
+  /**
+     * @minLength 1
+     * @maxLength 3000
+     */
+  instruction: string;
+}
+
+export interface VenomBuildApprovalInput {
+  revisionId: Uuid;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -299,6 +966,16 @@ export interface VenomChatMessage {
   role: VenomChatMessageRole;
   content: string;
 }
+
+export type VenomModelId = typeof VenomModelId[keyof typeof VenomModelId];
+
+
+export const VenomModelId = {
+  'venom-gpt': 'venom-gpt',
+  'venom-claude': 'venom-claude',
+  'venom-gemini': 'venom-gemini',
+  'venom-grok': 'venom-grok',
+} as const;
 
 export type SourceCitationProvider = typeof SourceCitationProvider[keyof typeof SourceCitationProvider];
 
@@ -372,6 +1049,32 @@ export interface AttestedSourceSnapshot {
   attestation: string;
 }
 
+/**
+ * How Venom answers — a single assistant (talk), background multi-voice verification that converges on one conclusion (verify), or a visible multi-voice debate in the thread (debate).
+ */
+export type VenomResponseMode = typeof VenomResponseMode[keyof typeof VenomResponseMode];
+
+
+export const VenomResponseMode = {
+  talk: 'talk',
+  verify: 'verify',
+  debate: 'debate',
+} as const;
+
+export interface VenomBlendWeight {
+  /**
+     * Corner identity — a managed model id when real providers back the corner, a persona voice id otherwise.
+     * @minLength 1
+     * @maxLength 64
+     */
+  id: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  weight: number;
+}
+
 export interface VenomChatRequest {
   /**
      * @minItems 1
@@ -385,6 +1088,8 @@ export interface VenomChatRequest {
      * @maxLength 160
      */
   projectId: string;
+  workspaceId?: Uuid;
+  modelId?: VenomModelId;
   /**
      * @maxItems 200
      * @items.pattern ^[A-Za-z0-9_-]{1,160}$
@@ -392,6 +1097,275 @@ export interface VenomChatRequest {
   sourceCitationIds?: string[];
   /** @maxItems 32 */
   sourceSnapshots?: AttestedSourceSnapshot[];
+  /** Opt this message into multi-voice deliberation. */
+  deliberate?: boolean;
+  mode?: VenomResponseMode;
+  /**
+     * Favoring weights for the participating voices in verify and debate. Omitted means an even blend. Weights favor a voice; they never silence the others.
+     * @maxItems 3
+     */
+  blend?: VenomBlendWeight[];
+}
+
+export type VenomVoiceId = typeof VenomVoiceId[keyof typeof VenomVoiceId];
+
+
+export const VenomVoiceId = {
+  direct: 'direct',
+  skeptic: 'skeptic',
+  evidence: 'evidence',
+} as const;
+
+export interface VenomDeliberationVoice {
+  voiceId: VenomVoiceId;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  tagline: string;
+}
+
+export interface VenomDeliberationAvailability {
+  available: boolean;
+  /** Whether voices can run on genuinely different models. */
+  distinctModels: boolean;
+  /** @maxItems 4 */
+  voices: VenomDeliberationVoice[];
+}
+
+export type VenomManagedModelProvider = typeof VenomManagedModelProvider[keyof typeof VenomManagedModelProvider];
+
+
+export const VenomManagedModelProvider = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+  gemini: 'gemini',
+  openrouter: 'openrouter',
+} as const;
+
+export type VenomManagedModelFamily = typeof VenomManagedModelFamily[keyof typeof VenomManagedModelFamily];
+
+
+export const VenomManagedModelFamily = {
+  GPT: 'GPT',
+  Claude: 'Claude',
+  Gemini: 'Gemini',
+  Grok: 'Grok',
+} as const;
+
+export interface VenomManagedModel {
+  id: VenomModelId;
+  provider: VenomManagedModelProvider;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  family: VenomManagedModelFamily;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  summary: string;
+  available: boolean;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  availabilityText: string;
+}
+
+export interface VenomModelPreferences {
+  /**
+     * @minItems 1
+     * @maxItems 4
+     */
+  enabledModelIds: VenomModelId[];
+  defaultModelId: VenomModelId;
+  activeModelId: VenomModelId;
+  /** @minimum 0 */
+  updatedAt: number;
+}
+
+export type VenomVoicePresetId = typeof VenomVoicePresetId[keyof typeof VenomVoicePresetId];
+
+
+export const VenomVoicePresetId = {
+  sam: 'sam',
+  marcus: 'marcus',
+  rowan: 'rowan',
+  elijah: 'elijah',
+  maya: 'maya',
+  isla: 'isla',
+} as const;
+
+export type VenomVoicePresetTone = typeof VenomVoicePresetTone[keyof typeof VenomVoicePresetTone];
+
+
+export const VenomVoicePresetTone = {
+  masculine: 'masculine',
+  feminine: 'feminine',
+  neutral: 'neutral',
+} as const;
+
+export interface VenomVoicePreset {
+  id: VenomVoicePresetId;
+  /**
+     * @minLength 1
+     * @maxLength 40
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  persona: string;
+  tone: VenomVoicePresetTone;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  sampleText: string;
+  available: boolean;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  availabilityText: string;
+}
+
+/**
+ * How eager voice mode is to answer remarks that don't clearly invite a reply. Optional on stored preferences; absent means "balanced".
+ */
+export type VenomVoiceTalkativeness = typeof VenomVoiceTalkativeness[keyof typeof VenomVoiceTalkativeness];
+
+
+export const VenomVoiceTalkativeness = {
+  chatty: 'chatty',
+  balanced: 'balanced',
+  reserved: 'reserved',
+} as const;
+
+export interface VenomVoicePreferences {
+  presetId: VenomVoicePresetId;
+  talkativeness?: VenomVoiceTalkativeness;
+  /** @minimum 0 */
+  updatedAt: number;
+}
+
+export type VenomVoiceTranscriptionRequestFormat = typeof VenomVoiceTranscriptionRequestFormat[keyof typeof VenomVoiceTranscriptionRequestFormat];
+
+
+export const VenomVoiceTranscriptionRequestFormat = {
+  webm: 'webm',
+  wav: 'wav',
+  mp3: 'mp3',
+  mp4: 'mp4',
+  ogg: 'ogg',
+} as const;
+
+export interface VenomVoiceTranscriptionRequest {
+  /**
+     * @minLength 1
+     * @maxLength 5000000
+     */
+  audioBase64: string;
+  format?: VenomVoiceTranscriptionRequestFormat;
+}
+
+export interface VenomVoiceTranscription {
+  /** @maxLength 8000 */
+  text: string;
+}
+
+export interface VenomVoiceSpeechRequest {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  text: string;
+  presetId: VenomVoicePresetId;
+}
+
+export type VenomVoiceTurnDecisionRequestRecentTurnsItemRole = typeof VenomVoiceTurnDecisionRequestRecentTurnsItemRole[keyof typeof VenomVoiceTurnDecisionRequestRecentTurnsItemRole];
+
+
+export const VenomVoiceTurnDecisionRequestRecentTurnsItemRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export type VenomVoiceTurnDecisionRequestRecentTurnsItem = {
+  role: VenomVoiceTurnDecisionRequestRecentTurnsItemRole;
+  /** @maxLength 4000 */
+  content: string;
+};
+
+export interface VenomVoiceTurnDecisionRequest {
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  transcript: string;
+  /** @maxItems 12 */
+  recentTurns?: VenomVoiceTurnDecisionRequestRecentTurnsItem[];
+  talkativeness?: VenomVoiceTalkativeness;
+}
+
+export type VenomVoiceTurnDecisionDecision = typeof VenomVoiceTurnDecisionDecision[keyof typeof VenomVoiceTurnDecisionDecision];
+
+
+export const VenomVoiceTurnDecisionDecision = {
+  respond: 'respond',
+  acknowledge: 'acknowledge',
+  silent: 'silent',
+} as const;
+
+export interface VenomVoiceTurnDecision {
+  /**
+     * Present only once the decision row is durably recorded; when absent, the client executes the decision without reporting an outcome.
+     * @minLength 1
+     * @maxLength 80
+     */
+  decisionId?: string;
+  decision: VenomVoiceTurnDecisionDecision;
+  /** The exchange reads as a goodbye; the session may ease itself closed after a quiet period. */
+  windDown: boolean;
+  /**
+     * Short spoken acknowledgment; present only when decision is "acknowledge".
+     * @maxLength 200
+     */
+  acknowledgment?: string;
+}
+
+export type VenomVoiceDecisionOutcomeRequestOutcome = typeof VenomVoiceDecisionOutcomeRequestOutcome[keyof typeof VenomVoiceDecisionOutcomeRequestOutcome];
+
+
+export const VenomVoiceDecisionOutcomeRequestOutcome = {
+  reply_completed: 'reply_completed',
+  reply_interrupted: 'reply_interrupted',
+  user_followed_up: 'user_followed_up',
+  stayed_quiet: 'stayed_quiet',
+  wound_down: 'wound_down',
+  session_closed: 'session_closed',
+} as const;
+
+export interface VenomVoiceDecisionOutcomeRequest {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  decisionId: string;
+  outcome: VenomVoiceDecisionOutcomeRequestOutcome;
+}
+
+export interface VenomVoiceDecisionOutcomeResult {
+  recorded: boolean;
 }
 
 export interface KnowledgeConversation {
@@ -441,6 +1415,9 @@ export interface KnowledgeExtractionInput {
      * @maxItems 48
      */
   messages: KnowledgeMessage[];
+  /** When true, the server files the extracted insights into the signed-in user's ontology store and returns the touched concepts in `filed`. Clients that omit this keep filing locally. */
+  file?: boolean;
+  workspaceId?: Uuid;
 }
 
 export interface KnowledgeCandidate {
@@ -479,9 +1456,188 @@ export interface KnowledgeCandidate {
   relatedLabels: string[];
 }
 
+export interface VenomKnowledgeSource {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  conversationId: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  projectId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  conversationTitle: string;
+  /**
+     * @maxItems 12
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  messageIds: string[];
+  /** @maxLength 2000 */
+  excerpt: string;
+  /** @minimum 0 */
+  updatedAt: number;
+  /**
+     * Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.
+     * @maxLength 120
+     * @nullable
+     */
+  capturedByUserId?: string | null;
+  /**
+     * When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.
+     * @minimum 0
+     * @nullable
+     */
+  capturedAt?: number | null;
+}
+
+export interface VenomKnowledgeCluster {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  projectId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  label: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  category: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  strength: number;
+  x: number;
+  y: number;
+  /**
+     * @maxItems 100
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  links: string[];
+  /** @maxLength 2000 */
+  description?: string;
+  /** @maxLength 2000 */
+  summary: string;
+  /** @minimum 0 */
+  mentionCount: number;
+  /** @minimum 0 */
+  lastUpdatedAt: number;
+  /** @maxItems 8 */
+  sources: VenomKnowledgeSource[];
+}
+
 export interface KnowledgeExtraction {
   /** @maxItems 8 */
   clusters: KnowledgeCandidate[];
+  /**
+     * Present only when the request set `file: true` and the insights were filed server-side. Contains every concept the filing created, strengthened, or re-linked, with canonical ids.
+     * @maxItems 80
+     */
+  filed?: VenomKnowledgeCluster[];
+  filedWorkspaceId?: Uuid;
+}
+
+export interface VenomOntologySearchResult {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  /** @maxLength 120 */
+  projectId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  label: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  category: string;
+  /** @maxLength 2000 */
+  summary: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  strength: number;
+  /** @minimum 0 */
+  mentionCount: number;
+  /** @minimum 0 */
+  lastUpdatedAt: number;
+  /** @minimum 0 */
+  evidenceCount: number;
+}
+
+export interface VenomOntologySearchResponse {
+  /** @maxItems 50 */
+  results: VenomOntologySearchResult[];
+}
+
+export interface VenomOntologyPerson {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  userId: string;
+  /**
+     * Best display label for the person (their name, else their email). Null when the identity record has neither.
+     * @maxLength 320
+     * @nullable
+     */
+  displayName: string | null;
+}
+
+export interface VenomOntologyConceptDetail {
+  concept: VenomKnowledgeCluster;
+  /** @maxItems 100 */
+  neighbors: VenomOntologySearchResult[];
+  /**
+     * Identity labels for every person attributed to this concept's evidence. Evidence captured before attribution is reported under the ontology owner's identity, so every evidence entry's capturedByUserId resolves against this list.
+     * @maxItems 16
+     */
+  people: VenomOntologyPerson[];
+}
+
+export interface VenomIdentity {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  userId: string;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  displayName: string | null;
+  /**
+     * @maxLength 320
+     * @nullable
+     */
+  email: string | null;
+  /**
+     * Sign-in provider slug for the account, for example "google" or "password". Null when the provider is unknown.
+     * @maxLength 60
+     * @nullable
+     */
+  provider: string | null;
 }
 
 export interface VenomNoteInput {
@@ -545,6 +1701,48 @@ export interface SourceCluster {
   citationIds: string[];
 }
 
+export type ProjectSourceScheduleCadence = typeof ProjectSourceScheduleCadence[keyof typeof ProjectSourceScheduleCadence];
+
+
+export const ProjectSourceScheduleCadence = {
+  off: 'off',
+  daily: 'daily',
+  weekly: 'weekly',
+} as const;
+
+/**
+ * Unattended update schedule for a connected source. "off" is recorded explicitly rather than by dropping the schedule so that turning a schedule off survives a merge with a device that still has it on.
+ */
+export interface ProjectSourceSchedule {
+  cadence: ProjectSourceScheduleCadence;
+  /**
+     * Epoch milliseconds of the last cadence change. Schedules merge on this timestamp, independently of the source snapshot itself.
+     * @minimum 0
+     */
+  updatedAt: number;
+  /**
+     * Epoch milliseconds of the last scheduled sync attempt, successful or not.
+     * @minimum 0
+     */
+  lastAttemptAt?: number;
+  /**
+     * Why the last scheduled sync failed. Absent once a sync succeeds.
+     * @maxLength 300
+     */
+  lastError?: string;
+  /**
+     * Epoch milliseconds when a device claimed the next scheduled sync of this source. A live claim pauses the schedule on other devices so a due source is re-synced once per cadence for the account, not once per open device. Completed attempts and expired leases clear it.
+     * @minimum 0
+     */
+  claimedAt?: number;
+  /**
+     * Opaque per-device-session token that wrote claimedAt, so the claiming device can recognize its own claim after a merge.
+     * @minLength 1
+     * @maxLength 120
+     */
+  claimedBy?: string;
+}
+
 export type ProjectSourceProvider = typeof ProjectSourceProvider[keyof typeof ProjectSourceProvider];
 
 
@@ -601,6 +1799,7 @@ export interface ProjectSource {
      * @pattern ^v1\.[A-Za-z0-9_-]{2,214}\.[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$
      */
   attestation?: string;
+  schedule?: ProjectSourceSchedule;
 }
 
 /**
@@ -731,6 +1930,42 @@ export interface VenomProject {
   fieldDefinitions: VenomKanbanField[];
 }
 
+export type VenomDeliberationTakeStatus = typeof VenomDeliberationTakeStatus[keyof typeof VenomDeliberationTakeStatus];
+
+
+export const VenomDeliberationTakeStatus = {
+  ok: 'ok',
+  failed: 'failed',
+} as const;
+
+export interface VenomDeliberationTake {
+  voiceId: VenomVoiceId;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  modelId?: VenomModelId;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  modelName?: string;
+  /** @maxLength 8000 */
+  content: string;
+  status: VenomDeliberationTakeStatus;
+}
+
+export interface VenomMessageDeliberation {
+  /** @maxItems 4 */
+  voices: VenomDeliberationTake[];
+  /**
+     * @maxItems 8
+     * @items.maxLength 500
+     */
+  disagreements: string[];
+}
+
 export type VenomMessageRole = typeof VenomMessageRole[keyof typeof VenomMessageRole];
 
 
@@ -760,6 +1995,45 @@ export interface VenomMessage {
   /** @minimum 0 */
   createdAt: number;
   status: VenomMessageStatus;
+  modelId?: VenomModelId;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  modelName?: string;
+  deliberation?: VenomMessageDeliberation;
+  /**
+     * Debate voice identity behind this assistant turn. Absent for ordinary replies, so older clients render debate turns as plain assistant messages.
+     * @minLength 1
+     * @maxLength 64
+     */
+  speakerId?: string;
+  /**
+     * Display name of the debate voice behind this assistant turn.
+     * @minLength 1
+     * @maxLength 80
+     */
+  speakerName?: string;
+}
+
+/**
+ * The blend pad position for this conversation, stored as the three corner identities and their normalized weights.
+ */
+export interface VenomConversationBlend {
+  /**
+     * @minItems 3
+     * @maxItems 3
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  corners: string[];
+  /**
+     * @minItems 3
+     * @maxItems 3
+     * @items.minimum 0
+     * @items.maximum 1
+     */
+  weights: number[];
 }
 
 export interface VenomConversation {
@@ -782,80 +2056,13 @@ export interface VenomConversation {
   updatedAt: number;
   /** @maxItems 1000 */
   messages: VenomMessage[];
-}
-
-export interface VenomKnowledgeSource {
+  responseMode?: VenomResponseMode;
+  blend?: VenomConversationBlend;
   /**
-     * @minLength 1
-     * @maxLength 120
-     */
-  conversationId: string;
-  /**
-     * @maxLength 120
-     * @nullable
-     */
-  projectId: string | null;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  conversationTitle: string;
-  /**
-     * @maxItems 12
-     * @items.minLength 1
-     * @items.maxLength 120
-     */
-  messageIds: string[];
-  /** @maxLength 2000 */
-  excerpt: string;
-  /** @minimum 0 */
-  updatedAt: number;
-}
-
-export interface VenomKnowledgeCluster {
-  /**
-     * @minLength 1
-     * @maxLength 120
-     */
-  id: string;
-  /**
-     * @maxLength 120
-     * @nullable
-     */
-  projectId: string | null;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  label: string;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     */
-  category: string;
-  /**
+     * When the response mode or blend last changed on any device; the newer block wins in cross-device merges.
      * @minimum 0
-     * @maximum 1
      */
-  strength: number;
-  x: number;
-  y: number;
-  /**
-     * @maxItems 100
-     * @items.minLength 1
-     * @items.maxLength 120
-     */
-  links: string[];
-  /** @maxLength 2000 */
-  description?: string;
-  /** @maxLength 2000 */
-  summary: string;
-  /** @minimum 0 */
-  mentionCount: number;
-  /** @minimum 0 */
-  lastUpdatedAt: number;
-  /** @maxItems 8 */
-  sources: VenomKnowledgeSource[];
+  modeUpdatedAt?: number;
 }
 
 export interface VenomDeletionMarker {
@@ -866,6 +2073,8 @@ export interface VenomDeletionMarker {
   id: string;
   /** @minimum 0 */
   deletedAt: number;
+  /** True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be. */
+  replaced?: boolean;
 }
 
 export interface VenomWorkspaceTombstones {
@@ -885,6 +2094,24 @@ export interface VenomWorkspaceTombstones {
   fields: VenomDeletionMarker[];
   /** @maxItems 2000 */
   sources: VenomDeletionMarker[];
+}
+
+export interface VenomArchivedCitation {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     * @pattern ^[A-Za-z0-9_-]{1,160}$
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  title: string;
+  /** @maxLength 2048 */
+  url: string;
+  /** @minimum 0 */
+  retiredAt: number;
 }
 
 export interface VenomWorkspaceState {
@@ -907,6 +2134,10 @@ export interface VenomWorkspaceState {
      */
   activeConversationId: string | null;
   tombstones?: VenomWorkspaceTombstones;
+  modelPreferences?: VenomModelPreferences;
+  voicePreferences?: VenomVoicePreferences;
+  /** @maxItems 500 */
+  archivedCitations?: VenomArchivedCitation[];
 }
 
 export interface VenomWorkspaceSaveInput {
@@ -923,8 +2154,1047 @@ export interface VenomWorkspaceSnapshot {
   updatedAt: string | null;
 }
 
+export type VenomSopLifecycle = typeof VenomSopLifecycle[keyof typeof VenomSopLifecycle];
+
+
+export const VenomSopLifecycle = {
+  draft: 'draft',
+  active: 'active',
+  archived: 'archived',
+} as const;
+
+export type VenomSopCategory = typeof VenomSopCategory[keyof typeof VenomSopCategory];
+
+
+export const VenomSopCategory = {
+  operations: 'operations',
+  brand: 'brand',
+  customer_service: 'customer_service',
+} as const;
+
+export type VenomSopProvenance = typeof VenomSopProvenance[keyof typeof VenomSopProvenance];
+
+
+export const VenomSopProvenance = {
+  manual: 'manual',
+  imported: 'imported',
+  model_assisted: 'model_assisted',
+} as const;
+
+export type SharedWorkspaceRole = typeof SharedWorkspaceRole[keyof typeof SharedWorkspaceRole];
+
+
+export const SharedWorkspaceRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface SharedWorkspace {
+  id: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  role: SharedWorkspaceRole;
+  /** @minimum 1 */
+  memberCount: number;
+  createdAt: string;
+}
+
+export interface SharedWorkspaceCreateInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+}
+
+export interface SharedWorkspaceMember {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  userId: string;
+  role: SharedWorkspaceRole;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  name: string | null;
+  addedAt: string;
+}
+
+export interface SharedWorkspaceMemberInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  userId: string;
+  role?: SharedWorkspaceRole;
+}
+
+export type SharedWorkspaceAccessErrorCode = typeof SharedWorkspaceAccessErrorCode[keyof typeof SharedWorkspaceAccessErrorCode];
+
+
+export const SharedWorkspaceAccessErrorCode = {
+  workspace_access_denied: 'workspace_access_denied',
+} as const;
+
+export interface SharedWorkspaceAccessError {
+  error: string;
+  code: SharedWorkspaceAccessErrorCode;
+}
+
+export interface SharedWorkspaceKnowledge {
+  /** @maxItems 1000 */
+  clusters: VenomKnowledgeCluster[];
+}
+
+export interface VenomSopContent {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  purpose: string;
+  /**
+     * @maxItems 25
+     * @items.minLength 1
+     * @items.maxLength 500
+     */
+  prerequisites: string[];
+  /**
+     * @maxItems 25
+     * @items.minLength 1
+     * @items.maxLength 500
+     */
+  inputs: string[];
+  /**
+     * @minItems 1
+     * @maxItems 60
+     * @items.minLength 1
+     * @items.maxLength 2000
+     */
+  guidance: string[];
+  /**
+     * @maxItems 25
+     * @items.minLength 1
+     * @items.maxLength 500
+     */
+  requiredApprovals: string[];
+  /**
+     * @maxItems 25
+     * @items.minLength 1
+     * @items.maxLength 500
+     */
+  acceptanceChecks: string[];
+}
+
+export interface SharedWorkspaceSop {
+  id: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  title: string;
+  lifecycle: VenomSopLifecycle;
+  category: VenomSopCategory;
+  /**
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 50
+     */
+  tags: string[];
+  provenance: VenomSopProvenance;
+  content: VenomSopContent;
+  activeRevisionId: Uuid | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  activeRevisionNumber: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VenomSop {
+  id: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  title: string;
+  lifecycle: VenomSopLifecycle;
+  category: VenomSopCategory;
+  /**
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 50
+     */
+  tags: string[];
+  provenance: VenomSopProvenance;
+  content: VenomSopContent;
+  activeRevisionId: Uuid | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  activeRevisionNumber: number | null;
+  /** @maxItems 100 */
+  appIds: Uuid[];
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  archivedAt: string | null;
+}
+
+export interface VenomSopInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  title: string;
+  category: VenomSopCategory;
+  /**
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 50
+     */
+  tags: string[];
+  provenance: VenomSopProvenance;
+  content: VenomSopContent;
+}
+
+export type VenomSopUpdate = VenomSopInput;
+
+export interface VenomSopRevision {
+  id: Uuid;
+  /** @minimum 1 */
+  versionNumber: number;
+  provenance: VenomSopProvenance;
+  /** @pattern ^[a-f0-9]{64}$ */
+  checksumSha256: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  title: string;
+  category: VenomSopCategory;
+  /**
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 50
+     */
+  tags: string[];
+  content: VenomSopContent;
+  publishedAt: string;
+}
+
+export interface VenomSopAppAssignment {
+  appId: Uuid;
+  assignedAt: string;
+}
+
+export interface VenomSopAppAssignmentsInput {
+  /** @maxItems 100 */
+  appIds: Uuid[];
+}
+
+export interface VenomSopDetail {
+  sop: VenomSop;
+  /** @maxItems 500 */
+  revisions: VenomSopRevision[];
+  /** @maxItems 100 */
+  assignments: VenomSopAppAssignment[];
+}
+
+export interface VenomSopProjectSelection {
+  sopId: Uuid;
+  revisionId: Uuid;
+  /** @minimum 1 */
+  revisionNumber: number;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  title: string;
+  category: VenomSopCategory;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  purpose: string;
+  selectedAt: string;
+}
+
+export interface VenomProjectSopSelectionInput {
+  /** @maxItems 30 */
+  sopIds: Uuid[];
+}
+
+export interface CommunityPublicProfile {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 60
+     */
+  displayName: string;
+  /**
+     * @maxLength 300
+     * @nullable
+     */
+  bio: string | null;
+  joinedAt: string;
+}
+
+export interface CommunityProfileInput {
+  /**
+     * @minLength 1
+     * @maxLength 60
+     */
+  displayName: string;
+  /**
+     * @maxLength 300
+     * @nullable
+     */
+  bio?: string | null;
+}
+
+export interface CommunityAuthor {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 60
+     */
+  displayName: string;
+}
+
+export type CommunitySummaryStatus = typeof CommunitySummaryStatus[keyof typeof CommunitySummaryStatus];
+
+
+export const CommunitySummaryStatus = {
+  generated: 'generated',
+  fallback: 'fallback',
+  pending: 'pending',
+} as const;
+
+export type CommunitySummaryLabel = typeof CommunitySummaryLabel[keyof typeof CommunitySummaryLabel];
+
+
+export const CommunitySummaryLabel = {
+  AI_summary: 'AI summary',
+} as const;
+
+export interface CommunitySummary {
+  /** @maxLength 320 */
+  text: string;
+  status: CommunitySummaryStatus;
+  /** @minimum 0 */
+  sourceRevision: number;
+  /** @nullable */
+  generatedAt: string | null;
+  label: CommunitySummaryLabel;
+}
+
+export interface CommunityThread {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  author: CommunityAuthor;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  body: string;
+  summary: CommunitySummary;
+  /** @minimum 0 */
+  score: number;
+  /** @minimum 0 */
+  replyCount: number;
+  viewerHasUpvoted: boolean;
+  viewerIsAuthor: boolean;
+  /** @minimum 0 */
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommunityReply {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  threadId: string;
+  author: CommunityAuthor;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  body: string;
+  /**
+     * @nullable
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  parentReplyId: string | null;
+  viewerIsAuthor: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CommunityNotificationType = typeof CommunityNotificationType[keyof typeof CommunityNotificationType];
+
+
+export const CommunityNotificationType = {
+  reply: 'reply',
+} as const;
+
+export interface CommunityNotificationActor {
+  /**
+     * @minLength 1
+     * @maxLength 60
+     */
+  displayName: string;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  avatarUrl: string | null;
+}
+
+export interface CommunityNotification {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  type: CommunityNotificationType;
+  actor: CommunityNotificationActor;
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  threadId: string;
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  replyId: string;
+  /**
+     * @nullable
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  parentReplyId: string | null;
+  available: boolean;
+  createdAt: string;
+  /** @nullable */
+  readAt: string | null;
+}
+
+export interface CommunityNotificationPage {
+  /** @maxItems 50 */
+  items: CommunityNotification[];
+  /**
+     * @maxLength 240
+     * @nullable
+     */
+  nextCursor: string | null;
+}
+
+export interface CommunityNotificationUnreadCount {
+  /** @minimum 0 */
+  count: number;
+}
+
+export interface CommunityNotificationMarkAllResult {
+  /** @minimum 0 */
+  marked: number;
+}
+
+export interface CommunityThreadDetail {
+  thread: CommunityThread;
+  /** @maxItems 502 */
+  replies: CommunityReply[];
+}
+
+export interface CommunityFeedPage {
+  items: CommunityThread[];
+  /**
+     * @maxLength 240
+     * @nullable
+     */
+  nextCursor: string | null;
+}
+
+export type PersonalAgendaItemSource = typeof PersonalAgendaItemSource[keyof typeof PersonalAgendaItemSource];
+
+
+export const PersonalAgendaItemSource = {
+  calendar: 'calendar',
+  todo: 'todo',
+} as const;
+
+export type PersonalAgendaItemPrivacy = typeof PersonalAgendaItemPrivacy[keyof typeof PersonalAgendaItemPrivacy];
+
+
+export const PersonalAgendaItemPrivacy = {
+  personal: 'personal',
+} as const;
+
+export type PersonalAgendaItemState = typeof PersonalAgendaItemState[keyof typeof PersonalAgendaItemState];
+
+
+export const PersonalAgendaItemState = {
+  open: 'open',
+  in_progress: 'in_progress',
+} as const;
+
+export interface PersonalAgendaItem {
+  /** @maxLength 120 */
+  id: string;
+  source: PersonalAgendaItemSource;
+  privacy: PersonalAgendaItemPrivacy;
+  /** @maxLength 300 */
+  title: string;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  detail: string | null;
+  /** @nullable */
+  startsAt: string | null;
+  /**
+     * @nullable
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+     */
+  dueDate: string | null;
+  state: PersonalAgendaItemState;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  projectName: string | null;
+}
+
+export type CommunityBriefingPageCalendarStatus = typeof CommunityBriefingPageCalendarStatus[keyof typeof CommunityBriefingPageCalendarStatus];
+
+
+export const CommunityBriefingPageCalendarStatus = {
+  connected: 'connected',
+  not_connected: 'not_connected',
+  unavailable: 'unavailable',
+} as const;
+
+export interface CommunityBriefingPage {
+  community: CommunityThread[];
+  agenda: PersonalAgendaItem[];
+  calendarStatus: CommunityBriefingPageCalendarStatus;
+  viewerProfile: CommunityPublicProfile | null;
+  /**
+     * @maxLength 240
+     * @nullable
+     */
+  nextCursor: string | null;
+}
+
+export interface CommunityThreadInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  body: string;
+}
+
+export interface CommunityThreadUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  body?: string;
+}
+
+export interface CommunityReplyInput {
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  body: string;
+  /**
+     * Client-generated operation id reused when retrying the same post
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  clientRequestId: string;
+  /**
+     * @nullable
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  parentReplyId?: string | null;
+}
+
+export interface CommunityReplyUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  body?: string;
+}
+
+export interface CommunityVoteInput {
+  upvoted: boolean;
+}
+
+export interface CommunityVoteResult {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  threadId: string;
+  upvoted: boolean;
+  /** @minimum 0 */
+  score: number;
+}
+
+export type CommunityReportInputTargetType = typeof CommunityReportInputTargetType[keyof typeof CommunityReportInputTargetType];
+
+
+export const CommunityReportInputTargetType = {
+  thread: 'thread',
+  reply: 'reply',
+} as const;
+
+export type CommunityReportInputReason = typeof CommunityReportInputReason[keyof typeof CommunityReportInputReason];
+
+
+export const CommunityReportInputReason = {
+  spam: 'spam',
+  abuse: 'abuse',
+  harassment: 'harassment',
+  other: 'other',
+} as const;
+
+export interface CommunityReportInput {
+  targetType: CommunityReportInputTargetType;
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  targetId: string;
+  reason: CommunityReportInputReason;
+  /** @maxLength 500 */
+  details?: string;
+}
+
+export type CommunityReportReceiptStatus = typeof CommunityReportReceiptStatus[keyof typeof CommunityReportReceiptStatus];
+
+
+export const CommunityReportReceiptStatus = {
+  received: 'received',
+} as const;
+
+export interface CommunityReportReceipt {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  status: CommunityReportReceiptStatus;
+}
+
+export type ProvisioningRunStatus = typeof ProvisioningRunStatus[keyof typeof ProvisioningRunStatus];
+
+
+export const ProvisioningRunStatus = {
+  blocked: 'blocked',
+  queued: 'queued',
+  checking_capability: 'checking_capability',
+  creating_project: 'creating_project',
+  handing_off: 'handing_off',
+  building: 'building',
+  testing: 'testing',
+  candidate_ready: 'candidate_ready',
+  publishing: 'publishing',
+  published: 'published',
+  cancelled: 'cancelled',
+  failed: 'failed',
+} as const;
+
+export type ProvisioningRunStage = typeof ProvisioningRunStage[keyof typeof ProvisioningRunStage];
+
+
+export const ProvisioningRunStage = {
+  capability_check: 'capability_check',
+  project_setup: 'project_setup',
+  source_handoff: 'source_handoff',
+  build: 'build',
+  test: 'test',
+  candidate: 'candidate',
+  publish: 'publish',
+} as const;
+
+export type ProvisioningEventType = typeof ProvisioningEventType[keyof typeof ProvisioningEventType];
+
+
+export const ProvisioningEventType = {
+  queued: 'queued',
+  blocked: 'blocked',
+  capability_checked: 'capability_checked',
+  project_created: 'project_created',
+  project_linked: 'project_linked',
+  source_handed_off: 'source_handed_off',
+  build_started: 'build_started',
+  build_complete: 'build_complete',
+  test_started: 'test_started',
+  test_complete: 'test_complete',
+  candidate_ready: 'candidate_ready',
+  publish_started: 'publish_started',
+  published: 'published',
+  cancel_requested: 'cancel_requested',
+  cancelled: 'cancelled',
+  failed: 'failed',
+  retried: 'retried',
+  heartbeat: 'heartbeat',
+} as const;
+
+export type ProvisioningCapabilityHealth = typeof ProvisioningCapabilityHealth[keyof typeof ProvisioningCapabilityHealth];
+
+
+export const ProvisioningCapabilityHealth = {
+  healthy: 'healthy',
+  degraded: 'degraded',
+  unavailable: 'unavailable',
+  unconfigured: 'unconfigured',
+} as const;
+
+export type ProvisioningPermissionSummaryDeniedItem = {
+  /** @maxLength 200 */
+  integration: string;
+  /** @maxLength 500 */
+  reason: string;
+};
+
+export interface ProvisioningPermissionSummary {
+  /**
+     * @maxItems 100
+     * @items.maxLength 200
+     */
+  allowed: string[];
+  /** @maxItems 100 */
+  denied: ProvisioningPermissionSummaryDeniedItem[];
+}
+
+export type ProvisioningCapabilitySupportedTargetTypesItem = typeof ProvisioningCapabilitySupportedTargetTypesItem[keyof typeof ProvisioningCapabilitySupportedTargetTypesItem];
+
+
+export const ProvisioningCapabilitySupportedTargetTypesItem = {
+  app: 'app',
+  website: 'website',
+} as const;
+
+export interface ProvisioningCapability {
+  health: ProvisioningCapabilityHealth;
+  /** @maxLength 2000 */
+  summary: string;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  recoveryGuidance: string | null;
+  /** @maxItems 10 */
+  supportedTargetTypes: ProvisioningCapabilitySupportedTargetTypesItem[];
+  rollbackSupported: boolean;
+  publishSupported: boolean;
+  permissionSummary: ProvisioningPermissionSummary | null;
+}
+
+export type ProvisionBuildRunInputDeploymentIntent = typeof ProvisionBuildRunInputDeploymentIntent[keyof typeof ProvisionBuildRunInputDeploymentIntent];
+
+
+export const ProvisionBuildRunInputDeploymentIntent = {
+  create_candidate: 'create_candidate',
+} as const;
+
+export interface ProvisionBuildRunInput {
+  approvedRevisionId: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  idempotencyKey: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  targetName: string;
+  /**
+     * @maxItems 50
+     * @items.maxLength 200
+     */
+  requestedIntegrations: string[];
+  deploymentIntent: ProvisionBuildRunInputDeploymentIntent;
+}
+
+export interface CancelProvisioningRunInput {
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export interface PublishProvisioningCandidateInput {
+  candidateReleaseId: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  idempotencyKey: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  confirmTargetName: string;
+}
+
+export interface RollbackProvisioningReleaseInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  idempotencyKey: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  confirmTargetName: string;
+}
+
+export interface ProvisioningRunEvent {
+  id: Uuid;
+  eventType: ProvisioningEventType;
+  status: ProvisioningRunStatus;
+  stage: ProvisioningRunStage | null;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  progress: number;
+  /** @maxLength 2000 */
+  message: string;
+  createdAt: string;
+}
+
+export interface ProvisioningRunSummary {
+  id: Uuid;
+  buildRunId: Uuid;
+  approvedRevisionId: Uuid;
+  appId: Uuid | null;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  targetName: string;
+  status: ProvisioningRunStatus;
+  stage: ProvisioningRunStage | null;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  progress: number;
+  /** @minimum 0 */
+  attempt: number;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  providerProjectId: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  providerCandidateId: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  failureCode: string | null;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  failureMessage: string | null;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  blockedReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProvisioningRun {
+  id: Uuid;
+  buildRunId: Uuid;
+  approvedRevisionId: Uuid;
+  appId: Uuid | null;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  targetName: string;
+  status: ProvisioningRunStatus;
+  stage: ProvisioningRunStage | null;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  progress: number;
+  /** @minimum 0 */
+  attempt: number;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  providerProjectId: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  providerCandidateId: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  failureCode: string | null;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  failureMessage: string | null;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  blockedReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** @maxItems 200 */
+  events: ProvisioningRunEvent[];
+  /** @maxItems 50 */
+  releases: ProvisioningCandidateRelease[];
+  /** @nullable */
+  startedAt: string | null;
+  /** @nullable */
+  completedAt: string | null;
+  cancelRequested: boolean;
+}
+
+export type SearchVenomOntologyParams = {
+/**
+ * @minLength 1
+ * @maxLength 200
+ */
+q: string;
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+};
+
 export type SaveVenomWorkspace413 = {
   error: string;
   /** @minimum 1 */
   maxBytes: number;
 };
+
+export type RemoveSharedWorkspaceMember200 = {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  removedUserId: string;
+};
+
+export type GetVenomAppTimelineParams = {
+/**
+ * Opaque cursor from the previous page; omit for the newest entries
+ * @maxLength 300
+ */
+cursor?: string;
+/**
+ * @minimum 1
+ * @maximum 200
+ */
+limit?: number;
+};
+
+export type ListVenomSopsParams = {
+/**
+ * @maxLength 120
+ */
+query?: string;
+lifecycle?: VenomSopLifecycle;
+appId?: Uuid;
+};
+
+export type GetCommunityFeedParams = {
+order: GetCommunityFeedOrder;
+/**
+ * @maxLength 240
+ */
+cursor?: string;
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+};
+
+export type GetCommunityFeedOrder = typeof GetCommunityFeedOrder[keyof typeof GetCommunityFeedOrder];
+
+
+export const GetCommunityFeedOrder = {
+  new: 'new',
+  top: 'top',
+} as const;
+
+export type GetCommunityBriefingParams = {
+/**
+ * @minLength 1
+ * @maxLength 80
+ */
+timezone: string;
+/**
+ * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+ */
+date?: string;
+order?: GetCommunityBriefingOrder;
+/**
+ * @maxLength 240
+ */
+cursor?: string;
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+};
+
+export type GetCommunityBriefingOrder = typeof GetCommunityBriefingOrder[keyof typeof GetCommunityBriefingOrder];
+
+
+export const GetCommunityBriefingOrder = {
+  new: 'new',
+  top: 'top',
+} as const;
+
+export type GetCommunityThreadParams = {
+/**
+ * Include this specific reply even when it falls outside the normal reply window
+ * @pattern ^[0-9a-fA-F-]{36}$
+ */
+replyId?: string;
+};
+
+export type ListCommunityNotificationsParams = {
+/**
+ * @maxLength 240
+ */
+cursor?: string;
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+};
+
+export type ListVenomBuildRunsParams = {
+appId?: Uuid | null;
+};
+
+export type ListProvisioningRunsParams = {
+buildRunId?: Uuid;
+appId?: Uuid;
+};
+

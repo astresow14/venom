@@ -1,5 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startCommunityNotificationRetentionJob } from "./lib/community-notifications";
+import { startVoiceDecisionRetentionJob } from "./lib/venom-voice-decision-store";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +24,6 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+  startCommunityNotificationRetentionJob();
+  startVoiceDecisionRetentionJob();
 });

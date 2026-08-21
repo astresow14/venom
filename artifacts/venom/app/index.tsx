@@ -27,7 +27,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { fetch } from "expo/fetch";
 import * as Haptics from "expo-haptics";
@@ -48,10 +48,11 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { useColors } from "@/hooks/useColors";
 import { useTheme } from "@/context/ThemeContext";
+import { claimFocusHandoff } from "@/lib/dialogFocusHandoff";
 import {
   useVenom,
-  IS_READ_ONLY_UI_TEST,
   IS_UI_TEST,
+  IS_READ_ONLY_UI_TEST,
   UI_TEST_USER_ID,
   Message,
   KnowledgeCluster,
@@ -60,24 +61,106 @@ import {
   KanbanFieldType,
   KanbanStage,
   type ProjectSource,
+  type VenomModelId,
 } from "@/context/VenomContext";
-import { extractVenomKnowledge } from "@workspace/api-client-react";
+import {
+  ApiError,
+  dismissVenomAppImprovementSuggestion,
+  extractVenomKnowledge,
+  getGetCommunityNotificationUnreadCountQueryKey,
+  getGetSharedWorkspaceKnowledgeQueryKey,
+  getListVenomAppsQueryKey,
+  getVenomOntologyConcept,
+  searchVenomOntology,
+  useGetCommunityNotificationUnreadCount,
+  useGetVenomDeliberation,
+  useGetVenomModels,
+  useListVenomApps,
+  type VenomManagedModel,
+  type VenomMessageDeliberation,
+  type VenomModelId as ApiVenomModelId,
+  type VenomOntologyConceptDetail,
+  type VenomOntologySearchResult,
+  type VenomResponseMode,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSharedWorkspace } from "@/context/sharedWorkspace";
+import {
+  notifyWorkspaceAccessLost,
+  WORKSPACE_ACCESS_DENIED_CODE,
+} from "@/lib/workspaceAccess";
 import { BrainNoteComposer } from "@/components/BrainNoteComposer";
+import { VoiceModeOverlay } from "@/components/voice/VoiceModeOverlay";
+import { ResponseModeSwitch } from "@/components/ResponseModeSwitch";
+import { BlendPad, type BlendCorner } from "@/components/BlendPad";
+import {
+  EVEN_BLEND,
+  isResponseMode,
+  normalizeConversationBlend,
+  type BlendWeights,
+} from "@/context/responsePrefs";
+import { SymbioteSlime } from "@/components/SymbioteSlime";
+import { CommunityBriefing } from "@/components/community/CommunityBriefing";
+import { CommunityNotifications } from "@/components/community/CommunityNotifications";
+import { NotificationBadge } from "@/components/community/NotificationBadge";
+import {
+  deriveSatelliteNodes,
+  layoutIslands,
+  slimeCapacityForTierName,
+  type SlimeEdge,
+  type SlimeNode,
+} from "@workspace/slime";
 import { buildChatProjectContextBundle } from "@/context/sourceContext";
-import { messageCitationSegments } from "@/context/messageCitations";
+import {
+  messageCitationPlainText,
+  messageCitationSegments,
+} from "@/context/messageCitations";
+import {
+  knowledgeDisplayText,
+  type KnowledgeCitationLookup,
+} from "@/context/knowledgeState";
 
 // Browser UI tests run without a Clerk session, so chat uses a stand-in
 // identity and token that only exist in the development UI-test bundle.
 const UI_TEST_CHAT_TOKEN = "venom-ui-test-chat-token";
 
+/**
+ * Test hook: `?slimeTier=full` pins the goo renderer tier so captures can
+ * show the whole organism on software rasterizers that live rendering would
+ * (correctly) tier down. Inert outside UI-test mode and on native.
+ */
+const SLIME_CAPACITY_OVERRIDE =
+  IS_UI_TEST && typeof globalThis.location !== "undefined"
+    ? slimeCapacityForTierName(
+        new URLSearchParams(globalThis.location.search).get("slimeTier") ?? "",
+      )
+    : null;
+
+/**
+ * Test hook: `?slimeScale=0.5` pins the goo surface fraction and turns
+ * frame-time adaptation off, so visual captures stay deterministic on
+ * software rasterizers. Inert outside UI-test mode and on native.
+ */
+const SLIME_SCALE_OVERRIDE = (() => {
+  if (!IS_UI_TEST || typeof globalThis.location === "undefined") return null;
+  const raw = new URLSearchParams(globalThis.location.search).get("slimeScale");
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? Math.min(value, 1) : null;
+})();
 let messageCounter = 0;
 function generateUniqueId(): string {
   messageCounter++;
   return `msg-${Date.now()}-${messageCounter}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// --- Components ---
-
+type DeliberationRosterVoice = {
+  voiceId: string;
+  name: string;
+  tagline?: string;
+  modelId?: string;
+  modelName?: string;
+};
 function ChatWorkspace({
   isActive,
   activeProject,
@@ -85,6 +168,7 @@ function ChatWorkspace({
   isActive: boolean;
   activeProject: any;
 }) {
+  const router = useRouter();
   const { getToken, userId: authenticatedUserId } = useAuth();
   const userId = IS_UI_TEST
     ? UI_TEST_USER_ID
@@ -98,17 +182,78 @@ function ChatWorkspace({
     setActiveConversation,
     createNewConversation,
     applyKnowledgeInsights,
+    applyFiledKnowledge,
+    setActiveModel,
+    setConversationResponsePrefs,
   } = useVenom();
   const [text, setText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [streamError, setStreamError] = useState<{ message: string; retryable: boolean } | null>(null);
   const [localStreamingMessage, setLocalStreamingMessage] =
     useState<Message | null>(null);
+  // Transient multi-voice state for a deliberated turn; persisted messages
+  // carry their own deliberation payload once the turn completes.
+  const [localDeliberation, setLocalDeliberation] =
+    useState<LocalDeliberation | null>(null);
+  // Transient debate-round state: the roster, the turn currently streaming,
+  // and voices that failed. Finished turns persist as ordinary messages.
+  const [localDebate, setLocalDebate] = useState<LocalDebate | null>(null);
+  // Live pad weights while a drag is in flight; null means show the stored
+  // per-conversation blend.
+  const [draftWeights, setDraftWeights] = useState<BlendWeights | null>(null);
+  const [showCornerPicker, setShowCornerPicker] = useState(false);
+  const [expandedTakeMessageIds, setExpandedTakeMessageIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const [voiceModeOpen, setVoiceModeOpen] = useState(false);
+  const voiceButtonRef = useRef<React.ComponentRef<typeof TouchableOpacity>>(
+    null,
+  );
+
+  // Model preferences from workspace state
+  const modelPreferences = state.modelPreferences;
+  const activeModelId = (modelPreferences?.activeModelId ?? "venom-gpt") as VenomModelId;
+  const enabledModelIds = (modelPreferences?.enabledModelIds ?? ["venom-gpt"]) as VenomModelId[];
+
+  const { activeWorkspace } = useSharedWorkspace();
+  const queryClient = useQueryClient();
+
+  const modelsQuery = useGetVenomModels({
+    query: {
+      queryKey: ["venom-models"],
+      staleTime: 5 * 60 * 1000,
+    },
+  });
+
+  // Deliberation availability; when the endpoint is missing or errors the
+  // control simply stays hidden and chat behaves exactly as before.
+  const deliberationQuery = useGetVenomDeliberation({
+    query: {
+      queryKey: ["venom-deliberation"],
+      staleTime: 5 * 60 * 1000,
+      retry: false,
+    },
+  });
+  const deliberationAvailable = deliberationQuery.data?.available === true;
+
+  const allModels: VenomManagedModel[] = modelsQuery.data ?? [];
+  const enabledModels = allModels.filter((m) =>
+    enabledModelIds.includes(m.id as VenomModelId),
+  );
+  const activeModel = allModels.find((m) => m.id === activeModelId) ?? null;
 
   const inputRef = useRef<TextInput>(null);
   const initializedRef = useRef(false);
   const activeUserIdRef = useRef<string | null>(userId ?? null);
   const activeRequestAbortRef = useRef<AbortController | null>(null);
+  // Debate steering: messages the user sent mid-round (the next turns react
+  // to them), which conversation the running debate belongs to, and whether
+  // the user asked the round to stop.
+  const pendingInterjectionsRef = useRef<string[]>([]);
+  const debateConvIdRef = useRef<string | null>(null);
+  const stopRequestedRef = useRef(false);
 
   useEffect(() => {
     activeUserIdRef.current = userId ?? null;
@@ -125,6 +270,102 @@ function ChatWorkspace({
     (c) => c.id === state.activeConversationId,
   );
   const contextMessages = activeConv?.messages || [];
+
+  // Response mode is remembered per conversation; without the deliberation
+  // endpoint everything is plain Talk and the controls stay hidden.
+  const storedResponseMode = activeConv?.responseMode;
+  const responseMode: VenomResponseMode =
+    deliberationAvailable && isResponseMode(storedResponseMode)
+      ? storedResponseMode
+      : "talk";
+  // Pad corners: enabled models that are actually available. With fewer than
+  // three real providers, the deliberation personas fill the corners so the
+  // pad always works; the control never shows models that are unavailable.
+  const cornerCandidates = allModels.filter(
+    (model) =>
+      model.available && enabledModelIds.includes(model.id as VenomModelId),
+  );
+  const personaVoices = deliberationQuery.data?.voices;
+  const storedBlend = normalizeConversationBlend(activeConv?.blend);
+  let blendCorners: [BlendCorner, BlendCorner, BlendCorner] | null = null;
+  let cornersPickable = false;
+  if (cornerCandidates.length >= 3) {
+    cornersPickable = cornerCandidates.length > 3;
+    const candidateIds: string[] = cornerCandidates.map((model) => model.id);
+    const storedCorners = storedBlend?.corners;
+    const chosenIds =
+      storedCorners && storedCorners.every((id) => candidateIds.includes(id))
+        ? storedCorners
+        : candidateIds.slice(0, 3);
+    blendCorners = chosenIds.map((id) => ({
+      id,
+      name: cornerCandidates.find((model) => model.id === id)?.name ?? id,
+    })) as [BlendCorner, BlendCorner, BlendCorner];
+  } else if (personaVoices && personaVoices.length >= 3) {
+    blendCorners = personaVoices
+      .slice(0, 3)
+      .map((voice) => ({ id: voice.voiceId, name: voice.name })) as [
+      BlendCorner,
+      BlendCorner,
+      BlendCorner,
+    ];
+  }
+  const storedWeights: BlendWeights =
+    blendCorners &&
+    storedBlend &&
+    blendCorners.every(
+      (corner, index) => storedBlend.corners[index] === corner.id,
+    )
+      ? (storedBlend.weights as BlendWeights)
+      : EVEN_BLEND;
+  const padWeights = draftWeights ?? storedWeights;
+
+  const handleModeChange = (mode: VenomResponseMode) => {
+    const convId = state.activeConversationId;
+    if (!convId) return;
+    setConversationResponsePrefs(convId, { responseMode: mode });
+  };
+
+  const commitBlend = (weights: BlendWeights) => {
+    setDraftWeights(null);
+    const convId = state.activeConversationId;
+    if (!convId || !blendCorners) return;
+    setConversationResponsePrefs(convId, {
+      blend: {
+        corners: blendCorners.map((corner) => corner.id),
+        weights: [...weights],
+      },
+    });
+  };
+
+  // Stop ends the debate round cleanly: finished turns stay, the rest of the
+  // round is cancelled, and any queued interjections stay ordinary messages.
+  const handleStopDebate = () => {
+    stopRequestedRef.current = true;
+    pendingInterjectionsRef.current = [];
+    activeRequestAbortRef.current?.abort();
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
+
+  // Swap a new model into the pad: it replaces the least-favored corner and
+  // the weights reset to even, so the change reads predictably.
+  const handleCornerPick = (modelId: string) => {
+    const convId = state.activeConversationId;
+    if (!convId || !blendCorners) return;
+    const currentIds = blendCorners.map((corner) => corner.id);
+    if (currentIds.includes(modelId)) return;
+    let least = 0;
+    for (let index = 1; index < 3; index += 1) {
+      if (storedWeights[index] < storedWeights[least]) least = index;
+    }
+    const nextCorners = [...currentIds];
+    nextCorners[least] = modelId;
+    setConversationResponsePrefs(convId, {
+      blend: { corners: nextCorners, weights: [...EVEN_BLEND] },
+    });
+  };
   const projectSources = (state.sources ?? []).filter(
     (source: ProjectSource) =>
       source.projectId === activeProject?.id && source.status === "connected",
@@ -134,6 +375,20 @@ function ChatWorkspace({
       source.citations.map((citation) => [citation.id, citation] as const),
     ),
   );
+  // A cited answer can lead back to the source it came from, so the reader can
+  // check the rest of that source's evidence without leaving Venom.
+  const sourceByCitationId = new Map(
+    projectSources.flatMap((source: ProjectSource) =>
+      source.citations.map((citation) => [citation.id, source] as const),
+    ),
+  );
+  // Retired citations a refresh archived: answers written before the refresh
+  // can still name (and open) the evidence they were based on.
+  const archivedCitationsById = new Map(
+    (state.archivedCitations ?? []).map(
+      (archived) => [archived.id, archived] as const,
+    ),
+  );
 
   const displayMessages = localStreamingMessage
     ? [...contextMessages, localStreamingMessage]
@@ -141,10 +396,15 @@ function ChatWorkspace({
 
   const reversedMessages = [...displayMessages].reverse();
 
+  // The session a first message lands in must belong to the project on screen,
+  // which is the fallback project when nothing is explicitly selected.
+  const onScreenProjectId: string | null =
+    activeProject?.id ?? state.activeProjectId;
+
   useEffect(() => {
     if (isReady && !state.activeConversationId && !initializedRef.current) {
       initializedRef.current = true;
-      const newId = createNewConversation(state.activeProjectId);
+      const newId = createNewConversation(onScreenProjectId);
       setActiveConversation(newId);
     }
   }, [
@@ -152,25 +412,99 @@ function ChatWorkspace({
     state.activeConversationId,
     createNewConversation,
     setActiveConversation,
-    state.activeProjectId,
+    onScreenProjectId,
   ]);
+
+  const BUILD_INTENT_REGEX = /^(?:create|build|make|generate|design)\s+(?:an?\s+)?(?:[\w-]+\s+){0,3}(app|application|website|site|brand|customer[- ]service(?:[- ]flow)?)\b/i;
 
   async function handleSend() {
     const trimmed = text.trim();
     const initiatingUserId = userId ?? null;
-    if (!trimmed || isStreaming || !initiatingUserId) return;
-    const initiatingProjectId = activeProject?.id ?? state.activeProjectId;
-    const abortController = new AbortController();
+    if (!trimmed || !initiatingUserId) return;
+    if (isStreaming) {
+      // Mid-debate the composer stays open: the message lands in the thread
+      // now and the following debater turns take it into account.
+      if (
+        localDebate &&
+        debateConvIdRef.current &&
+        debateConvIdRef.current === state.activeConversationId
+      ) {
+        setText("");
+        addMessage(debateConvIdRef.current, {
+          id: generateUniqueId(),
+          role: "user",
+          content: trimmed,
+          status: "sent",
+        });
+        pendingInterjectionsRef.current.push(trimmed);
+        if (Platform.OS !== "web") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+      }
+      return;
+    }
+
+    const buildMatch = trimmed.match(BUILD_INTENT_REGEX);
+    if (buildMatch) {
+      const rawTargetType = buildMatch[1].toLowerCase().replace(/[- ]/g, "_");
+      const targetType = rawTargetType.startsWith("customer")
+        ? "customer_service_flow"
+        : rawTargetType === "application"
+          ? "app"
+          : rawTargetType === "site"
+            ? "website"
+            : rawTargetType;
+      const targetName = trimmed
+        .match(/\b(?:called|named)\s+(.{1,120})$/i)?.[1]
+        ?.trim();
+      setText("");
+      router.push({
+        pathname: "/apps",
+        params: {
+          draftPrompt: trimmed,
+          targetType,
+          ...(targetName ? { targetName } : {}),
+        },
+      });
+      return;
+    }
+
+    const initiatingProjectId = onScreenProjectId;
+    let abortController = new AbortController();
     activeRequestAbortRef.current = abortController;
+    // Capture the model being used at send time
+    const sendingModelId = activeModelId;
+    // Capture the shared-workspace selection at send time; the server
+    // re-checks membership for every request.
+    const sendingWorkspaceId = activeWorkspace?.id ?? null;
+    // Mode and blend are captured at send time. Talk requests stay
+    // byte-identical with today's chat: no mode key at all.
+    const sendMode: VenomResponseMode = responseMode;
+    const blendPayload =
+      sendMode !== "talk" && blendCorners
+        ? blendCorners.map((corner, index) => ({
+            id: corner.id,
+            weight: storedWeights[index],
+          }))
+        : null;
+    stopRequestedRef.current = false;
+    pendingInterjectionsRef.current = [];
 
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     setText("");
+    setStreamError(null);
 
+    // Never append to a session that belongs to another project: the answer is
+    // read as part of the project on screen, so that is where it has to be
+    // filed.
     let targetConvId = state.activeConversationId;
-    if (!targetConvId) {
-      targetConvId = createNewConversation(state.activeProjectId);
+    const targetConv = state.conversations.find(
+      (conversation) => conversation.id === targetConvId,
+    );
+    if (!targetConvId || (targetConv?.projectId ?? null) !== onScreenProjectId) {
+      targetConvId = createNewConversation(onScreenProjectId);
       setActiveConversation(targetConvId);
     }
 
@@ -182,14 +516,52 @@ function ChatWorkspace({
       status: "sent",
     });
 
+    debateConvIdRef.current = sendMode === "debate" ? targetConvId : null;
     setIsStreaming(true);
     setShowTyping(true);
 
     let fullContent = "";
     let requestFailed = false;
+    let streamCompleted = false;
     let hasReceivedFirstChunk = false;
     let requestToken: string | null = null;
     const streamId = generateUniqueId();
+    // Metadata extracted from the SSE stream
+    let streamModelId: VenomModelId | null = null;
+    let streamModelName: string | null = null;
+    // Deliberation accumulators (only used when this turn opted in)
+    let deliberationRoster: DeliberationRosterVoice[] | null = null;
+    let deliberationTakes: Record<string, DeliberationTakeState> = {};
+    let deliberationStage: "voices" | "synthesis" = "voices";
+    let finalDeliberation: VenomMessageDeliberation | null = null;
+    const syncDeliberation = () => {
+      if (!deliberationRoster) return;
+      setLocalDeliberation({
+        roster: deliberationRoster,
+        stage: deliberationStage,
+        takes: Object.fromEntries(
+          Object.entries(deliberationTakes).map(([voiceId, take]) => [
+            voiceId,
+            { ...take },
+          ]),
+        ),
+      });
+    };
+    // Debate accumulators (only used when this turn runs a debate round).
+    let debateRoster: DeliberationRosterVoice[] | null = null;
+    let debatePlannedTurns = 0;
+    let currentDebateTurn: DebateTurnLive | null = null;
+    const debateFailedNames: string[] = [];
+    let restartRound = false;
+    const syncDebate = () => {
+      if (!debateRoster) return;
+      setLocalDebate({
+        roster: debateRoster,
+        of: debatePlannedTurns,
+        current: currentDebateTurn ? { ...currentDebateTurn } : null,
+        failedNames: [...debateFailedNames],
+      });
+    };
 
     try {
       const domain = process.env.EXPO_PUBLIC_DOMAIN;
@@ -220,6 +592,15 @@ function ChatWorkspace({
         sources: projectSources,
       });
 
+      // Debate rounds restart when the user interjects between turns: the
+      // history the next round continues from accumulates the persisted
+      // turns and the user's new messages.
+      const debateHistory = [...chatHistory];
+
+      roundLoop: while (true) {
+      streamCompleted = false;
+      restartRound = false;
+
       const response = await fetch(`${baseUrl}/api/venom/respond`, {
         method: "POST",
         headers: {
@@ -228,27 +609,241 @@ function ChatWorkspace({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          messages: chatHistory,
+          messages: debateHistory.slice(-24),
           projectId: initiatingProjectId,
+          modelId: sendingModelId,
           projectContext,
           sourceCitationIds,
           sourceSnapshots,
+          // The server re-checks membership on every call, so a stale
+          // selection cannot leak workspace content.
+          ...(sendingWorkspaceId ? { workspaceId: sendingWorkspaceId } : {}),
+          // Talk stays exactly today's request; Verify and Debate declare
+          // themselves and carry the blend when the pad is present.
+          ...(sendMode !== "talk" ? { mode: sendMode } : {}),
+          ...(sendMode !== "talk" && blendPayload
+            ? { blend: blendPayload }
+            : {}),
         }),
         signal: abortController.signal,
       });
 
       if (activeUserIdRef.current !== initiatingUserId) return;
-      if (!response.ok) throw new Error("Network error");
+
+      if (!response.ok) {
+        const isRateLimit = response.status === 429;
+        const isProviderError = response.status === 502;
+        let errMsg = "The request failed. Please try again.";
+        if (isRateLimit) errMsg = "Rate limit reached. Please wait a moment before sending again.";
+        if (isProviderError) errMsg = "The selected model provider is temporarily unavailable. Try a different model or retry shortly.";
+        if (response.status === 403) {
+          try {
+            const body = (await response.json()) as { code?: string; error?: string };
+            if (body?.code === WORKSPACE_ACCESS_DENIED_CODE) {
+              // Membership ended between selecting the workspace and sending:
+              // evict cached workspace content and fall back to personal.
+              notifyWorkspaceAccessLost();
+              errMsg = body.error ?? "You no longer have access to that shared workspace.";
+            }
+          } catch {
+            // not JSON – keep the generic message
+          }
+        }
+        throw Object.assign(new Error(errMsg), { retryable: true, httpStatus: response.status });
+      }
 
       const reader = response.body?.getReader();
-      if (!reader) throw new Error("No stream");
+      if (!reader) throw Object.assign(new Error("No response stream received."), { retryable: true });
 
       const decoder = new TextDecoder();
       let buffer = "";
+      const processSseLine = (line: string) => {
+        if (!line.startsWith("data: ")) return;
+        const data = line.slice(6);
+        if (data === "[DONE]") {
+          streamCompleted = true;
+          return;
+        }
+
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) {
+            const isRetryable = parsed.retryable !== false;
+            throw Object.assign(new Error(parsed.error as string), {
+              retryable: isRetryable,
+            });
+          }
+          if (parsed.done === true) {
+            streamCompleted = true;
+            return;
+          }
+          // Debate events: roster metadata, per-turn markers, and per-turn
+          // chunks. Consume them before the generic content branch so debate
+          // text never leaks into a single answer bubble.
+          if (parsed.debate?.voices && Array.isArray(parsed.debate.voices)) {
+            debateRoster = parsed.debate.voices as DeliberationRosterVoice[];
+            debatePlannedTurns =
+              typeof parsed.debate.turns === "number"
+                ? parsed.debate.turns
+                : debateRoster.length;
+            setShowTyping(false);
+            syncDebate();
+            return;
+          }
+          if (parsed.debateTurn) {
+            currentDebateTurn = {
+              index: Number(parsed.debateTurn.index ?? 0),
+              voiceId: String(parsed.debateTurn.voiceId ?? ""),
+              name: String(parsed.debateTurn.name ?? "Voice"),
+              modelId:
+                typeof parsed.debateTurn.modelId === "string"
+                  ? parsed.debateTurn.modelId
+                  : undefined,
+              modelName:
+                typeof parsed.debateTurn.modelName === "string"
+                  ? parsed.debateTurn.modelName
+                  : undefined,
+              content: "",
+            };
+            if (typeof parsed.debateTurn.of === "number") {
+              debatePlannedTurns = parsed.debateTurn.of;
+            }
+            syncDebate();
+            return;
+          }
+          if (typeof parsed.turn === "number" && debateRoster) {
+            const turn = currentDebateTurn;
+            if (parsed.turnStatus === "ok" || parsed.turnStatus === "failed") {
+              if (turn && parsed.turnStatus === "ok" && turn.content.trim()) {
+                // Persist the finished turn immediately so it survives a
+                // stop or reload and syncs to other devices as a normal
+                // attributed assistant message.
+                const persistedContent = turn.content.trim();
+                addMessage(targetConvId, {
+                  id: generateUniqueId(),
+                  role: "assistant",
+                  content: persistedContent,
+                  status: "sent",
+                  ...(turn.modelId
+                    ? {
+                        modelId: turn.modelId as ApiVenomModelId,
+                        ...(turn.modelName
+                          ? { modelName: turn.modelName }
+                          : {}),
+                      }
+                    : {}),
+                  speakerId: turn.voiceId.slice(0, 64),
+                  speakerName: turn.name.slice(0, 80),
+                });
+                debateHistory.push({
+                  role: "assistant",
+                  content: persistedContent,
+                });
+              } else if (turn) {
+                // A failed voice doesn't kill the round; the debate carries
+                // on and the miss is noted in the live panel.
+                debateFailedNames.push(turn.name);
+              }
+              currentDebateTurn = null;
+              syncDebate();
+              // Between turns is where user interjections take effect.
+              if (pendingInterjectionsRef.current.length > 0) {
+                restartRound = true;
+              }
+            } else if (turn && parsed.content && parsed.turn === turn.index) {
+              turn.content += parsed.content;
+              syncDebate();
+            }
+            return;
+          }
+          // Deliberation events: roster metadata (no disagreements yet), the
+          // final persisted summary, stage moves, and per-voice chunks.
+          if (parsed.deliberation?.voices) {
+            if (Array.isArray(parsed.deliberation.disagreements)) {
+              finalDeliberation = {
+                voices: parsed.deliberation.voices,
+                disagreements: parsed.deliberation.disagreements,
+              } as VenomMessageDeliberation;
+              for (const take of finalDeliberation.voices) {
+                deliberationTakes[take.voiceId] = {
+                  content: take.content,
+                  status: take.status === "failed" ? "failed" : "ok",
+                };
+              }
+              syncDeliberation();
+            } else {
+              deliberationRoster =
+                parsed.deliberation.voices as DeliberationRosterVoice[];
+              deliberationTakes = Object.fromEntries(
+                deliberationRoster.map((voice) => [
+                  voice.voiceId,
+                  { content: "", status: "streaming" as const },
+                ]),
+              );
+              deliberationStage = "voices";
+              setShowTyping(false);
+              syncDeliberation();
+            }
+          }
+          if (parsed.stage === "synthesis" && deliberationRoster) {
+            deliberationStage = "synthesis";
+            syncDeliberation();
+          }
+          if (typeof parsed.voice === "string") {
+            // Voice chunks feed the transient panel, never the main answer.
+            const take = deliberationTakes[parsed.voice] ?? {
+              content: "",
+              status: "streaming" as const,
+            };
+            deliberationTakes[parsed.voice] = take;
+            if (parsed.content) take.content += parsed.content;
+            if (parsed.voiceStatus === "ok" || parsed.voiceStatus === "failed") {
+              take.status = parsed.voiceStatus;
+            }
+            syncDeliberation();
+            return;
+          }
+          if (parsed.modelId && typeof parsed.modelId === "string") {
+            streamModelId = parsed.modelId as VenomModelId;
+          }
+          if (parsed.modelName && typeof parsed.modelName === "string") {
+            streamModelName = parsed.modelName as string;
+          }
+          if (parsed.content) {
+            fullContent += parsed.content;
+
+            if (!hasReceivedFirstChunk) {
+              setShowTyping(false);
+              hasReceivedFirstChunk = true;
+            }
+
+            setLocalStreamingMessage({
+              id: streamId,
+              role: "assistant",
+              content: fullContent,
+              createdAt: Date.now(),
+              status: "sending",
+            });
+          }
+        } catch (error) {
+          // Re-throw structured errors; malformed events fail via the missing
+          // completion marker rather than becoming completed messages.
+          if (
+            error instanceof Error &&
+            (error as { retryable?: boolean }).retryable !== undefined
+          ) {
+            throw error;
+          }
+        }
+      };
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          buffer += decoder.decode();
+          if (buffer) processSseLine(buffer.replace(/\r$/, ""));
+          break;
+        }
         if (activeUserIdRef.current !== initiatingUserId) {
           await reader.cancel();
           return;
@@ -259,45 +854,74 @@ function ChatWorkspace({
         buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6);
-          if (data === "[DONE]") continue;
-          if (data.includes('"done":true')) continue;
-
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.content) {
-              fullContent += parsed.content;
-
-              if (!hasReceivedFirstChunk) {
-                setShowTyping(false);
-                hasReceivedFirstChunk = true;
-              }
-
-              setLocalStreamingMessage({
-                id: streamId,
-                role: "assistant",
-                content: fullContent,
-                createdAt: Date.now(),
-                status: "sending",
-              });
-            }
-          } catch (e) {}
+          processSseLine(line.replace(/\r$/, ""));
         }
+
+        if (restartRound) {
+          // An interjection is waiting: stop reading this round and start a
+          // fresh one that carries the new user message.
+          await reader.cancel();
+          try {
+            abortController.abort();
+          } catch {
+            // Closing an already-finished stream is fine.
+          }
+          break;
+        }
+      }
+
+      if (
+        sendMode === "debate" &&
+        pendingInterjectionsRef.current.length > 0 &&
+        !stopRequestedRef.current &&
+        activeUserIdRef.current === initiatingUserId
+      ) {
+        const interjections = pendingInterjectionsRef.current.splice(0);
+        for (const interjection of interjections) {
+          debateHistory.push({ role: "user", content: interjection });
+        }
+        currentDebateTurn = null;
+        syncDebate();
+        abortController = new AbortController();
+        activeRequestAbortRef.current = abortController;
+        continue roundLoop;
+      }
+      break;
+      }
+
+      if (!streamCompleted && !stopRequestedRef.current) {
+        throw Object.assign(
+          new Error("The response was interrupted. Please try again."),
+          { retryable: true },
+        );
       }
     } catch (error) {
       if (activeUserIdRef.current !== initiatingUserId) return;
-      console.error(error);
-      requestFailed = true;
-      setShowTyping(false);
-      setLocalStreamingMessage({
-        id: streamId,
-        role: "assistant",
-        content: "I lost connection to the server. Please try again.",
-        createdAt: Date.now(),
-        status: "error",
-      });
-      fullContent = "I lost connection to the server. Please try again.";
+      // A user-requested stop ends the round cleanly: turns that finished
+      // stay in the thread, the half-spoken one is discarded, no error.
+      if (stopRequestedRef.current) {
+        fullContent = "";
+        requestFailed = false;
+        setShowTyping(false);
+      } else {
+        console.error(error);
+        requestFailed = true;
+        const isRetryable = (error as any)?.retryable !== false;
+        const errMessage =
+          error instanceof Error
+            ? error.message
+            : "I lost connection to the server. Please try again.";
+        setShowTyping(false);
+        setStreamError({ message: errMessage, retryable: isRetryable });
+        setLocalStreamingMessage({
+          id: streamId,
+          role: "assistant",
+          content: errMessage,
+          createdAt: Date.now(),
+          status: "error",
+        });
+        fullContent = errMessage;
+      }
     } finally {
       if (activeUserIdRef.current !== initiatingUserId) return;
       if (activeRequestAbortRef.current === abortController) {
@@ -306,17 +930,68 @@ function ChatWorkspace({
       setIsStreaming(false);
       setShowTyping(false);
 
+      // A deliberated turn persists its takes and disagreements alongside the
+      // collective answer; if the final summary event never arrived, fall
+      // back to what accumulated while streaming.
+      // Snapshot the closure-written accumulators: TS flow analysis cannot
+      // see the assignments made inside processSseLine.
+      const finalSnapshot = finalDeliberation as VenomMessageDeliberation | null;
+      const rosterSnapshot = deliberationRoster as
+        | DeliberationRosterVoice[]
+        | null;
+      const persistedDeliberation: VenomMessageDeliberation | null =
+        finalSnapshot ??
+        (rosterSnapshot
+          ? ({
+              voices: rosterSnapshot.map((voice) => {
+                const take = deliberationTakes[voice.voiceId];
+                return {
+                  voiceId: voice.voiceId,
+                  name: voice.name,
+                  ...(voice.modelId ? { modelId: voice.modelId } : {}),
+                  ...(voice.modelName ? { modelName: voice.modelName } : {}),
+                  content: (take?.content ?? "").slice(0, 8000),
+                  status:
+                    take?.status === "failed"
+                      ? ("failed" as const)
+                      : ("ok" as const),
+                };
+              }),
+              disagreements: [],
+            } as VenomMessageDeliberation)
+          : null);
+
       if (fullContent) {
         addMessage(targetConvId, {
           id: streamId,
           role: "assistant",
           content: fullContent,
-          status: "sent",
+          status: requestFailed ? "error" : "sent",
+          // Persist model attribution on successfully completed messages
+          ...((!requestFailed && (streamModelId ?? sendingModelId)) ? {
+            modelId: (streamModelId ?? sendingModelId) as ApiVenomModelId,
+            modelName: streamModelName ?? activeModel?.name ?? undefined,
+          } : {}),
+          ...(!requestFailed && persistedDeliberation
+            ? { deliberation: persistedDeliberation }
+            : {}),
         });
       }
       setLocalStreamingMessage(null);
+      setLocalDeliberation(null);
+      setLocalDebate(null);
+      debateConvIdRef.current = null;
+      pendingInterjectionsRef.current = [];
+      stopRequestedRef.current = false;
 
-      if (fullContent && !requestFailed && requestToken) {
+      // Debate turns persist as they finish and skip knowledge extraction:
+      // the exchange is argument, not settled knowledge to absorb.
+      if (
+        sendMode !== "debate" &&
+        fullContent &&
+        !requestFailed &&
+        requestToken
+      ) {
         const conversation = state.conversations.find(
           (item) => item.id === targetConvId,
         );
@@ -327,6 +1002,10 @@ function ChatWorkspace({
 
         void extractVenomKnowledge(
           {
+            // Ask the server to file the insights straight into the ontology
+            // store; `filed` in the response carries the canonical records.
+            file: true,
+            ...(sendingWorkspaceId ? { workspaceId: sendingWorkspaceId } : {}),
             conversation: {
               id: targetConvId,
               title: conversationTitle,
@@ -354,17 +1033,39 @@ function ChatWorkspace({
         )
           .then((result) => {
             if (activeUserIdRef.current !== initiatingUserId) return;
-            applyKnowledgeInsights(
-              {
-                id: targetConvId,
-                title: conversationTitle,
-                projectId: initiatingProjectId,
-              },
-              result.clusters,
-            );
+            const conversationRef = {
+              id: targetConvId,
+              title: conversationTitle,
+              projectId: initiatingProjectId,
+            };
+            if (result.filedWorkspaceId) {
+              // Filed into the shared workspace store server-side. Never
+              // mirror it into the synced personal snapshot — shared content
+              // must stay evictable — just refresh the cached copy.
+              void queryClient.invalidateQueries({
+                queryKey: getGetSharedWorkspaceKnowledgeQueryKey(
+                  result.filedWorkspaceId,
+                ),
+              });
+            } else if (result.filed && result.filed.length > 0) {
+              // The server filed these into the ontology store already;
+              // mirror its canonical records locally.
+              applyFiledKnowledge(conversationRef, result.filed);
+            } else {
+              // Older server or filing hiccup: fall back to local filing,
+              // which reaches the store on the next workspace sync.
+              applyKnowledgeInsights(conversationRef, result.clusters);
+            }
           })
-          .catch(() => {
-            // Chat remains usable when background extraction is unavailable.
+          .catch((extractionError: unknown) => {
+            // Chat remains usable when background extraction is unavailable —
+            // but a workspace-access denial must still evict caches.
+            const status = (extractionError as { status?: number } | null)?.status;
+            const code = (extractionError as { data?: { code?: string } } | null)
+              ?.data?.code;
+            if (status === 403 && code === WORKSPACE_ACCESS_DENIED_CODE) {
+              notifyWorkspaceAccessLost();
+            }
           });
       }
 
@@ -374,40 +1075,131 @@ function ChatWorkspace({
     }
   }
 
+  // Shared renderer for assistant text: citation markers resolve to source
+  // references (live links or archived labels), never raw [source:id] tags.
+  const renderSegments = (
+    segments: ReturnType<typeof messageCitationSegments>,
+    keyPrefix: string,
+  ) =>
+    segments.map((segment, index) => {
+      if (segment.kind === "text") return segment.text;
+      if (segment.kind === "citation") {
+        return (
+          <Text
+            key={`${keyPrefix}-${segment.citation.id}-${index}`}
+            onPress={() => Linking.openURL(segment.citation.url)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open source: ${segment.citation.title}`}
+            style={[styles.citationLink, { color: colors.primary }]}
+          >
+            {segment.citation.title}
+          </Text>
+        );
+      }
+      const archived = segment.archived;
+      if (archived && archived.url) {
+        return (
+          <Text
+            key={`${keyPrefix}-${segment.citationId}-${index}`}
+            onPress={() => Linking.openURL(archived.url)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open archived source, no longer connected: ${archived.title}`}
+            style={[
+              styles.citationArchivedLink,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            {segment.label}
+          </Text>
+        );
+      }
+      return (
+        <Text
+          key={`${keyPrefix}-${segment.citationId}-${index}`}
+          accessibilityLabel={
+            archived
+              ? `Archived source, no longer connected: ${archived.title}`
+              : "Archived source, no longer connected"
+          }
+          style={[
+            styles.citationArchived,
+            { color: colors.mutedForeground },
+          ]}
+        >
+          {segment.label}
+        </Text>
+      );
+    });
+
+  const renderCitationText = (content: string, keyPrefix: string) =>
+    renderSegments(
+      messageCitationSegments(content, citationsById, archivedCitationsById),
+      keyPrefix,
+    );
+
+  const toggleTakes = (messageId: string) => {
+    setExpandedTakeMessageIds((current) => {
+      const next = new Set(current);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
+  };
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
+    const isError = item.status === "error";
+    const segments = isUser
+      ? []
+      : messageCitationSegments(
+          item.content,
+          citationsById,
+          archivedCitationsById,
+        );
+    // The connected sources this answer cited, in the order they appear, so the
+    // reader can open one and read the rest of the evidence it carries.
+    const citedSources: ProjectSource[] = [];
+    for (const segment of segments) {
+      if (segment.kind !== "citation") continue;
+      const source = sourceByCitationId.get(segment.citation.id);
+      if (!source || citedSources.some((entry) => entry.id === source.id)) {
+        continue;
+      }
+      citedSources.push(source);
+    }
     const content = !isUser
-      ? messageCitationSegments(item.content, citationsById).map(
-          (segment, index) => {
-            if (segment.kind === "text") return segment.text;
-            if (segment.kind === "citation") {
-              return (
-                <Text
-                  key={`${segment.citation.id}-${index}`}
-                  onPress={() => Linking.openURL(segment.citation.url)}
-                  accessibilityRole="link"
-                  accessibilityLabel={`Open source: ${segment.citation.title}`}
-                  style={[styles.citationLink, { color: colors.primary }]}
-                >
-                  {segment.citation.title}
-                </Text>
-              );
-            }
-            return (
-              <Text
-                key={`${segment.citationId}-${index}`}
-                accessibilityLabel="Archived source, no longer connected"
-                style={[
-                  styles.citationArchived,
-                  { color: colors.mutedForeground },
-                ]}
-              >
-                {segment.label}
-              </Text>
-            );
-          },
-        )
+      ? renderSegments(segments, item.id)
       : item.content;
+
+    const deliberation = !isUser && !isError ? item.deliberation : undefined;
+    const takesExpanded = deliberation
+      ? expandedTakeMessageIds.has(item.id)
+      : false;
+    const deliberationOkCount = deliberation
+      ? deliberation.voices.filter((take) => take.status === "ok").length
+      : 0;
+    const deliberationShowModels = deliberation
+      ? new Set(
+          deliberation.voices
+            .filter((take) => take.status === "ok")
+            .map((take) => take.modelId)
+            .filter(Boolean),
+        ).size > 1
+      : false;
+
+    // Debate turns carry their own speaker chip above the bubble, so the
+    // trailing model attribution is suppressed for them.
+    const speakerName = !isUser ? item.speakerName : undefined;
+    const speakerModelLabel =
+      speakerName && item.modelName && item.modelName !== speakerName
+        ? item.modelName
+        : null;
+    const modelLabel = !isUser && !speakerName && item.modelName
+      ? item.modelName
+      : !isUser && !speakerName && item.modelId
+        ? item.modelId
+        : null;
+
     return (
       <View
         style={[
@@ -415,26 +1207,269 @@ function ChatWorkspace({
           isUser ? styles.messageUser : styles.messageAssistant,
         ]}
       >
-        <View
-          style={[
-            styles.messageBubble,
-            isUser
-              ? [styles.bubbleUser, { backgroundColor: colors.secondary }]
-              : styles.bubbleAssistant,
-            item.status === "error" && {
-              borderColor: colors.destructive,
-              borderWidth: 1,
-            },
-          ]}
-        >
-          <Text
+        <View style={styles.messageWrap}>
+          {speakerName && (
+            <View style={styles.speakerChip} testID="chip-speaker">
+              <View
+                style={[
+                  styles.speakerDot,
+                  { backgroundColor: colors.foreground },
+                ]}
+              />
+              <Text
+                style={[styles.speakerName, { color: colors.foreground }]}
+                numberOfLines={1}
+              >
+                {speakerName}
+              </Text>
+              {speakerModelLabel && (
+                <Text
+                  style={[
+                    styles.speakerModel,
+                    { color: colors.mutedForeground },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {` · ${speakerModelLabel}`}
+                </Text>
+              )}
+            </View>
+          )}
+          <View
             style={[
-              styles.messageText,
-              { color: isUser ? colors.foreground : colors.foreground },
+              styles.messageBubble,
+              isUser
+                ? [styles.bubbleUser, { backgroundColor: colors.secondary }]
+                : styles.bubbleAssistant,
+              isError && {
+                borderColor: colors.destructive,
+                borderWidth: 1,
+              },
             ]}
           >
-            {content}
-          </Text>
+            {isError && (
+              <View style={styles.errorBadge}>
+                <Feather name="alert-circle" size={12} color={colors.destructive} />
+                <Text style={[styles.errorBadgeText, { color: colors.destructive }]}>
+                  {streamError?.retryable !== false ? "Tap send to retry" : "Error"}
+                </Text>
+              </View>
+            )}
+            <Text
+              testID={isUser ? "chat-message-user" : "chat-message-assistant"}
+              style={[
+                styles.messageText,
+                { color: colors.foreground },
+              ]}
+            >
+              {content}
+            </Text>
+          </View>
+          {deliberation && (
+            <View style={styles.deliberationResult} testID="deliberation-result">
+              {deliberation.disagreements.length > 0 ? (
+                <View
+                  style={[
+                    styles.deliberationDisagreements,
+                    { borderColor: colors.border, backgroundColor: colors.card },
+                  ]}
+                  testID="deliberation-disagreements"
+                >
+                  <View style={styles.deliberationDisagreeHeader}>
+                    <Feather
+                      name="git-branch"
+                      size={12}
+                      color={colors.foreground}
+                    />
+                    <Text
+                      style={[
+                        styles.deliberationDisagreeTitle,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      Where the voices split
+                    </Text>
+                  </View>
+                  {deliberation.disagreements.map((note, index) => (
+                    <View key={index} style={styles.deliberationDisagreeItem}>
+                      <View
+                        style={[
+                          styles.deliberationDisagreeBullet,
+                          { backgroundColor: colors.mutedForeground },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.deliberationDisagreeText,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        {renderCitationText(note, `${item.id}-dis-${index}`)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text
+                  style={[
+                    styles.deliberationAgreement,
+                    { color: colors.mutedForeground },
+                  ]}
+                  testID="deliberation-agreement"
+                >
+                  The voices converged without real disagreement.
+                </Text>
+              )}
+              <TouchableOpacity
+                onPress={() => toggleTakes(item.id)}
+                style={styles.deliberationToggle}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: takesExpanded }}
+                accessibilityLabel={
+                  takesExpanded ? "Hide the voice takes" : "Show the voice takes"
+                }
+                testID="toggle-deliberation-takes"
+              >
+                <Feather
+                  name={takesExpanded ? "chevron-up" : "chevron-down"}
+                  size={13}
+                  color={colors.mutedForeground}
+                />
+                <Text
+                  style={[
+                    styles.deliberationToggleText,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  {takesExpanded
+                    ? "Hide the takes"
+                    : `Read the takes (${deliberationOkCount})`}
+                </Text>
+              </TouchableOpacity>
+              {takesExpanded &&
+                deliberation.voices.map((take) => (
+                  <View
+                    key={take.voiceId}
+                    style={[
+                      styles.deliberationTakeCard,
+                      { borderColor: colors.border },
+                    ]}
+                    testID={`deliberation-take-${take.voiceId}`}
+                  >
+                    <View style={styles.deliberationVoiceHeader}>
+                      <Text
+                        style={[
+                          styles.deliberationVoiceName,
+                          { color: colors.foreground },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {take.name}
+                      </Text>
+                      {deliberationShowModels && take.modelName ? (
+                        <Text
+                          style={[
+                            styles.deliberationVoiceModel,
+                            { color: colors.mutedForeground },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {take.modelName}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {take.status === "failed" ? (
+                      <Text
+                        style={[
+                          styles.deliberationTakeText,
+                          { color: colors.mutedForeground, opacity: 0.8 },
+                        ]}
+                      >
+                        This voice didn't finish its take.
+                      </Text>
+                    ) : (
+                      <Text
+                        style={[
+                          styles.deliberationTakeText,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        {renderCitationText(
+                          take.content,
+                          `${item.id}-take-${take.voiceId}`,
+                        )}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+            </View>
+          )}
+          {citedSources.length > 0 && !isError && (
+            <View style={styles.citedSourceRow}>
+              {citedSources.map((source) => (
+                <TouchableOpacity
+                  key={source.id}
+                  style={[
+                    styles.citedSourceChip,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.card,
+                    },
+                  ]}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/knowledge",
+                      params: { view: "sources", source: source.id },
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show all ${source.citations.length} citation${
+                    source.citations.length === 1 ? "" : "s"
+                  } from ${source.name} in Venom`}
+                  testID={`chat-open-source-${source.id}`}
+                  activeOpacity={0.8}
+                >
+                  <Feather
+                    name={source.provider === "github" ? "github" : "globe"}
+                    size={11}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.citedSourceChipText,
+                      { color: colors.foreground },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {source.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.citedSourceChipMeta,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    {`${source.citations.length} citation${
+                      source.citations.length === 1 ? "" : "s"
+                    }`}
+                  </Text>
+                  <Feather
+                    name="arrow-up-right"
+                    size={11}
+                    color={colors.mutedForeground}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          {modelLabel && !isUser && !isError && (
+            <Text
+              style={[styles.messageAttribution, { color: colors.mutedForeground }]}
+              numberOfLines={1}
+            >
+              {modelLabel}
+            </Text>
+          )}
         </View>
       </View>
     );
@@ -457,7 +1492,19 @@ function ChatWorkspace({
         showsVerticalScrollIndicator={false}
         scrollEnabled={reversedMessages.length > 0}
         ListHeaderComponent={
-          showTyping ? (
+          localDebate ? (
+            <DebateStreamCard
+              debate={localDebate}
+              colors={colors}
+              renderContent={renderCitationText}
+            />
+          ) : localDeliberation ? (
+            <DeliberationStreamCard
+              deliberation={localDeliberation}
+              colors={colors}
+              renderContent={renderCitationText}
+            />
+          ) : showTyping ? (
             <View style={styles.typingContainer}>
               <ActivityIndicator size="small" color={colors.primary} />
             </View>
@@ -499,6 +1546,193 @@ function ChatWorkspace({
           },
         ]}
       >
+        {/* Response mode: Talk / Verify / Debate, remembered per session. */}
+        {deliberationAvailable && (
+          <View style={styles.modeSwitchRow}>
+            <ResponseModeSwitch
+              mode={responseMode}
+              onChange={handleModeChange}
+              disabled={isStreaming}
+            />
+          </View>
+        )}
+        {/* Blend pad: who carries the exchange in Verify and Debate. */}
+        {deliberationAvailable && responseMode !== "talk" && blendCorners && (
+          <View style={styles.blendSection}>
+            <BlendPad
+              corners={blendCorners}
+              weights={padWeights}
+              onChange={(weights) => setDraftWeights(weights)}
+              onCommit={commitBlend}
+              disabled={isStreaming}
+            />
+            {cornersPickable && (
+              <TouchableOpacity
+                onPress={() => {
+                  setShowCornerPicker((value) => !value);
+                  if (Platform.OS !== "web") {
+                    Haptics.selectionAsync();
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showCornerPicker }}
+                accessibilityLabel="Choose which three models take the corners"
+                testID="button-blend-corners"
+                hitSlop={6}
+                style={styles.cornerPickerToggle}
+              >
+                <Text
+                  style={[
+                    styles.cornerPickerToggleText,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  {showCornerPicker
+                    ? "Done choosing voices"
+                    : "Choose the three voices"}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {cornersPickable && showCornerPicker && (
+              <View style={styles.cornerPickerRow} testID="blend-corner-picker">
+                {cornerCandidates.map((model) => {
+                  const inCorners = blendCorners.some(
+                    (corner) => corner.id === model.id,
+                  );
+                  return (
+                    <TouchableOpacity
+                      key={model.id}
+                      onPress={() => handleCornerPick(model.id)}
+                      disabled={inCorners}
+                      style={[
+                        styles.cornerPickChip,
+                        {
+                          borderColor: inCorners
+                            ? colors.foreground
+                            : colors.border,
+                          backgroundColor: inCorners
+                            ? colors.foreground
+                            : colors.card,
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: inCorners }}
+                      accessibilityLabel={
+                        inCorners
+                          ? `${model.name} holds a corner`
+                          : `Give ${model.name} a corner`
+                      }
+                      testID={`button-corner-pick-${model.id}`}
+                      hitSlop={4}
+                    >
+                      <Text
+                        style={[
+                          styles.cornerPickChipText,
+                          {
+                            color: inCorners
+                              ? colors.background
+                              : colors.mutedForeground,
+                          },
+                        ]}
+                      >
+                        {model.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        )}
+        {/* Shared-workspace indicator: answers may draw on team knowledge */}
+        {activeWorkspace && (
+          <View style={styles.workspaceChipRow}>
+            <View
+              style={[
+                styles.workspaceChip,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+              accessibilityLabel={`Chatting with shared knowledge from ${activeWorkspace.name}`}
+              testID="chip-shared-space"
+            >
+              <Feather name="users" size={11} color={colors.mutedForeground} />
+              <Text
+                style={[styles.workspaceChipText, { color: colors.mutedForeground }]}
+                numberOfLines={1}
+              >
+                {activeWorkspace.name}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Model selector row */}
+        {enabledModels.length > 1 && (
+          <View style={styles.modelSelectorRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.modelSelectorScroll}
+            >
+              {enabledModels.map((model) => {
+                const isSelected = model.id === activeModelId;
+                return (
+                  <TouchableOpacity
+                    key={model.id}
+                    onPress={() => {
+                      setActiveModel(model.id as VenomModelId);
+                      setShowModelPicker(false);
+                    }}
+                    style={[
+                      styles.modelChip,
+                      {
+                        backgroundColor: isSelected ? colors.primary : colors.card,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Use ${model.name}`}
+                    accessibilityState={{ selected: isSelected }}
+                    testID={`select-model-${model.id}`}
+                  >
+                    <Text
+                      style={[
+                        styles.modelChipText,
+                        {
+                          color: isSelected
+                            ? colors.primaryForeground
+                            : colors.mutedForeground,
+                        },
+                      ]}
+                    >
+                      {model.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        <VoiceModeOverlay
+          visible={voiceModeOpen}
+          activeProject={activeProject}
+          onClose={() => {
+            setVoiceModeOpen(false);
+            // An animated modal's focus trap can strand focus while closing;
+            // hand it back to the launcher explicitly (web only).
+            if (Platform.OS === "web") {
+              setTimeout(() => {
+                (
+                  voiceButtonRef.current as unknown as {
+                    focus?: () => void;
+                  } | null
+                )?.focus?.();
+              }, 80);
+            }
+          }}
+        />
+
         <View
           style={[
             styles.inputWrapper,
@@ -510,7 +1744,9 @@ function ChatWorkspace({
             testID="chat-input"
             accessibilityLabel="Message Venom"
             style={[styles.input, { color: colors.foreground }]}
-            placeholder="Message..."
+            placeholder={
+              localDebate && isStreaming ? "Join the debate..." : "Message..."
+            }
             placeholderTextColor={colors.mutedForeground}
             value={text}
             onChangeText={setText}
@@ -518,6 +1754,38 @@ function ChatWorkspace({
             maxLength={1000}
             blurOnSubmit={false}
           />
+          {localDebate && isStreaming && (
+            <TouchableOpacity
+              style={[styles.stopButton, { borderColor: colors.border }]}
+              onPress={handleStopDebate}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Stop the debate after this turn"
+              testID="stop-debate"
+            >
+              <View
+                style={[
+                  styles.stopButtonSquare,
+                  { backgroundColor: colors.foreground },
+                ]}
+              />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            ref={voiceButtonRef}
+            style={[
+              styles.voiceButton,
+              { borderColor: colors.border, backgroundColor: colors.card },
+            ]}
+            onPress={() => setVoiceModeOpen(true)}
+            disabled={isStreaming}
+            hitSlop={12}
+            testID="open-voice-mode"
+            accessibilityRole="button"
+            accessibilityLabel="Start a voice conversation"
+          >
+            <Feather name="mic" size={16} color={colors.foreground} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.sendButton,
@@ -528,11 +1796,15 @@ function ChatWorkspace({
               },
             ]}
             onPress={handleSend}
-            disabled={!text.trim() || isStreaming}
+            disabled={!text.trim() || (isStreaming && !localDebate)}
             hitSlop={12}
             testID="send-message-button"
             accessibilityRole="button"
-            accessibilityLabel="Send message"
+            accessibilityLabel={
+              localDebate && isStreaming
+                ? "Send a message into the debate"
+                : "Send message"
+            }
           >
             <Feather
               name="arrow-up"
@@ -561,14 +1833,6 @@ type GraphConnection = {
 const MAX_LIVE_CONNECTIONS = 48;
 
 const DEFAULT_GRAPH_CAMERA: GraphCamera = { yaw: 0, pitch: 0, zoom: 1 };
-const SYMBIOTE_LOBES = [
-  { width: 210, height: 116, x: -105, y: -58, rotate: "-12deg" },
-  { width: 104, height: 238, x: -52, y: -119, rotate: "18deg" },
-  { width: 74, height: 188, x: -136, y: -94, rotate: "-48deg" },
-  { width: 68, height: 212, x: 66, y: -106, rotate: "52deg" },
-  { width: 54, height: 170, x: -27, y: -38, rotate: "82deg" },
-] as const;
-
 function SymbioteTendrilSegment({
   from,
   to,
@@ -707,6 +1971,8 @@ function SymbioteNode({
   depthScale,
   depthOpacity,
   onPress,
+  onPressIn,
+  onPressOut,
 }: {
   cluster: KnowledgeCluster;
   position: ProjectedGraphPoint;
@@ -717,6 +1983,8 @@ function SymbioteNode({
   depthScale: number;
   depthOpacity: number;
   onPress: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
 }) {
   const colors = useColors();
   const size = 34 + cluster.strength * 18;
@@ -788,6 +2056,8 @@ function SymbioteNode({
             },
           ]}
           onPress={onPress}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
           activeOpacity={0.75}
         >
           <View
@@ -845,6 +2115,19 @@ function SymbioteNode({
   );
 }
 
+/**
+ * A search hit whose concept is not in local state. The device keeps at most
+ * the newest slice of the ontology, so the concept itself — summary, evidence,
+ * neighbors — has to come from the server on demand.
+ */
+type RemoteConceptView = {
+  conceptId: string;
+  /** Label from the search row, shown while the full concept loads. */
+  label: string;
+  projectId: string | null;
+  status: "loading" | "ready" | "offline" | "missing";
+  detail: VenomOntologyConceptDetail | null;
+};
 function KnowledgeWorkspace({
   onOpenConversation,
   isActive,
@@ -857,10 +2140,12 @@ function KnowledgeWorkspace({
   const reduceMotion = useReducedMotion();
   const {
     state,
+    setActiveProject,
     renameKnowledgeCluster,
     deleteKnowledgeCluster,
     mergeKnowledgeClusters,
   } = useVenom();
+  const { getToken } = useAuth();
   const captureButtonRef =
     useRef<React.ElementRef<typeof TouchableOpacity>>(null);
   const [composerProjectId, setComposerProjectId] = useState<string | null>(
@@ -869,11 +2154,19 @@ function KnowledgeWorkspace({
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(
     null,
   );
+  // Concept under the user's finger (press-in, before release). Display-time
+  // only: it drives the slime's touch reaction, never data.
+  const [touchedClusterId, setTouchedClusterId] = useState<string | null>(
+    null,
+  );
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const [isChoosingMerge, setIsChoosingMerge] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [remoteConcept, setRemoteConcept] = useState<RemoteConceptView | null>(
+    null,
+  );
   const visibleClusters = useMemo<KnowledgeCluster[]>(
     () =>
       state.clusters.filter(
@@ -882,10 +2175,222 @@ function KnowledgeWorkspace({
       ),
     [state.activeProjectId, state.clusters],
   );
+  // Brain notes are summarized from conversation text, so they can carry the
+  // same inline `[source:...]` markers an answer stores. Resolving them with
+  // the project's citations keeps a live source reading as its title and a
+  // disconnected one as its archived reference, never as a raw marker.
+  const citationLookup = useMemo<KnowledgeCitationLookup>(
+    () => ({
+      citationsById: new Map(
+        (state.sources ?? [])
+          .filter(
+            (source: ProjectSource) =>
+              source.projectId === state.activeProjectId &&
+              source.status === "connected",
+          )
+          .flatMap((source: ProjectSource) =>
+            source.citations.map(
+              (citation) => [citation.id, citation] as const,
+            ),
+          ),
+      ),
+      archivedById: new Map(
+        (state.archivedCitations ?? []).map(
+          (archived) => [archived.id, archived] as const,
+        ),
+      ),
+    }),
+    [state.activeProjectId, state.archivedCitations, state.sources],
+  );
   const selectedCluster =
     visibleClusters.find((cluster) => cluster.id === selectedClusterId) ?? null;
   const composerProject =
     state.projects.find((project) => project.id === composerProjectId) ?? null;
+
+  // Whole-ontology search. The server store is the system of record (it can
+  // hold more concepts than a device keeps locally), so ask it first and fall
+  // back to the on-device copy offline or in UI-test mode.
+  const [brainQuery, setBrainQuery] = useState("");
+  const [brainRemoteResults, setBrainRemoteResults] = useState<
+    VenomOntologySearchResult[] | null
+  >(null);
+  useEffect(() => {
+    const term = brainQuery.trim();
+    if (term.length < 2) {
+      setBrainRemoteResults(null);
+      return;
+    }
+    let stale = false;
+    const timer = setTimeout(async () => {
+      try {
+        // Browser UI tests stub this endpoint like every other backend read.
+        const token = IS_UI_TEST ? UI_TEST_CHAT_TOKEN : await getToken();
+        if (!token || stale) return;
+        const response = await searchVenomOntology(
+          { q: term, limit: 20 },
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!stale) setBrainRemoteResults(response.results);
+      } catch {
+        // Offline or the store is unreachable: the local list below still
+        // answers from the device copy.
+        if (!stale) setBrainRemoteResults(null);
+      }
+    }, 250);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [brainQuery, getToken]);
+
+  const brainSearchResults = useMemo(() => {
+    const term = brainQuery.trim().toLowerCase();
+    if (term.length < 2) return [];
+    const seen = new Set<string>();
+    const rows: {
+      id: string;
+      label: string;
+      category: string;
+      projectId: string | null;
+      evidenceCount: number;
+    }[] = [];
+    for (const result of brainRemoteResults ?? []) {
+      if (seen.has(result.id)) continue;
+      seen.add(result.id);
+      rows.push({
+        id: result.id,
+        label: result.label,
+        category: result.category,
+        projectId: result.projectId,
+        evidenceCount: result.evidenceCount,
+      });
+    }
+    for (const cluster of state.clusters) {
+      if (seen.has(cluster.id)) continue;
+      if (
+        !cluster.label.toLowerCase().includes(term) &&
+        !cluster.summary.toLowerCase().includes(term)
+      ) {
+        continue;
+      }
+      seen.add(cluster.id);
+      rows.push({
+        id: cluster.id,
+        label: cluster.label,
+        category: cluster.category,
+        projectId: cluster.projectId,
+        evidenceCount: cluster.sources.length,
+      });
+    }
+    return rows.slice(0, 12);
+  }, [brainQuery, brainRemoteResults, state.clusters]);
+  const projectNameById = useMemo(
+    () => new Map(state.projects.map((project) => [project.id, project.name])),
+    [state.projects],
+  );
+  const handleOpenSearchResult = useCallback(
+    (row: { id: string; label: string; projectId: string | null }) => {
+      setIsRenaming(false);
+      setIsChoosingMerge(false);
+      setIsConfirmingDelete(false);
+      setEditError(null);
+      setBrainQuery("");
+      setBrainRemoteResults(null);
+      const isLocal = state.clusters.some((cluster) => cluster.id === row.id);
+      if (isLocal) {
+        setRemoteConcept(null);
+        if (row.projectId !== state.activeProjectId) {
+          setActiveProject(row.projectId);
+        }
+        setSelectedClusterId(row.id);
+        return;
+      }
+      // Not cached on this device: open the server-backed detail view instead
+      // of switching projects toward a node the map cannot render.
+      setSelectedClusterId(null);
+      setRemoteConcept({
+        conceptId: row.id,
+        label: row.label,
+        projectId: row.projectId,
+        status: "loading",
+        detail: null,
+      });
+    },
+    [setActiveProject, state.activeProjectId, state.clusters],
+  );
+
+  // Fetch the opened remote concept. Retry re-enters "loading", which re-runs
+  // this effect; closing or replacing the overlay makes the in-flight read
+  // stale.
+  useEffect(() => {
+    if (!remoteConcept || remoteConcept.status !== "loading") return;
+    const { conceptId } = remoteConcept;
+    let stale = false;
+    (async () => {
+      try {
+        const token = IS_UI_TEST ? UI_TEST_CHAT_TOKEN : await getToken();
+        if (stale) return;
+        if (!token) throw new Error("Not signed in");
+        const detail = await getVenomOntologyConcept(conceptId, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (stale) return;
+        setRemoteConcept((current) =>
+          current?.conceptId === conceptId && current.status === "loading"
+            ? {
+                ...current,
+                status: "ready",
+                detail,
+                label: detail.concept.label,
+                projectId: detail.concept.projectId,
+              }
+            : current,
+        );
+      } catch (error) {
+        if (stale) return;
+        const missing = error instanceof ApiError && error.status === 404;
+        setRemoteConcept((current) =>
+          current?.conceptId === conceptId && current.status === "loading"
+            ? {
+                ...current,
+                status: missing ? "missing" : "offline",
+                detail: null,
+              }
+            : current,
+        );
+      }
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [getToken, remoteConcept]);
+
+  // A remote concept usually belongs to another project, so resolve its
+  // citation markers against every connected source on the device — not just
+  // the active project's — plus the archived record of retired ones.
+  const remoteCitationLookup = useMemo<KnowledgeCitationLookup>(
+    () => ({
+      citationsById: new Map(
+        (state.sources ?? [])
+          .filter((source: ProjectSource) => source.status === "connected")
+          .flatMap((source: ProjectSource) =>
+            source.citations.map(
+              (citation) => [citation.id, citation] as const,
+            ),
+          ),
+      ),
+      archivedById: new Map(
+        (state.archivedCitations ?? []).map(
+          (archived) => [archived.id, archived] as const,
+        ),
+      ),
+    }),
+    [state.archivedCitations, state.sources],
+  );
+  const localConversationIds = useMemo(
+    () => new Set(state.conversations.map((conversation) => conversation.id)),
+    [state.conversations],
+  );
 
   const MAP_SIZE = 800;
   const CENTER = MAP_SIZE / 2;
@@ -941,15 +2446,22 @@ function KnowledgeWorkspace({
     }
   }, [selectedClusterId, state.activeProjectId, visibleClusters]);
 
-  const clustersById = useMemo(
-    () => new Map(visibleClusters.map((cluster) => [cluster.id, cluster])),
+  // Display-time layout only: pull same-category concepts into visual
+  // islands so the mass reads as clusters. Stored positions, counts and the
+  // selectable clusters are untouched — these copies only feed geometry.
+  const displayClusters = useMemo(
+    () => layoutIslands(visibleClusters),
     [visibleClusters],
+  );
+  const clustersById = useMemo(
+    () => new Map(displayClusters.map((cluster) => [cluster.id, cluster])),
+    [displayClusters],
   );
   const liveConnections = useMemo<GraphConnection[]>(() => {
     const connections: GraphConnection[] = [];
     const seen = new Set<string>();
 
-    for (const cluster of visibleClusters) {
+    for (const cluster of displayClusters) {
       for (const targetId of cluster.links) {
         const target = clustersById.get(targetId);
         if (!target) continue;
@@ -974,17 +2486,17 @@ function KnowledgeWorkspace({
           (left.from.strength + left.to.strength),
       )
       .slice(0, MAX_LIVE_CONNECTIONS);
-  }, [clustersById, visibleClusters]);
+  }, [clustersById, displayClusters]);
 
   const projectedClusters = useMemo<ProjectedGraphCluster[]>(
     () =>
-      visibleClusters
+      displayClusters
         .map((cluster) => ({
           cluster,
           ...projectGraphCluster(cluster, graphCamera, baseGraphScale, CENTER),
         }))
         .sort((left, right) => left.depth - right.depth),
-    [CENTER, baseGraphScale, graphCamera, visibleClusters],
+    [CENTER, baseGraphScale, graphCamera, displayClusters],
   );
   const projectedById = useMemo(
     () =>
@@ -992,6 +2504,32 @@ function KnowledgeWorkspace({
         projectedClusters.map((projected) => [projected.cluster.id, projected]),
       ),
     [projectedClusters],
+  );
+
+  // Feed the slime the same projected geometry the nodes use, so the goo
+  // orbits and dives with them instead of drifting behind. Each concept also
+  // grows a handful of satellite micro-clumps sized from its real substance
+  // (sources and mentions) — goo-only mass that is never counted or labelled.
+  const slimeNodes = useMemo<SlimeNode[]>(() => {
+    const cores = projectedClusters.map((projected) => ({
+      id: projected.cluster.id,
+      x: projected.x,
+      y: projected.y,
+      depth: projected.depth,
+      radius: (34 + projected.cluster.strength * 18) * projected.scale * 1.1,
+      sourceCount: projected.cluster.sources.length,
+      mentionCount: projected.cluster.mentionCount,
+    }));
+    return [...cores, ...deriveSatelliteNodes(cores)];
+  }, [projectedClusters]);
+
+  const slimeEdges = useMemo<SlimeEdge[]>(
+    () =>
+      liveConnections.map((connection) => ({
+        sourceId: connection.from.id,
+        targetId: connection.to.id,
+      })),
+    [liveConnections],
   );
 
   const orbitGesture = Gesture.Pan()
@@ -1081,6 +2619,7 @@ function KnowledgeWorkspace({
 
   const openCluster = (clusterId: string) => {
     setSelectedClusterId(clusterId);
+    setRemoteConcept(null);
     setIsRenaming(false);
     setIsChoosingMerge(false);
     setIsConfirmingDelete(false);
@@ -1143,6 +2682,116 @@ function KnowledgeWorkspace({
   return (
     <View style={styles.workspaceContainer}>
       <View style={styles.knowledgeContainer}>
+        <View style={styles.brainSearchWrap}>
+          <View
+            style={[
+              styles.brainSearchField,
+              {
+                backgroundColor: colors.secondary,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Feather name="search" size={14} color={colors.mutedForeground} />
+            <TextInput
+              testID="brain-search-input"
+              style={[styles.brainSearchInput, { color: colors.foreground }]}
+              placeholder="Search all knowledge"
+              placeholderTextColor={colors.mutedForeground}
+              value={brainQuery}
+              onChangeText={setBrainQuery}
+              autoCorrect={false}
+              autoCapitalize="none"
+              accessibilityLabel="Search all knowledge"
+              returnKeyType="search"
+            />
+            {brainQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setBrainQuery("")}
+                accessibilityRole="button"
+                accessibilityLabel="Clear knowledge search"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Feather name="x" size={14} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
+          </View>
+          {brainQuery.trim().length >= 2 && (
+            <View
+              testID="brain-search-results"
+              style={[
+                styles.brainSearchResults,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              {brainSearchResults.length === 0 ? (
+                <Text
+                  style={[
+                    styles.brainSearchEmpty,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  No concepts match yet.
+                </Text>
+              ) : (
+                <ScrollView
+                  style={styles.brainSearchList}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                >
+                  {brainSearchResults.map((row) => (
+                    <TouchableOpacity
+                      key={row.id}
+                      testID={`brain-search-result-${row.id}`}
+                      style={styles.brainSearchRow}
+                      onPress={() => handleOpenSearchResult(row)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open concept ${row.label}`}
+                    >
+                      <View style={styles.brainSearchRowText}>
+                        <Text
+                          style={[
+                            styles.brainSearchRowLabel,
+                            { color: colors.foreground },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {row.label}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.brainSearchRowMeta,
+                            { color: colors.mutedForeground },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {row.projectId
+                            ? (projectNameById.get(row.projectId) ??
+                              "Unknown project")
+                            : "No project"}
+                          {" · "}
+                          {row.category}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.brainSearchRowCount,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        {row.evidenceCount}{" "}
+                        {row.evidenceCount === 1 ? "source" : "sources"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
+        </View>
         {visibleClusters.length === 0 ? (
           <View style={styles.knowledgeEmpty}>
             <View
@@ -1269,39 +2918,17 @@ function KnowledgeWorkspace({
                     ]}
                   />
 
-                  {SYMBIOTE_LOBES.map((lobe, index) => (
-                    <View
-                      key={`symbiote-lobe-${index}`}
-                      pointerEvents="none"
-                      style={[
-                        styles.symbioteLobe,
-                        {
-                          width: lobe.width,
-                          height: lobe.height,
-                          left: CENTER + lobe.x,
-                          top: CENTER + lobe.y,
-                          borderRadius:
-                            Math.min(lobe.width, lobe.height) * 0.46,
-                          backgroundColor: colors.symbioteSurface,
-                          borderColor: colors.symbioteSoft,
-                          shadowColor: colors.symbioteHighlight,
-                          transform: [{ rotate: lobe.rotate }],
-                        },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.symbioteLobeSpecular,
-                          {
-                            width: Math.max(18, lobe.width * 0.26),
-                            height: Math.max(4, lobe.height * 0.055),
-                            borderRadius: lobe.width,
-                            backgroundColor: colors.symbioteHighlight,
-                          },
-                        ]}
-                      />
-                    </View>
-                  ))}
+                  <SymbioteSlime
+                    nodes={slimeNodes}
+                    edges={slimeEdges}
+                    mapSize={MAP_SIZE}
+                    reduceMotion={reduceMotion}
+                    selectedId={selectedCluster?.id ?? null}
+                    touchedId={touchedClusterId}
+                    capacityOverride={SLIME_CAPACITY_OVERRIDE}
+                    surfaceFractionOverride={SLIME_SCALE_OVERRIDE}
+                    exposeTelemetry={IS_UI_TEST}
+                  />
 
                   {liveConnections.map((connection) => {
                     const from = projectedById.get(connection.from.id);
@@ -1335,6 +2962,14 @@ function KnowledgeWorkspace({
                         if (Platform.OS !== "web") Haptics.selectionAsync();
                         openCluster(projected.cluster.id);
                       }}
+                      onPressIn={() =>
+                        setTouchedClusterId(projected.cluster.id)
+                      }
+                      onPressOut={() =>
+                        setTouchedClusterId((current) =>
+                          current === projected.cluster.id ? null : current,
+                        )
+                      }
                     />
                   ))}
                 </Animated.View>
@@ -1430,7 +3065,7 @@ function KnowledgeWorkspace({
                   { color: colors.mutedForeground },
                 ]}
               >
-                {selectedCluster.summary}
+                {knowledgeDisplayText(selectedCluster.summary, citationLookup)}
               </Text>
               <View style={styles.knowledgeEditActions}>
                 <TouchableOpacity
@@ -1828,7 +3463,7 @@ function KnowledgeWorkspace({
                             { color: colors.mutedForeground },
                           ]}
                         >
-                          {source.excerpt}
+                          {knowledgeDisplayText(source.excerpt, citationLookup)}
                         </Text>
                       </View>
                       <Feather
@@ -1843,7 +3478,351 @@ function KnowledgeWorkspace({
             </ScrollView>
           </View>
         )}
-        {!selectedCluster && (
+
+        {/* Remote concept overlay: knowledge the server holds but this device
+            has not cached. Same surface as the local panel, read-only. */}
+        {remoteConcept && (
+          <View
+            testID="knowledge-remote-details"
+            style={[
+              styles.knowledgeInfoPanel,
+              {
+                backgroundColor: colors.background,
+                borderTopColor: colors.border,
+              },
+            ]}
+            accessibilityViewIsModal
+            accessibilityLabel={`${remoteConcept.label} synced concept details`}
+          >
+            <ScrollView
+              style={styles.knowledgeInfoScroll}
+              contentContainerStyle={styles.knowledgeInfoContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
+              <View style={styles.knowledgeInfoHeader}>
+                <Text
+                  style={[
+                    styles.knowledgeInfoTitle,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  {remoteConcept.label}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setRemoteConcept(null)}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close synced concept details"
+                  testID="knowledge-remote-close"
+                >
+                  <Feather name="x" size={20} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              </View>
+              <Text
+                style={[
+                  styles.knowledgeRemoteMeta,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                {projectNameById.get(remoteConcept.projectId ?? "") ??
+                  "Unknown project"}
+                {" · not on this device"}
+              </Text>
+
+              {remoteConcept.status === "loading" && (
+                <View
+                  style={styles.knowledgeRemoteStatus}
+                  testID="knowledge-remote-loading"
+                >
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text
+                    style={[
+                      styles.knowledgeRemoteStatusCopy,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    Pulling this concept from your synced brain…
+                  </Text>
+                </View>
+              )}
+
+              {remoteConcept.status === "offline" && (
+                <View
+                  style={styles.knowledgeRemoteStatus}
+                  testID="knowledge-remote-offline"
+                >
+                  <Feather
+                    name="wifi-off"
+                    size={26}
+                    color={colors.mutedForeground}
+                  />
+                  <Text
+                    style={[
+                      styles.knowledgeRemoteStatusTitle,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Connect to view evidence
+                  </Text>
+                  <Text
+                    style={[
+                      styles.knowledgeRemoteStatusCopy,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    This knowledge lives in your synced brain, not on this
+                    device. Go online to pull its summary, evidence, and links.
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.knowledgeRemoteRetry,
+                      { borderColor: colors.border },
+                    ]}
+                    onPress={() =>
+                      setRemoteConcept((current) =>
+                        current ? { ...current, status: "loading" } : current,
+                      )
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel="Try loading this concept again"
+                    testID="knowledge-remote-retry"
+                  >
+                    <Feather
+                      name="rotate-ccw"
+                      size={14}
+                      color={colors.foreground}
+                    />
+                    <Text
+                      style={[
+                        styles.knowledgeRemoteRetryText,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      Try again
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {remoteConcept.status === "missing" && (
+                <View
+                  style={styles.knowledgeRemoteStatus}
+                  testID="knowledge-remote-missing"
+                >
+                  <Text
+                    style={[
+                      styles.knowledgeRemoteStatusCopy,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    This concept is no longer in your knowledge base. It may
+                    have been merged or deleted on another device.
+                  </Text>
+                </View>
+              )}
+
+              {remoteConcept.status === "ready" && remoteConcept.detail && (
+                <>
+                  <Text
+                    style={[
+                      styles.knowledgeInfoDesc,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    {knowledgeDisplayText(
+                      remoteConcept.detail.concept.summary,
+                      remoteCitationLookup,
+                    )}
+                  </Text>
+                  <View style={styles.knowledgeRemoteBadges}>
+                    <View
+                      style={[
+                        styles.knowledgeRemoteBadge,
+                        { borderColor: colors.border },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.knowledgeRemoteBadgeText,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {remoteConcept.detail.concept.category}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.knowledgeRemoteBadge,
+                        { borderColor: colors.border },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.knowledgeRemoteBadgeText,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {remoteConcept.detail.concept.mentionCount} mentions
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.knowledgeRemoteBadge,
+                        { borderColor: colors.border },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.knowledgeRemoteBadgeText,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {Math.round(
+                          remoteConcept.detail.concept.strength * 100,
+                        )}
+                        % strength
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.knowledgeSourcesLabel,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    Evidence · {remoteConcept.detail.concept.sources.length}
+                  </Text>
+                  {remoteConcept.detail.concept.sources.length === 0 ? (
+                    <Text
+                      style={[
+                        styles.knowledgeRemoteStatusCopy,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      No conversation evidence is attached to this concept yet.
+                    </Text>
+                  ) : (
+                    <View style={styles.knowledgeSourcesList}>
+                      {remoteConcept.detail.concept.sources.map(
+                        (source, index) => {
+                          const isLocalConversation = localConversationIds.has(
+                            source.conversationId,
+                          );
+                          return (
+                            <TouchableOpacity
+                              key={`${source.conversationId}-${index}`}
+                              style={[
+                                styles.knowledgeSourceRow,
+                                { borderColor: colors.border },
+                              ]}
+                              onPress={() =>
+                                onOpenConversation(source.conversationId)
+                              }
+                              disabled={!isLocalConversation}
+                              testID={`knowledge-remote-source-${source.conversationId}`}
+                              accessibilityRole="button"
+                              accessibilityState={{
+                                disabled: !isLocalConversation,
+                              }}
+                              accessibilityLabel={
+                                isLocalConversation
+                                  ? `Open source conversation ${source.conversationTitle}`
+                                  : `Source conversation ${source.conversationTitle} is not on this device`
+                              }
+                            >
+                              <View style={styles.knowledgeSourceCopy}>
+                                <Text
+                                  numberOfLines={1}
+                                  style={[
+                                    styles.knowledgeSourceTitle,
+                                    { color: colors.foreground },
+                                  ]}
+                                >
+                                  {source.conversationTitle}
+                                </Text>
+                                <Text
+                                  numberOfLines={2}
+                                  style={[
+                                    styles.knowledgeSourceExcerpt,
+                                    { color: colors.mutedForeground },
+                                  ]}
+                                >
+                                  {knowledgeDisplayText(
+                                    source.excerpt,
+                                    remoteCitationLookup,
+                                  )}
+                                </Text>
+                              </View>
+                              {isLocalConversation && (
+                                <Feather
+                                  name="arrow-up-right"
+                                  size={16}
+                                  color={colors.primary}
+                                />
+                              )}
+                            </TouchableOpacity>
+                          );
+                        },
+                      )}
+                    </View>
+                  )}
+
+                  {remoteConcept.detail.neighbors.length > 0 && (
+                    <>
+                      <Text
+                        style={[
+                          styles.knowledgeSourcesLabel,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        Linked concepts
+                      </Text>
+                      <View style={styles.knowledgeNeighborChips}>
+                        {remoteConcept.detail.neighbors.map((neighbor) => (
+                          <TouchableOpacity
+                            key={neighbor.id}
+                            style={[
+                              styles.knowledgeNeighborChip,
+                              { borderColor: colors.border },
+                            ]}
+                            onPress={() =>
+                              handleOpenSearchResult({
+                                id: neighbor.id,
+                                label: neighbor.label,
+                                projectId: neighbor.projectId,
+                              })
+                            }
+                            accessibilityRole="button"
+                            accessibilityLabel={`Open linked concept ${neighbor.label}`}
+                            testID={`knowledge-remote-neighbor-${neighbor.id}`}
+                          >
+                            <Feather
+                              name="link"
+                              size={12}
+                              color={colors.foreground}
+                            />
+                            <Text
+                              style={[
+                                styles.knowledgeNeighborChipText,
+                                { color: colors.foreground },
+                              ]}
+                            >
+                              {neighbor.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
+                  )}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        )}
+        {!selectedCluster && !remoteConcept && (
           <TouchableOpacity
             ref={captureButtonRef}
             style={[
@@ -1918,6 +3897,7 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
   const stages: KanbanStage[] = activeProject?.boardStages ?? [];
   const fields: KanbanField[] = activeProject?.fieldDefinitions ?? [];
   const tasks: Task[] = activeProject?.tasks ?? [];
+  const reduceMotion = useReducedMotion();
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [addingStageId, setAddingStageId] = useState<string | null>(null);
   const [editorTaskId, setEditorTaskId] = useState<string | null>(null);
@@ -1944,6 +3924,14 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
   const [focusedMoveControl, setFocusedMoveControl] = useState<string | null>(
     null,
   );
+  const [focusedCardId, setFocusedCardId] = useState<string | null>(null);
+  const [focusedAddCardStageId, setFocusedAddCardStageId] = useState<
+    string | null
+  >(null);
+  const editorAppear = useRef(new RNAnimated.Value(0)).current;
+  const cardControlRefs = useRef<Map<string, CardControlHandles>>(new Map());
+  const addCardControlRefs = useRef<Map<string, CardControlHandle>>(new Map());
+  const pendingCardFocusRef = useRef<BoardFocusTarget | null>(null);
   const [boardError, setBoardError] = useState("");
 
   const tasksForStage = useCallback(
@@ -1957,7 +3945,58 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
     [tasks],
   );
 
+  const registerCardControl =
+    (taskId: string, control: keyof CardControlHandles) =>
+    (node: CardControlHandle | null) => {
+      const handles = cardControlRefs.current.get(taskId) ?? {
+        edit: null,
+        next: null,
+      };
+      handles[control] = node;
+      if (!handles.edit && !handles.next) {
+        cardControlRefs.current.delete(taskId);
+        return;
+      }
+      cardControlRefs.current.set(taskId, handles);
+    };
+
+  const registerAddCardControl =
+    (stageId: string) => (node: CardControlHandle | null) => {
+      if (node) {
+        addCardControlRefs.current.set(stageId, node);
+        return;
+      }
+      addCardControlRefs.current.delete(stageId);
+    };
+
+  // Keyboard users must keep their place after the editor closes. The card can
+  // change stage on save, so the browser cannot restore focus by itself: the
+  // element it remembers is unmounted with the old column.
+  const focusCardControls = (taskId: string) => {
+    const handles = cardControlRefs.current.get(taskId);
+    if (!handles) return;
+    const task = tasks.find((item) => item.id === taskId);
+    const stageIndex = task
+      ? stages.findIndex((stage) => stage.id === task.stageId)
+      : -1;
+    const canMoveNext = stageIndex >= 0 && stageIndex < stages.length - 1;
+    const target = (canMoveNext ? handles.next : null) ?? handles.edit;
+    target?.focus?.();
+  };
+
+  const handleEditorDismiss = () => {
+    const target = pendingCardFocusRef.current;
+    pendingCardFocusRef.current = null;
+    if (!target) return;
+    if (target.kind === "card") {
+      focusCardControls(target.taskId);
+      return;
+    }
+    addCardControlRefs.current.get(target.stageId)?.focus?.();
+  };
+
   const openEditor = (task: Task) => {
+    pendingCardFocusRef.current = null;
     setEditorTaskId(task.id);
     setEditorTitle(task.title);
     setEditorStageId(task.stageId);
@@ -2040,6 +4079,29 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
       stageId: editorStageId,
       values,
     });
+    pendingCardFocusRef.current = { kind: "card", taskId: editorTaskId };
+    closeEditor();
+  };
+
+  // Deleting the edited card leaves nothing for the browser to return focus
+  // to, so aim the post-dismiss focus at the closest surviving neighbour in
+  // the card's stage — the next card, or the previous one when the last card
+  // went — and at the stage's "Add card" control once the stage is empty.
+  const deleteEditedTask = () => {
+    if (!editorTaskId) return;
+    const task = tasks.find((item) => item.id === editorTaskId);
+    if (task) {
+      const columnTasks = tasksForStage(task.stageId);
+      const index = columnTasks.findIndex((item) => item.id === task.id);
+      const neighbour =
+        index >= 0
+          ? (columnTasks[index + 1] ?? columnTasks[index - 1])
+          : undefined;
+      pendingCardFocusRef.current = neighbour
+        ? { kind: "card", taskId: neighbour.id }
+        : { kind: "addCard", stageId: task.stageId };
+    }
+    deleteTask(activeProject.id, editorTaskId);
     closeEditor();
   };
 
@@ -2135,6 +4197,21 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
 
   const visibleFields = fields.filter((field) => field.showOnCard).slice(0, 3);
   const editingTask = tasks.find((task) => task.id === editorTaskId);
+  const editorIsOpen = Boolean(editingTask);
+
+  useEffect(() => {
+    if (!editorIsOpen) return;
+    editorAppear.setValue(reduceMotion ? 1 : 0);
+    if (reduceMotion) return;
+    const appearance = RNAnimated.timing(editorAppear, {
+      toValue: 1,
+      duration: 170,
+      useNativeDriver: Platform.OS !== "web",
+    });
+    appearance.start();
+    return () => appearance.stop();
+  }, [editorAppear, editorIsOpen, reduceMotion]);
+
   const syncNotice =
     syncStatus === "too_large"
       ? "This board is saved on this device but is too large to sync. Remove unused cards or fields, then edit again to retry."
@@ -2187,15 +4264,23 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
           style={[
             styles.kanbanCard,
             { backgroundColor: colors.card, borderColor: colors.border },
+            focusedCardId === task.id && { borderColor: colors.primary },
           ]}
           testID={`kanban-card-${task.id}`}
         >
           <TouchableOpacity
+            ref={registerCardControl(task.id, "edit")}
             onPress={() => openEditor(task)}
             accessibilityRole="button"
             accessibilityLabel={`Edit task ${task.title}`}
             accessibilityHint="Long press and drag to move this card. Arrow buttons provide the same controls."
             style={styles.kanbanCardMain}
+            onFocus={() => setFocusedCardId(task.id)}
+            onBlur={() =>
+              setFocusedCardId((current) =>
+                current === task.id ? null : current,
+              )
+            }
           >
             <Text
               style={[
@@ -2318,6 +4403,7 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
               />
             </TouchableOpacity>
             <TouchableOpacity
+              ref={registerCardControl(task.id, "next")}
               style={[
                 styles.cardMoveButton,
                 focusedMoveControl === `${task.id}:next` && {
@@ -3175,15 +5261,25 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                     </View>
                   ) : (
                     <TouchableOpacity
+                      ref={registerAddCardControl(stage.id)}
                       style={[
                         styles.columnAddButton,
                         { borderColor: colors.border },
+                        focusedAddCardStageId === stage.id && {
+                          borderColor: colors.primary,
+                        },
                       ]}
                       onPress={() => {
                         setAddingStageId(stage.id);
                         setNewTaskTitle("");
                         setBoardError("");
                       }}
+                      onFocus={() => setFocusedAddCardStageId(stage.id)}
+                      onBlur={() =>
+                        setFocusedAddCardStageId((current) =>
+                          current === stage.id ? null : current,
+                        )
+                      }
                       accessibilityRole="button"
                       accessibilityLabel={`Add card to ${stage.name}`}
                       testID={`add-task-${stage.id}`}
@@ -3213,17 +5309,32 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
       <Modal
         visible={Boolean(editingTask)}
         transparent
-        animationType="fade"
+        // On web an animated dismissal keeps the dialog (and its focus trap)
+        // mounted for the length of the fade, which pulls keyboard focus back
+        // into the closing editor. Close immediately there instead.
+        animationType={Platform.OS === "web" ? "none" : "fade"}
+        onDismiss={handleEditorDismiss}
         onRequestClose={closeEditor}
       >
         <KeyboardAvoidingView
           style={styles.modalBackdrop}
           behavior="padding"
         >
-          <View
+          <RNAnimated.View
             style={[
               styles.cardEditor,
               { backgroundColor: colors.background, borderColor: colors.border },
+              {
+                opacity: editorAppear,
+                transform: [
+                  {
+                    translateY: editorAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
             ]}
             accessibilityViewIsModal
             accessibilityLabel="Card editor"
@@ -3471,6 +5582,7 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                   <View style={styles.confirmActions}>
                     <TouchableOpacity
                       onPress={() => setPendingDeleteTaskId(null)}
+                      accessibilityRole="button"
                     >
                       <Text
                         style={[
@@ -3482,16 +5594,13 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => {
-                        if (editorTaskId) {
-                          deleteTask(activeProject.id, editorTaskId);
-                          closeEditor();
-                        }
-                      }}
+                      onPress={deleteEditedTask}
                       style={[
                         styles.destructiveButton,
                         { backgroundColor: colors.destructive },
                       ]}
+                      accessibilityRole="button"
+                      testID="confirm-delete-card"
                     >
                       <Text
                         style={[
@@ -3565,7 +5674,7 @@ function BoardWorkspace({ activeProject }: { activeProject: any }) {
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </RNAnimated.View>
         </KeyboardAvoidingView>
       </Modal>
     </View>
@@ -3581,22 +5690,73 @@ function FeedWorkspace({
 }) {
   const colors = useColors();
   const { state } = useVenom();
+  const router = useRouter();
+  const { userId: feedUserId } = useAuth();
+
+  const appsQuery = useListVenomApps({
+    query: {
+      enabled: Boolean(feedUserId),
+      retry: 1,
+      queryKey: getListVenomAppsQueryKey(),
+    },
+  });
+  const improvementSuggestions = (appsQuery.data ?? []).filter(
+    (app) => app.improvementSignal,
+  );
+  const [dismissingSuggestionId, setDismissingSuggestionId] = useState("");
+  const handleDismissSuggestion = async (appId: string) => {
+    setDismissingSuggestionId(appId);
+    try {
+      await dismissVenomAppImprovementSuggestion(appId);
+      await appsQuery.refetch();
+    } catch {
+      // Keep the card visible so the user can retry from here or the record.
+    } finally {
+      setDismissingSuggestionId("");
+    }
+  };
 
   const feedItems = useMemo(() => {
     if (!activeProject) return [];
+
+    // Previews reuse the chat renderer's view of citations so inline
+    // `[source:...]` markers read as source names instead of raw text.
+    const citationsById = new Map(
+      (state.sources ?? [])
+        .filter(
+          (source: ProjectSource) =>
+            source.projectId === activeProject.id &&
+            source.status === "connected",
+        )
+        .flatMap((source: ProjectSource) =>
+          source.citations.map((citation) => [citation.id, citation] as const),
+        ),
+    );
+    const archivedCitationsById = new Map(
+      (state.archivedCitations ?? []).map(
+        (archived) => [archived.id, archived] as const,
+      ),
+    );
 
     const conversations = state.conversations
       .filter((conversation) => conversation.projectId === activeProject.id)
       .map((conversation) => {
         const latestMessage =
           conversation.messages[conversation.messages.length - 1];
+        const preview = latestMessage
+          ? messageCitationPlainText(
+              latestMessage.content,
+              citationsById,
+              archivedCitationsById,
+            )
+          : "";
         return {
           id: `conversation-${conversation.id}`,
           type: "conversation" as const,
           icon: "message-square" as const,
           label: "Conversation",
           title: conversation.title,
-          detail: latestMessage?.content || "A new conversation is ready.",
+          detail: preview || "A new conversation is ready.",
           timestamp: conversation.updatedAt,
           conversationId: conversation.id,
         };
@@ -3635,7 +5795,13 @@ function FeedWorkspace({
         icon: "hexagon" as const,
         label: "Knowledge note",
         title: cluster.label,
-        detail: cluster.summary,
+        // Knowledge entries are summarized from the same answer text as the
+        // conversation previews above, so they resolve markers the same way.
+        detail:
+          knowledgeDisplayText(cluster.summary, {
+            citationsById,
+            archivedById: archivedCitationsById,
+          }) || "A knowledge note is ready.",
         timestamp: cluster.lastUpdatedAt,
         conversationId: undefined,
       }));
@@ -3643,7 +5809,13 @@ function FeedWorkspace({
     return [...conversations, ...tasks, ...clusters]
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 12);
-  }, [activeProject, state.conversations, state.clusters]);
+  }, [
+    activeProject,
+    state.conversations,
+    state.clusters,
+    state.sources,
+    state.archivedCitations,
+  ]);
 
   return (
     <View style={styles.workspaceContainer}>
@@ -3664,6 +5836,64 @@ function FeedWorkspace({
           </View>
           <Feather name="rss" size={18} color={colors.foreground} />
         </View>
+
+        {improvementSuggestions.slice(0, 3).map((app) => (
+          <TouchableOpacity
+            key={`improve-${app.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`New data for ${app.name} since its last version. Open the portfolio to review an iteration.`}
+            onPress={() => router.push("/apps" as never)}
+            style={[
+              styles.feedSuggestionCard,
+              { backgroundColor: colors.foreground },
+            ]}
+            testID={`feed-suggestion-${app.id}`}
+          >
+            <View style={styles.feedSuggestionTop}>
+              <Feather name="zap" size={13} color={colors.background} />
+              <Text
+                style={[
+                  styles.feedSuggestionLabel,
+                  { color: colors.background },
+                ]}
+              >
+                Improvement suggestion
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Dismiss improvement suggestion for ${app.name}`}
+                testID={`button-feed-dismiss-${app.id}`}
+                disabled={dismissingSuggestionId === app.id}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                onPress={() => void handleDismissSuggestion(app.id)}
+                style={{ marginLeft: "auto", padding: 2 }}
+              >
+                {dismissingSuggestionId === app.id ? (
+                  <ActivityIndicator size="small" color={colors.background} />
+                ) : (
+                  <Feather name="x" size={14} color={colors.background} />
+                )}
+              </TouchableOpacity>
+            </View>
+            <Text
+              style={[styles.feedSuggestionTitle, { color: colors.background }]}
+              numberOfLines={1}
+            >
+              {app.name}
+            </Text>
+            <Text
+              style={[styles.feedSuggestionCopy, { color: colors.background }]}
+              numberOfLines={2}
+            >
+              {app.improvementSignal?.summary}
+            </Text>
+            <Text
+              style={[styles.feedSuggestionHint, { color: colors.background }]}
+            >
+              Review first — nothing runs on its own
+            </Text>
+          </TouchableOpacity>
+        ))}
 
         {feedItems.length === 0 ? (
           <View style={styles.feedEmpty}>
@@ -3701,6 +5931,7 @@ function FeedWorkspace({
                 activeOpacity={0.75}
                 accessibilityRole={item.conversationId ? "button" : "text"}
                 accessibilityLabel={`${item.label}: ${item.title}`}
+                testID={`feed-card-${item.type}`}
               >
                 <View
                   style={[
@@ -3772,6 +6003,7 @@ function FeedWorkspace({
 
 export default function WorkspaceScreen() {
   const router = useRouter();
+  const { userId: workspaceUserId } = useAuth();
   const colors = useColors();
   const { theme, toggleTheme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -3789,9 +6021,38 @@ export default function WorkspaceScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [focusedTabIndex, setFocusedTabIndex] = useState<number | null>(null);
   const tabRefs = useRef<Array<WorkspaceTabHandle | null>>([]);
+  const projectSwitcherRef = useRef<{ focus?: () => void } | null>(null);
+  const [projectSwitcherFocused, setProjectSwitcherFocused] = useState(false);
+  const { data: notificationCount } =
+    useGetCommunityNotificationUnreadCount({
+      query: {
+        queryKey: [
+          ...getGetCommunityNotificationUnreadCountQueryKey(),
+          "account",
+          workspaceUserId ?? "ui-test",
+        ],
+        refetchInterval: 15000,
+      },
+    });
+  const unreadNotificationCount = notificationCount?.count ?? 0;
   const activeProject =
     state.projects.find((p) => p.id === state.activeProjectId) ||
     state.projects[0];
+
+  // Creating a project closes its dialog by popping straight back to this
+  // screen, so that dialog cannot hand keyboard focus anywhere itself — its
+  // whole screen unmounts (see projects.tsx). It records the intent instead,
+  // and this claims it once the workspace is back on screen, landing focus on
+  // the switcher that now names the project the user just created.
+  useFocusEffect(
+    useCallback(() => {
+      if (!claimFocusHandoff("project-switcher")) return;
+      const frame = requestAnimationFrame(() => {
+        projectSwitcherRef.current?.focus?.();
+      });
+      return () => cancelAnimationFrame(frame);
+    }, []),
+  );
 
   const handleTabPress = useCallback((index: number) => {
     setActiveIndex(index);
@@ -3855,12 +6116,15 @@ export default function WorkspaceScreen() {
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gestureState) =>
-          activeIndex !== 2 &&
           activeIndex !== 3 &&
+          activeIndex !== 4 &&
           Math.abs(gestureState.dx) > 18 &&
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5,
         onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx < -70 && activeIndex < 3) {
+          if (
+            gestureState.dx < -70 &&
+            activeIndex < WORKSPACE_TABS.length - 1
+          ) {
             handleTabPress(activeIndex + 1);
           } else if (gestureState.dx > 70 && activeIndex > 0) {
             handleTabPress(activeIndex - 1);
@@ -3993,7 +6257,13 @@ export default function WorkspaceScreen() {
           },
         ]}
       >
-        <View accessibilityRole="tablist" style={styles.navTabs}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.navTabsScroll}
+          contentContainerStyle={styles.navTabs}
+          accessibilityRole="tablist"
+        >
           {WORKSPACE_TABS.map((title, i) => {
             const isActive = activeIndex === i;
             const isFocused = focusedTabIndex === i;
@@ -4021,7 +6291,11 @@ export default function WorkspaceScreen() {
                 hitSlop={10}
                 testID={`workspace-tab-${title.toLowerCase().replace("-", "")}`}
                 accessibilityRole="tab"
-                accessibilityLabel={`Open ${title} workspace`}
+                accessibilityLabel={
+                  title === "Notifications" && unreadNotificationCount > 0
+                    ? `Open Notifications workspace, ${unreadNotificationCount} unread`
+                    : `Open ${title} workspace`
+                }
                 accessibilityState={{ selected: isActive }}
                 aria-selected={isActive}
                 {...(Platform.OS === "web"
@@ -4037,21 +6311,26 @@ export default function WorkspaceScreen() {
                     }
                   : {})}
               >
-                <Text
-                  style={[
-                    styles.navTabText,
-                    {
-                      color: isActive
-                        ? colors.foreground
-                        : colors.mutedForeground,
-                      fontFamily: isActive
-                        ? "Inter_600SemiBold"
-                        : "Inter_500Medium",
-                    },
-                  ]}
-                >
-                  {title}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text
+                    style={[
+                      styles.navTabText,
+                      {
+                        color: isActive
+                          ? colors.foreground
+                          : colors.mutedForeground,
+                        fontFamily: isActive
+                          ? "Inter_600SemiBold"
+                          : "Inter_500Medium",
+                      },
+                    ]}
+                  >
+                    {title}
+                  </Text>
+                  {title === "Notifications" && (
+                    <NotificationBadge count={unreadNotificationCount} />
+                  )}
+                </View>
                 {isActive && (
                   <View
                     style={[
@@ -4063,8 +6342,18 @@ export default function WorkspaceScreen() {
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
         <View style={styles.navActions}>
+          <TouchableOpacity
+            onPress={() => router.push("/sops" as never)}
+            style={styles.navIconButton}
+            testID="open-sops"
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Open procedures library"
+          >
+            <Feather name="file-text" size={17} color={colors.foreground} />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={toggleTheme}
             style={styles.themeButton}
@@ -4103,9 +6392,21 @@ export default function WorkspaceScreen() {
             />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.navProject}
+            ref={(node: { focus?: () => void } | null) => {
+              projectSwitcherRef.current = node;
+            }}
+            style={[
+              styles.navProject,
+              {
+                borderColor: projectSwitcherFocused
+                  ? colors.primary
+                  : "transparent",
+              },
+            ]}
             activeOpacity={0.7}
             onPress={() => router.push("/projects")}
+            onFocus={() => setProjectSwitcherFocused(true)}
+            onBlur={() => setProjectSwitcherFocused(false)}
             testID="open-projects"
             accessibilityRole="button"
             accessibilityLabel={`Open projects. Current project: ${activeProject?.name || "Workspace"}.`}
@@ -4148,20 +6449,26 @@ export default function WorkspaceScreen() {
             activeIndex !== 1 && styles.workspacePageHidden,
           ]}
         >
-          <FeedWorkspace
-            activeProject={activeProject}
-            onOpenConversation={handleOpenConversation}
-          />
+          <CommunityBriefing isActive={activeIndex === 1} />
         </View>
         <View
-          testID="workspace-brain"
+          testID="workspace-notifications"
           style={[
             styles.workspacePage,
             activeIndex !== 2 && styles.workspacePageHidden,
           ]}
         >
+          <CommunityNotifications isActive={activeIndex === 2} />
+        </View>
+        <View
+          testID="workspace-brain"
+          style={[
+            styles.workspacePage,
+            activeIndex !== 3 && styles.workspacePageHidden,
+          ]}
+        >
           <KnowledgeWorkspace
-            isActive={activeIndex === 2}
+            isActive={activeIndex === 3}
             onOpenConversation={handleOpenConversation}
           />
         </View>
@@ -4169,7 +6476,7 @@ export default function WorkspaceScreen() {
           testID="workspace-todo"
           style={[
             styles.workspacePage,
-            activeIndex !== 3 && styles.workspacePageHidden,
+            activeIndex !== 4 && styles.workspacePageHidden,
           ]}
         >
           <BoardWorkspace activeProject={activeProject} />
@@ -4258,7 +6565,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    flexShrink: 0,
+    paddingRight: 8,
+  },
+  navTabsScroll: {
+    flexShrink: 1,
   },
   navTab: {
     paddingVertical: 12,
@@ -4288,6 +6598,10 @@ const styles = StyleSheet.create({
     gap: 6,
     flexShrink: 1,
     marginLeft: 4,
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
   },
   navActions: {
     flexDirection: "row",
@@ -4332,6 +6646,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 24,
     paddingBottom: 40,
+  },
+  feedSuggestionCard: {
+    borderRadius: 16,
+    gap: 5,
+    marginBottom: 14,
+    padding: 16,
+  },
+  feedSuggestionTop: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  feedSuggestionLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    opacity: 0.7,
+  },
+  feedSuggestionTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+  },
+  feedSuggestionCopy: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+    opacity: 0.78,
+  },
+  feedSuggestionHint: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 9,
+    letterSpacing: 0.6,
+    marginTop: 3,
+    opacity: 0.55,
+    textTransform: "uppercase",
   },
   feedHeader: {
     flexDirection: "row",
@@ -4441,8 +6791,11 @@ const styles = StyleSheet.create({
   messageAssistant: {
     justifyContent: "flex-start",
   },
-  messageBubble: {
+  messageWrap: {
     maxWidth: "85%",
+    flexShrink: 1,
+  },
+  messageBubble: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 20,
@@ -4459,18 +6812,302 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     lineHeight: 24,
   },
+  messageAttribution: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 10,
+    marginTop: 4,
+    marginLeft: 4,
+    letterSpacing: 0.1,
+  },
+  errorBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 6,
+  },
+  errorBadgeText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+  },
   citationLink: {
     fontFamily: "Inter_600SemiBold",
     textDecorationLine: "underline",
   },
+  citedSourceRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8,
+    marginLeft: 4,
+  },
+  citedSourceChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    maxWidth: "100%",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  citedSourceChipText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    flexShrink: 1,
+  },
+  citedSourceChipMeta: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 10,
+  },
   citationArchived: {
     fontStyle: "italic",
   },
+  citationArchivedLink: {
+    fontStyle: "italic",
+    textDecorationLine: "underline",
+  },
+  workspaceChipRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+  },
+  workspaceChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    maxWidth: 220,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  workspaceChipText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    flexShrink: 1,
+  },
+  modelSelectorRow: {
+    marginBottom: 8,
+  },
+  modelSelectorScroll: {
+    paddingHorizontal: 0,
+    gap: 6,
+    flexDirection: "row",
+  },
+  modelChip: {
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modelChipText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    letterSpacing: 0.1,
+  },
+  // Both header-slot views render inside the list's padded content
+  // container, so they carry no horizontal inset of their own — otherwise
+  // they sit 16px right of the message column they hand off to.
   typingContainer: {
     paddingVertical: 12,
     marginBottom: 16,
     alignItems: "flex-start",
+  },
+  deliberationPanel: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 10,
+    gap: 8,
+    marginBottom: 16,
+  },
+  deliberationHeader: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 6,
+    paddingHorizontal: 4,
+    paddingTop: 2,
+  },
+  deliberationHeaderTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+  },
+  deliberationHeaderMeta: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 11,
+    flexShrink: 1,
+  },
+  deliberationVoiceCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    gap: 6,
+  },
+  deliberationVoiceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  deliberationVoiceName: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    flexShrink: 1,
+  },
+  deliberationVoiceModel: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 10,
+    marginLeft: "auto",
+  },
+  deliberationDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  deliberationTakeText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  deliberationResult: {
+    marginTop: 8,
+    gap: 8,
+    alignSelf: "stretch",
+  },
+  deliberationDisagreements: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    gap: 6,
+  },
+  deliberationDisagreeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  deliberationDisagreeTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+  },
+  deliberationDisagreeItem: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  deliberationDisagreeBullet: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    marginTop: 8,
+  },
+  deliberationDisagreeText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    lineHeight: 20,
+    flex: 1,
+  },
+  deliberationAgreement: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 11,
+    marginLeft: 4,
+  },
+  deliberationToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 2,
+    marginLeft: 2,
+    alignSelf: "flex-start",
+  },
+  deliberationToggleText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+  },
+  deliberationTakeCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    gap: 4,
+  },
+  modeSwitchRow: {
     paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  blendSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    alignItems: "center",
+    gap: 8,
+  },
+  cornerPickerToggle: {
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+  },
+  cornerPickerToggleText: {
+    fontSize: 11.5,
+    fontWeight: "500",
+    textDecorationLine: "underline",
+  },
+  cornerPickerRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 6,
+  },
+  cornerPickChip: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+  },
+  cornerPickChipText: {
+    fontSize: 11.5,
+    fontWeight: "500",
+  },
+  stopButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+    alignSelf: "flex-end",
+    marginBottom: 4,
+  },
+  stopButtonSquare: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+  },
+  speakerChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+    paddingHorizontal: 2,
+  },
+  speakerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  speakerName: {
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.1,
+  },
+  speakerModel: {
+    fontSize: 11.5,
+    flexShrink: 1,
+  },
+  debateFailedNote: {
+    fontSize: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 10,
   },
   emptyContainer: {
     flex: 1,
@@ -4525,11 +7162,82 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginLeft: 8,
   },
+  voiceButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
 
   // Knowledge Styles
   knowledgeContainer: {
     flex: 1,
     position: "relative",
+  },
+  brainSearchWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 6,
+    position: "relative",
+    zIndex: 40,
+  },
+  brainSearchField: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 40,
+  },
+  brainSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 0,
+  },
+  brainSearchResults: {
+    position: "absolute",
+    top: 54,
+    left: 16,
+    right: 16,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 4,
+    overflow: "hidden",
+  },
+  brainSearchList: {
+    maxHeight: 288,
+  },
+  brainSearchEmpty: {
+    fontSize: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  brainSearchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  brainSearchRowText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  brainSearchRowLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  brainSearchRowMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  brainSearchRowCount: {
+    fontSize: 11,
+    fontVariant: ["tabular-nums"],
   },
   knowledgeEmpty: {
     flex: 1,
@@ -4652,22 +7360,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     opacity: 0.46,
     transform: [{ scaleY: 0.52 }, { rotate: "22deg" }],
-  },
-  symbioteLobe: {
-    position: "absolute",
-    borderWidth: 1,
-    shadowOpacity: 0.24,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
-    overflow: "hidden",
-  },
-  symbioteLobeSpecular: {
-    position: "absolute",
-    top: "13%",
-    left: "17%",
-    opacity: 0.38,
-    transform: [{ rotate: "-18deg" }],
   },
   tendrilSegment: {
     position: "absolute",
@@ -4857,6 +7549,77 @@ const styles = StyleSheet.create({
   knowledgeEditSaveText: {
     fontFamily: "Inter_600SemiBold",
     fontSize: 13,
+  },
+  knowledgeRemoteMeta: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    marginBottom: 14,
+  },
+  knowledgeRemoteStatus: {
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 26,
+    paddingHorizontal: 12,
+  },
+  knowledgeRemoteStatusTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+  },
+  knowledgeRemoteStatusCopy: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  knowledgeRemoteRetry: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    marginTop: 6,
+    minHeight: 44,
+  },
+  knowledgeRemoteRetryText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+  },
+  knowledgeRemoteBadges: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+  },
+  knowledgeRemoteBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+  },
+  knowledgeRemoteBadgeText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+  },
+  knowledgeNeighborChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  knowledgeNeighborChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 36,
+  },
+  knowledgeNeighborChipText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
   },
   knowledgeMergeOption: {
     flexDirection: "row",
@@ -5491,8 +8254,11 @@ function projectGraphCluster(
   };
 }
 
-const WORKSPACE_TABS = ["Chat", "Feed", "Brain", "To-Do"] as const;
+const WORKSPACE_TABS = ["Chat", "Feed", "Notifications", "Brain", "To-Do"] as const;
 
+type CardControlHandle = {
+  focus?: () => void;
+};
 type WorkspaceTabHandle = {
   focus?: () => void;
   addEventListener?: (
@@ -5531,3 +8297,344 @@ function graphDepthForCluster(cluster: KnowledgeCluster) {
   }
   return (hash % 210) - 105 + Math.sin(cluster.x * 0.06 + cluster.y * 0.04) * 32;
 }
+
+type CardControlHandles = {
+  edit: CardControlHandle | null;
+  next: CardControlHandle | null;
+};
+
+/**
+ * Where keyboard focus should land after the card editor closes: back on a
+ * card's controls, or on a stage's "Add card" control when a deletion left
+ * the stage without any card to return to.
+ */
+type BoardFocusTarget =
+  | { kind: "card"; taskId: string }
+  | { kind: "addCard"; stageId: string };
+
+type DeliberationTakeState = {
+  content: string;
+  status: "streaming" | "ok" | "failed";
+};
+
+type LocalDeliberation = {
+  roster: DeliberationRosterVoice[];
+  takes: Record<string, DeliberationTakeState>;
+  stage: "voices" | "synthesis";
+};
+
+type DebateTurnLive = {
+  index: number;
+  voiceId: string;
+  name: string;
+  modelId?: string;
+  modelName?: string;
+  content: string;
+};
+/** Small monochrome dot that breathes while a voice is still speaking. */
+function BreathingDot({
+  color,
+  phase,
+  testID,
+}: {
+  color: string;
+  phase: number;
+  testID?: string;
+}) {
+  const reduceMotion = useReducedMotion();
+  const pulse = useSharedValue(0.35 + phase * 0.3);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(pulse);
+      pulse.value = withTiming(0.9, { duration: 200 });
+      return;
+    }
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+    return () => cancelAnimation(pulse);
+  }, [reduceMotion, pulse]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: pulse.value,
+    transform: [{ scale: 0.8 + pulse.value * 0.2 }],
+  }));
+
+  return (
+    <Animated.View
+      testID={testID}
+      style={[
+        styles.deliberationDot,
+        { backgroundColor: color },
+        animatedStyle,
+      ]}
+    />
+  );
+}
+
+/** The in-progress chamber: voice takes surfacing while the answer forms. */
+function DeliberationStreamCard({
+  deliberation,
+  colors,
+  renderContent,
+}: {
+  deliberation: LocalDeliberation;
+  colors: ReturnType<typeof useColors>;
+  renderContent: (content: string, keyPrefix: string) => React.ReactNode;
+}) {
+  const converging = deliberation.stage === "synthesis";
+  const showModels =
+    new Set(deliberation.roster.map((voice) => voice.modelId).filter(Boolean))
+      .size > 1;
+
+  return (
+    <View
+      style={[
+        styles.deliberationPanel,
+        { borderColor: colors.border, backgroundColor: colors.card },
+      ]}
+      testID="deliberation-panel"
+    >
+      <View style={styles.deliberationHeader}>
+        <Text
+          style={[styles.deliberationHeaderTitle, { color: colors.foreground }]}
+        >
+          {converging ? "Converging" : "Verifying"}
+        </Text>
+        <Text
+          style={[
+            styles.deliberationHeaderMeta,
+            { color: colors.mutedForeground },
+          ]}
+          numberOfLines={1}
+        >
+          {converging
+            ? "merging into one answer"
+            : `${deliberation.roster.length} voices are checking the question`}
+        </Text>
+      </View>
+      {deliberation.roster.map((voice, index) => {
+        const take = deliberation.takes[voice.voiceId] ?? {
+          content: "",
+          status: "streaming" as const,
+        };
+        return (
+          <View
+            key={voice.voiceId}
+            style={[
+              styles.deliberationVoiceCard,
+              {
+                borderColor: colors.border,
+                backgroundColor: colors.background,
+                opacity: converging ? 0.65 : 1,
+              },
+            ]}
+            testID={`deliberation-voice-${voice.voiceId}`}
+          >
+            <View style={styles.deliberationVoiceHeader}>
+              {take.status === "streaming" ? (
+                <BreathingDot
+                  color={colors.foreground}
+                  phase={index / 3}
+                  testID={`deliberation-dot-${voice.voiceId}`}
+                />
+              ) : (
+                <View
+                  testID={`deliberation-dot-${voice.voiceId}`}
+                  style={[
+                    styles.deliberationDot,
+                    take.status === "ok"
+                      ? { backgroundColor: colors.foreground }
+                      : {
+                          borderWidth: 1,
+                          borderColor: colors.mutedForeground,
+                          backgroundColor: "transparent",
+                        },
+                  ]}
+                />
+              )}
+              <Text
+                style={[
+                  styles.deliberationVoiceName,
+                  { color: colors.foreground },
+                ]}
+                numberOfLines={1}
+              >
+                {voice.name}
+              </Text>
+              {showModels && voice.modelName ? (
+                <Text
+                  style={[
+                    styles.deliberationVoiceModel,
+                    { color: colors.mutedForeground },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {voice.modelName}
+                </Text>
+              ) : null}
+            </View>
+            {take.status === "failed" ? (
+              <Text
+                style={[
+                  styles.deliberationTakeText,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                Didn't finish — the others carry on.
+              </Text>
+            ) : take.content ? (
+              <Text
+                style={[
+                  styles.deliberationTakeText,
+                  { color: colors.mutedForeground },
+                ]}
+                numberOfLines={6}
+              >
+                {renderContent(take.content, `live-${voice.voiceId}`)}
+              </Text>
+            ) : (
+              <Text
+                style={[
+                  styles.deliberationTakeText,
+                  { color: colors.mutedForeground, opacity: 0.7 },
+                ]}
+              >
+                Forming a take…
+              </Text>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * The live debate: the roster, whose turn is streaming right now, and voices
+ * that failed. Finished turns already sit in the thread as named messages —
+ * this card only renders the in-flight one.
+ */
+function DebateStreamCard({
+  debate,
+  colors,
+  renderContent,
+}: {
+  debate: LocalDebate;
+  colors: ReturnType<typeof useColors>;
+  renderContent: (content: string, keyPrefix: string) => React.ReactNode;
+}) {
+  const current = debate.current;
+  const showModels =
+    new Set(debate.roster.map((voice) => voice.modelId).filter(Boolean)).size >
+    1;
+  const currentIndexInRoster = current
+    ? Math.max(
+        0,
+        debate.roster.findIndex((voice) => voice.voiceId === current.voiceId),
+      )
+    : 0;
+
+  return (
+    <View
+      style={[
+        styles.deliberationPanel,
+        { borderColor: colors.border, backgroundColor: colors.card },
+      ]}
+      testID="debate-stream"
+    >
+      <View style={styles.deliberationHeader}>
+        <Text
+          style={[styles.deliberationHeaderTitle, { color: colors.foreground }]}
+        >
+          Debating
+        </Text>
+        <Text
+          style={[
+            styles.deliberationHeaderMeta,
+            { color: colors.mutedForeground },
+          ]}
+          numberOfLines={1}
+          testID="debate-status"
+        >
+          {current
+            ? `Turn ${current.index + 1} of ${debate.of} · ${current.name} is speaking`
+            : "the voices are gathering"}
+        </Text>
+      </View>
+      {debate.failedNames.length > 0 && (
+        <Text
+          style={[
+            styles.debateFailedNote,
+            { color: colors.mutedForeground, borderColor: colors.border },
+          ]}
+          testID="chip-debate-failed"
+        >
+          {`${debate.failedNames.join(", ")} couldn't respond — the debate carries on.`}
+        </Text>
+      )}
+      {current && (
+        <View
+          style={[
+            styles.deliberationVoiceCard,
+            { borderColor: colors.border, backgroundColor: colors.background },
+          ]}
+          testID={`debate-turn-${current.index}`}
+        >
+          <View style={styles.deliberationVoiceHeader}>
+            <BreathingDot
+              color={colors.foreground}
+              phase={currentIndexInRoster / 3}
+            />
+            <Text
+              style={[
+                styles.deliberationVoiceName,
+                { color: colors.foreground },
+              ]}
+              numberOfLines={1}
+            >
+              {current.name}
+            </Text>
+            {showModels && current.modelName ? (
+              <Text
+                style={[
+                  styles.deliberationVoiceModel,
+                  { color: colors.mutedForeground },
+                ]}
+                numberOfLines={1}
+              >
+                {current.modelName}
+              </Text>
+            ) : null}
+          </View>
+          {current.content ? (
+            <Text
+              style={[styles.deliberationTakeText, { color: colors.foreground }]}
+            >
+              {renderContent(current.content, `debate-${current.index}`)}
+            </Text>
+          ) : (
+            <Text
+              style={[
+                styles.deliberationTakeText,
+                { color: colors.mutedForeground, opacity: 0.7 },
+              ]}
+            >
+              Forming a reply…
+            </Text>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+type LocalDebate = {
+  roster: DeliberationRosterVoice[];
+  of: number;
+  current: DebateTurnLive | null;
+  failedNames: string[];
+};

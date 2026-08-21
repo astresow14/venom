@@ -24,11 +24,14 @@ import {
   useGetVenomWorkspace,
   type VenomMessage,
   type VenomMessageStatus,
+  type VenomConversationBlend,
+  type VenomResponseMode,
   type VenomTask,
   type VenomTaskStatus,
   type VenomWorkspaceSnapshot,
 } from '@workspace/api-client-react';
 import {
+  applyFiledClustersToState,
   applyKnowledgeInsightsToState,
   clearConversationKnowledge,
   createDefaultState,
@@ -40,6 +43,8 @@ import {
   mergeWorkspaceStates,
   mergeTombstones,
   normalizeLabel,
+  normalizeModelPreferences,
+  normalizeVoicePreferences,
   normalizeWorkspaceState,
   prepareWorkspaceStateForSave,
   reconcileKnowledgeLinks,
@@ -49,10 +54,14 @@ import {
   type KnowledgeCluster,
   type KnowledgeInsight,
   type KnowledgeSource,
+  type ModelPreferences,
   type Project,
   type SyncStatus,
+  type VenomModelId,
+  type VoicePreferences,
   type WorkspaceState,
 } from '@/lib/workspaceState';
+import { IS_UI_TEST } from '@/lib/ui-test';
 
 export type VenomWorkspaceContextType = {
   state: WorkspaceState;
@@ -85,9 +94,32 @@ export type VenomWorkspaceContextType = {
     conversation: Pick<Conversation, 'id' | 'title' | 'projectId'>,
     insights: KnowledgeInsight[],
   ) => void;
+  applyFiledKnowledge: (
+    conversation: Pick<Conversation, 'id' | 'title' | 'projectId'>,
+    filed: KnowledgeCluster[],
+  ) => void;
   renameKnowledgeCluster: (clusterId: string, label: string) => void;
   deleteKnowledgeCluster: (clusterId: string) => void;
   mergeKnowledgeClusters: (targetClusterId: string, sourceClusterId: string) => void;
+
+  // Response mode & blend prefs (per conversation, synced across devices)
+  setConversationResponsePrefs: (
+    conversationId: string,
+    prefs: {
+      responseMode?: VenomResponseMode;
+      /** New pad position; null clears the stored blend. */
+      blend?: VenomConversationBlend | null;
+    },
+  ) => void;
+
+  // Model preference ops
+  setModelPreferences: (updates: Partial<ModelPreferences>) => void;
+  setActiveModelId: (modelId: VenomModelId) => void;
+
+  // Voice preference ops (hands-free voice mode on the phone; synced account-wide)
+  setVoicePreferences: (
+    updates: Partial<Pick<VoicePreferences, 'presetId' | 'talkativeness'>>,
+  ) => void;
 };
 
 const VenomWorkspaceContext = createContext<VenomWorkspaceContextType | null>(null);
@@ -385,6 +417,15 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
     workspaceQuery.isPending,
     workspaceQuery.isSuccess,
   ]);
+
+  // ── browser-test persistence ─────────────────────────────────────────────
+  // The UI-test build has no account and no cloud sync, but reloading must
+  // still keep the session. Mirror state into the same local store the cloud
+  // path writes through, so a refresh rehydrates rather than resets.
+  useEffect(() => {
+    if (!IS_UI_TEST) return;
+    writeLocalState(UI_TEST_USER_ID, state);
+  }, [state]);
 
   // ── debounced sync on state changes ──────────────────────────────────────
   useEffect(() => {
@@ -688,6 +729,19 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
     [],
   );
 
+  const applyFiledKnowledge = useCallback(
+    (
+      conversation: Pick<Conversation, 'id' | 'title' | 'projectId'>,
+      filed: KnowledgeCluster[],
+    ) => {
+      const now = Date.now();
+      setState((current) =>
+        applyFiledClustersToState({ state: current, conversation, filed, now }),
+      );
+    },
+    [],
+  );
+
   const renameKnowledgeCluster = useCallback((clusterId: string, label: string) => {
     const cleanedLabel = label.trim();
     if (!cleanedLabel) return;
@@ -738,6 +792,87 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
       };
     });
   }, []);
+
+  const setConversationResponsePrefs = useCallback(
+    (
+      conversationId: string,
+      prefs: {
+        responseMode?: VenomResponseMode;
+        blend?: VenomConversationBlend | null;
+      },
+    ) => {
+      setState((current) => {
+        const conversation = current.conversations.find(
+          (item) => item.id === conversationId,
+        );
+        if (!conversation) return current;
+
+        // The preference block keeps its own clock (modeUpdatedAt) so a mode
+        // change on one device never outranks newer chat content elsewhere:
+        // conversation.updatedAt stays untouched here on purpose.
+        const next: Conversation = { ...conversation, modeUpdatedAt: Date.now() };
+        if (prefs.responseMode !== undefined) next.responseMode = prefs.responseMode;
+        if (prefs.blend === null) {
+          delete next.blend;
+        } else if (prefs.blend !== undefined) {
+          next.blend = prefs.blend;
+        }
+        return {
+          ...current,
+          conversations: current.conversations.map((item) =>
+            item.id === conversationId ? next : item,
+          ),
+        };
+      });
+    },
+    [],
+  );
+
+  const setModelPreferences = useCallback((updates: Partial<ModelPreferences>) => {
+    setState((current) => {
+      const merged = normalizeModelPreferences({
+        ...current.modelPreferences,
+        ...updates,
+        updatedAt: Date.now(),
+      });
+      return { ...current, modelPreferences: merged };
+    });
+  }, []);
+
+  const setActiveModelId = useCallback((modelId: VenomModelId) => {
+    setState((current) => {
+      const prefs = current.modelPreferences;
+      if (!prefs?.enabledModelIds.includes(modelId)) return current;
+      return {
+        ...current,
+        modelPreferences: normalizeModelPreferences({
+          ...prefs,
+          activeModelId: modelId,
+          updatedAt: Date.now(),
+        }),
+      };
+    });
+  }, []);
+
+  /**
+   * Voice preferences (speaking voice + talkativeness) are one synced block
+   * with a single clock: every write stamps a fresh updatedAt so the freshest
+   * device wins the cross-device merge, and normalization keeps unknown
+   * values from ever entering the snapshot.
+   */
+  const setVoicePreferences = useCallback(
+    (updates: Partial<Pick<VoicePreferences, 'presetId' | 'talkativeness'>>) => {
+      setState((current) => ({
+        ...current,
+        voicePreferences: normalizeVoicePreferences({
+          ...current.voicePreferences,
+          ...updates,
+          updatedAt: Date.now(),
+        }),
+      }));
+    },
+    [],
+  );
 
   const mergeKnowledgeClusters = useCallback(
     (targetClusterId: string, sourceClusterId: string) => {
@@ -809,9 +944,14 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
       updateTaskStatus,
       deleteTask,
       applyKnowledgeInsights,
+      applyFiledKnowledge,
       renameKnowledgeCluster,
       deleteKnowledgeCluster,
       mergeKnowledgeClusters,
+      setConversationResponsePrefs,
+      setModelPreferences,
+      setActiveModelId,
+      setVoicePreferences,
     }),
     [
       state,
@@ -830,9 +970,14 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
       updateTaskStatus,
       deleteTask,
       applyKnowledgeInsights,
+      applyFiledKnowledge,
       renameKnowledgeCluster,
       deleteKnowledgeCluster,
       mergeKnowledgeClusters,
+      setConversationResponsePrefs,
+      setModelPreferences,
+      setActiveModelId,
+      setVoicePreferences,
     ],
   );
 
@@ -854,11 +999,7 @@ export function useVenomWorkspace(): VenomWorkspaceContextType {
   }
   return context;
 }
-
-export const IS_UI_TEST =
-  import.meta.env.DEV && import.meta.env.VITE_VENOM_UI_TEST === 'true';
-
-const UI_TEST_USER_ID = 'venom-desktop-ui-test';
+export const UI_TEST_USER_ID = 'venom-desktop-ui-test';
 
 function createInitialWorkspaceState(): WorkspaceState {
   const state = createDefaultState();
@@ -867,14 +1008,19 @@ function createInitialWorkspaceState(): WorkspaceState {
   const brainFixture = new URLSearchParams(window.location.search).get(
     'brainFixture',
   );
-  if (brainFixture !== 'sparse') return state;
+  if (brainFixture === 'sparse') {
+    const clusterIds = new Set(state.clusters.slice(0, 2).map(({ id }) => id));
+    return {
+      ...state,
+      clusters: state.clusters.slice(0, 2).map((cluster) => ({
+        ...cluster,
+        links: cluster.links.filter((id) => clusterIds.has(id)),
+      })),
+    };
+  }
 
-  const clusterIds = new Set(state.clusters.slice(0, 2).map(({ id }) => id));
-  return {
-    ...state,
-    clusters: state.clusters.slice(0, 2).map((cluster) => ({
-      ...cluster,
-      links: cluster.links.filter((id) => clusterIds.has(id)),
-    })),
-  };
+  // Browser tests sign nobody in, so there is no cloud snapshot to hydrate
+  // from. Read the same local mirror a signed-in account keeps, so a reload
+  // restores the session instead of silently starting over.
+  return readLocalState(UI_TEST_USER_ID) ?? state;
 }

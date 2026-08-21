@@ -1,22 +1,29 @@
 import { SignIn } from '@clerk/react';
 import { Link } from 'wouter';
-import { VenomMark } from '@/components/venom-mark';
+import { VenomWordmark } from '@/components/venom-wordmark';
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 export default function SignInPage() {
   return (
-    <main className="min-h-[100dvh] bg-black text-white flex flex-col items-center justify-center p-4">
-      <Link href="/" className="absolute top-6 left-6 md:top-8 md:left-8 flex items-center gap-2.5 text-base font-semibold tracking-tight hover:text-neutral-400 transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
-        <VenomMark className="w-5 h-5" />
-        Venom
-      </Link>
-      <SignIn
-        routing="path"
-        path={`${basePath}/sign-in`}
-        signUpUrl={`${basePath}/sign-up`}
-        fallbackRedirectUrl={`${basePath}/workspace/chat`}
-      />
+    <main className="flex min-h-[100dvh] flex-col bg-background text-foreground">
+      <header className="px-5 py-4 sm:px-8">
+        <Link
+          href="/"
+          data-testid="link-home"
+          className="inline-flex items-center gap-2.5 rounded-md text-[15px] font-medium tracking-tight text-foreground transition-colors hover:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
+        >
+          <VenomWordmark className="h-7" />
+        </Link>
+      </header>
+      <div className="flex flex-1 items-center justify-center px-4 pb-16">
+        <SignIn
+          routing="path"
+          path={`${basePath}/sign-in`}
+          signUpUrl={`${basePath}/sign-up`}
+          fallbackRedirectUrl={`${basePath}/workspace/chat`}
+        />
+      </div>
     </main>
   );
 }
