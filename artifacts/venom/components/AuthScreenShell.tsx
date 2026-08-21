@@ -1,36 +1,101 @@
-import React from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import {
+  Platform,
+  type StyleProp,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import {
   SymbioteAuthBackdrop,
   useSymbioteInteraction,
 } from '@/components/SymbioteAuthBackdrop';
-import { VenomMark } from '@/components/VenomMark';
+import { VenomWordmark } from '@/components/VenomWordmark';
 import { useColors } from '@/hooks/useColors';
 
 type AuthScreenShellProps = {
-  eyebrow: string;
-  title: string;
-  subtitle: string;
+  /**
+   * Identity of the current step ('welcome' | 'email' | 'verify' | ...).
+   * Changing it replays the staggered reveal for the new step's content.
+   */
+  stateKey: string;
+  /** Large decorative visual shown above the headline (welcome state). */
+  hero?: React.ReactNode;
+  headline: string;
+  /** One quiet line under the headline. Keep it short. */
+  supportText?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
 };
 
+type RevealProps = {
+  children: React.ReactNode;
+  delay?: number;
+  style?: StyleProp<ViewStyle>;
+};
+
+/** Fade-and-rise entrance; instant when the user prefers reduced motion. */
+function Reveal({ children, delay = 0, style }: RevealProps) {
+  const reduceMotion = useReducedMotion();
+  const progress = useSharedValue(reduceMotion ? 1 : 0);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      progress.value = 1;
+      return;
+    }
+    progress.value = 0;
+    progress.value = withDelay(
+      delay,
+      withTiming(1, { duration: 560, easing: Easing.out(Easing.cubic) }),
+    );
+  }, [delay, progress, reduceMotion]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ translateY: (1 - progress.value) * 16 }],
+  }));
+
+  return <Animated.View style={[animatedStyle, style]}>{children}</Animated.View>;
+}
+
+/**
+ * Open, card-free auth layout: small brand row up top, an optional hero and
+ * display headline, then the caller's stacked actions sitting directly on the
+ * living backdrop.
+ */
 export function AuthScreenShell({
-  eyebrow,
-  title,
-  subtitle,
+  stateKey,
+  hero,
+  headline,
+  supportText,
   children,
   footer,
 }: AuthScreenShellProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { onPointerMove, onTouchEnd, onTouchMove, pointerX, pointerY } =
     useSymbioteInteraction();
   const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
   const bottomInset =
     Platform.OS === 'web' ? Math.max(insets.bottom, 34) : insets.bottom;
+
+  const displaySize = Math.round(
+    Math.min(Math.max(Math.min(width, 480) * 0.125, 40), 56),
+  );
 
   return (
     <View
@@ -44,45 +109,88 @@ export function AuthScreenShell({
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: topInset + 28,
-            paddingBottom: bottomInset + 28,
+            paddingTop: topInset + 12,
+            paddingBottom: bottomInset + 22,
           },
         ]}
         bottomOffset={24}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.brand}>
-          <VenomMark color={colors.symbioteHighlight} size={42} />
-          <Text style={[styles.wordmark, { color: colors.symbioteHighlight }]}>
-            Venom
-          </Text>
-        </View>
+        <Reveal>
+          <View style={styles.brand}>
+            <VenomWordmark color={colors.symbioteHighlight} height={32} />
+          </View>
+        </Reveal>
 
-        <View
-          style={[
-            styles.panel,
-            {
-              backgroundColor:
-                Platform.OS === 'web' ? colors.authPanel : colors.card,
-              borderColor: colors.border,
-              shadowColor: colors.foreground,
-            },
-          ]}
-        >
-          <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>
-            {eyebrow}
-          </Text>
-          <Text style={[styles.title, { color: colors.foreground }]}>
-            {title}
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-            {subtitle}
-          </Text>
-          {children}
-        </View>
+        <View key={stateKey} style={styles.body}>
+          {hero ? (
+            <>
+              <View style={styles.spacerAboveHero} />
+              <Reveal delay={70} style={styles.heroWrap}>
+                {hero}
+              </Reveal>
+              <Reveal delay={150}>
+                <Text
+                  accessibilityRole="header"
+                  style={[
+                    styles.display,
+                    {
+                      color: colors.symbioteHighlight,
+                      fontSize: displaySize,
+                      lineHeight: Math.round(displaySize * 1.04),
+                      letterSpacing: -displaySize * 0.03,
+                    },
+                  ]}
+                >
+                  {headline}
+                </Text>
+              </Reveal>
+              {supportText ? (
+                <Reveal delay={200}>
+                  <Text
+                    style={[styles.support, { color: colors.symbioteMuted }]}
+                  >
+                    {supportText}
+                  </Text>
+                </Reveal>
+              ) : null}
+              <View style={styles.spacerBelowHeadline} />
+            </>
+          ) : (
+            <>
+              <View style={styles.spacerAboveSection} />
+              <Reveal delay={70}>
+                <Text
+                  accessibilityRole="header"
+                  style={[styles.section, { color: colors.symbioteHighlight }]}
+                >
+                  {headline}
+                </Text>
+              </Reveal>
+              {supportText ? (
+                <Reveal delay={130}>
+                  <Text
+                    style={[styles.support, { color: colors.symbioteMuted }]}
+                  >
+                    {supportText}
+                  </Text>
+                </Reveal>
+              ) : null}
+              <View style={styles.sectionGap} />
+            </>
+          )}
 
-        {footer ? <View style={styles.footer}>{footer}</View> : null}
+          <Reveal delay={hero ? 240 : 190}>{children}</Reveal>
+
+          {!hero ? <View style={styles.spacerGrow} /> : null}
+
+          {footer ? (
+            <Reveal delay={hero ? 300 : 250} style={styles.footer}>
+              {footer}
+            </Reveal>
+          ) : null}
+        </View>
       </KeyboardAwareScrollViewCompat>
     </View>
   );
@@ -95,8 +203,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 22,
+    paddingHorizontal: 24,
     alignSelf: 'center',
     width: '100%',
     maxWidth: 480,
@@ -105,45 +212,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 11,
-    marginBottom: 32,
   },
-  wordmark: {
+  body: {
+    flexGrow: 1,
+  },
+  heroWrap: {
+    alignItems: 'center',
+  },
+  display: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 22,
-    letterSpacing: -0.7,
+    textAlign: 'center',
+    marginTop: 22,
   },
-  panel: {
-    borderWidth: 1,
-    borderRadius: 28,
-    paddingHorizontal: 26,
-    paddingVertical: 30,
-    shadowOffset: { width: 0, height: 24 },
-    shadowOpacity: Platform.OS === 'web' ? 0.06 : 0.1,
-    shadowRadius: 48,
-    elevation: 6,
-  },
-  eyebrow: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    letterSpacing: 0.1,
-    marginBottom: 9,
-  },
-  title: {
+  section: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 31,
-    lineHeight: 37,
+    fontSize: 30,
+    lineHeight: 36,
     letterSpacing: -1,
+    textAlign: 'center',
   },
-  subtitle: {
+  support: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 14,
+    fontSize: 15,
     lineHeight: 22,
-    marginTop: 10,
-    marginBottom: 26,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  sectionGap: {
+    height: 30,
+  },
+  spacerAboveHero: {
+    flexGrow: 0.8,
+    minHeight: 10,
+  },
+  spacerBelowHeadline: {
+    flexGrow: 1.2,
+    minHeight: 24,
+  },
+  spacerAboveSection: {
+    flexGrow: 0.55,
+    minHeight: 26,
+  },
+  spacerGrow: {
+    flexGrow: 1,
+    minHeight: 14,
   },
   footer: {
     alignItems: 'center',
-    marginTop: 22,
+    marginTop: 18,
   },
 });

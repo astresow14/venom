@@ -29,4 +29,9 @@ export interface VenomAppUpdate {
      * @nullable
      */
   deploymentUrl?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  linkedProjectId?: string | null;
 }

@@ -5,7 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ProvisioningCandidateRelease } from './provisioningCandidateRelease';
 import type { VenomApp } from './venomApp';
+import type { VenomAppIteration } from './venomAppIteration';
+import type { VenomAppTimelineEntry } from './venomAppTimelineEntry';
 import type { VenomDeploymentLink } from './venomDeploymentLink';
 import type { VenomImportJob } from './venomImportJob';
 import type { VenomSourceVersion } from './venomSourceVersion';
@@ -18,4 +21,13 @@ export interface VenomAppDetail {
   importJobs: VenomImportJob[];
   /** @maxItems 20 */
   deploymentLinks: VenomDeploymentLink[];
+  /** @maxItems 500 */
+  provisioningReleases: ProvisioningCandidateRelease[];
+  /** @maxItems 200 */
+  iterations: VenomAppIteration[];
+  /** @maxItems 400 */
+  timeline: VenomAppTimelineEntry[];
+  /** @minimum 0 */
+  timelineTotal: number;
+  timelineTruncated: boolean;
 }

@@ -33,6 +33,7 @@ node_modules
 /coverage
 **/playwright-report/
 **/test-results/
+**/test-results-auth/
 /libpeerconnection.log
 npm-debug.log
 yarn-error.log
@@ -49,3 +50,31 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Credentials — key material belongs in a Replit Secret, never in a workspace
+# file. This repository is mirrored to GitHub, and a pushed key has to be
+# regenerated at the provider, so these are untrackable by default.
+# `pnpm run sync:github` refuses to push anything that slips past these rules.
+*.pem
+*.key
+*.p12
+*.pfx
+*.p8
+*.jks
+*.keystore
+*.ppk
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+.env
+.env.*
+# Templates stay tracked. This list must match ENV_TEMPLATE_SUFFIXES in
+# scripts/src/lib/credential-guard.ts, so a file the sync guard allows is never
+# one git refuses to track.
+!.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+!.env.*.sample
+!.env.*.template

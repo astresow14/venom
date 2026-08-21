@@ -14,4 +14,6 @@ export interface VenomDeletionMarker {
   id: string;
   /** @minimum 0 */
   deletedAt: number;
+  /** True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be. */
+  replaced?: boolean;
 }

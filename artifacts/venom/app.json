@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/venom-mark-monochrome.png",
+      "image": "./assets/images/venom-splash-scrawl.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
@@ -28,7 +28,8 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

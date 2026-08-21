@@ -1,198 +1,397 @@
-import React, { useMemo } from "react";
-import { useVenomWorkspace } from "@/context/venom-workspace";
-import { Skeleton } from "@/components/ui/skeleton";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  Combine,
-  CheckSquare,
-  MessageSquare,
-  Clock,
-  BrainCircuit,
-} from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { taskStatusForProject } from "@/lib/workspaceState";
-import { motion, type Variants } from "framer-motion";
+  useGetCommunityBriefing,
+  useGetCommunityFeed,
+  getGetCommunityBriefingQueryKey,
+  getGetCommunityFeedQueryKey,
+  useListVenomBuildRuns,
+  getListVenomBuildRunsQueryKey,
+  useListVenomApps,
+  getListVenomAppsQueryKey,
+  useDismissVenomAppImprovementSuggestion,
+  type VenomApp,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { ThreadCard } from "@/components/community/ThreadCard";
+import { AgendaSection } from "@/components/community/AgendaSection";
+import { CreateThreadDialog } from "@/components/community/CreateThreadDialog";
+import { ProfileDialog } from "@/components/community/ProfileDialog";
+import { Activity, LayoutList, AlertCircle, PackageSearch, Sparkles, X, Loader2 } from "lucide-react";
+import { Link } from "wouter";
+import { asList } from "@/lib/as-list";
+import { knowledgeDisplayText } from "@/lib/messageCitations";
 
-type FeedItem = {
-  id: string;
-  type: "task" | "conversation" | "cluster";
-  title: string;
-  subtitle: string;
-  timestamp: number;
-  icon: React.ElementType;
-};
+function FeedSegment({
+  cursor,
+  order,
+  isFirst,
+  onNextCursor,
+  onLoadedFirst,
+}: {
+  cursor?: string;
+  order: "new" | "top";
+  isFirst: boolean;
+  onNextCursor: (c: string | null) => void;
+  onLoadedFirst?: (agenda: any[], calStatus: any, profile: any) => void;
+}) {
+  const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
 
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
-};
+  const briefingQuery = useGetCommunityBriefing(
+    { timezone, order, cursor },
+    {
+      query: {
+        queryKey: getGetCommunityBriefingQueryKey({ timezone, order, cursor }),
+        enabled: isFirst,
+        staleTime: 1000 * 30,
+      },
+    }
+  );
 
-const itemVariants: Variants = {
-  hidden: { x: -20, opacity: 0 },
-  visible: {
-    x: 0,
-    opacity: 1,
-    transition: { type: "spring", stiffness: 300, damping: 25 },
-  },
-};
+  const feedQuery = useGetCommunityFeed(
+    { order, cursor },
+    {
+      query: {
+        queryKey: getGetCommunityFeedQueryKey({ order, cursor }),
+        enabled: !isFirst,
+        staleTime: 1000 * 30,
+      },
+    }
+  );
 
-export default function FeedPage() {
-  const { state } = useVenomWorkspace();
+  const query = isFirst ? briefingQuery : feedQuery;
 
-  const feedItems = useMemo(() => {
-    if (!state) return [];
-    const items: FeedItem[] = [];
-
-    state.projects?.forEach((project) => {
-      project.tasks?.forEach((task) => {
-        const status = taskStatusForProject(project, task);
-        items.push({
-          id: `task_${task.id}`,
-          type: "task",
-          title: `Task: ${status.replace("_", " ")}`,
-          subtitle: task.title,
-          timestamp: task.updatedAt || task.createdAt,
-          icon: CheckSquare,
-        });
-      });
-    });
-
-    state.conversations?.forEach((conv) => {
-      if (conv.messages?.length) {
-        items.push({
-          id: `conv_${conv.id}`,
-          type: "conversation",
-          title: "Neural Thread",
-          subtitle: conv.title || "Untitled Sequence",
-          timestamp: conv.updatedAt,
-          icon: MessageSquare,
-        });
+  useEffect(() => {
+    if (query.data) {
+      onNextCursor(query.data.nextCursor);
+      if (isFirst && onLoadedFirst) {
+        const b = query.data as any;
+        // Normalized at the boundary: everything downstream is typed as a
+        // list, but this payload is whatever the request actually returned.
+        onLoadedFirst(asList(b.agenda), b.calendarStatus, b.viewerProfile);
       }
-    });
+    }
+  }, [query.data, onNextCursor, isFirst, onLoadedFirst]);
 
-    state.clusters?.forEach((cluster) => {
-      if (cluster.lastUpdatedAt) {
-        items.push({
-          id: `cluster_${cluster.id}`,
-          type: "cluster",
-          title: "Concept Assimilated",
-          subtitle: cluster.label,
-          timestamp: cluster.lastUpdatedAt,
-          icon: BrainCircuit,
-        });
-      }
-    });
-
-    return items.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
-  }, [state]);
-
-  if (!state) {
+  if (query.isLoading) {
     return (
-      <div className="p-4 md:p-10 space-y-6 max-w-4xl mx-auto w-full">
-        <Skeleton className="w-64 h-12 rounded-none" />
-        <Skeleton className="w-full h-32 rounded-none" />
-        <Skeleton className="w-full h-32 rounded-none" />
+      <div className="space-y-4 mb-4">
+        <Skeleton className="h-32 w-full rounded-md" />
+        <Skeleton className="h-32 w-full rounded-md" />
+      </div>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <div className="text-destructive text-sm font-medium p-5 border border-destructive/60 rounded-xl mb-4 flex flex-col items-center text-center bg-destructive/10 shadow-soft">
+        <AlertCircle className="w-8 h-8 mb-3" />
+        <p className="mb-4">Failed to load signals from the network.</p>
+        <Button variant="outline" className="rounded-md border-destructive/60 text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => query.refetch()}>
+          Retry connection
+        </Button>
+      </div>
+    );
+  }
+
+  if (!query.data) return null;
+
+  // A failed request still resolves here with an error body that carries
+  // neither key, so this has to survive the field being absent.
+  const threads = asList<any>(
+    isFirst ? (query.data as any).community : (query.data as any).items,
+  );
+
+  if (threads.length === 0 && isFirst) {
+    return (
+      <div className="text-center py-20 border border-dashed border-border/60 rounded-2xl bg-background/30">
+        <LayoutList className="w-8 h-8 mx-auto text-muted-foreground mb-4 opacity-50" />
+        <p className="text-xs text-muted-foreground">
+          No threads found. Be the first to broadcast.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background p-4 md:p-10 relative scroll-smooth">
-      <div className="max-w-4xl mx-auto pb-24">
-        <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between border-b-2 border-border/50 pb-6 gap-6 sticky top-0 bg-background/90 backdrop-blur-md z-10 pt-4">
+    <>
+      {threads.map((t: any) => (
+        <ThreadCard key={t.id} thread={t} />
+      ))}
+    </>
+  );
+}
+
+export default function FeedPage() {
+  const [order, setOrder] = useState<"new" | "top">("new");
+  const [extraCursors, setExtraCursors] = useState<string[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const { data: buildRuns } = useListVenomBuildRuns(
+    {},
+    {
+      query: {
+        queryKey: getListVenomBuildRunsQueryKey({}),
+        refetchInterval: 5000,
+      },
+    },
+  );
+  const visibleBuildRuns = Array.isArray(buildRuns)
+    ? buildRuns.slice(0, 5)
+    : [];
+  const { data: appsData } = useListVenomApps();
+  const improvementSuggestions = asList<VenomApp>(appsData).filter(
+    (app) => app?.improvementSignal,
+  );
+  const queryClient = useQueryClient();
+  const dismissSuggestion = useDismissVenomAppImprovementSuggestion();
+  const [dismissingAppId, setDismissingAppId] = useState<string | null>(null);
+  const handleDismissSuggestion = async (appId: string) => {
+    setDismissingAppId(appId);
+    try {
+      await dismissSuggestion.mutateAsync({ appId });
+      await queryClient.invalidateQueries({
+        queryKey: getListVenomAppsQueryKey(),
+      });
+    } catch {
+      // Keep the card visible so the user can retry from here or the record.
+    } finally {
+      setDismissingAppId(null);
+    }
+  };
+
+  // Agenda/Profile state hoisted from the first segment
+  const [agendaData, setAgendaData] = useState<{
+    agenda: any[];
+    calendarStatus: any;
+    viewerProfile: any;
+  } | null>(null);
+
+  // Reset cursors on order change
+  useEffect(() => {
+    setExtraCursors([]);
+    setNextCursor(null);
+  }, [order]);
+
+  const handleLoadMore = () => {
+    if (nextCursor && !extraCursors.includes(nextCursor)) {
+      setExtraCursors((prev) => [...prev, nextCursor]);
+      setNextCursor(null); // will be updated by the new segment when it loads
+    }
+  };
+
+  const handleFirstLoaded = useCallback((agenda: any[], calendarStatus: any, viewerProfile: any) => {
+    const next = { agenda, calendarStatus, viewerProfile };
+    setAgendaData((current) =>
+      current && JSON.stringify(current) === JSON.stringify(next)
+        ? current
+        : next,
+    );
+  }, []);
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-background p-4 md:p-8 relative scroll-smooth h-full">
+      <div className="max-w-6xl mx-auto pb-24 h-full flex flex-col">
+        <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between border-b border-border/60 pb-6 gap-6 sticky top-0 bg-background/95 backdrop-blur-md z-20 pt-4">
           <div>
-            <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter">
-              Feed
+            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight flex items-center gap-3">
+              <Activity className="w-8 h-8 text-foreground" />
+              Community briefing
             </h1>
-            <p className="font-mono text-sm font-bold tracking-widest text-muted-foreground mt-2 uppercase">
-              Real-time workspace modifications
+            <p className="text-sm font-medium text-muted-foreground mt-2">
+              Global signals & personal agenda
             </p>
           </div>
-          <div
-            className="flex items-center gap-3 font-mono text-[11px] font-bold uppercase tracking-widest bg-foreground px-4 py-2 text-background border border-foreground w-fit"
-            aria-label="Current workspace activity"
-          >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full bg-background opacity-40"></span>
-              <span className="relative inline-flex h-2 w-2 bg-background"></span>
-            </span>
-            Live Sync
+          <div className="flex items-center gap-4">
+            {agendaData?.viewerProfile === null && (
+              <span className="text-xs font-medium text-muted-foreground hidden md:inline">
+                Profile missing
+              </span>
+            )}
+            <ProfileDialog />
           </div>
         </header>
 
-        {feedItems.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center py-32 border-2 border-dashed border-border/50 bg-background/30"
-          >
-            <Combine className="w-12 h-12 mx-auto text-muted-foreground mb-6 opacity-30 animate-pulse" />
-            <h3 className="font-black text-2xl mb-2 uppercase tracking-tighter">
-              Void Detected
-            </h3>
-            <p className="font-mono text-muted-foreground text-xs uppercase tracking-widest max-w-sm mx-auto">
-              Your project activity will appear here.
-            </p>
-          </motion.div>
-        ) : (
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="relative before:absolute before:inset-0 before:ml-[1.1rem] md:before:ml-[2.5rem] before:h-full before:w-0.5 before:bg-border/50"
-            role="feed"
-          >
-            {feedItems.map((item, index) => {
-              const Icon = item.icon;
-              return (
-                <motion.article
-                  variants={itemVariants}
-                  key={`${item.id}_${index}`}
-                  className="relative flex items-start gap-4 md:gap-8 group mb-8 md:mb-10"
-                  aria-labelledby={`title-${item.id}`}
-                >
-                  {/* Timeline dot */}
-                  <div
-                    className="relative flex items-center justify-center w-9 h-9 md:w-12 md:h-12 rounded-none border-2 border-border bg-background text-muted-foreground shrink-0 z-10 group-hover:bg-foreground group-hover:text-background group-hover:border-foreground transition-all duration-300 mt-1"
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+          {/* Left Column: Agenda (Sticky on desktop) */}
+          <div className="lg:col-span-4 lg:sticky lg:top-[8rem]">
+            {improvementSuggestions.length ? (
+              <section
+                aria-labelledby="improvement-suggestions-title"
+                className="mb-6 surface border border-border/60 rounded-xl p-5 shadow-soft"
+              >
+                <div className="mb-1 flex items-center gap-2">
+                  <Sparkles
+                    className="h-4 w-4 text-muted-foreground"
                     aria-hidden="true"
+                  />
+                  <h2
+                    id="improvement-suggestions-title"
+                    className="text-sm font-semibold"
                   >
-                    <Icon className="w-4 h-4 md:w-5 md:h-5" />
-                  </div>
+                    Improvement suggestions
+                  </h2>
+                </div>
+                <p className="mb-4 text-[11px] text-muted-foreground">
+                  New data since each app's last version. Review first —
+                  nothing runs on its own.
+                </p>
+                <div className="space-y-2">
+                  {improvementSuggestions.slice(0, 4).map((app) => (
+                    <Link key={app.id} href={`/workspace/apps/${app.id}`}>
+                      <div
+                        className="relative rounded-md border border-border/60 px-3 py-2 pr-9 transition-colors hover:bg-foreground/5"
+                        data-testid={`card-suggestion-${app.id}`}
+                      >
+                        <p className="truncate text-sm font-semibold">
+                          {app.name}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                          {/* Server-built from knowledge deltas; resolve any
+                              inline [source:...] marker that slips through so
+                              a feed entry never shows the raw machine tag. */}
+                          {knowledgeDisplayText(
+                            app.improvementSignal?.summary ?? "",
+                          )}
+                        </p>
+                        <button
+                          type="button"
+                          aria-label={`Dismiss suggestion for ${app.name}`}
+                          data-testid={`button-feed-dismiss-${app.id}`}
+                          disabled={dismissingAppId === app.id}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void handleDismissSuggestion(app.id);
+                          }}
+                          className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-50"
+                        >
+                          {dismissingAppId === app.id ? (
+                            <Loader2
+                              className="h-3.5 w-3.5 animate-spin"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <X className="h-3.5 w-3.5" aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            {visibleBuildRuns.length ? (
+              <section
+                aria-labelledby="build-activity-title"
+                className="mb-6 surface border border-border/60 rounded-xl p-5 shadow-soft"
+              >
+                <div className="mb-4 flex items-center gap-2">
+                  <PackageSearch
+                    className="h-4 w-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <h2
+                    id="build-activity-title"
+                    className="text-sm font-semibold"
+                  >
+                    Build activity
+                  </h2>
+                </div>
+                <div className="space-y-2">
+                  {visibleBuildRuns.map((buildRun) => (
+                    <Link
+                      key={buildRun.id}
+                      href={`/workspace/builds/${buildRun.id}`}
+                    >
+                      <div className="rounded-md border border-border/60 px-3 py-2 transition-colors hover:bg-foreground/5">
+                        <p className="truncate text-sm font-semibold">
+                          {buildRun.targetName}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {buildRun.status.replace(/_/g, " ")}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            {agendaData ? (
+              <AgendaSection
+                agenda={agendaData.agenda}
+                calendarStatus={agendaData.calendarStatus}
+              />
+            ) : (
+              <div className="surface border border-border/60 rounded-xl shadow-soft p-5 space-y-4">
+                <Skeleton className="h-6 w-32 rounded-md" />
+                <Skeleton className="h-16 w-full rounded-md" />
+                <Skeleton className="h-16 w-full rounded-md" />
+              </div>
+            )}
+          </div>
 
-                  {/* Content Card */}
-                  <div className="flex-1">
-                    <div className="p-5 md:p-6 border-l-4 border-border bg-card hover:bg-foreground/5 hover:border-foreground transition-all duration-300 cursor-default">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between mb-3 gap-2 md:gap-4">
-                        <div
-                          id={`title-${item.id}`}
-                          className="font-bold text-xs md:text-[11px] uppercase tracking-widest text-muted-foreground flex items-center gap-2"
-                        >
-                          {item.title}
-                        </div>
-                        <time
-                          className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 shrink-0 opacity-70"
-                          dateTime={new Date(item.timestamp).toISOString()}
-                        >
-                          <Clock className="w-3 h-3" aria-hidden="true" />
-                          {formatDistanceToNow(item.timestamp, {
-                            addSuffix: true,
-                          })}
-                        </time>
-                      </div>
-                      <div className="text-lg font-black leading-snug text-foreground uppercase tracking-tight">
-                        {item.subtitle}
-                      </div>
-                    </div>
-                  </div>
-                </motion.article>
-              );
-            })}
-          </motion.div>
-        )}
+          {/* Right Column: Feed */}
+          <div className="lg:col-span-8 flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex bg-muted/30 p-1 border border-border/60 rounded-lg" role="tablist" aria-label="Sort order">
+                <button
+                  role="tab"
+                  aria-selected={order === "new"}
+                  aria-controls="feed-panel"
+                  id="tab-new"
+                  tabIndex={order === "new" ? 0 : -1}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${ order === "new" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground" }`}
+                  onClick={() => setOrder("new")}
+                >
+                  New
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={order === "top"}
+                  aria-controls="feed-panel"
+                  id="tab-top"
+                  tabIndex={order === "top" ? 0 : -1}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${ order === "top" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground" }`}
+                  onClick={() => setOrder("top")}
+                >
+                  Top
+                </button>
+              </div>
+              <CreateThreadDialog />
+            </div>
+
+            <div id="feed-panel" role="tabpanel" aria-labelledby={`tab-${order}`} className="flex flex-col gap-4">
+              <FeedSegment
+                key={`${order}-first`}
+                order={order}
+                isFirst={true}
+                onNextCursor={setNextCursor}
+                onLoadedFirst={handleFirstLoaded}
+              />
+
+              {extraCursors.map((c) => (
+                <FeedSegment
+                  key={`${order}-${c}`}
+                  cursor={c}
+                  order={order}
+                  isFirst={false}
+                  onNextCursor={setNextCursor}
+                />
+              ))}
+
+              {nextCursor && (
+                <Button
+                  variant="outline"
+                  className="rounded-xl border-border/60 mt-4 font-medium py-6 border-dashed transition-colors hover:border-border shadow-sm"
+                  onClick={handleLoadMore}
+                >
+                  Load more signals
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

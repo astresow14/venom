@@ -1,7 +1,7 @@
 import { Link, Stack } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { VenomMark } from '@/components/VenomMark';
+import { VenomWordmark } from '@/components/VenomWordmark';
 import { useColors } from '@/hooks/useColors';
 
 export default function NotFoundScreen() {
@@ -27,7 +27,7 @@ export default function NotFoundScreen() {
             { backgroundColor: colors.card, borderColor: colors.border },
           ]}
         >
-          <VenomMark color={colors.foreground} size={44} />
+          <VenomWordmark color={colors.foreground} height={40} />
           <Text style={[styles.title, { color: colors.foreground }]}>
             This page wandered off
           </Text>

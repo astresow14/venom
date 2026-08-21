@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -7,15 +7,28 @@ import {
   TextInput,
   ScrollView,
   Modal,
+  Platform,
   Pressable,
+  Animated as RNAnimated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useReducedMotion } from "react-native-reanimated";
 
 import { useColors } from "@/hooks/useColors";
 import { useVenom, type Project } from "@/context/VenomContext";
 import { Header } from "@/components/Header";
+import { requestFocusHandoff } from "@/lib/dialogFocusHandoff";
+
+// The dialog card must both swallow backdrop taps (Pressable) and animate its
+// own entrance (Animated) on the same element, because the modal container no
+// longer animates on web.
+const AnimatedPressable = RNAnimated.createAnimatedComponent(Pressable);
+
+type FocusableHandle = {
+  focus?: () => void;
+};
 
 export default function ProjectsScreen() {
   const colors = useColors();
@@ -26,6 +39,11 @@ export default function ProjectsScreen() {
   const [isCreating, setIsCreating] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [createButtonFocused, setCreateButtonFocused] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const dialogAppear = useRef(new RNAnimated.Value(0)).current;
+  const createButtonRef = useRef<FocusableHandle | null>(null);
+  const dismissFocusRef = useRef<"create-button" | null>(null);
   const projectAccents = [
     colors.foreground,
     colors.mutedForeground,
@@ -36,6 +54,43 @@ export default function ProjectsScreen() {
   const chooseProject = (projectId: string) => {
     setActiveProject(projectId);
     router.back();
+  };
+
+  // The dialog animates its own card because the modal container must not
+  // animate on web: an animated modal keeps its focus trap alive while it
+  // fades out and strands keyboard focus (see the card editor in
+  // BoardWorkspace for the shared pattern).
+  useEffect(() => {
+    if (!isCreating) return;
+    dialogAppear.setValue(reduceMotion ? 1 : 0);
+    if (reduceMotion) return;
+    const appearance = RNAnimated.timing(dialogAppear, {
+      toValue: 1,
+      duration: 170,
+      useNativeDriver: Platform.OS !== "web",
+    });
+    appearance.start();
+    return () => appearance.stop();
+  }, [dialogAppear, isCreating, reduceMotion]);
+
+  const openCreateDialog = () => {
+    dismissFocusRef.current = null;
+    setIsCreating(true);
+  };
+
+  // Cancel-style closes stay on this screen: hand focus back to the button
+  // that opened the dialog.
+  const cancelCreateDialog = () => {
+    dismissFocusRef.current = "create-button";
+    setIsCreating(false);
+  };
+
+  // Fires once the modal is actually gone (immediately on web) and its focus
+  // trap has released, so an explicit focus target sticks.
+  const handleDialogDismiss = () => {
+    const target = dismissFocusRef.current;
+    dismissFocusRef.current = null;
+    if (target === "create-button") createButtonRef.current?.focus?.();
   };
 
   const createProject = () => {
@@ -50,6 +105,11 @@ export default function ProjectsScreen() {
     setActiveProject(projectId);
     setName("");
     setDescription("");
+    dismissFocusRef.current = null;
+    // Creating leaves this screen entirely, so no local control can take
+    // focus. The workspace header claims this request for its project
+    // switcher once the navigation lands.
+    requestFocusHandoff("project-switcher");
     setIsCreating(false);
     router.back();
   };
@@ -79,9 +139,22 @@ export default function ProjectsScreen() {
             </Text>
           </View>
           <TouchableOpacity
+            ref={(node: FocusableHandle | null) => {
+              createButtonRef.current = node;
+            }}
+            accessibilityRole="button"
             accessibilityLabel="Create project"
-            onPress={() => setIsCreating(true)}
-            style={[styles.createButton, { backgroundColor: colors.foreground }]}
+            onPress={openCreateDialog}
+            onFocus={() => setCreateButtonFocused(true)}
+            onBlur={() => setCreateButtonFocused(false)}
+            style={[
+              styles.createButton,
+              { backgroundColor: colors.foreground },
+              createButtonFocused && {
+                borderWidth: 2,
+                borderColor: colors.background,
+              },
+            ]}
             testID="create-project"
           >
             <Feather name="plus" color={colors.background} size={18} />
@@ -98,6 +171,7 @@ export default function ProjectsScreen() {
                   key={project.id}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
+                  aria-selected={selected}
                   accessibilityLabel={`Switch to ${project.name}`}
                   onPress={() => chooseProject(project.id)}
                   style={[
@@ -165,13 +239,14 @@ export default function ProjectsScreen() {
                       ).length}{" "}
                       sources
                     </Text>
-                    {selected ? (
-                      <Feather
-                        name="check"
-                        color={colors.background}
-                        size={17}
-                      />
-                    ) : (
+                    <View style={styles.metaActions}>
+                      {selected ? (
+                        <Feather
+                          name="check"
+                          color={colors.background}
+                          size={17}
+                        />
+                      ) : null}
                       <TouchableOpacity
                         onPress={() => deleteProject(project.id)}
                         accessibilityRole="button"
@@ -183,11 +258,13 @@ export default function ProjectsScreen() {
                         <Feather
                           name="trash-2"
                           size={15}
-                          color={colors.destructive}
+                          color={
+                            selected ? colors.background : colors.destructive
+                          }
                           style={{ opacity: 0.7 }}
                         />
                       </TouchableOpacity>
-                    )}
+                    </View>
                   </View>
                 </TouchableOpacity>
               );
@@ -198,16 +275,32 @@ export default function ProjectsScreen() {
       <Modal
         transparent
         visible={isCreating}
-        animationType="fade"
-        onRequestClose={() => setIsCreating(false)}
+        // On web an animated dismissal keeps the dialog (and its focus trap)
+        // mounted for the length of the fade, which pulls keyboard focus back
+        // into the closing dialog. Close immediately there instead; the card
+        // below animates its own entrance.
+        animationType={Platform.OS === "web" ? "none" : "fade"}
+        onDismiss={handleDialogDismiss}
+        onRequestClose={cancelCreateDialog}
       >
-        <Pressable
-          onPress={() => setIsCreating(false)}
-          style={styles.modalBackdrop}
-        >
-          <Pressable
+        <Pressable onPress={cancelCreateDialog} style={styles.modalBackdrop}>
+          <AnimatedPressable
             onPress={(event) => event.stopPropagation()}
-            style={[styles.modalCard, { backgroundColor: colors.card }]}
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
             accessibilityViewIsModal
           >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>
@@ -247,7 +340,10 @@ export default function ProjectsScreen() {
               testID="new-project-description"
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => setIsCreating(false)}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={cancelCreateDialog}
+              >
                 <Text
                   style={[styles.cancel, { color: colors.mutedForeground }]}
                 >
@@ -274,7 +370,7 @@ export default function ProjectsScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-          </Pressable>
+          </AnimatedPressable>
         </Pressable>
       </Modal>
     </View>
@@ -322,6 +418,7 @@ const styles = StyleSheet.create({
   },
   projectDescription: { fontFamily: "Inter_400Regular", fontSize: 13 },
   projectMeta: { alignItems: "flex-end", gap: 7, marginLeft: 12 },
+  metaActions: { alignItems: "center", flexDirection: "row", gap: 2 },
   deleteButton: {
     width: 44,
     height: 44,

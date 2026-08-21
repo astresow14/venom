@@ -89,10 +89,11 @@ test("Kanban editing stays connected, accessible, and persistent", async ({
       .getByRole("button", { name: `Edit task ${EDITED_CARD_TITLE}` }),
   ).toBeVisible();
 
+  // Saving returns keyboard focus to the edited card, even though the card
+  // moved to another stage while the editor was open.
   const keyboardMove = page.getByRole("button", {
     name: `Move ${EDITED_CARD_TITLE} to next stage`,
   });
-  await keyboardMove.focus();
   await expectVisibleKeyboardFocus(keyboardMove);
   await keyboardMove.press("Enter");
   const doneCard = page
@@ -272,4 +273,57 @@ test("Kanban editing stays connected, accessible, and persistent", async ({
   await expect(
     page.getByRole("checkbox", { name: "Approved", exact: true }),
   ).toBeChecked();
+});
+
+// The seeded workspace starts with "Design onboarding flow" in To Do; the
+// two cards added here sit after it, so the deletions below exercise every
+// neighbour branch: next card, previous card, then the empty stage.
+test("Deleting a card hands keyboard focus to a surviving neighbour", async ({
+  page,
+}) => {
+  await page.goto("/?venomUiTest=true");
+  await openBoard(page);
+
+  const toDoStage = page.getByRole("list", { name: "To Do stage" });
+  for (const title of ["Delete target", "Delete survivor"]) {
+    await page.getByRole("button", { name: "Add card to To Do" }).click();
+    await page.getByLabel("New task title for To Do").fill(title);
+    await page.getByRole("button", { name: "Add card", exact: true }).click();
+    await expect(
+      toDoStage.getByRole("button", { name: `Edit task ${title}` }),
+    ).toBeVisible();
+  }
+
+  const deleteCard = async (title: string) => {
+    await page.getByRole("button", { name: `Edit task ${title}` }).click();
+    await page.getByRole("button", { name: "Delete card" }).click();
+    await expect(
+      page.getByText("Delete this card? This cannot be undone."),
+    ).toBeVisible();
+    await page.getByTestId("confirm-delete-card").click();
+    await expect(
+      toDoStage.getByRole("button", { name: `Edit task ${title}` }),
+    ).toHaveCount(0);
+  };
+
+  // Deleting a middle card moves focus to the next card in the same stage.
+  await deleteCard("Delete target");
+  await expectVisibleKeyboardFocus(
+    page.getByRole("button", { name: "Move Delete survivor to next stage" }),
+  );
+
+  // Deleting the last card falls back to the card before it.
+  await deleteCard("Delete survivor");
+  await expectVisibleKeyboardFocus(
+    page.getByRole("button", {
+      name: "Move Design onboarding flow to next stage",
+    }),
+  );
+
+  // Deleting the only remaining card focuses the stage's Add card control.
+  await deleteCard("Design onboarding flow");
+  await expect(page.getByText("No cards in To Do")).toBeVisible();
+  await expectVisibleKeyboardFocus(
+    page.getByRole("button", { name: "Add card to To Do" }),
+  );
 });

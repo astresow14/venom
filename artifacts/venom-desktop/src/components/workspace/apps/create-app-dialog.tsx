@@ -115,14 +115,14 @@ export default function CreateAppDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] rounded-none border-border bg-background/95 backdrop-blur-3xl p-0 overflow-hidden shadow-2xl">
+      <DialogContent className="sm:max-w-[500px] rounded-2xl border-border/60 surface p-0 overflow-hidden shadow-lift">
         <div className="absolute inset-0 bg-gradient-to-br from-foreground/5 to-transparent pointer-events-none" />
-        <div className="relative p-6 sm:p-8">
+        <div className="relative p-6 sm:p-8 sheen">
           <DialogHeader className="mb-6">
-            <DialogTitle className="text-2xl font-black uppercase tracking-tighter">
-              Register App
+            <DialogTitle className="text-2xl font-semibold tracking-tight">
+              Register app
             </DialogTitle>
-            <DialogDescription className="font-mono text-xs uppercase tracking-widest text-muted-foreground mt-2">
+            <DialogDescription className="text-sm text-muted-foreground mt-2">
               Add a product to your portfolio
             </DialogDescription>
           </DialogHeader>
@@ -134,17 +134,17 @@ export default function CreateAppDialog({
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-mono text-[10px] uppercase tracking-widest">
-                      App Name
+                    <FormLabel className="text-sm font-medium">
+                      App name
                     </FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="NEXUS CONTROLLER"
-                        className="rounded-none border-border/50 bg-background/50 text-sm font-bold uppercase focus-visible:ring-1 focus-visible:ring-foreground"
+                        placeholder="Nexus Controller"
+                        className="rounded-md border-border/60 bg-background/50 text-sm focus-visible:ring-ring shadow-soft"
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage className="text-[10px] uppercase tracking-wider" />
+                    <FormMessage className="text-xs" />
                   </FormItem>
                 )}
               />
@@ -154,7 +154,7 @@ export default function CreateAppDialog({
                 name="deploymentUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-mono text-[10px] uppercase tracking-widest">
+                    <FormLabel className="text-sm font-medium">
                       Existing deployment URL
                     </FormLabel>
                     <FormControl>
@@ -163,14 +163,14 @@ export default function CreateAppDialog({
                         placeholder="https://example.com"
                         autoCapitalize="none"
                         autoCorrect="off"
-                        className="rounded-none border-border/50 bg-background/50 text-sm focus-visible:ring-1 focus-visible:ring-foreground"
+                        className="rounded-md border-border/60 bg-background/50 text-sm focus-visible:ring-ring shadow-soft"
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription className="text-[10px]">
+                    <FormDescription className="text-xs text-muted-foreground">
                       Optional. Venom will link to it, not deploy it.
                     </FormDescription>
-                    <FormMessage className="text-[10px] uppercase tracking-wider" />
+                    <FormMessage className="text-xs" />
                   </FormItem>
                 )}
               />
@@ -180,17 +180,17 @@ export default function CreateAppDialog({
                 name="brand"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-mono text-[10px] uppercase tracking-widest">
-                      Brand / Identity
+                    <FormLabel className="text-sm font-medium">
+                      Brand / identity
                     </FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="ACME CORP"
-                        className="rounded-none border-border/50 bg-background/50 text-sm font-bold uppercase focus-visible:ring-1 focus-visible:ring-foreground"
+                        placeholder="Acme Corp"
+                        className="rounded-md border-border/60 bg-background/50 text-sm focus-visible:ring-ring shadow-soft"
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage className="text-[10px] uppercase tracking-wider" />
+                    <FormMessage className="text-xs" />
                   </FormItem>
                 )}
               />
@@ -200,17 +200,17 @@ export default function CreateAppDialog({
                 name="purpose"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-mono text-[10px] uppercase tracking-widest">
-                      Primary Purpose
+                    <FormLabel className="text-sm font-medium">
+                      Primary purpose
                     </FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder="State purpose of this application..."
-                        className="min-h-[100px] resize-none rounded-none border-border/50 bg-background/50 text-sm font-medium focus-visible:ring-1 focus-visible:ring-foreground"
+                        className="min-h-[100px] resize-none rounded-md border-border/60 bg-background/50 text-sm focus-visible:ring-ring shadow-soft"
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage className="text-[10px] uppercase tracking-wider" />
+                    <FormMessage className="text-xs" />
                   </FormItem>
                 )}
               />
@@ -219,13 +219,13 @@ export default function CreateAppDialog({
                 <Button
                   type="submit"
                   disabled={createApp.isPending}
-                  className="rounded-none font-bold uppercase tracking-widest px-8"
+                  className="rounded-md font-medium px-8 shadow-soft"
                   data-testid="button-submit-create-app"
                 >
                   {createApp.isPending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    "Initialize"
+                    "Create app"
                   )}
                 </Button>
               </div>

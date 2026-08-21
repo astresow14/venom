@@ -1,0 +1,53 @@
+/**
+ * Shared-workspace access loss, in one place.
+ *
+ * The server answers every workspace-scoped read with
+ * `403 { code: "workspace_access_denied" }` the moment the caller stops being
+ * a member. Revocation must take effect on the *next request*, so the client
+ * treats that response as an event, not an error to retry: evict cached
+ * workspace content and fall back to the personal tier.
+ *
+ * This module is deliberately dependency-free (structural error check instead
+ * of an `instanceof ApiError` import) so the QueryClient in the entry chunk
+ * can use it without dragging the API client along.
+ */
+
+export const WORKSPACE_ACCESS_DENIED_CODE = "workspace_access_denied";
+
+/**
+ * Matches both the generated client's thrown `ApiError` (status + parsed
+ * `data`) and hand-rolled fetch errors shaped the same way.
+ */
+export function isWorkspaceAccessDeniedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as {
+    status?: unknown;
+    data?: { code?: unknown } | null;
+  };
+  if (candidate.status !== 403) return false;
+  const data = candidate.data;
+  if (!data || typeof data !== "object") return false;
+  return data.code === WORKSPACE_ACCESS_DENIED_CODE;
+}
+
+type AccessLostHandler = () => void;
+
+let handler: AccessLostHandler | null = null;
+
+/** The SharedWorkspaceProvider registers its eviction routine here. */
+export function registerWorkspaceAccessLostHandler(
+  next: AccessLostHandler,
+): () => void {
+  handler = next;
+  return () => {
+    if (handler === next) handler = null;
+  };
+}
+
+/**
+ * Fired from the QueryClient's error hooks and from the manual fetch paths
+ * (chat streaming) whenever the server says workspace access is gone.
+ */
+export function notifyWorkspaceAccessLost(): void {
+  handler?.();
+}

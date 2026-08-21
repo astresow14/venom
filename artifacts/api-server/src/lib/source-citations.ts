@@ -18,7 +18,21 @@ function longestCitationPrefixSuffix(value: string): number {
   return 0;
 }
 
-export function createCitationStreamFilter(allowedIds: Iterable<string>) {
+export type CitationStreamFilterOptions = {
+  /**
+   * Optional server-side marker rewriter. When an allowed citation id
+   * resolves to a string, that text replaces the whole [source:id] marker in
+   * the output stream (used to turn workspace citations into plain-text
+   * labels so no structured workspace reference reaches client persistence).
+   * Returning null/undefined keeps the marker verbatim.
+   */
+  resolveMarker?: (citationId: string) => string | null | undefined;
+};
+
+export function createCitationStreamFilter(
+  allowedIds: Iterable<string>,
+  options?: CitationStreamFilterOptions,
+) {
   const allowed = new Set(
     [...allowedIds].filter((id) => CITATION_ID_PATTERN.test(id)),
   );
@@ -55,7 +69,8 @@ export function createCitationStreamFilter(allowedIds: Iterable<string>) {
 
       const citationId = pending.slice(CITATION_PREFIX.length, end);
       if (allowed.has(citationId)) {
-        output += pending.slice(0, end + 1);
+        const resolved = options?.resolveMarker?.(citationId);
+        output += resolved ?? pending.slice(0, end + 1);
       }
       pending = pending.slice(end + 1);
     }

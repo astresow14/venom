@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   applyKnowledgeInsightsToState,
+  knowledgeDisplayText,
   clearConversationKnowledge,
   deleteProjectKnowledge,
   fileKnowledgeNoteToState,
@@ -327,4 +328,68 @@ test("filing a duplicate concept updates only the initiating project", () => {
   assert.equal(alphaRoadmap.mentionCount, 1);
   assert.equal(betaRoadmap.mentionCount, 2);
   assert.equal(betaRoadmap.sources.length, 2);
+});
+
+const citation = (overrides) => ({
+  id: "cite_live",
+  provider: "github",
+  kind: "issue",
+  title: "Drawer stays open",
+  url: "https://github.com/acme/venom/issues/12",
+  excerpt: "Drawer stays open on mobile.",
+  reference: "acme/venom#12",
+  ...overrides,
+});
+
+test("Brain note text names its live sources instead of raw markers", () => {
+  const lookup = {
+    citationsById: new Map([["cite_live", citation()]]),
+    archivedById: new Map(),
+  };
+
+  assert.equal(
+    knowledgeDisplayText(
+      "The release is blocked by [source:cite_live] until Friday.",
+      lookup,
+    ),
+    "The release is blocked by Drawer stays open until Friday.",
+  );
+});
+
+test("Brain note text reads disconnected sources as archived references", () => {
+  const archivedLookup = {
+    citationsById: new Map(),
+    archivedById: new Map([
+      [
+        "cite_gone",
+        {
+          id: "cite_gone",
+          title: "Closed pull request",
+          url: "https://github.com/acme/venom/pull/4",
+          retiredAt: 10,
+        },
+      ],
+    ]),
+  };
+
+  assert.equal(
+    knowledgeDisplayText("Shipped in [source:cite_gone].", archivedLookup),
+    "Shipped in Closed pull request (archived).",
+  );
+  assert.equal(
+    knowledgeDisplayText("Shipped in [source:cite_unknown].", {
+      citationsById: new Map(),
+    }),
+    "Shipped in (archived source).",
+  );
+});
+
+test("Brain note text never shows a raw source marker", () => {
+  const withoutLookup = knowledgeDisplayText(
+    "Blocked by [source:cite_live] and [source:cite_gone], see [source:cite",
+  );
+
+  assert.ok(!withoutLookup.includes("[source:"));
+  assert.equal(withoutLookup, "Blocked by (archived source) and (archived source), see");
+  assert.equal(knowledgeDisplayText(""), "");
 });

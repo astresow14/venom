@@ -1,3 +1,9 @@
+import type {
+  SourceCitation,
+  VenomArchivedCitation,
+} from "@workspace/api-client-react";
+import { messageCitationPlainText } from "./messageCitations.ts";
+
 export type TaskStatus = "todo" | "in_progress" | "done";
 
 export type Task = {
@@ -107,6 +113,38 @@ export const initialVenomState: VenomState = {
 };
 
 const normalizeLabel = (label: string) => label.trim().toLocaleLowerCase();
+
+/**
+ * The citations a Brain note's text can point at: the live ones of the note's
+ * project, plus the archived record of any a refresh or disconnect retired.
+ */
+export type KnowledgeCitationLookup = {
+  citationsById: Map<string, SourceCitation>;
+  archivedById?: Map<string, VenomArchivedCitation>;
+};
+
+const NO_LIVE_CITATIONS: Map<string, SourceCitation> = new Map();
+
+/**
+ * Renders a cluster summary or source excerpt as a reader sees it. Both are
+ * summarized from conversation text, so they can carry the same inline
+ * `[source:...]` markers an assistant answer stores — from the extraction
+ * model echoing one, or from a saved answer used verbatim as the excerpt. A
+ * marker never belongs on screen: a live one reads as its source title, and
+ * one whose source was refreshed away or disconnected reads as the archived
+ * reference the chat bubble shows.
+ */
+export function knowledgeDisplayText(
+  text: string,
+  lookup?: KnowledgeCitationLookup,
+): string {
+  if (!text) return "";
+  return messageCitationPlainText(
+    text,
+    lookup?.citationsById ?? NO_LIVE_CITATIONS,
+    lookup?.archivedById,
+  );
+}
 
 function positionForLabel(label: string, index: number) {
   const hash = [...label].reduce(
@@ -475,6 +513,94 @@ export function applyKnowledgeInsightsToState({
   );
 
   return { ...state, clusters, projects };
+}
+
+type ApplyFiledClustersOptions = {
+  state: VenomState;
+  conversation: Pick<Conversation, "id" | "title" | "projectId">;
+  filed: KnowledgeCluster[];
+  now: number;
+};
+
+// Applies clusters the server already filed into the ontology store. The
+// server runs the exact normalization and merge rules the local path uses,
+// so its records are canonical: replace matching ids wholesale, add new
+// ones, and decay untouched same-project clusters exactly like a local
+// filing would so both sides stay aligned.
+export function applyFiledClustersToState({
+  state,
+  conversation,
+  filed,
+  now,
+}: ApplyFiledClustersOptions): VenomState {
+  if (!filed.length) return state;
+  const liveConversation = state.conversations.find(
+    (item) => item.id === conversation.id,
+  );
+  if (
+    !liveConversation ||
+    liveConversation.projectId !== conversation.projectId
+  ) {
+    return state;
+  }
+
+  const filedIds = new Set(filed.map((cluster) => cluster.id));
+  const clusters = state.clusters
+    .filter((cluster) => !filedIds.has(cluster.id))
+    .map((cluster) =>
+      cluster.projectId === liveConversation.projectId
+        ? { ...cluster, strength: Math.max(0.12, cluster.strength * 0.96) }
+        : cluster,
+    );
+  for (const cluster of filed) {
+    clusters.push({
+      ...cluster,
+      links: [...cluster.links],
+      sources: cluster.sources.map((source) => ({
+        ...source,
+        messageIds: [...source.messageIds],
+      })),
+    });
+  }
+
+  // Keep the local link invariant: symmetric and never dangling.
+  const liveIds = new Set(clusters.map((cluster) => cluster.id));
+  const linkSets = new Map(
+    clusters.map((cluster) => [
+      cluster.id,
+      new Set(
+        cluster.links.filter((id) => id !== cluster.id && liveIds.has(id)),
+      ),
+    ]),
+  );
+  for (const cluster of clusters) {
+    for (const target of linkSets.get(cluster.id) ?? []) {
+      linkSets.get(target)?.add(cluster.id);
+    }
+  }
+  const reconciled = clusters.map((cluster) => ({
+    ...cluster,
+    links: [...(linkSets.get(cluster.id) ?? [])],
+  }));
+
+  const projectConversationIds = new Set(
+    reconciled
+      .filter((cluster) => cluster.projectId === liveConversation.projectId)
+      .flatMap((cluster) =>
+        cluster.sources.map((source) => source.conversationId),
+      ),
+  );
+  const projects = state.projects.map((project) =>
+    project.id === liveConversation.projectId
+      ? {
+          ...project,
+          sourceCount: projectConversationIds.size,
+          updatedAt: now,
+        }
+      : project,
+  );
+
+  return { ...state, clusters: reconciled, projects };
 }
 
 type FileKnowledgeNoteOptions = {

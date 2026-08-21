@@ -6,8 +6,16 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { KnowledgeCandidate } from './knowledgeCandidate';
+import type { Uuid } from './uuid';
+import type { VenomKnowledgeCluster } from './venomKnowledgeCluster';
 
 export interface KnowledgeExtraction {
   /** @maxItems 8 */
   clusters: KnowledgeCandidate[];
+  /**
+     * Present only when the request set `file: true` and the insights were filed server-side. Contains every concept the filing created, strengthened, or re-linked, with canonical ids.
+     * @maxItems 80
+     */
+  filed?: VenomKnowledgeCluster[];
+  filedWorkspaceId?: Uuid;
 }

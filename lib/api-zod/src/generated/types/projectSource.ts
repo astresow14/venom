@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProjectSourceProvider } from './projectSourceProvider';
+import type { ProjectSourceSchedule } from './projectSourceSchedule';
 import type { ProjectSourceStatus } from './projectSourceStatus';
 import type { SourceCitation } from './sourceCitation';
 import type { SourceCluster } from './sourceCluster';
@@ -50,4 +51,5 @@ export interface ProjectSource {
      * @pattern ^v1\.[A-Za-z0-9_-]{2,214}\.[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$
      */
   attestation?: string;
+  schedule?: ProjectSourceSchedule;
 }

@@ -32,4 +32,16 @@ export interface VenomKnowledgeSource {
   excerpt: string;
   /** @minimum 0 */
   updatedAt: number;
+  /**
+     * Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.
+     * @maxLength 120
+     * @nullable
+     */
+  capturedByUserId?: string | null;
+  /**
+     * When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.
+     * @minimum 0
+     * @nullable
+     */
+  capturedAt?: number | null;
 }

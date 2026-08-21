@@ -26,6 +26,7 @@ export const sendVenomMessageBodyProjectContextMax = 8000;
 
 export const sendVenomMessageBodyProjectIdMax = 160;
 
+export const sendVenomMessageBodyWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 export const sendVenomMessageBodySourceCitationIdsItemRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
 export const sendVenomMessageBodySourceCitationIdsMax = 200;
 
@@ -55,6 +56,12 @@ export const sendVenomMessageBodySourceSnapshotsItemAttestationMax = 2048;
 export const sendVenomMessageBodySourceSnapshotsItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
 export const sendVenomMessageBodySourceSnapshotsMax = 32;
 
+export const sendVenomMessageBodyBlendItemIdMax = 64;
+
+export const sendVenomMessageBodyBlendItemWeightMin = 0;
+export const sendVenomMessageBodyBlendItemWeightMax = 1;
+
+export const sendVenomMessageBodyBlendMax = 3;
 
 
 export const SendVenomMessageBody = zod.object({
@@ -64,6 +71,8 @@ export const SendVenomMessageBody = zod.object({
 })).min(1).max(sendVenomMessageBodyMessagesMax),
   "projectContext": zod.string().max(sendVenomMessageBodyProjectContextMax).optional(),
   "projectId": zod.string().min(1).max(sendVenomMessageBodyProjectIdMax),
+  "workspaceId": zod.string().regex(sendVenomMessageBodyWorkspaceIdRegExp).optional(),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']).optional(),
   "sourceCitationIds": zod.array(zod.string().regex(sendVenomMessageBodySourceCitationIdsItemRegExp)).max(sendVenomMessageBodySourceCitationIdsMax).optional(),
   "sourceSnapshots": zod.array(zod.object({
   "id": zod.string().min(1).max(sendVenomMessageBodySourceSnapshotsItemIdMax).regex(sendVenomMessageBodySourceSnapshotsItemIdRegExp),
@@ -78,10 +87,170 @@ export const SendVenomMessageBody = zod.object({
   "reference": zod.string().min(1).max(sendVenomMessageBodySourceSnapshotsItemCitationsItemReferenceMax).nullable()
 })).min(1).max(sendVenomMessageBodySourceSnapshotsItemCitationsMax),
   "attestation": zod.string().min(1).max(sendVenomMessageBodySourceSnapshotsItemAttestationMax).regex(sendVenomMessageBodySourceSnapshotsItemAttestationRegExp)
-})).max(sendVenomMessageBodySourceSnapshotsMax).optional()
+})).max(sendVenomMessageBodySourceSnapshotsMax).optional(),
+  "deliberate": zod.boolean().optional().describe('Opt this message into multi-voice deliberation.'),
+  "mode": zod.enum(['talk', 'verify', 'debate']).optional().describe('How Venom answers — a single assistant (talk), background multi-voice verification that converges on one conclusion (verify), or a visible multi-voice debate in the thread (debate).'),
+  "blend": zod.array(zod.object({
+  "id": zod.string().min(1).max(sendVenomMessageBodyBlendItemIdMax).describe('Corner identity — a managed model id when real providers back the corner, a persona voice id otherwise.'),
+  "weight": zod.number().min(sendVenomMessageBodyBlendItemWeightMin).max(sendVenomMessageBodyBlendItemWeightMax)
+})).max(sendVenomMessageBodyBlendMax).optional().describe('Favoring weights for the participating voices in verify and debate. Omitted means an even blend. Weights favor a voice; they never silence the others.')
 })
 
 export const SendVenomMessageResponse = zod.unknown()
+
+
+/**
+ * @summary List the server-managed text models available to Venom
+ */
+export const getVenomModelsResponseNameMax = 80;
+
+export const getVenomModelsResponseSummaryMax = 240;
+
+export const getVenomModelsResponseAvailabilityTextMax = 160;
+
+
+export const GetVenomModelsResponseItem = zod.object({
+  "id": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
+  "provider": zod.enum(['openai', 'anthropic', 'gemini', 'openrouter']),
+  "name": zod.string().min(1).max(getVenomModelsResponseNameMax),
+  "family": zod.enum(['GPT', 'Claude', 'Gemini', 'Grok']),
+  "summary": zod.string().min(1).max(getVenomModelsResponseSummaryMax),
+  "available": zod.boolean(),
+  "availabilityText": zod.string().min(1).max(getVenomModelsResponseAvailabilityTextMax)
+})
+export const GetVenomModelsResponse = zod.array(GetVenomModelsResponseItem)
+
+
+/**
+ * @summary Describe multi-voice deliberation availability and its voice roster
+ */
+export const getVenomDeliberationResponseVoicesItemNameMax = 80;
+
+export const getVenomDeliberationResponseVoicesItemTaglineMax = 240;
+
+export const getVenomDeliberationResponseVoicesMax = 4;
+
+
+export const GetVenomDeliberationResponse = zod.object({
+  "available": zod.boolean(),
+  "distinctModels": zod.boolean().describe('Whether voices can run on genuinely different models.'),
+  "voices": zod.array(zod.object({
+  "voiceId": zod.enum(['direct', 'skeptic', 'evidence']),
+  "name": zod.string().min(1).max(getVenomDeliberationResponseVoicesItemNameMax),
+  "tagline": zod.string().min(1).max(getVenomDeliberationResponseVoicesItemTaglineMax)
+})).max(getVenomDeliberationResponseVoicesMax)
+})
+
+
+/**
+ * @summary List the named voice presets for hands-free voice chat
+ */
+export const getVenomVoicesResponseNameMax = 40;
+
+export const getVenomVoicesResponsePersonaMax = 160;
+
+export const getVenomVoicesResponseSampleTextMax = 240;
+
+export const getVenomVoicesResponseAvailabilityTextMax = 160;
+
+
+export const GetVenomVoicesResponseItem = zod.object({
+  "id": zod.enum(['sam', 'marcus', 'rowan', 'elijah', 'maya', 'isla']),
+  "name": zod.string().min(1).max(getVenomVoicesResponseNameMax),
+  "persona": zod.string().min(1).max(getVenomVoicesResponsePersonaMax),
+  "tone": zod.enum(['masculine', 'feminine', 'neutral']),
+  "sampleText": zod.string().min(1).max(getVenomVoicesResponseSampleTextMax),
+  "available": zod.boolean(),
+  "availabilityText": zod.string().min(1).max(getVenomVoicesResponseAvailabilityTextMax)
+})
+export const GetVenomVoicesResponse = zod.array(GetVenomVoicesResponseItem)
+
+
+/**
+ * Audio is processed transiently in memory and never persisted or logged; only the recognized text is returned.
+ * @summary Transcribe one spoken utterance to text
+ */
+export const transcribeVenomVoiceBodyAudioBase64Max = 5000000;
+
+
+export const TranscribeVenomVoiceBody = zod.object({
+  "audioBase64": zod.string().min(1).max(transcribeVenomVoiceBodyAudioBase64Max),
+  "format": zod.enum(['webm', 'wav', 'mp3', 'mp4', 'ogg']).optional()
+})
+
+export const transcribeVenomVoiceResponseTextMax = 8000;
+
+
+export const TranscribeVenomVoiceResponse = zod.object({
+  "text": zod.string().max(transcribeVenomVoiceResponseTextMax)
+})
+
+
+/**
+ * @summary Stream spoken audio for a piece of assistant text
+ */
+export const speakVenomVoiceBodyTextMax = 2000;
+
+
+export const SpeakVenomVoiceBody = zod.object({
+  "text": zod.string().min(1).max(speakVenomVoiceBodyTextMax),
+  "presetId": zod.enum(['sam', 'marcus', 'rowan', 'elijah', 'maya', 'isla'])
+})
+
+export const SpeakVenomVoiceResponse = zod.unknown()
+
+
+/**
+ * Classifies one finished voice turn from its transcript and recent conversation momentum. Hard-biased toward responding: questions and direct requests always get a full reply, and any uncertainty or internal failure resolves to "respond". Applies only to voice mode; typed chat never consults this endpoint.
+ * @summary Decide whether a finished spoken turn deserves a reply, a brief acknowledgment, or silence
+ */
+export const decideVenomVoiceTurnBodyTranscriptMax = 8000;
+
+export const decideVenomVoiceTurnBodyRecentTurnsItemContentMax = 4000;
+
+export const decideVenomVoiceTurnBodyRecentTurnsMax = 12;
+
+
+
+export const DecideVenomVoiceTurnBody = zod.object({
+  "transcript": zod.string().min(1).max(decideVenomVoiceTurnBodyTranscriptMax),
+  "recentTurns": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().max(decideVenomVoiceTurnBodyRecentTurnsItemContentMax)
+})).max(decideVenomVoiceTurnBodyRecentTurnsMax).optional(),
+  "talkativeness": zod.enum(['chatty', 'balanced', 'reserved']).optional().describe('How eager voice mode is to answer remarks that don\'t clearly invite a reply. Optional on stored preferences; absent means \"balanced\".')
+})
+
+export const decideVenomVoiceTurnResponseDecisionIdMax = 80;
+
+export const decideVenomVoiceTurnResponseAcknowledgmentMax = 200;
+
+
+
+export const DecideVenomVoiceTurnResponse = zod.object({
+  "decisionId": zod.string().min(1).max(decideVenomVoiceTurnResponseDecisionIdMax).optional().describe('Present only once the decision row is durably recorded; when absent, the client executes the decision without reporting an outcome.'),
+  "decision": zod.enum(['respond', 'acknowledge', 'silent']),
+  "windDown": zod.boolean().describe('The exchange reads as a goodbye; the session may ease itself closed after a quiet period.'),
+  "acknowledgment": zod.string().max(decideVenomVoiceTurnResponseAcknowledgmentMax).optional().describe('Short spoken acknowledgment; present only when decision is \"acknowledge\".')
+})
+
+
+/**
+ * Pairs a prior decision with its observed outcome (reply interrupted, user re-asked after silence, session wound down cleanly, ...) so restraint thresholds can be tuned from real usage. No audio is ever attached.
+ * @summary Record what actually happened after a speak/stay-quiet decision
+ */
+export const reportVenomVoiceDecisionOutcomeBodyDecisionIdMax = 80;
+
+
+
+export const ReportVenomVoiceDecisionOutcomeBody = zod.object({
+  "decisionId": zod.string().min(1).max(reportVenomVoiceDecisionOutcomeBodyDecisionIdMax),
+  "outcome": zod.enum(['reply_completed', 'reply_interrupted', 'user_followed_up', 'stayed_quiet', 'wound_down', 'session_closed'])
+})
+
+export const ReportVenomVoiceDecisionOutcomeResponse = zod.object({
+  "recorded": zod.boolean()
+})
 
 
 /**
@@ -99,6 +268,7 @@ export const extractVenomKnowledgeBodyMessagesItemContentMax = 8000;
 
 export const extractVenomKnowledgeBodyMessagesMax = 48;
 
+export const extractVenomKnowledgeBodyWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const ExtractVenomKnowledgeBody = zod.object({
@@ -111,7 +281,9 @@ export const ExtractVenomKnowledgeBody = zod.object({
   "id": zod.string().min(1).max(extractVenomKnowledgeBodyMessagesItemIdMax),
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string().min(1).max(extractVenomKnowledgeBodyMessagesItemContentMax)
-})).min(1).max(extractVenomKnowledgeBodyMessagesMax)
+})).min(1).max(extractVenomKnowledgeBodyMessagesMax),
+  "file": zod.boolean().optional().describe('When true, the server files the extracted insights into the signed-in user\'s ontology store and returns the touched concepts in `filed`. Clients that omit this keep filing locally.'),
+  "workspaceId": zod.string().regex(extractVenomKnowledgeBodyWorkspaceIdRegExp).optional()
 })
 
 export const extractVenomKnowledgeResponseClustersItemLabelMax = 64;
@@ -133,6 +305,56 @@ export const extractVenomKnowledgeResponseClustersItemRelatedLabelsMax = 8;
 
 export const extractVenomKnowledgeResponseClustersMax = 8;
 
+export const extractVenomKnowledgeResponseFiledItemIdMax = 120;
+
+export const extractVenomKnowledgeResponseFiledItemProjectIdMax = 120;
+
+export const extractVenomKnowledgeResponseFiledItemLabelMax = 200;
+
+export const extractVenomKnowledgeResponseFiledItemCategoryMax = 100;
+
+export const extractVenomKnowledgeResponseFiledItemStrengthMin = 0;
+export const extractVenomKnowledgeResponseFiledItemStrengthMax = 1;
+
+export const extractVenomKnowledgeResponseFiledItemLinksItemMax = 120;
+
+export const extractVenomKnowledgeResponseFiledItemLinksMax = 100;
+
+export const extractVenomKnowledgeResponseFiledItemDescriptionMax = 2000;
+
+export const extractVenomKnowledgeResponseFiledItemSummaryMax = 2000;
+
+export const extractVenomKnowledgeResponseFiledItemMentionCountMin = 0;
+export const extractVenomKnowledgeResponseFiledItemMentionCountMultipleOf = 1;
+
+export const extractVenomKnowledgeResponseFiledItemLastUpdatedAtMin = 0;
+export const extractVenomKnowledgeResponseFiledItemLastUpdatedAtMultipleOf = 1;
+
+export const extractVenomKnowledgeResponseFiledItemSourcesItemConversationIdMax = 120;
+
+export const extractVenomKnowledgeResponseFiledItemSourcesItemProjectIdMax = 120;
+
+export const extractVenomKnowledgeResponseFiledItemSourcesItemConversationTitleMax = 200;
+
+export const extractVenomKnowledgeResponseFiledItemSourcesItemMessageIdsItemMax = 120;
+
+export const extractVenomKnowledgeResponseFiledItemSourcesItemMessageIdsMax = 12;
+
+export const extractVenomKnowledgeResponseFiledItemSourcesItemExcerptMax = 2000;
+
+export const extractVenomKnowledgeResponseFiledItemSourcesItemUpdatedAtMin = 0;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemUpdatedAtMultipleOf = 1;
+
+export const extractVenomKnowledgeResponseFiledItemSourcesItemCapturedByUserIdMax = 120;
+
+export const extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMin = 0;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMultipleOf = 1;
+
+export const extractVenomKnowledgeResponseFiledItemSourcesMax = 8;
+
+export const extractVenomKnowledgeResponseFiledMax = 80;
+
+export const extractVenomKnowledgeResponseFiledWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const ExtractVenomKnowledgeResponse = zod.object({
@@ -143,7 +365,231 @@ export const ExtractVenomKnowledgeResponse = zod.object({
   "summary": zod.string().min(1).max(extractVenomKnowledgeResponseClustersItemSummaryMax),
   "sourceMessageIds": zod.array(zod.string().min(1).max(extractVenomKnowledgeResponseClustersItemSourceMessageIdsItemMax)).min(1).max(extractVenomKnowledgeResponseClustersItemSourceMessageIdsMax),
   "relatedLabels": zod.array(zod.string().min(1).max(extractVenomKnowledgeResponseClustersItemRelatedLabelsItemMax)).max(extractVenomKnowledgeResponseClustersItemRelatedLabelsMax)
-})).max(extractVenomKnowledgeResponseClustersMax)
+})).max(extractVenomKnowledgeResponseClustersMax),
+  "filed": zod.array(zod.object({
+  "id": zod.string().min(1).max(extractVenomKnowledgeResponseFiledItemIdMax),
+  "projectId": zod.string().max(extractVenomKnowledgeResponseFiledItemProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(extractVenomKnowledgeResponseFiledItemLabelMax),
+  "category": zod.string().min(1).max(extractVenomKnowledgeResponseFiledItemCategoryMax),
+  "strength": zod.number().min(extractVenomKnowledgeResponseFiledItemStrengthMin).max(extractVenomKnowledgeResponseFiledItemStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(extractVenomKnowledgeResponseFiledItemLinksItemMax)).max(extractVenomKnowledgeResponseFiledItemLinksMax),
+  "description": zod.string().max(extractVenomKnowledgeResponseFiledItemDescriptionMax).optional(),
+  "summary": zod.string().max(extractVenomKnowledgeResponseFiledItemSummaryMax),
+  "mentionCount": zod.number().min(extractVenomKnowledgeResponseFiledItemMentionCountMin).multipleOf(extractVenomKnowledgeResponseFiledItemMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(extractVenomKnowledgeResponseFiledItemLastUpdatedAtMin).multipleOf(extractVenomKnowledgeResponseFiledItemLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(extractVenomKnowledgeResponseFiledItemSourcesItemConversationIdMax),
+  "projectId": zod.string().max(extractVenomKnowledgeResponseFiledItemSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(extractVenomKnowledgeResponseFiledItemSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(extractVenomKnowledgeResponseFiledItemSourcesItemMessageIdsItemMax)).max(extractVenomKnowledgeResponseFiledItemSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(extractVenomKnowledgeResponseFiledItemSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(extractVenomKnowledgeResponseFiledItemSourcesItemUpdatedAtMin).multipleOf(extractVenomKnowledgeResponseFiledItemSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(extractVenomKnowledgeResponseFiledItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMin).multipleOf(extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
+})).max(extractVenomKnowledgeResponseFiledItemSourcesMax)
+})).max(extractVenomKnowledgeResponseFiledMax).optional().describe('Present only when the request set `file: true` and the insights were filed server-side. Contains every concept the filing created, strengthened, or re-linked, with canonical ids.'),
+  "filedWorkspaceId": zod.string().regex(extractVenomKnowledgeResponseFiledWorkspaceIdRegExp).optional()
+})
+
+
+/**
+ * @summary Search the signed-in user's knowledge ontology across projects
+ */
+export const searchVenomOntologyQueryQMax = 200;
+
+export const searchVenomOntologyQueryLimitMax = 50;
+
+
+export const SearchVenomOntologyQueryParams = zod.object({
+  "q": zod.coerce.string().min(1).max(searchVenomOntologyQueryQMax),
+  "limit": zod.coerce.number().int().min(1).max(searchVenomOntologyQueryLimitMax).optional()
+})
+
+export const searchVenomOntologyResponseResultsItemIdMax = 120;
+
+export const searchVenomOntologyResponseResultsItemProjectIdMax = 120;
+
+export const searchVenomOntologyResponseResultsItemLabelMax = 200;
+
+export const searchVenomOntologyResponseResultsItemCategoryMax = 100;
+
+export const searchVenomOntologyResponseResultsItemSummaryMax = 2000;
+
+export const searchVenomOntologyResponseResultsItemStrengthMin = 0;
+export const searchVenomOntologyResponseResultsItemStrengthMax = 1;
+
+export const searchVenomOntologyResponseResultsItemMentionCountMin = 0;
+
+export const searchVenomOntologyResponseResultsItemLastUpdatedAtMin = 0;
+
+export const searchVenomOntologyResponseResultsItemEvidenceCountMin = 0;
+
+export const searchVenomOntologyResponseResultsMax = 50;
+
+
+export const SearchVenomOntologyResponse = zod.object({
+  "results": zod.array(zod.object({
+  "id": zod.string().min(1).max(searchVenomOntologyResponseResultsItemIdMax),
+  "projectId": zod.string().max(searchVenomOntologyResponseResultsItemProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(searchVenomOntologyResponseResultsItemLabelMax),
+  "category": zod.string().min(1).max(searchVenomOntologyResponseResultsItemCategoryMax),
+  "summary": zod.string().max(searchVenomOntologyResponseResultsItemSummaryMax),
+  "strength": zod.number().min(searchVenomOntologyResponseResultsItemStrengthMin).max(searchVenomOntologyResponseResultsItemStrengthMax),
+  "mentionCount": zod.number().min(searchVenomOntologyResponseResultsItemMentionCountMin),
+  "lastUpdatedAt": zod.number().min(searchVenomOntologyResponseResultsItemLastUpdatedAtMin),
+  "evidenceCount": zod.number().min(searchVenomOntologyResponseResultsItemEvidenceCountMin)
+})).max(searchVenomOntologyResponseResultsMax)
+})
+
+
+/**
+ * @summary Get one ontology concept with its neighbors and evidence
+ */
+export const getVenomOntologyConceptPathConceptIdMax = 120;
+
+
+export const GetVenomOntologyConceptParams = zod.object({
+  "conceptId": zod.coerce.string().min(1).max(getVenomOntologyConceptPathConceptIdMax)
+})
+
+export const getVenomOntologyConceptResponseConceptIdMax = 120;
+
+export const getVenomOntologyConceptResponseConceptProjectIdMax = 120;
+
+export const getVenomOntologyConceptResponseConceptLabelMax = 200;
+
+export const getVenomOntologyConceptResponseConceptCategoryMax = 100;
+
+export const getVenomOntologyConceptResponseConceptStrengthMin = 0;
+export const getVenomOntologyConceptResponseConceptStrengthMax = 1;
+
+export const getVenomOntologyConceptResponseConceptLinksItemMax = 120;
+
+export const getVenomOntologyConceptResponseConceptLinksMax = 100;
+
+export const getVenomOntologyConceptResponseConceptDescriptionMax = 2000;
+
+export const getVenomOntologyConceptResponseConceptSummaryMax = 2000;
+
+export const getVenomOntologyConceptResponseConceptMentionCountMin = 0;
+export const getVenomOntologyConceptResponseConceptMentionCountMultipleOf = 1;
+
+export const getVenomOntologyConceptResponseConceptLastUpdatedAtMin = 0;
+export const getVenomOntologyConceptResponseConceptLastUpdatedAtMultipleOf = 1;
+
+export const getVenomOntologyConceptResponseConceptSourcesItemConversationIdMax = 120;
+
+export const getVenomOntologyConceptResponseConceptSourcesItemProjectIdMax = 120;
+
+export const getVenomOntologyConceptResponseConceptSourcesItemConversationTitleMax = 200;
+
+export const getVenomOntologyConceptResponseConceptSourcesItemMessageIdsItemMax = 120;
+
+export const getVenomOntologyConceptResponseConceptSourcesItemMessageIdsMax = 12;
+
+export const getVenomOntologyConceptResponseConceptSourcesItemExcerptMax = 2000;
+
+export const getVenomOntologyConceptResponseConceptSourcesItemUpdatedAtMin = 0;
+export const getVenomOntologyConceptResponseConceptSourcesItemUpdatedAtMultipleOf = 1;
+
+export const getVenomOntologyConceptResponseConceptSourcesItemCapturedByUserIdMax = 120;
+
+export const getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMin = 0;
+export const getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMultipleOf = 1;
+
+export const getVenomOntologyConceptResponseConceptSourcesMax = 8;
+
+export const getVenomOntologyConceptResponseNeighborsItemIdMax = 120;
+
+export const getVenomOntologyConceptResponseNeighborsItemProjectIdMax = 120;
+
+export const getVenomOntologyConceptResponseNeighborsItemLabelMax = 200;
+
+export const getVenomOntologyConceptResponseNeighborsItemCategoryMax = 100;
+
+export const getVenomOntologyConceptResponseNeighborsItemSummaryMax = 2000;
+
+export const getVenomOntologyConceptResponseNeighborsItemStrengthMin = 0;
+export const getVenomOntologyConceptResponseNeighborsItemStrengthMax = 1;
+
+export const getVenomOntologyConceptResponseNeighborsItemMentionCountMin = 0;
+
+export const getVenomOntologyConceptResponseNeighborsItemLastUpdatedAtMin = 0;
+
+export const getVenomOntologyConceptResponseNeighborsItemEvidenceCountMin = 0;
+
+export const getVenomOntologyConceptResponseNeighborsMax = 100;
+
+export const getVenomOntologyConceptResponsePeopleItemUserIdMax = 120;
+
+export const getVenomOntologyConceptResponsePeopleItemDisplayNameMax = 320;
+
+export const getVenomOntologyConceptResponsePeopleMax = 16;
+
+
+export const GetVenomOntologyConceptResponse = zod.object({
+  "concept": zod.object({
+  "id": zod.string().min(1).max(getVenomOntologyConceptResponseConceptIdMax),
+  "projectId": zod.string().max(getVenomOntologyConceptResponseConceptProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(getVenomOntologyConceptResponseConceptLabelMax),
+  "category": zod.string().min(1).max(getVenomOntologyConceptResponseConceptCategoryMax),
+  "strength": zod.number().min(getVenomOntologyConceptResponseConceptStrengthMin).max(getVenomOntologyConceptResponseConceptStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(getVenomOntologyConceptResponseConceptLinksItemMax)).max(getVenomOntologyConceptResponseConceptLinksMax),
+  "description": zod.string().max(getVenomOntologyConceptResponseConceptDescriptionMax).optional(),
+  "summary": zod.string().max(getVenomOntologyConceptResponseConceptSummaryMax),
+  "mentionCount": zod.number().min(getVenomOntologyConceptResponseConceptMentionCountMin).multipleOf(getVenomOntologyConceptResponseConceptMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(getVenomOntologyConceptResponseConceptLastUpdatedAtMin).multipleOf(getVenomOntologyConceptResponseConceptLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(getVenomOntologyConceptResponseConceptSourcesItemConversationIdMax),
+  "projectId": zod.string().max(getVenomOntologyConceptResponseConceptSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(getVenomOntologyConceptResponseConceptSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(getVenomOntologyConceptResponseConceptSourcesItemMessageIdsItemMax)).max(getVenomOntologyConceptResponseConceptSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(getVenomOntologyConceptResponseConceptSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(getVenomOntologyConceptResponseConceptSourcesItemUpdatedAtMin).multipleOf(getVenomOntologyConceptResponseConceptSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(getVenomOntologyConceptResponseConceptSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMin).multipleOf(getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
+})).max(getVenomOntologyConceptResponseConceptSourcesMax)
+}),
+  "neighbors": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomOntologyConceptResponseNeighborsItemIdMax),
+  "projectId": zod.string().max(getVenomOntologyConceptResponseNeighborsItemProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(getVenomOntologyConceptResponseNeighborsItemLabelMax),
+  "category": zod.string().min(1).max(getVenomOntologyConceptResponseNeighborsItemCategoryMax),
+  "summary": zod.string().max(getVenomOntologyConceptResponseNeighborsItemSummaryMax),
+  "strength": zod.number().min(getVenomOntologyConceptResponseNeighborsItemStrengthMin).max(getVenomOntologyConceptResponseNeighborsItemStrengthMax),
+  "mentionCount": zod.number().min(getVenomOntologyConceptResponseNeighborsItemMentionCountMin),
+  "lastUpdatedAt": zod.number().min(getVenomOntologyConceptResponseNeighborsItemLastUpdatedAtMin),
+  "evidenceCount": zod.number().min(getVenomOntologyConceptResponseNeighborsItemEvidenceCountMin)
+})).max(getVenomOntologyConceptResponseNeighborsMax),
+  "people": zod.array(zod.object({
+  "userId": zod.string().min(1).max(getVenomOntologyConceptResponsePeopleItemUserIdMax),
+  "displayName": zod.string().max(getVenomOntologyConceptResponsePeopleItemDisplayNameMax).nullable().describe('Best display label for the person (their name, else their email). Null when the identity record has neither.')
+})).max(getVenomOntologyConceptResponsePeopleMax).describe('Identity labels for every person attributed to this concept\'s evidence. Evidence captured before attribution is reported under the ontology owner\'s identity, so every evidence entry\'s capturedByUserId resolves against this list.')
+})
+
+
+/**
+ * Resolves the signed-in account into its per-user identity record (display name, email, sign-in provider), creating the record on first authenticated use and refreshing it when stale.
+ * @summary Who Venom recognizes the signed-in account as
+ */
+export const getVenomIdentityResponseUserIdMax = 120;
+
+export const getVenomIdentityResponseDisplayNameMax = 200;
+
+export const getVenomIdentityResponseEmailMax = 320;
+
+export const getVenomIdentityResponseProviderMax = 60;
+
+
+export const GetVenomIdentityResponse = zod.object({
+  "userId": zod.string().min(1).max(getVenomIdentityResponseUserIdMax),
+  "displayName": zod.string().max(getVenomIdentityResponseDisplayNameMax).nullable(),
+  "email": zod.string().max(getVenomIdentityResponseEmailMax).nullable(),
+  "provider": zod.string().max(getVenomIdentityResponseProviderMax).nullable().describe('Sign-in provider slug for the account, for example \"google\" or \"password\". Null when the provider is unknown.')
 })
 
 
@@ -151,7 +597,6 @@ export const ExtractVenomKnowledgeResponse = zod.object({
  * @summary Improve the grammar and organization of a draft project note
  */
 export const improveVenomNoteBodyNoteMax = 5000;
-
 
 
 export const ImproveVenomNoteBody = zod.object({
@@ -163,7 +608,6 @@ export const improveVenomNoteResponseSuggestionMax = 5000;
 export const improveVenomNoteResponseChangeNotesItemMax = 160;
 
 export const improveVenomNoteResponseChangeNotesMax = 6;
-
 
 
 export const ImproveVenomNoteResponse = zod.object({
@@ -191,14 +635,12 @@ export const GetGitHubRepositoriesResponse = zod.array(GetGitHubRepositoriesResp
 export const connectGitHubSourcePathProjectIdMax = 120;
 
 
-
 export const ConnectGitHubSourceParams = zod.object({
   "projectId": zod.coerce.string().min(1).max(connectGitHubSourcePathProjectIdMax)
 })
 
 export const connectGitHubSourceBodyRepositoryMin = 3;
 export const connectGitHubSourceBodyRepositoryMax = 200;
-
 
 
 export const ConnectGitHubSourceBody = zod.object({
@@ -238,6 +680,18 @@ export const connectGitHubSourceResponseAttestationMax = 2048;
 
 
 export const connectGitHubSourceResponseAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const connectGitHubSourceResponseScheduleUpdatedAtMin = 0;
+export const connectGitHubSourceResponseScheduleUpdatedAtMultipleOf = 1;
+
+export const connectGitHubSourceResponseScheduleLastAttemptAtMin = 0;
+export const connectGitHubSourceResponseScheduleLastAttemptAtMultipleOf = 1;
+
+export const connectGitHubSourceResponseScheduleLastErrorMax = 300;
+
+export const connectGitHubSourceResponseScheduleClaimedAtMin = 0;
+export const connectGitHubSourceResponseScheduleClaimedAtMultipleOf = 1;
+
+export const connectGitHubSourceResponseScheduleClaimedByMax = 120;
 
 
 export const ConnectGitHubSourceResponse = zod.object({
@@ -266,7 +720,15 @@ export const ConnectGitHubSourceResponse = zod.object({
   "strength": zod.number().min(connectGitHubSourceResponseClustersItemStrengthMin).max(connectGitHubSourceResponseClustersItemStrengthMax),
   "citationIds": zod.array(zod.string())
 })),
-  "attestation": zod.string().min(1).max(connectGitHubSourceResponseAttestationMax).regex(connectGitHubSourceResponseAttestationRegExp).optional()
+  "attestation": zod.string().min(1).max(connectGitHubSourceResponseAttestationMax).regex(connectGitHubSourceResponseAttestationRegExp).optional(),
+  "schedule": zod.object({
+  "cadence": zod.enum(['off', 'daily', 'weekly']),
+  "updatedAt": zod.number().min(connectGitHubSourceResponseScheduleUpdatedAtMin).multipleOf(connectGitHubSourceResponseScheduleUpdatedAtMultipleOf).describe('Epoch milliseconds of the last cadence change. Schedules merge on this timestamp, independently of the source snapshot itself.'),
+  "lastAttemptAt": zod.number().min(connectGitHubSourceResponseScheduleLastAttemptAtMin).multipleOf(connectGitHubSourceResponseScheduleLastAttemptAtMultipleOf).optional().describe('Epoch milliseconds of the last scheduled sync attempt, successful or not.'),
+  "lastError": zod.string().max(connectGitHubSourceResponseScheduleLastErrorMax).optional().describe('Why the last scheduled sync failed. Absent once a sync succeeds.'),
+  "claimedAt": zod.number().min(connectGitHubSourceResponseScheduleClaimedAtMin).multipleOf(connectGitHubSourceResponseScheduleClaimedAtMultipleOf).optional().describe('Epoch milliseconds when a device claimed the next scheduled sync of this source. A live claim pauses the schedule on other devices so a due source is re-synced once per cadence for the account, not once per open device. Completed attempts and expired leases clear it.'),
+  "claimedBy": zod.string().min(1).max(connectGitHubSourceResponseScheduleClaimedByMax).optional().describe('Opaque per-device-session token that wrote claimedAt, so the claiming device can recognize its own claim after a merge.')
+}).optional().describe('Unattended update schedule for a connected source. \"off\" is recorded explicitly rather than by dropping the schedule so that turning a schedule off survives a merge with a device that still has it on.')
 })
 
 
@@ -276,7 +738,6 @@ export const ConnectGitHubSourceResponse = zod.object({
 export const connectWebsiteSourcePathProjectIdMax = 120;
 
 
-
 export const ConnectWebsiteSourceParams = zod.object({
   "projectId": zod.coerce.string().min(1).max(connectWebsiteSourcePathProjectIdMax)
 })
@@ -284,7 +745,6 @@ export const ConnectWebsiteSourceParams = zod.object({
 export const connectWebsiteSourceBodyUrlMax = 2048;
 
 export const connectWebsiteSourceBodyNameMax = 120;
-
 
 
 export const ConnectWebsiteSourceBody = zod.object({
@@ -325,6 +785,18 @@ export const connectWebsiteSourceResponseAttestationMax = 2048;
 
 
 export const connectWebsiteSourceResponseAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const connectWebsiteSourceResponseScheduleUpdatedAtMin = 0;
+export const connectWebsiteSourceResponseScheduleUpdatedAtMultipleOf = 1;
+
+export const connectWebsiteSourceResponseScheduleLastAttemptAtMin = 0;
+export const connectWebsiteSourceResponseScheduleLastAttemptAtMultipleOf = 1;
+
+export const connectWebsiteSourceResponseScheduleLastErrorMax = 300;
+
+export const connectWebsiteSourceResponseScheduleClaimedAtMin = 0;
+export const connectWebsiteSourceResponseScheduleClaimedAtMultipleOf = 1;
+
+export const connectWebsiteSourceResponseScheduleClaimedByMax = 120;
 
 
 export const ConnectWebsiteSourceResponse = zod.object({
@@ -353,7 +825,15 @@ export const ConnectWebsiteSourceResponse = zod.object({
   "strength": zod.number().min(connectWebsiteSourceResponseClustersItemStrengthMin).max(connectWebsiteSourceResponseClustersItemStrengthMax),
   "citationIds": zod.array(zod.string())
 })),
-  "attestation": zod.string().min(1).max(connectWebsiteSourceResponseAttestationMax).regex(connectWebsiteSourceResponseAttestationRegExp).optional()
+  "attestation": zod.string().min(1).max(connectWebsiteSourceResponseAttestationMax).regex(connectWebsiteSourceResponseAttestationRegExp).optional(),
+  "schedule": zod.object({
+  "cadence": zod.enum(['off', 'daily', 'weekly']),
+  "updatedAt": zod.number().min(connectWebsiteSourceResponseScheduleUpdatedAtMin).multipleOf(connectWebsiteSourceResponseScheduleUpdatedAtMultipleOf).describe('Epoch milliseconds of the last cadence change. Schedules merge on this timestamp, independently of the source snapshot itself.'),
+  "lastAttemptAt": zod.number().min(connectWebsiteSourceResponseScheduleLastAttemptAtMin).multipleOf(connectWebsiteSourceResponseScheduleLastAttemptAtMultipleOf).optional().describe('Epoch milliseconds of the last scheduled sync attempt, successful or not.'),
+  "lastError": zod.string().max(connectWebsiteSourceResponseScheduleLastErrorMax).optional().describe('Why the last scheduled sync failed. Absent once a sync succeeds.'),
+  "claimedAt": zod.number().min(connectWebsiteSourceResponseScheduleClaimedAtMin).multipleOf(connectWebsiteSourceResponseScheduleClaimedAtMultipleOf).optional().describe('Epoch milliseconds when a device claimed the next scheduled sync of this source. A live claim pauses the schedule on other devices so a due source is re-synced once per cadence for the account, not once per open device. Completed attempts and expired leases clear it.'),
+  "claimedBy": zod.string().min(1).max(connectWebsiteSourceResponseScheduleClaimedByMax).optional().describe('Opaque per-device-session token that wrote claimedAt, so the claiming device can recognize its own claim after a merge.')
+}).optional().describe('Unattended update schedule for a connected source. \"off\" is recorded explicitly rather than by dropping the schedule so that turning a schedule off survives a merge with a device that still has it on.')
 })
 
 
@@ -442,7 +922,39 @@ export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemConte
 export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin = 0;
 export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf = 1;
 
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemModelNameMax = 80;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemNameMax = 80;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemModelNameMax = 80;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemContentMax = 8000;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesMax = 4;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsItemMax = 500;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsMax = 8;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerIdMax = 64;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax = 80;
+
 export const getVenomWorkspaceResponseStateOneConversationsItemMessagesMax = 1000;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendCornersItemMax = 64;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendCornersMin = 3;
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendCornersMax = 3;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMin = 0;
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMax = 1;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMin = 3;
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMax = 3;
+
+export const getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf = 1;
 
 export const getVenomWorkspaceResponseStateOneConversationsMax = 500;
 
@@ -486,6 +998,11 @@ export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax 
 export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin = 0;
 export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf = 1;
 
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedByUserIdMax = 120;
+
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf = 1;
+
 export const getVenomWorkspaceResponseStateOneClustersItemSourcesMax = 8;
 
 export const getVenomWorkspaceResponseStateOneClustersMax = 1000;
@@ -523,6 +1040,19 @@ export const getVenomWorkspaceResponseStateOneSourcesItemAttestationMax = 2048;
 
 
 export const getVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMin = 0;
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleLastErrorMax = 300;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedByMax = 120;
+
 export const getVenomWorkspaceResponseStateOneSourcesMax = 500;
 
 export const getVenomWorkspaceResponseStateOneActiveProjectIdMax = 120;
@@ -585,9 +1115,29 @@ export const getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMult
 
 export const getVenomWorkspaceResponseStateOneTombstonesSourcesMax = 2000;
 
+export const getVenomWorkspaceResponseStateOneModelPreferencesEnabledModelIdsMax = 4;
+
+export const getVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemIdMax = 160;
+
+
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemTitleMax = 300;
+
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemUrlMax = 2048;
+
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMin = 0;
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMultipleOf = 1;
+
+export const getVenomWorkspaceResponseStateOneArchivedCitationsMax = 500;
+
 export const getVenomWorkspaceResponseRevisionMin = 0;
 export const getVenomWorkspaceResponseRevisionMultipleOf = 1;
-
 
 
 export const GetVenomWorkspaceResponse = zod.object({
@@ -636,8 +1186,29 @@ export const GetVenomWorkspaceResponse = zod.object({
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string().max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemContentMax),
   "createdAt": zod.number().min(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf),
-  "status": zod.enum(['sending', 'sent', 'error'])
-})).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesMax)
+  "status": zod.enum(['sending', 'sent', 'error']),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']).optional(),
+  "modelName": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemModelNameMax).optional(),
+  "deliberation": zod.object({
+  "voices": zod.array(zod.object({
+  "voiceId": zod.enum(['direct', 'skeptic', 'evidence']),
+  "name": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemNameMax),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']).optional(),
+  "modelName": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemModelNameMax).optional(),
+  "content": zod.string().max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemContentMax),
+  "status": zod.enum(['ok', 'failed'])
+})).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesMax),
+  "disagreements": zod.array(zod.string().max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsItemMax)).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsMax)
+}).optional(),
+  "speakerId": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerIdMax).optional().describe('Debate voice identity behind this assistant turn. Absent for ordinary replies, so older clients render debate turns as plain assistant messages.'),
+  "speakerName": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax).optional().describe('Display name of the debate voice behind this assistant turn.')
+})).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesMax),
+  "responseMode": zod.enum(['talk', 'verify', 'debate']).optional().describe('How Venom answers — a single assistant (talk), background multi-voice verification that converges on one conclusion (verify), or a visible multi-voice debate in the thread (debate).'),
+  "blend": zod.object({
+  "corners": zod.array(zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemBlendCornersItemMax)).min(getVenomWorkspaceResponseStateOneConversationsItemBlendCornersMin).max(getVenomWorkspaceResponseStateOneConversationsItemBlendCornersMax),
+  "weights": zod.array(zod.number().min(getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMin).max(getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMax)).min(getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMin).max(getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMax)
+}).optional().describe('The blend pad position for this conversation, stored as the three corner identities and their normalized weights.'),
+  "modeUpdatedAt": zod.number().min(getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf).optional().describe('When the response mode or blend last changed on any device; the newer block wins in cross-device merges.')
 })).max(getVenomWorkspaceResponseStateOneConversationsMax),
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneClustersItemIdMax),
@@ -658,7 +1229,9 @@ export const GetVenomWorkspaceResponse = zod.object({
   "conversationTitle": zod.string().min(1).max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationTitleMax),
   "messageIds": zod.array(zod.string().min(1).max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsItemMax)).max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsMax),
   "excerpt": zod.string().max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax),
-  "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf)
+  "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin).multipleOf(getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
 })).max(getVenomWorkspaceResponseStateOneClustersItemSourcesMax)
 })).max(getVenomWorkspaceResponseStateOneClustersMax),
   "sources": zod.array(zod.object({
@@ -687,44 +1260,77 @@ export const GetVenomWorkspaceResponse = zod.object({
   "strength": zod.number().min(getVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMin).max(getVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMax),
   "citationIds": zod.array(zod.string())
 })),
-  "attestation": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemAttestationMax).regex(getVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp).optional()
+  "attestation": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemAttestationMax).regex(getVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp).optional(),
+  "schedule": zod.object({
+  "cadence": zod.enum(['off', 'daily', 'weekly']),
+  "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMultipleOf).describe('Epoch milliseconds of the last cadence change. Schedules merge on this timestamp, independently of the source snapshot itself.'),
+  "lastAttemptAt": zod.number().min(getVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMin).multipleOf(getVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMultipleOf).optional().describe('Epoch milliseconds of the last scheduled sync attempt, successful or not.'),
+  "lastError": zod.string().max(getVenomWorkspaceResponseStateOneSourcesItemScheduleLastErrorMax).optional().describe('Why the last scheduled sync failed. Absent once a sync succeeds.'),
+  "claimedAt": zod.number().min(getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMin).multipleOf(getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMultipleOf).optional().describe('Epoch milliseconds when a device claimed the next scheduled sync of this source. A live claim pauses the schedule on other devices so a due source is re-synced once per cadence for the account, not once per open device. Completed attempts and expired leases clear it.'),
+  "claimedBy": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedByMax).optional().describe('Opaque per-device-session token that wrote claimedAt, so the claiming device can recognize its own claim after a merge.')
+}).optional().describe('Unattended update schedule for a connected source. \"off\" is recorded explicitly rather than by dropping the schedule so that turning a schedule off survives a merge with a device that still has it on.')
 })).max(getVenomWorkspaceResponseStateOneSourcesMax),
   "activeProjectId": zod.string().max(getVenomWorkspaceResponseStateOneActiveProjectIdMax).nullable(),
   "activeConversationId": zod.string().max(getVenomWorkspaceResponseStateOneActiveConversationIdMax).nullable(),
   "tombstones": zod.object({
   "projects": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesProjectsItemIdMax),
-  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(getVenomWorkspaceResponseStateOneTombstonesProjectsMax),
   "tasks": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesTasksItemIdMax),
-  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(getVenomWorkspaceResponseStateOneTombstonesTasksMax),
   "conversations": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesConversationsItemIdMax),
-  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(getVenomWorkspaceResponseStateOneTombstonesConversationsMax),
   "messages": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesMessagesItemIdMax),
-  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(getVenomWorkspaceResponseStateOneTombstonesMessagesMax),
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax),
-  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(getVenomWorkspaceResponseStateOneTombstonesClustersMax),
   "stages": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesStagesItemIdMax),
-  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(getVenomWorkspaceResponseStateOneTombstonesStagesMax),
   "fields": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax),
-  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(getVenomWorkspaceResponseStateOneTombstonesFieldsMax),
   "sources": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneTombstonesSourcesItemIdMax),
-  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin).multipleOf(getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(getVenomWorkspaceResponseStateOneTombstonesSourcesMax)
-}).optional()
+}).optional(),
+  "modelPreferences": zod.object({
+  "enabledModelIds": zod.array(zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok'])).min(1).max(getVenomWorkspaceResponseStateOneModelPreferencesEnabledModelIdsMax),
+  "defaultModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
+  "activeModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
+  "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMultipleOf)
+}).optional(),
+  "voicePreferences": zod.object({
+  "presetId": zod.enum(['sam', 'marcus', 'rowan', 'elijah', 'maya', 'isla']),
+  "talkativeness": zod.enum(['chatty', 'balanced', 'reserved']).optional().describe('How eager voice mode is to answer remarks that don\'t clearly invite a reply. Optional on stored preferences; absent means \"balanced\".'),
+  "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMultipleOf)
+}).optional(),
+  "archivedCitations": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneArchivedCitationsItemIdMax).regex(getVenomWorkspaceResponseStateOneArchivedCitationsItemIdRegExp),
+  "title": zod.string().min(1).max(getVenomWorkspaceResponseStateOneArchivedCitationsItemTitleMax),
+  "url": zod.string().max(getVenomWorkspaceResponseStateOneArchivedCitationsItemUrlMax),
+  "retiredAt": zod.number().min(getVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMin).multipleOf(getVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMultipleOf)
+})).max(getVenomWorkspaceResponseStateOneArchivedCitationsMax).optional()
 }),zod.null()]),
   "revision": zod.number().min(getVenomWorkspaceResponseRevisionMin).multipleOf(getVenomWorkspaceResponseRevisionMultipleOf),
   "updatedAt": zod.coerce.date().nullable()
@@ -816,7 +1422,39 @@ export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemContentMax 
 export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMin = 0;
 export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMultipleOf = 1;
 
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemModelNameMax = 80;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemNameMax = 80;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemModelNameMax = 80;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemContentMax = 8000;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesMax = 4;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationDisagreementsItemMax = 500;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationDisagreementsMax = 8;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemSpeakerIdMax = 64;
+
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemSpeakerNameMax = 80;
+
 export const saveVenomWorkspaceBodyStateConversationsItemMessagesMax = 1000;
+
+export const saveVenomWorkspaceBodyStateConversationsItemBlendCornersItemMax = 64;
+
+export const saveVenomWorkspaceBodyStateConversationsItemBlendCornersMin = 3;
+export const saveVenomWorkspaceBodyStateConversationsItemBlendCornersMax = 3;
+
+export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsItemMin = 0;
+export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsItemMax = 1;
+
+export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsMin = 3;
+export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsMax = 3;
+
+export const saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMultipleOf = 1;
 
 export const saveVenomWorkspaceBodyStateConversationsMax = 500;
 
@@ -860,6 +1498,11 @@ export const saveVenomWorkspaceBodyStateClustersItemSourcesItemExcerptMax = 2000
 export const saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMin = 0;
 export const saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMultipleOf = 1;
 
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedByUserIdMax = 120;
+
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMin = 0;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMultipleOf = 1;
+
 export const saveVenomWorkspaceBodyStateClustersItemSourcesMax = 8;
 
 export const saveVenomWorkspaceBodyStateClustersMax = 1000;
@@ -897,6 +1540,19 @@ export const saveVenomWorkspaceBodyStateSourcesItemAttestationMax = 2048;
 
 
 export const saveVenomWorkspaceBodyStateSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleLastAttemptAtMin = 0;
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleLastAttemptAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleLastErrorMax = 300;
+
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedAtMin = 0;
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedByMax = 120;
+
 export const saveVenomWorkspaceBodyStateSourcesMax = 500;
 
 export const saveVenomWorkspaceBodyStateActiveProjectIdMax = 120;
@@ -959,9 +1615,29 @@ export const saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMultipleOf
 
 export const saveVenomWorkspaceBodyStateTombstonesSourcesMax = 2000;
 
+export const saveVenomWorkspaceBodyStateModelPreferencesEnabledModelIdsMax = 4;
+
+export const saveVenomWorkspaceBodyStateModelPreferencesUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateModelPreferencesUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateVoicePreferencesUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateVoicePreferencesUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemIdMax = 160;
+
+
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemTitleMax = 300;
+
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemUrlMax = 2048;
+
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemRetiredAtMin = 0;
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemRetiredAtMultipleOf = 1;
+
+export const saveVenomWorkspaceBodyStateArchivedCitationsMax = 500;
+
 export const saveVenomWorkspaceBodyBaseRevisionMin = 0;
 export const saveVenomWorkspaceBodyBaseRevisionMultipleOf = 1;
-
 
 
 export const SaveVenomWorkspaceBody = zod.object({
@@ -1010,8 +1686,29 @@ export const SaveVenomWorkspaceBody = zod.object({
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string().max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemContentMax),
   "createdAt": zod.number().min(saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMin).multipleOf(saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMultipleOf),
-  "status": zod.enum(['sending', 'sent', 'error'])
-})).max(saveVenomWorkspaceBodyStateConversationsItemMessagesMax)
+  "status": zod.enum(['sending', 'sent', 'error']),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']).optional(),
+  "modelName": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemModelNameMax).optional(),
+  "deliberation": zod.object({
+  "voices": zod.array(zod.object({
+  "voiceId": zod.enum(['direct', 'skeptic', 'evidence']),
+  "name": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemNameMax),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']).optional(),
+  "modelName": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemModelNameMax).optional(),
+  "content": zod.string().max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemContentMax),
+  "status": zod.enum(['ok', 'failed'])
+})).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesMax),
+  "disagreements": zod.array(zod.string().max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationDisagreementsItemMax)).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationDisagreementsMax)
+}).optional(),
+  "speakerId": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemSpeakerIdMax).optional().describe('Debate voice identity behind this assistant turn. Absent for ordinary replies, so older clients render debate turns as plain assistant messages.'),
+  "speakerName": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemSpeakerNameMax).optional().describe('Display name of the debate voice behind this assistant turn.')
+})).max(saveVenomWorkspaceBodyStateConversationsItemMessagesMax),
+  "responseMode": zod.enum(['talk', 'verify', 'debate']).optional().describe('How Venom answers — a single assistant (talk), background multi-voice verification that converges on one conclusion (verify), or a visible multi-voice debate in the thread (debate).'),
+  "blend": zod.object({
+  "corners": zod.array(zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemBlendCornersItemMax)).min(saveVenomWorkspaceBodyStateConversationsItemBlendCornersMin).max(saveVenomWorkspaceBodyStateConversationsItemBlendCornersMax),
+  "weights": zod.array(zod.number().min(saveVenomWorkspaceBodyStateConversationsItemBlendWeightsItemMin).max(saveVenomWorkspaceBodyStateConversationsItemBlendWeightsItemMax)).min(saveVenomWorkspaceBodyStateConversationsItemBlendWeightsMin).max(saveVenomWorkspaceBodyStateConversationsItemBlendWeightsMax)
+}).optional().describe('The blend pad position for this conversation, stored as the three corner identities and their normalized weights.'),
+  "modeUpdatedAt": zod.number().min(saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMultipleOf).optional().describe('When the response mode or blend last changed on any device; the newer block wins in cross-device merges.')
 })).max(saveVenomWorkspaceBodyStateConversationsMax),
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateClustersItemIdMax),
@@ -1032,7 +1729,9 @@ export const SaveVenomWorkspaceBody = zod.object({
   "conversationTitle": zod.string().min(1).max(saveVenomWorkspaceBodyStateClustersItemSourcesItemConversationTitleMax),
   "messageIds": zod.array(zod.string().min(1).max(saveVenomWorkspaceBodyStateClustersItemSourcesItemMessageIdsItemMax)).max(saveVenomWorkspaceBodyStateClustersItemSourcesItemMessageIdsMax),
   "excerpt": zod.string().max(saveVenomWorkspaceBodyStateClustersItemSourcesItemExcerptMax),
-  "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMultipleOf)
+  "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMin).multipleOf(saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
 })).max(saveVenomWorkspaceBodyStateClustersItemSourcesMax)
 })).max(saveVenomWorkspaceBodyStateClustersMax),
   "sources": zod.array(zod.object({
@@ -1061,44 +1760,77 @@ export const SaveVenomWorkspaceBody = zod.object({
   "strength": zod.number().min(saveVenomWorkspaceBodyStateSourcesItemClustersItemStrengthMin).max(saveVenomWorkspaceBodyStateSourcesItemClustersItemStrengthMax),
   "citationIds": zod.array(zod.string())
 })),
-  "attestation": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemAttestationMax).regex(saveVenomWorkspaceBodyStateSourcesItemAttestationRegExp).optional()
+  "attestation": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemAttestationMax).regex(saveVenomWorkspaceBodyStateSourcesItemAttestationRegExp).optional(),
+  "schedule": zod.object({
+  "cadence": zod.enum(['off', 'daily', 'weekly']),
+  "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateSourcesItemScheduleUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateSourcesItemScheduleUpdatedAtMultipleOf).describe('Epoch milliseconds of the last cadence change. Schedules merge on this timestamp, independently of the source snapshot itself.'),
+  "lastAttemptAt": zod.number().min(saveVenomWorkspaceBodyStateSourcesItemScheduleLastAttemptAtMin).multipleOf(saveVenomWorkspaceBodyStateSourcesItemScheduleLastAttemptAtMultipleOf).optional().describe('Epoch milliseconds of the last scheduled sync attempt, successful or not.'),
+  "lastError": zod.string().max(saveVenomWorkspaceBodyStateSourcesItemScheduleLastErrorMax).optional().describe('Why the last scheduled sync failed. Absent once a sync succeeds.'),
+  "claimedAt": zod.number().min(saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedAtMin).multipleOf(saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedAtMultipleOf).optional().describe('Epoch milliseconds when a device claimed the next scheduled sync of this source. A live claim pauses the schedule on other devices so a due source is re-synced once per cadence for the account, not once per open device. Completed attempts and expired leases clear it.'),
+  "claimedBy": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedByMax).optional().describe('Opaque per-device-session token that wrote claimedAt, so the claiming device can recognize its own claim after a merge.')
+}).optional().describe('Unattended update schedule for a connected source. \"off\" is recorded explicitly rather than by dropping the schedule so that turning a schedule off survives a merge with a device that still has it on.')
 })).max(saveVenomWorkspaceBodyStateSourcesMax),
   "activeProjectId": zod.string().max(saveVenomWorkspaceBodyStateActiveProjectIdMax).nullable(),
   "activeConversationId": zod.string().max(saveVenomWorkspaceBodyStateActiveConversationIdMax).nullable(),
   "tombstones": zod.object({
   "projects": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesProjectsItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceBodyStateTombstonesProjectsMax),
   "tasks": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesTasksItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceBodyStateTombstonesTasksMax),
   "conversations": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesConversationsItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceBodyStateTombstonesConversationsMax),
   "messages": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesMessagesItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceBodyStateTombstonesMessagesMax),
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesClustersItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceBodyStateTombstonesClustersMax),
   "stages": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesStagesItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceBodyStateTombstonesStagesMax),
   "fields": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesFieldsItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceBodyStateTombstonesFieldsMax),
   "sources": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateTombstonesSourcesItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMin).multipleOf(saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceBodyStateTombstonesSourcesMax)
-}).optional()
+}).optional(),
+  "modelPreferences": zod.object({
+  "enabledModelIds": zod.array(zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok'])).min(1).max(saveVenomWorkspaceBodyStateModelPreferencesEnabledModelIdsMax),
+  "defaultModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
+  "activeModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
+  "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateModelPreferencesUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateModelPreferencesUpdatedAtMultipleOf)
+}).optional(),
+  "voicePreferences": zod.object({
+  "presetId": zod.enum(['sam', 'marcus', 'rowan', 'elijah', 'maya', 'isla']),
+  "talkativeness": zod.enum(['chatty', 'balanced', 'reserved']).optional().describe('How eager voice mode is to answer remarks that don\'t clearly invite a reply. Optional on stored preferences; absent means \"balanced\".'),
+  "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateVoicePreferencesUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateVoicePreferencesUpdatedAtMultipleOf)
+}).optional(),
+  "archivedCitations": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateArchivedCitationsItemIdMax).regex(saveVenomWorkspaceBodyStateArchivedCitationsItemIdRegExp),
+  "title": zod.string().min(1).max(saveVenomWorkspaceBodyStateArchivedCitationsItemTitleMax),
+  "url": zod.string().max(saveVenomWorkspaceBodyStateArchivedCitationsItemUrlMax),
+  "retiredAt": zod.number().min(saveVenomWorkspaceBodyStateArchivedCitationsItemRetiredAtMin).multipleOf(saveVenomWorkspaceBodyStateArchivedCitationsItemRetiredAtMultipleOf)
+})).max(saveVenomWorkspaceBodyStateArchivedCitationsMax).optional()
 }),
   "baseRevision": zod.number().min(saveVenomWorkspaceBodyBaseRevisionMin).multipleOf(saveVenomWorkspaceBodyBaseRevisionMultipleOf)
 })
@@ -1185,7 +1917,39 @@ export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCont
 export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin = 0;
 export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf = 1;
 
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemModelNameMax = 80;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemNameMax = 80;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemModelNameMax = 80;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemContentMax = 8000;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesMax = 4;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsItemMax = 500;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsMax = 8;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerIdMax = 64;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax = 80;
+
 export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesMax = 1000;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersItemMax = 64;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersMin = 3;
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersMax = 3;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMin = 0;
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMax = 1;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMin = 3;
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMax = 3;
+
+export const saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf = 1;
 
 export const saveVenomWorkspaceResponseStateOneConversationsMax = 500;
 
@@ -1229,6 +1993,11 @@ export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax
 export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin = 0;
 export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf = 1;
 
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedByUserIdMax = 120;
+
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf = 1;
+
 export const saveVenomWorkspaceResponseStateOneClustersItemSourcesMax = 8;
 
 export const saveVenomWorkspaceResponseStateOneClustersMax = 1000;
@@ -1266,6 +2035,19 @@ export const saveVenomWorkspaceResponseStateOneSourcesItemAttestationMax = 2048;
 
 
 export const saveVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastErrorMax = 300;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedByMax = 120;
+
 export const saveVenomWorkspaceResponseStateOneSourcesMax = 500;
 
 export const saveVenomWorkspaceResponseStateOneActiveProjectIdMax = 120;
@@ -1328,9 +2110,29 @@ export const saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMul
 
 export const saveVenomWorkspaceResponseStateOneTombstonesSourcesMax = 2000;
 
+export const saveVenomWorkspaceResponseStateOneModelPreferencesEnabledModelIdsMax = 4;
+
+export const saveVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemIdMax = 160;
+
+
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemTitleMax = 300;
+
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemUrlMax = 2048;
+
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMultipleOf = 1;
+
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsMax = 500;
+
 export const saveVenomWorkspaceResponseRevisionMin = 0;
 export const saveVenomWorkspaceResponseRevisionMultipleOf = 1;
-
 
 
 export const SaveVenomWorkspaceResponse = zod.object({
@@ -1379,8 +2181,29 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string().max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemContentMax),
   "createdAt": zod.number().min(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf),
-  "status": zod.enum(['sending', 'sent', 'error'])
-})).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesMax)
+  "status": zod.enum(['sending', 'sent', 'error']),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']).optional(),
+  "modelName": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemModelNameMax).optional(),
+  "deliberation": zod.object({
+  "voices": zod.array(zod.object({
+  "voiceId": zod.enum(['direct', 'skeptic', 'evidence']),
+  "name": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemNameMax),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']).optional(),
+  "modelName": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemModelNameMax).optional(),
+  "content": zod.string().max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemContentMax),
+  "status": zod.enum(['ok', 'failed'])
+})).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesMax),
+  "disagreements": zod.array(zod.string().max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsItemMax)).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsMax)
+}).optional(),
+  "speakerId": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerIdMax).optional().describe('Debate voice identity behind this assistant turn. Absent for ordinary replies, so older clients render debate turns as plain assistant messages.'),
+  "speakerName": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax).optional().describe('Display name of the debate voice behind this assistant turn.')
+})).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesMax),
+  "responseMode": zod.enum(['talk', 'verify', 'debate']).optional().describe('How Venom answers — a single assistant (talk), background multi-voice verification that converges on one conclusion (verify), or a visible multi-voice debate in the thread (debate).'),
+  "blend": zod.object({
+  "corners": zod.array(zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersItemMax)).min(saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersMin).max(saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersMax),
+  "weights": zod.array(zod.number().min(saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMin).max(saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMax)).min(saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMin).max(saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMax)
+}).optional().describe('The blend pad position for this conversation, stored as the three corner identities and their normalized weights.'),
+  "modeUpdatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf).optional().describe('When the response mode or blend last changed on any device; the newer block wins in cross-device merges.')
 })).max(saveVenomWorkspaceResponseStateOneConversationsMax),
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneClustersItemIdMax),
@@ -1401,7 +2224,9 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "conversationTitle": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationTitleMax),
   "messageIds": zod.array(zod.string().min(1).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsItemMax)).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsMax),
   "excerpt": zod.string().max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax),
-  "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf)
+  "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
 })).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesMax)
 })).max(saveVenomWorkspaceResponseStateOneClustersMax),
   "sources": zod.array(zod.object({
@@ -1430,47 +2255,528 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "strength": zod.number().min(saveVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMin).max(saveVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMax),
   "citationIds": zod.array(zod.string())
 })),
-  "attestation": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemAttestationMax).regex(saveVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp).optional()
+  "attestation": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemAttestationMax).regex(saveVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp).optional(),
+  "schedule": zod.object({
+  "cadence": zod.enum(['off', 'daily', 'weekly']),
+  "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMultipleOf).describe('Epoch milliseconds of the last cadence change. Schedules merge on this timestamp, independently of the source snapshot itself.'),
+  "lastAttemptAt": zod.number().min(saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMin).multipleOf(saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMultipleOf).optional().describe('Epoch milliseconds of the last scheduled sync attempt, successful or not.'),
+  "lastError": zod.string().max(saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastErrorMax).optional().describe('Why the last scheduled sync failed. Absent once a sync succeeds.'),
+  "claimedAt": zod.number().min(saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMultipleOf).optional().describe('Epoch milliseconds when a device claimed the next scheduled sync of this source. A live claim pauses the schedule on other devices so a due source is re-synced once per cadence for the account, not once per open device. Completed attempts and expired leases clear it.'),
+  "claimedBy": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedByMax).optional().describe('Opaque per-device-session token that wrote claimedAt, so the claiming device can recognize its own claim after a merge.')
+}).optional().describe('Unattended update schedule for a connected source. \"off\" is recorded explicitly rather than by dropping the schedule so that turning a schedule off survives a merge with a device that still has it on.')
 })).max(saveVenomWorkspaceResponseStateOneSourcesMax),
   "activeProjectId": zod.string().max(saveVenomWorkspaceResponseStateOneActiveProjectIdMax).nullable(),
   "activeConversationId": zod.string().max(saveVenomWorkspaceResponseStateOneActiveConversationIdMax).nullable(),
   "tombstones": zod.object({
   "projects": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesProjectsItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceResponseStateOneTombstonesProjectsMax),
   "tasks": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesTasksItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceResponseStateOneTombstonesTasksMax),
   "conversations": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesConversationsItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceResponseStateOneTombstonesConversationsMax),
   "messages": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesMessagesItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceResponseStateOneTombstonesMessagesMax),
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceResponseStateOneTombstonesClustersMax),
   "stages": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesStagesItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceResponseStateOneTombstonesStagesMax),
   "fields": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceResponseStateOneTombstonesFieldsMax),
   "sources": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneTombstonesSourcesItemIdMax),
-  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf)
+  "deletedAt": zod.number().min(saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf),
+  "replaced": zod.boolean().optional().describe('True when the entity was retired because a newer snapshot took its place (a source refresh), rather than deleted outright. A replaced entity can never come back, so the tombstone wins regardless of how recent an incoming copy claims to be.')
 })).max(saveVenomWorkspaceResponseStateOneTombstonesSourcesMax)
-}).optional()
+}).optional(),
+  "modelPreferences": zod.object({
+  "enabledModelIds": zod.array(zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok'])).min(1).max(saveVenomWorkspaceResponseStateOneModelPreferencesEnabledModelIdsMax),
+  "defaultModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
+  "activeModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
+  "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMultipleOf)
+}).optional(),
+  "voicePreferences": zod.object({
+  "presetId": zod.enum(['sam', 'marcus', 'rowan', 'elijah', 'maya', 'isla']),
+  "talkativeness": zod.enum(['chatty', 'balanced', 'reserved']).optional().describe('How eager voice mode is to answer remarks that don\'t clearly invite a reply. Optional on stored preferences; absent means \"balanced\".'),
+  "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMultipleOf)
+}).optional(),
+  "archivedCitations": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneArchivedCitationsItemIdMax).regex(saveVenomWorkspaceResponseStateOneArchivedCitationsItemIdRegExp),
+  "title": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneArchivedCitationsItemTitleMax),
+  "url": zod.string().max(saveVenomWorkspaceResponseStateOneArchivedCitationsItemUrlMax),
+  "retiredAt": zod.number().min(saveVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMin).multipleOf(saveVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMultipleOf)
+})).max(saveVenomWorkspaceResponseStateOneArchivedCitationsMax).optional()
 }),zod.null()]),
   "revision": zod.number().min(saveVenomWorkspaceResponseRevisionMin).multipleOf(saveVenomWorkspaceResponseRevisionMultipleOf),
   "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary List the shared workspaces the signed-in user belongs to
+ */
+export const listSharedWorkspacesResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listSharedWorkspacesResponseNameMax = 80;
+
+export const listSharedWorkspacesResponseMemberCountMultipleOf = 1;
+
+
+export const ListSharedWorkspacesResponseItem = zod.object({
+  "id": zod.string().regex(listSharedWorkspacesResponseIdRegExp),
+  "name": zod.string().min(1).max(listSharedWorkspacesResponseNameMax),
+  "role": zod.enum(['admin', 'member']),
+  "memberCount": zod.number().min(1).multipleOf(listSharedWorkspacesResponseMemberCountMultipleOf),
+  "createdAt": zod.coerce.date()
+})
+export const ListSharedWorkspacesResponse = zod.array(ListSharedWorkspacesResponseItem).max(200)
+
+
+/**
+ * @summary Create a shared workspace with the caller as its first admin
+ */
+export const createSharedWorkspaceBodyNameMax = 80;
+
+
+export const CreateSharedWorkspaceBody = zod.object({
+  "name": zod.string().min(1).max(createSharedWorkspaceBodyNameMax)
+})
+
+export const createSharedWorkspaceResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createSharedWorkspaceResponseNameMax = 80;
+
+export const createSharedWorkspaceResponseMemberCountMultipleOf = 1;
+
+
+export const CreateSharedWorkspaceResponse = zod.object({
+  "id": zod.string().regex(createSharedWorkspaceResponseIdRegExp),
+  "name": zod.string().min(1).max(createSharedWorkspaceResponseNameMax),
+  "role": zod.enum(['admin', 'member']),
+  "memberCount": zod.number().min(1).multipleOf(createSharedWorkspaceResponseMemberCountMultipleOf),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List the members of a shared workspace (members only)
+ */
+export const listSharedWorkspaceMembersPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ListSharedWorkspaceMembersParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(listSharedWorkspaceMembersPathWorkspaceIdRegExp)
+})
+
+export const listSharedWorkspaceMembersResponseUserIdMax = 160;
+
+export const listSharedWorkspaceMembersResponseNameMax = 200;
+
+
+export const ListSharedWorkspaceMembersResponseItem = zod.object({
+  "userId": zod.string().min(1).max(listSharedWorkspaceMembersResponseUserIdMax),
+  "role": zod.enum(['admin', 'member']),
+  "name": zod.string().max(listSharedWorkspaceMembersResponseNameMax).nullable(),
+  "addedAt": zod.coerce.date()
+})
+export const ListSharedWorkspaceMembersResponse = zod.array(ListSharedWorkspaceMembersResponseItem).max(500)
+
+
+/**
+ * @summary Add an account to a shared workspace (admins only)
+ */
+export const addSharedWorkspaceMemberPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const AddSharedWorkspaceMemberParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(addSharedWorkspaceMemberPathWorkspaceIdRegExp)
+})
+
+export const addSharedWorkspaceMemberBodyUserIdMax = 160;
+
+
+export const AddSharedWorkspaceMemberBody = zod.object({
+  "userId": zod.string().min(1).max(addSharedWorkspaceMemberBodyUserIdMax),
+  "role": zod.enum(['admin', 'member']).optional()
+})
+
+export const addSharedWorkspaceMemberResponseUserIdMax = 160;
+
+export const addSharedWorkspaceMemberResponseNameMax = 200;
+
+
+export const AddSharedWorkspaceMemberResponse = zod.object({
+  "userId": zod.string().min(1).max(addSharedWorkspaceMemberResponseUserIdMax),
+  "role": zod.enum(['admin', 'member']),
+  "name": zod.string().max(addSharedWorkspaceMemberResponseNameMax).nullable(),
+  "addedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Remove a member; their workspace access ends at their next request (admins only)
+ */
+export const removeSharedWorkspaceMemberPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const removeSharedWorkspaceMemberPathMemberUserIdMax = 160;
+
+
+export const RemoveSharedWorkspaceMemberParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(removeSharedWorkspaceMemberPathWorkspaceIdRegExp),
+  "memberUserId": zod.coerce.string().min(1).max(removeSharedWorkspaceMemberPathMemberUserIdMax)
+})
+
+export const removeSharedWorkspaceMemberResponseRemovedUserIdMax = 160;
+
+
+export const RemoveSharedWorkspaceMemberResponse = zod.object({
+  "removedUserId": zod.string().min(1).max(removeSharedWorkspaceMemberResponseRemovedUserIdMax)
+})
+
+
+/**
+ * Workspace-tier knowledge is served exclusively through this membership-checked endpoint and is never embedded in any per-user sync snapshot, so revoking membership revokes access.
+ * @summary Read a shared workspace's knowledge clusters (members only)
+ */
+export const getSharedWorkspaceKnowledgePathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const GetSharedWorkspaceKnowledgeParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(getSharedWorkspaceKnowledgePathWorkspaceIdRegExp)
+})
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemIdMax = 120;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemProjectIdMax = 120;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemLabelMax = 200;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemCategoryMax = 100;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemStrengthMin = 0;
+export const getSharedWorkspaceKnowledgeResponseClustersItemStrengthMax = 1;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemLinksItemMax = 120;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemLinksMax = 100;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemDescriptionMax = 2000;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemSummaryMax = 2000;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemMentionCountMin = 0;
+export const getSharedWorkspaceKnowledgeResponseClustersItemMentionCountMultipleOf = 1;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemLastUpdatedAtMin = 0;
+export const getSharedWorkspaceKnowledgeResponseClustersItemLastUpdatedAtMultipleOf = 1;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemConversationIdMax = 120;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemProjectIdMax = 120;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemConversationTitleMax = 200;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemMessageIdsItemMax = 120;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemMessageIdsMax = 12;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemExcerptMax = 2000;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemUpdatedAtMin = 0;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemUpdatedAtMultipleOf = 1;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedByUserIdMax = 120;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMin = 0;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMultipleOf = 1;
+
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesMax = 8;
+
+export const getSharedWorkspaceKnowledgeResponseClustersMax = 1000;
+
+
+export const GetSharedWorkspaceKnowledgeResponse = zod.object({
+  "clusters": zod.array(zod.object({
+  "id": zod.string().min(1).max(getSharedWorkspaceKnowledgeResponseClustersItemIdMax),
+  "projectId": zod.string().max(getSharedWorkspaceKnowledgeResponseClustersItemProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(getSharedWorkspaceKnowledgeResponseClustersItemLabelMax),
+  "category": zod.string().min(1).max(getSharedWorkspaceKnowledgeResponseClustersItemCategoryMax),
+  "strength": zod.number().min(getSharedWorkspaceKnowledgeResponseClustersItemStrengthMin).max(getSharedWorkspaceKnowledgeResponseClustersItemStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(getSharedWorkspaceKnowledgeResponseClustersItemLinksItemMax)).max(getSharedWorkspaceKnowledgeResponseClustersItemLinksMax),
+  "description": zod.string().max(getSharedWorkspaceKnowledgeResponseClustersItemDescriptionMax).optional(),
+  "summary": zod.string().max(getSharedWorkspaceKnowledgeResponseClustersItemSummaryMax),
+  "mentionCount": zod.number().min(getSharedWorkspaceKnowledgeResponseClustersItemMentionCountMin).multipleOf(getSharedWorkspaceKnowledgeResponseClustersItemMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(getSharedWorkspaceKnowledgeResponseClustersItemLastUpdatedAtMin).multipleOf(getSharedWorkspaceKnowledgeResponseClustersItemLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemConversationIdMax),
+  "projectId": zod.string().max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemMessageIdsItemMax)).max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemUpdatedAtMin).multipleOf(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMin).multipleOf(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
+})).max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesMax)
+})).max(getSharedWorkspaceKnowledgeResponseClustersMax)
+})
+
+
+/**
+ * @summary List a shared workspace's SOPs (members only)
+ */
+export const listSharedWorkspaceSopsPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ListSharedWorkspaceSopsParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(listSharedWorkspaceSopsPathWorkspaceIdRegExp)
+})
+
+export const listSharedWorkspaceSopsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listSharedWorkspaceSopsResponseTitleMax = 160;
+
+export const listSharedWorkspaceSopsResponseTagsItemMax = 50;
+
+export const listSharedWorkspaceSopsResponseTagsMax = 20;
+
+export const listSharedWorkspaceSopsResponseContentPurposeMax = 2000;
+
+export const listSharedWorkspaceSopsResponseContentPrerequisitesItemMax = 500;
+
+export const listSharedWorkspaceSopsResponseContentPrerequisitesMax = 25;
+
+export const listSharedWorkspaceSopsResponseContentInputsItemMax = 500;
+
+export const listSharedWorkspaceSopsResponseContentInputsMax = 25;
+
+export const listSharedWorkspaceSopsResponseContentGuidanceItemMax = 2000;
+
+export const listSharedWorkspaceSopsResponseContentGuidanceMax = 60;
+
+export const listSharedWorkspaceSopsResponseContentRequiredApprovalsItemMax = 500;
+
+export const listSharedWorkspaceSopsResponseContentRequiredApprovalsMax = 25;
+
+export const listSharedWorkspaceSopsResponseContentAcceptanceChecksItemMax = 500;
+
+export const listSharedWorkspaceSopsResponseContentAcceptanceChecksMax = 25;
+
+export const listSharedWorkspaceSopsResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listSharedWorkspaceSopsResponseActiveRevisionNumberMultipleOf = 1;
+
+
+export const ListSharedWorkspaceSopsResponseItem = zod.object({
+  "id": zod.string().regex(listSharedWorkspaceSopsResponseIdRegExp),
+  "title": zod.string().min(1).max(listSharedWorkspaceSopsResponseTitleMax),
+  "lifecycle": zod.enum(['draft', 'active', 'archived']),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(listSharedWorkspaceSopsResponseTagsItemMax)).max(listSharedWorkspaceSopsResponseTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(listSharedWorkspaceSopsResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(listSharedWorkspaceSopsResponseContentPrerequisitesItemMax)).max(listSharedWorkspaceSopsResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(listSharedWorkspaceSopsResponseContentInputsItemMax)).max(listSharedWorkspaceSopsResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(listSharedWorkspaceSopsResponseContentGuidanceItemMax)).min(1).max(listSharedWorkspaceSopsResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(listSharedWorkspaceSopsResponseContentRequiredApprovalsItemMax)).max(listSharedWorkspaceSopsResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(listSharedWorkspaceSopsResponseContentAcceptanceChecksItemMax)).max(listSharedWorkspaceSopsResponseContentAcceptanceChecksMax)
+}),
+  "activeRevisionId": zod.union([zod.string().regex(listSharedWorkspaceSopsResponseActiveRevisionIdOneRegExp),zod.null()]),
+  "activeRevisionNumber": zod.number().min(1).multipleOf(listSharedWorkspaceSopsResponseActiveRevisionNumberMultipleOf).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListSharedWorkspaceSopsResponse = zod.array(ListSharedWorkspaceSopsResponseItem).max(500)
+
+
+/**
+ * @summary Create an SOP owned by the shared workspace (members only)
+ */
+export const createSharedWorkspaceSopPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const CreateSharedWorkspaceSopParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(createSharedWorkspaceSopPathWorkspaceIdRegExp)
+})
+
+export const createSharedWorkspaceSopBodyTitleMax = 160;
+
+export const createSharedWorkspaceSopBodyTagsItemMax = 50;
+
+export const createSharedWorkspaceSopBodyTagsMax = 20;
+
+export const createSharedWorkspaceSopBodyContentPurposeMax = 2000;
+
+export const createSharedWorkspaceSopBodyContentPrerequisitesItemMax = 500;
+
+export const createSharedWorkspaceSopBodyContentPrerequisitesMax = 25;
+
+export const createSharedWorkspaceSopBodyContentInputsItemMax = 500;
+
+export const createSharedWorkspaceSopBodyContentInputsMax = 25;
+
+export const createSharedWorkspaceSopBodyContentGuidanceItemMax = 2000;
+
+export const createSharedWorkspaceSopBodyContentGuidanceMax = 60;
+
+export const createSharedWorkspaceSopBodyContentRequiredApprovalsItemMax = 500;
+
+export const createSharedWorkspaceSopBodyContentRequiredApprovalsMax = 25;
+
+export const createSharedWorkspaceSopBodyContentAcceptanceChecksItemMax = 500;
+
+export const createSharedWorkspaceSopBodyContentAcceptanceChecksMax = 25;
+
+
+export const CreateSharedWorkspaceSopBody = zod.object({
+  "title": zod.string().min(1).max(createSharedWorkspaceSopBodyTitleMax),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(createSharedWorkspaceSopBodyTagsItemMax)).max(createSharedWorkspaceSopBodyTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(createSharedWorkspaceSopBodyContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(createSharedWorkspaceSopBodyContentPrerequisitesItemMax)).max(createSharedWorkspaceSopBodyContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(createSharedWorkspaceSopBodyContentInputsItemMax)).max(createSharedWorkspaceSopBodyContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(createSharedWorkspaceSopBodyContentGuidanceItemMax)).min(1).max(createSharedWorkspaceSopBodyContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(createSharedWorkspaceSopBodyContentRequiredApprovalsItemMax)).max(createSharedWorkspaceSopBodyContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(createSharedWorkspaceSopBodyContentAcceptanceChecksItemMax)).max(createSharedWorkspaceSopBodyContentAcceptanceChecksMax)
+})
+})
+
+export const createSharedWorkspaceSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createSharedWorkspaceSopResponseTitleMax = 160;
+
+export const createSharedWorkspaceSopResponseTagsItemMax = 50;
+
+export const createSharedWorkspaceSopResponseTagsMax = 20;
+
+export const createSharedWorkspaceSopResponseContentPurposeMax = 2000;
+
+export const createSharedWorkspaceSopResponseContentPrerequisitesItemMax = 500;
+
+export const createSharedWorkspaceSopResponseContentPrerequisitesMax = 25;
+
+export const createSharedWorkspaceSopResponseContentInputsItemMax = 500;
+
+export const createSharedWorkspaceSopResponseContentInputsMax = 25;
+
+export const createSharedWorkspaceSopResponseContentGuidanceItemMax = 2000;
+
+export const createSharedWorkspaceSopResponseContentGuidanceMax = 60;
+
+export const createSharedWorkspaceSopResponseContentRequiredApprovalsItemMax = 500;
+
+export const createSharedWorkspaceSopResponseContentRequiredApprovalsMax = 25;
+
+export const createSharedWorkspaceSopResponseContentAcceptanceChecksItemMax = 500;
+
+export const createSharedWorkspaceSopResponseContentAcceptanceChecksMax = 25;
+
+export const createSharedWorkspaceSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createSharedWorkspaceSopResponseActiveRevisionNumberMultipleOf = 1;
+
+
+export const CreateSharedWorkspaceSopResponse = zod.object({
+  "id": zod.string().regex(createSharedWorkspaceSopResponseIdRegExp),
+  "title": zod.string().min(1).max(createSharedWorkspaceSopResponseTitleMax),
+  "lifecycle": zod.enum(['draft', 'active', 'archived']),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(createSharedWorkspaceSopResponseTagsItemMax)).max(createSharedWorkspaceSopResponseTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(createSharedWorkspaceSopResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(createSharedWorkspaceSopResponseContentPrerequisitesItemMax)).max(createSharedWorkspaceSopResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(createSharedWorkspaceSopResponseContentInputsItemMax)).max(createSharedWorkspaceSopResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(createSharedWorkspaceSopResponseContentGuidanceItemMax)).min(1).max(createSharedWorkspaceSopResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(createSharedWorkspaceSopResponseContentRequiredApprovalsItemMax)).max(createSharedWorkspaceSopResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(createSharedWorkspaceSopResponseContentAcceptanceChecksItemMax)).max(createSharedWorkspaceSopResponseContentAcceptanceChecksMax)
+}),
+  "activeRevisionId": zod.union([zod.string().regex(createSharedWorkspaceSopResponseActiveRevisionIdOneRegExp),zod.null()]),
+  "activeRevisionNumber": zod.number().min(1).multipleOf(createSharedWorkspaceSopResponseActiveRevisionNumberMultipleOf).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Publish the current draft of a workspace SOP (members only)
+ */
+export const publishSharedWorkspaceSopPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishSharedWorkspaceSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const PublishSharedWorkspaceSopParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(publishSharedWorkspaceSopPathWorkspaceIdRegExp),
+  "sopId": zod.coerce.string().regex(publishSharedWorkspaceSopPathSopIdRegExp)
+})
+
+export const publishSharedWorkspaceSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishSharedWorkspaceSopResponseVersionNumberMultipleOf = 1;
+
+export const publishSharedWorkspaceSopResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const publishSharedWorkspaceSopResponseTitleMax = 160;
+
+export const publishSharedWorkspaceSopResponseTagsItemMax = 50;
+
+export const publishSharedWorkspaceSopResponseTagsMax = 20;
+
+export const publishSharedWorkspaceSopResponseContentPurposeMax = 2000;
+
+export const publishSharedWorkspaceSopResponseContentPrerequisitesItemMax = 500;
+
+export const publishSharedWorkspaceSopResponseContentPrerequisitesMax = 25;
+
+export const publishSharedWorkspaceSopResponseContentInputsItemMax = 500;
+
+export const publishSharedWorkspaceSopResponseContentInputsMax = 25;
+
+export const publishSharedWorkspaceSopResponseContentGuidanceItemMax = 2000;
+
+export const publishSharedWorkspaceSopResponseContentGuidanceMax = 60;
+
+export const publishSharedWorkspaceSopResponseContentRequiredApprovalsItemMax = 500;
+
+export const publishSharedWorkspaceSopResponseContentRequiredApprovalsMax = 25;
+
+export const publishSharedWorkspaceSopResponseContentAcceptanceChecksItemMax = 500;
+
+export const publishSharedWorkspaceSopResponseContentAcceptanceChecksMax = 25;
+
+
+export const PublishSharedWorkspaceSopResponse = zod.object({
+  "id": zod.string().regex(publishSharedWorkspaceSopResponseIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(publishSharedWorkspaceSopResponseVersionNumberMultipleOf),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "checksumSha256": zod.string().regex(publishSharedWorkspaceSopResponseChecksumSha256RegExp),
+  "title": zod.string().min(1).max(publishSharedWorkspaceSopResponseTitleMax),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(publishSharedWorkspaceSopResponseTagsItemMax)).max(publishSharedWorkspaceSopResponseTagsMax),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(publishSharedWorkspaceSopResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(publishSharedWorkspaceSopResponseContentPrerequisitesItemMax)).max(publishSharedWorkspaceSopResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(publishSharedWorkspaceSopResponseContentInputsItemMax)).max(publishSharedWorkspaceSopResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(publishSharedWorkspaceSopResponseContentGuidanceItemMax)).min(1).max(publishSharedWorkspaceSopResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(publishSharedWorkspaceSopResponseContentRequiredApprovalsItemMax)).max(publishSharedWorkspaceSopResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(publishSharedWorkspaceSopResponseContentAcceptanceChecksItemMax)).max(publishSharedWorkspaceSopResponseContentAcceptanceChecksMax)
+}),
+  "publishedAt": zod.coerce.date()
 })
 
 
@@ -1493,6 +2799,24 @@ export const listVenomAppsResponseSourceVersionMultipleOf = 1;
 
 export const listVenomAppsResponseDeploymentUrlMax = 2048;
 
+export const listVenomAppsResponseLinkedProjectIdMax = 120;
+
+export const listVenomAppsResponseLinkedProjectNameMax = 120;
+
+export const listVenomAppsResponseLatestIterationNumberMin = 0;
+export const listVenomAppsResponseLatestIterationNumberMultipleOf = 1;
+
+export const listVenomAppsResponseImprovementSignalOneKnowledgeChangesMin = 0;
+export const listVenomAppsResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
+
+export const listVenomAppsResponseImprovementSignalOneSourceChangesMin = 0;
+export const listVenomAppsResponseImprovementSignalOneSourceChangesMultipleOf = 1;
+
+export const listVenomAppsResponseImprovementSignalOneTotalChangesMultipleOf = 1;
+
+export const listVenomAppsResponseImprovementSignalOneSummaryMax = 1500;
+
+export const listVenomAppsResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
 
 
 export const ListVenomAppsResponseItem = zod.object({
@@ -1507,6 +2831,17 @@ export const ListVenomAppsResponseItem = zod.object({
   "deploymentUrl": zod.string().max(listVenomAppsResponseDeploymentUrlMax).nullable(),
   "importStatus": zod.union([zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),zod.null()]),
   "sourceUpdatedAt": zod.coerce.date().nullable(),
+  "linkedProjectId": zod.string().max(listVenomAppsResponseLinkedProjectIdMax).nullable(),
+  "linkedProjectName": zod.string().max(listVenomAppsResponseLinkedProjectNameMax).nullable(),
+  "latestIterationNumber": zod.number().min(listVenomAppsResponseLatestIterationNumberMin).multipleOf(listVenomAppsResponseLatestIterationNumberMultipleOf),
+  "improvementSignal": zod.union([zod.object({
+  "since": zod.coerce.date(),
+  "knowledgeChanges": zod.number().min(listVenomAppsResponseImprovementSignalOneKnowledgeChangesMin).multipleOf(listVenomAppsResponseImprovementSignalOneKnowledgeChangesMultipleOf),
+  "sourceChanges": zod.number().min(listVenomAppsResponseImprovementSignalOneSourceChangesMin).multipleOf(listVenomAppsResponseImprovementSignalOneSourceChangesMultipleOf),
+  "totalChanges": zod.number().min(1).multipleOf(listVenomAppsResponseImprovementSignalOneTotalChangesMultipleOf),
+  "summary": zod.string().min(1).max(listVenomAppsResponseImprovementSignalOneSummaryMax),
+  "baselineIterationNumber": zod.number().min(1).multipleOf(listVenomAppsResponseImprovementSignalOneBaselineIterationNumberMultipleOf)
+}),zod.null()]),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -1523,7 +2858,6 @@ export const createVenomAppBodyPurposeMax = 1000;
 export const createVenomAppBodyBrandMax = 120;
 
 export const createVenomAppBodyDeploymentUrlMax = 2048;
-
 
 
 export const CreateVenomAppBody = zod.object({
@@ -1549,6 +2883,24 @@ export const createVenomAppResponseSourceVersionMultipleOf = 1;
 
 export const createVenomAppResponseDeploymentUrlMax = 2048;
 
+export const createVenomAppResponseLinkedProjectIdMax = 120;
+
+export const createVenomAppResponseLinkedProjectNameMax = 120;
+
+export const createVenomAppResponseLatestIterationNumberMin = 0;
+export const createVenomAppResponseLatestIterationNumberMultipleOf = 1;
+
+export const createVenomAppResponseImprovementSignalOneKnowledgeChangesMin = 0;
+export const createVenomAppResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
+
+export const createVenomAppResponseImprovementSignalOneSourceChangesMin = 0;
+export const createVenomAppResponseImprovementSignalOneSourceChangesMultipleOf = 1;
+
+export const createVenomAppResponseImprovementSignalOneTotalChangesMultipleOf = 1;
+
+export const createVenomAppResponseImprovementSignalOneSummaryMax = 1500;
+
+export const createVenomAppResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
 
 
 export const CreateVenomAppResponse = zod.object({
@@ -1563,6 +2915,17 @@ export const CreateVenomAppResponse = zod.object({
   "deploymentUrl": zod.string().max(createVenomAppResponseDeploymentUrlMax).nullable(),
   "importStatus": zod.union([zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),zod.null()]),
   "sourceUpdatedAt": zod.coerce.date().nullable(),
+  "linkedProjectId": zod.string().max(createVenomAppResponseLinkedProjectIdMax).nullable(),
+  "linkedProjectName": zod.string().max(createVenomAppResponseLinkedProjectNameMax).nullable(),
+  "latestIterationNumber": zod.number().min(createVenomAppResponseLatestIterationNumberMin).multipleOf(createVenomAppResponseLatestIterationNumberMultipleOf),
+  "improvementSignal": zod.union([zod.object({
+  "since": zod.coerce.date(),
+  "knowledgeChanges": zod.number().min(createVenomAppResponseImprovementSignalOneKnowledgeChangesMin).multipleOf(createVenomAppResponseImprovementSignalOneKnowledgeChangesMultipleOf),
+  "sourceChanges": zod.number().min(createVenomAppResponseImprovementSignalOneSourceChangesMin).multipleOf(createVenomAppResponseImprovementSignalOneSourceChangesMultipleOf),
+  "totalChanges": zod.number().min(1).multipleOf(createVenomAppResponseImprovementSignalOneTotalChangesMultipleOf),
+  "summary": zod.string().min(1).max(createVenomAppResponseImprovementSignalOneSummaryMax),
+  "baselineIterationNumber": zod.number().min(1).multipleOf(createVenomAppResponseImprovementSignalOneBaselineIterationNumberMultipleOf)
+}),zod.null()]),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -1593,6 +2956,25 @@ export const getVenomAppResponseAppSourceVersionMin = 0;
 export const getVenomAppResponseAppSourceVersionMultipleOf = 1;
 
 export const getVenomAppResponseAppDeploymentUrlMax = 2048;
+
+export const getVenomAppResponseAppLinkedProjectIdMax = 120;
+
+export const getVenomAppResponseAppLinkedProjectNameMax = 120;
+
+export const getVenomAppResponseAppLatestIterationNumberMin = 0;
+export const getVenomAppResponseAppLatestIterationNumberMultipleOf = 1;
+
+export const getVenomAppResponseAppImprovementSignalOneKnowledgeChangesMin = 0;
+export const getVenomAppResponseAppImprovementSignalOneKnowledgeChangesMultipleOf = 1;
+
+export const getVenomAppResponseAppImprovementSignalOneSourceChangesMin = 0;
+export const getVenomAppResponseAppImprovementSignalOneSourceChangesMultipleOf = 1;
+
+export const getVenomAppResponseAppImprovementSignalOneTotalChangesMultipleOf = 1;
+
+export const getVenomAppResponseAppImprovementSignalOneSummaryMax = 1500;
+
+export const getVenomAppResponseAppImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
 
 export const getVenomAppResponseVersionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 export const getVenomAppResponseVersionsItemVersionNumberMultipleOf = 1;
@@ -1651,6 +3033,64 @@ export const getVenomAppResponseDeploymentLinksItemUrlMax = 2048;
 
 export const getVenomAppResponseDeploymentLinksMax = 20;
 
+export const getVenomAppResponseProvisioningReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseProvisioningReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseProvisioningReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseProvisioningReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseProvisioningReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseProvisioningReleasesItemTargetNameMax = 120;
+
+export const getVenomAppResponseProvisioningReleasesItemProviderProjectIdMax = 120;
+
+export const getVenomAppResponseProvisioningReleasesItemProviderCandidateIdMax = 120;
+
+export const getVenomAppResponseProvisioningReleasesItemProviderReleaseIdMax = 120;
+
+export const getVenomAppResponseProvisioningReleasesItemLaunchUrlMax = 2048;
+
+export const getVenomAppResponseProvisioningReleasesItemPublishIdempotencyKeyMax = 120;
+
+export const getVenomAppResponseProvisioningReleasesItemRollbackIdempotencyKeyMax = 120;
+
+export const getVenomAppResponseProvisioningReleasesMax = 500;
+
+export const getVenomAppResponseIterationsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseIterationsItemIterationNumberMultipleOf = 1;
+
+export const getVenomAppResponseIterationsItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseIterationsItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseIterationsItemPackageTitleMax = 160;
+
+export const getVenomAppResponseIterationsItemPackageChecksumRegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomAppResponseIterationsItemReasonMax = 1000;
+
+export const getVenomAppResponseIterationsItemChangesSummaryMax = 2000;
+
+export const getVenomAppResponseIterationsItemBaselineIterationNumberOneMultipleOf = 1;
+
+export const getVenomAppResponseIterationsItemCreatedByMax = 200;
+
+export const getVenomAppResponseIterationsMax = 200;
+
+export const getVenomAppResponseTimelineItemIdMax = 200;
+
+export const getVenomAppResponseTimelineItemTitleMax = 240;
+
+export const getVenomAppResponseTimelineItemDetailMax = 2000;
+
+export const getVenomAppResponseTimelineItemActorMax = 200;
+
+export const getVenomAppResponseTimelineItemStatusMax = 60;
+
+export const getVenomAppResponseTimelineItemBuildRunIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseTimelineItemReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseTimelineItemSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseTimelineItemIterationNumberOneMultipleOf = 1;
+
+export const getVenomAppResponseTimelineMax = 400;
+
+export const getVenomAppResponseTimelineTotalMin = 0;
+export const getVenomAppResponseTimelineTotalMultipleOf = 1;
 
 
 export const GetVenomAppResponse = zod.object({
@@ -1666,6 +3106,17 @@ export const GetVenomAppResponse = zod.object({
   "deploymentUrl": zod.string().max(getVenomAppResponseAppDeploymentUrlMax).nullable(),
   "importStatus": zod.union([zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),zod.null()]),
   "sourceUpdatedAt": zod.coerce.date().nullable(),
+  "linkedProjectId": zod.string().max(getVenomAppResponseAppLinkedProjectIdMax).nullable(),
+  "linkedProjectName": zod.string().max(getVenomAppResponseAppLinkedProjectNameMax).nullable(),
+  "latestIterationNumber": zod.number().min(getVenomAppResponseAppLatestIterationNumberMin).multipleOf(getVenomAppResponseAppLatestIterationNumberMultipleOf),
+  "improvementSignal": zod.union([zod.object({
+  "since": zod.coerce.date(),
+  "knowledgeChanges": zod.number().min(getVenomAppResponseAppImprovementSignalOneKnowledgeChangesMin).multipleOf(getVenomAppResponseAppImprovementSignalOneKnowledgeChangesMultipleOf),
+  "sourceChanges": zod.number().min(getVenomAppResponseAppImprovementSignalOneSourceChangesMin).multipleOf(getVenomAppResponseAppImprovementSignalOneSourceChangesMultipleOf),
+  "totalChanges": zod.number().min(1).multipleOf(getVenomAppResponseAppImprovementSignalOneTotalChangesMultipleOf),
+  "summary": zod.string().min(1).max(getVenomAppResponseAppImprovementSignalOneSummaryMax),
+  "baselineIterationNumber": zod.number().min(1).multipleOf(getVenomAppResponseAppImprovementSignalOneBaselineIterationNumberMultipleOf)
+}),zod.null()]),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 }),
@@ -1708,7 +3159,56 @@ export const GetVenomAppResponse = zod.object({
   "url": zod.string().max(getVenomAppResponseDeploymentLinksItemUrlMax),
   "isPrimary": zod.boolean(),
   "createdAt": zod.coerce.date()
-})).max(getVenomAppResponseDeploymentLinksMax)
+})).max(getVenomAppResponseDeploymentLinksMax),
+  "provisioningReleases": zod.array(zod.object({
+  "id": zod.string().regex(getVenomAppResponseProvisioningReleasesItemIdRegExp),
+  "provisioningRunId": zod.string().regex(getVenomAppResponseProvisioningReleasesItemProvisioningRunIdRegExp),
+  "buildRunId": zod.string().regex(getVenomAppResponseProvisioningReleasesItemBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(getVenomAppResponseProvisioningReleasesItemApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(getVenomAppResponseProvisioningReleasesItemAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().max(getVenomAppResponseProvisioningReleasesItemTargetNameMax),
+  "providerProjectId": zod.string().max(getVenomAppResponseProvisioningReleasesItemProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().min(1).max(getVenomAppResponseProvisioningReleasesItemProviderCandidateIdMax),
+  "providerReleaseId": zod.string().max(getVenomAppResponseProvisioningReleasesItemProviderReleaseIdMax).nullable(),
+  "launchUrl": zod.string().max(getVenomAppResponseProvisioningReleasesItemLaunchUrlMax).nullable(),
+  "status": zod.enum(['candidate', 'published', 'superseded', 'rolled_back', 'failed']),
+  "rollbackSupported": zod.boolean(),
+  "publishIdempotencyKey": zod.string().max(getVenomAppResponseProvisioningReleasesItemPublishIdempotencyKeyMax).nullable(),
+  "rollbackIdempotencyKey": zod.string().max(getVenomAppResponseProvisioningReleasesItemRollbackIdempotencyKeyMax).nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "rolledBackAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})).max(getVenomAppResponseProvisioningReleasesMax),
+  "iterations": zod.array(zod.object({
+  "id": zod.string().regex(getVenomAppResponseIterationsItemIdRegExp),
+  "iterationNumber": zod.number().min(1).multipleOf(getVenomAppResponseIterationsItemIterationNumberMultipleOf),
+  "buildRunId": zod.string().regex(getVenomAppResponseIterationsItemBuildRunIdRegExp),
+  "revisionId": zod.string().regex(getVenomAppResponseIterationsItemRevisionIdRegExp),
+  "packageTitle": zod.string().min(1).max(getVenomAppResponseIterationsItemPackageTitleMax),
+  "packageChecksum": zod.string().regex(getVenomAppResponseIterationsItemPackageChecksumRegExp),
+  "runKind": zod.enum(['standard', 'app_iteration']),
+  "reason": zod.string().min(1).max(getVenomAppResponseIterationsItemReasonMax),
+  "changesSummary": zod.string().max(getVenomAppResponseIterationsItemChangesSummaryMax).nullable(),
+  "baselineIterationNumber": zod.union([zod.number().min(1).multipleOf(getVenomAppResponseIterationsItemBaselineIterationNumberOneMultipleOf),zod.null()]),
+  "createdBy": zod.string().min(1).max(getVenomAppResponseIterationsItemCreatedByMax),
+  "createdAt": zod.coerce.date()
+})).max(getVenomAppResponseIterationsMax),
+  "timeline": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomAppResponseTimelineItemIdMax),
+  "kind": zod.enum(['source_import', 'package_iteration', 'release_created', 'release_published', 'release_rolled_back']),
+  "occurredAt": zod.coerce.date(),
+  "title": zod.string().min(1).max(getVenomAppResponseTimelineItemTitleMax),
+  "detail": zod.string().max(getVenomAppResponseTimelineItemDetailMax).nullable(),
+  "actor": zod.string().min(1).max(getVenomAppResponseTimelineItemActorMax),
+  "status": zod.string().min(1).max(getVenomAppResponseTimelineItemStatusMax),
+  "buildRunId": zod.union([zod.string().regex(getVenomAppResponseTimelineItemBuildRunIdOneRegExp),zod.null()]),
+  "releaseId": zod.union([zod.string().regex(getVenomAppResponseTimelineItemReleaseIdOneRegExp),zod.null()]),
+  "sourceVersionId": zod.union([zod.string().regex(getVenomAppResponseTimelineItemSourceVersionIdOneRegExp),zod.null()]),
+  "iterationNumber": zod.union([zod.number().min(1).multipleOf(getVenomAppResponseTimelineItemIterationNumberOneMultipleOf),zod.null()])
+})).max(getVenomAppResponseTimelineMax),
+  "timelineTotal": zod.number().min(getVenomAppResponseTimelineTotalMin).multipleOf(getVenomAppResponseTimelineTotalMultipleOf),
+  "timelineTruncated": zod.boolean()
 })
 
 
@@ -1730,6 +3230,7 @@ export const updateVenomAppBodyBrandMax = 120;
 
 export const updateVenomAppBodyDeploymentUrlMax = 2048;
 
+export const updateVenomAppBodyLinkedProjectIdMax = 120;
 
 
 export const UpdateVenomAppBody = zod.object({
@@ -1737,7 +3238,8 @@ export const UpdateVenomAppBody = zod.object({
   "purpose": zod.string().min(1).max(updateVenomAppBodyPurposeMax).optional(),
   "brand": zod.string().min(1).max(updateVenomAppBodyBrandMax).optional(),
   "status": zod.enum(['draft', 'importing', 'ready', 'attention']).optional(),
-  "deploymentUrl": zod.string().max(updateVenomAppBodyDeploymentUrlMax).nullish()
+  "deploymentUrl": zod.string().max(updateVenomAppBodyDeploymentUrlMax).nullish(),
+  "linkedProjectId": zod.string().max(updateVenomAppBodyLinkedProjectIdMax).nullish()
 })
 
 export const updateVenomAppResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
@@ -1756,6 +3258,24 @@ export const updateVenomAppResponseSourceVersionMultipleOf = 1;
 
 export const updateVenomAppResponseDeploymentUrlMax = 2048;
 
+export const updateVenomAppResponseLinkedProjectIdMax = 120;
+
+export const updateVenomAppResponseLinkedProjectNameMax = 120;
+
+export const updateVenomAppResponseLatestIterationNumberMin = 0;
+export const updateVenomAppResponseLatestIterationNumberMultipleOf = 1;
+
+export const updateVenomAppResponseImprovementSignalOneKnowledgeChangesMin = 0;
+export const updateVenomAppResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
+
+export const updateVenomAppResponseImprovementSignalOneSourceChangesMin = 0;
+export const updateVenomAppResponseImprovementSignalOneSourceChangesMultipleOf = 1;
+
+export const updateVenomAppResponseImprovementSignalOneTotalChangesMultipleOf = 1;
+
+export const updateVenomAppResponseImprovementSignalOneSummaryMax = 1500;
+
+export const updateVenomAppResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
 
 
 export const UpdateVenomAppResponse = zod.object({
@@ -1770,6 +3290,17 @@ export const UpdateVenomAppResponse = zod.object({
   "deploymentUrl": zod.string().max(updateVenomAppResponseDeploymentUrlMax).nullable(),
   "importStatus": zod.union([zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),zod.null()]),
   "sourceUpdatedAt": zod.coerce.date().nullable(),
+  "linkedProjectId": zod.string().max(updateVenomAppResponseLinkedProjectIdMax).nullable(),
+  "linkedProjectName": zod.string().max(updateVenomAppResponseLinkedProjectNameMax).nullable(),
+  "latestIterationNumber": zod.number().min(updateVenomAppResponseLatestIterationNumberMin).multipleOf(updateVenomAppResponseLatestIterationNumberMultipleOf),
+  "improvementSignal": zod.union([zod.object({
+  "since": zod.coerce.date(),
+  "knowledgeChanges": zod.number().min(updateVenomAppResponseImprovementSignalOneKnowledgeChangesMin).multipleOf(updateVenomAppResponseImprovementSignalOneKnowledgeChangesMultipleOf),
+  "sourceChanges": zod.number().min(updateVenomAppResponseImprovementSignalOneSourceChangesMin).multipleOf(updateVenomAppResponseImprovementSignalOneSourceChangesMultipleOf),
+  "totalChanges": zod.number().min(1).multipleOf(updateVenomAppResponseImprovementSignalOneTotalChangesMultipleOf),
+  "summary": zod.string().min(1).max(updateVenomAppResponseImprovementSignalOneSummaryMax),
+  "baselineIterationNumber": zod.number().min(1).multipleOf(updateVenomAppResponseImprovementSignalOneBaselineIterationNumberMultipleOf)
+}),zod.null()]),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -1786,6 +3317,476 @@ export const DeleteVenomAppParams = zod.object({
 })
 
 export const DeleteVenomAppResponse = zod.void()
+
+
+/**
+ * @summary Get the pre-seeded context for improving this app
+ */
+export const getVenomAppIterationContextPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const GetVenomAppIterationContextParams = zod.object({
+  "appId": zod.coerce.string().regex(getVenomAppIterationContextPathAppIdRegExp)
+})
+
+export const getVenomAppIterationContextResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseAppNameMax = 120;
+
+export const getVenomAppIterationContextResponseLinkedProjectOneIdMax = 120;
+
+export const getVenomAppIterationContextResponseLinkedProjectOneNameMax = 120;
+
+export const getVenomAppIterationContextResponseBaselineOneIterationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseBaselineOneIterationNumberMultipleOf = 1;
+
+export const getVenomAppIterationContextResponseBaselineOneBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseBaselineOneRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseBaselineOnePackageTitleMax = 160;
+
+export const getVenomAppIterationContextResponseLatestSourceVersionOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseLatestSourceVersionOneVersionNumberMultipleOf = 1;
+
+export const getVenomAppIterationContextResponseLatestSourceVersionOneArchiveFilenameMax = 160;
+
+export const getVenomAppIterationContextResponseSuggestedSopsItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseSuggestedSopsItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseSuggestedSopsItemRevisionNumberMultipleOf = 1;
+
+export const getVenomAppIterationContextResponseSuggestedSopsItemTitleMax = 160;
+
+export const getVenomAppIterationContextResponseSuggestedSopsMax = 20;
+
+export const getVenomAppIterationContextResponseChangesOneKnowledgeChangesMin = 0;
+export const getVenomAppIterationContextResponseChangesOneKnowledgeChangesMultipleOf = 1;
+
+export const getVenomAppIterationContextResponseChangesOneSourceChangesMin = 0;
+export const getVenomAppIterationContextResponseChangesOneSourceChangesMultipleOf = 1;
+
+export const getVenomAppIterationContextResponseChangesOneSummaryMax = 1500;
+
+
+export const GetVenomAppIterationContextResponse = zod.object({
+  "appId": zod.string().regex(getVenomAppIterationContextResponseAppIdRegExp),
+  "appName": zod.string().min(1).max(getVenomAppIterationContextResponseAppNameMax),
+  "linkedProject": zod.union([zod.object({
+  "id": zod.string().min(1).max(getVenomAppIterationContextResponseLinkedProjectOneIdMax),
+  "name": zod.string().min(1).max(getVenomAppIterationContextResponseLinkedProjectOneNameMax)
+}),zod.null()]),
+  "baseline": zod.union([zod.object({
+  "iterationId": zod.string().regex(getVenomAppIterationContextResponseBaselineOneIterationIdRegExp),
+  "iterationNumber": zod.number().min(1).multipleOf(getVenomAppIterationContextResponseBaselineOneIterationNumberMultipleOf),
+  "buildRunId": zod.string().regex(getVenomAppIterationContextResponseBaselineOneBuildRunIdRegExp),
+  "revisionId": zod.string().regex(getVenomAppIterationContextResponseBaselineOneRevisionIdRegExp),
+  "packageTitle": zod.string().min(1).max(getVenomAppIterationContextResponseBaselineOnePackageTitleMax),
+  "approvedAt": zod.coerce.date().nullable(),
+  "resolvable": zod.boolean()
+}),zod.null()]),
+  "latestSourceVersion": zod.union([zod.object({
+  "id": zod.string().regex(getVenomAppIterationContextResponseLatestSourceVersionOneIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(getVenomAppIterationContextResponseLatestSourceVersionOneVersionNumberMultipleOf),
+  "archiveFilename": zod.string().min(1).max(getVenomAppIterationContextResponseLatestSourceVersionOneArchiveFilenameMax)
+}),zod.null()]),
+  "suggestedSops": zod.array(zod.object({
+  "sopId": zod.string().regex(getVenomAppIterationContextResponseSuggestedSopsItemSopIdRegExp),
+  "revisionId": zod.string().regex(getVenomAppIterationContextResponseSuggestedSopsItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(getVenomAppIterationContextResponseSuggestedSopsItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(getVenomAppIterationContextResponseSuggestedSopsItemTitleMax)
+})).max(getVenomAppIterationContextResponseSuggestedSopsMax),
+  "changes": zod.union([zod.object({
+  "since": zod.coerce.date(),
+  "knowledgeChanges": zod.number().min(getVenomAppIterationContextResponseChangesOneKnowledgeChangesMin).multipleOf(getVenomAppIterationContextResponseChangesOneKnowledgeChangesMultipleOf),
+  "sourceChanges": zod.number().min(getVenomAppIterationContextResponseChangesOneSourceChangesMin).multipleOf(getVenomAppIterationContextResponseChangesOneSourceChangesMultipleOf),
+  "summary": zod.string().min(1).max(getVenomAppIterationContextResponseChangesOneSummaryMax)
+}),zod.null()]),
+  "canIterate": zod.boolean(),
+  "blockedReason": zod.union([zod.enum(['no_baseline', 'baseline_unresolvable']),zod.null()])
+})
+
+
+/**
+ * @summary Start an improvement build run from the app's approved baseline
+ */
+export const createVenomAppIterationPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const CreateVenomAppIterationParams = zod.object({
+  "appId": zod.coerce.string().regex(createVenomAppIterationPathAppIdRegExp)
+})
+
+export const createVenomAppIterationBodyInstructionMax = 4000;
+
+export const createVenomAppIterationBodyConstraintsMax = 4000;
+
+export const createVenomAppIterationBodySopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationBodySopRevisionIdsMax = 20;
+
+export const createVenomAppIterationBodyIdempotencyKeyMin = 16;
+export const createVenomAppIterationBodyIdempotencyKeyMax = 120;
+
+
+export const createVenomAppIterationBodyIdempotencyKeyRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+
+
+export const CreateVenomAppIterationBody = zod.object({
+  "instruction": zod.string().min(1).max(createVenomAppIterationBodyInstructionMax),
+  "constraints": zod.string().max(createVenomAppIterationBodyConstraintsMax).optional(),
+  "sopRevisionIds": zod.array(zod.string().regex(createVenomAppIterationBodySopRevisionIdsItemRegExp)).max(createVenomAppIterationBodySopRevisionIdsMax).optional(),
+  "idempotencyKey": zod.string().min(createVenomAppIterationBodyIdempotencyKeyMin).max(createVenomAppIterationBodyIdempotencyKeyMax).regex(createVenomAppIterationBodyIdempotencyKeyRegExp)
+})
+
+export const createVenomAppIterationResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseOneTargetNameMax = 120;
+
+export const createVenomAppIterationResponseOneProgressMin = 0;
+export const createVenomAppIterationResponseOneProgressMax = 100;
+export const createVenomAppIterationResponseOneProgressMultipleOf = 1;
+
+export const createVenomAppIterationResponseOneCurrentRevisionNumberMin = 0;
+export const createVenomAppIterationResponseOneCurrentRevisionNumberMultipleOf = 1;
+
+export const createVenomAppIterationResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseOneFailureMessageMax = 240;
+
+export const createVenomAppIterationResponseOneCancelledReasonMax = 500;
+
+export const createVenomAppIterationResponseTwoRequestTargetNameMax = 120;
+
+export const createVenomAppIterationResponseTwoRequestRequirementsMax = 8000;
+
+export const createVenomAppIterationResponseTwoRequestConstraintsMax = 4000;
+
+export const createVenomAppIterationResponseTwoRequestBrandDirectionMax = 3000;
+
+export const createVenomAppIterationResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRequestProjectIdMax = 120;
+
+export const createVenomAppIterationResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRequestSopRevisionIdsMax = 20;
+
+export const createVenomAppIterationResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRequestChangesSummaryMax = 2000;
+
+export const createVenomAppIterationResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+
+export const createVenomAppIterationResponseTwoRevisionsItemReasonMax = 1000;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageTitleMax = 160;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+
+export const createVenomAppIterationResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+
+export const createVenomAppIterationResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomAppIterationResponseTwoRevisionsMax = 50;
+
+export const createVenomAppIterationResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoEventsItemProgressMin = 0;
+export const createVenomAppIterationResponseTwoEventsItemProgressMax = 100;
+export const createVenomAppIterationResponseTwoEventsItemProgressMultipleOf = 1;
+
+export const createVenomAppIterationResponseTwoEventsItemMessageMax = 240;
+
+export const createVenomAppIterationResponseTwoEventsMax = 200;
+
+export const createVenomAppIterationResponseTwoAttemptMax = 10;
+export const createVenomAppIterationResponseTwoAttemptMultipleOf = 1;
+
+export const createVenomAppIterationResponseTwoFailureCodeMax = 80;
+
+
+export const CreateVenomAppIterationResponse = zod.object({
+  "id": zod.string().regex(createVenomAppIterationResponseOneIdRegExp),
+  "correlationId": zod.string().regex(createVenomAppIterationResponseOneCorrelationIdRegExp),
+  "appId": zod.union([zod.string().regex(createVenomAppIterationResponseOneAppIdOneRegExp),zod.null()]),
+  "runKind": zod.enum(['standard', 'app_iteration']),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(createVenomAppIterationResponseOneTargetNameMax),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(createVenomAppIterationResponseOneProgressMin).max(createVenomAppIterationResponseOneProgressMax).multipleOf(createVenomAppIterationResponseOneProgressMultipleOf),
+  "currentRevisionNumber": zod.number().min(createVenomAppIterationResponseOneCurrentRevisionNumberMin).multipleOf(createVenomAppIterationResponseOneCurrentRevisionNumberMultipleOf),
+  "approvedRevisionId": zod.union([zod.string().regex(createVenomAppIterationResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "failureMessage": zod.string().max(createVenomAppIterationResponseOneFailureMessageMax).nullable(),
+  "cancelledReason": zod.string().max(createVenomAppIterationResponseOneCancelledReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "request": zod.object({
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(createVenomAppIterationResponseTwoRequestTargetNameMax),
+  "requirements": zod.string().min(1).max(createVenomAppIterationResponseTwoRequestRequirementsMax),
+  "constraints": zod.string().max(createVenomAppIterationResponseTwoRequestConstraintsMax),
+  "brandDirection": zod.string().max(createVenomAppIterationResponseTwoRequestBrandDirectionMax),
+  "appId": zod.union([zod.string().regex(createVenomAppIterationResponseTwoRequestAppIdOneRegExp),zod.null()]),
+  "sourceVersionId": zod.union([zod.string().regex(createVenomAppIterationResponseTwoRequestSourceVersionIdOneRegExp),zod.null()]),
+  "projectId": zod.string().max(createVenomAppIterationResponseTwoRequestProjectIdMax).nullable(),
+  "sopRevisionIds": zod.array(zod.string().regex(createVenomAppIterationResponseTwoRequestSopRevisionIdsItemRegExp)).max(createVenomAppIterationResponseTwoRequestSopRevisionIdsMax),
+  "baselineIterationId": zod.union([zod.string().regex(createVenomAppIterationResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
+  "baselineRevisionId": zod.union([zod.string().regex(createVenomAppIterationResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
+  "changesSummary": zod.string().max(createVenomAppIterationResponseTwoRequestChangesSummaryMax).nullable()
+}),
+  "revisions": zod.array(zod.object({
+  "id": zod.string().regex(createVenomAppIterationResponseTwoRevisionsItemIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(createVenomAppIterationResponseTwoRevisionsItemRevisionNumberMultipleOf),
+  "reason": zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemReasonMax),
+  "package": zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefAudienceItemMax)).max(createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax)).max(createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageFunctionalScopeItemMax)).max(createVenomAppIterationResponseTwoRevisionsItemPackageFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageBrandDirectionItemMax)).max(createVenomAppIterationResponseTwoRevisionsItemPackageBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageContentRequirementsItemMax)).max(createVenomAppIterationResponseTwoRevisionsItemPackageContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax)).max(createVenomAppIterationResponseTwoRevisionsItemPackageServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp)
+})).max(createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp)
+})).max(createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageDataNeedsItemMax)).max(createVenomAppIterationResponseTwoRevisionsItemPackageDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageIntegrationNeedsItemMax)).max(createVenomAppIterationResponseTwoRevisionsItemPackageIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageAcceptanceChecksItemMax)).min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageLaunchConstraintsItemMax)).min(1).max(createVenomAppIterationResponseTwoRevisionsItemPackageLaunchConstraintsMax)
+}),
+  "checksumSha256": zod.string().regex(createVenomAppIterationResponseTwoRevisionsItemChecksumSha256RegExp),
+  "createdAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullable()
+})).max(createVenomAppIterationResponseTwoRevisionsMax),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(createVenomAppIterationResponseTwoEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(createVenomAppIterationResponseTwoEventsItemProgressMin).max(createVenomAppIterationResponseTwoEventsItemProgressMax).multipleOf(createVenomAppIterationResponseTwoEventsItemProgressMultipleOf),
+  "message": zod.string().min(1).max(createVenomAppIterationResponseTwoEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(createVenomAppIterationResponseTwoEventsMax),
+  "attempt": zod.number().min(1).max(createVenomAppIterationResponseTwoAttemptMax).multipleOf(createVenomAppIterationResponseTwoAttemptMultipleOf),
+  "failureCode": zod.string().max(createVenomAppIterationResponseTwoFailureCodeMax).nullable(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}))
+
+
+/**
+ * @summary Dismiss the current new-data improvement suggestion
+ */
+export const dismissVenomAppImprovementSuggestionPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const DismissVenomAppImprovementSuggestionParams = zod.object({
+  "appId": zod.coerce.string().regex(dismissVenomAppImprovementSuggestionPathAppIdRegExp)
+})
+
+export const dismissVenomAppImprovementSuggestionResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const dismissVenomAppImprovementSuggestionResponseNameMax = 120;
+
+export const dismissVenomAppImprovementSuggestionResponsePurposeMax = 1000;
+
+export const dismissVenomAppImprovementSuggestionResponseBrandMax = 120;
+
+export const dismissVenomAppImprovementSuggestionResponseDetectedStackItemMax = 60;
+
+export const dismissVenomAppImprovementSuggestionResponseDetectedStackMax = 20;
+
+export const dismissVenomAppImprovementSuggestionResponseSourceVersionMin = 0;
+export const dismissVenomAppImprovementSuggestionResponseSourceVersionMultipleOf = 1;
+
+export const dismissVenomAppImprovementSuggestionResponseDeploymentUrlMax = 2048;
+
+export const dismissVenomAppImprovementSuggestionResponseLinkedProjectIdMax = 120;
+
+export const dismissVenomAppImprovementSuggestionResponseLinkedProjectNameMax = 120;
+
+export const dismissVenomAppImprovementSuggestionResponseLatestIterationNumberMin = 0;
+export const dismissVenomAppImprovementSuggestionResponseLatestIterationNumberMultipleOf = 1;
+
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneKnowledgeChangesMin = 0;
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
+
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSourceChangesMin = 0;
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSourceChangesMultipleOf = 1;
+
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneTotalChangesMultipleOf = 1;
+
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSummaryMax = 1500;
+
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
+
+
+export const DismissVenomAppImprovementSuggestionResponse = zod.object({
+  "id": zod.string().regex(dismissVenomAppImprovementSuggestionResponseIdRegExp),
+  "name": zod.string().min(1).max(dismissVenomAppImprovementSuggestionResponseNameMax),
+  "purpose": zod.string().min(1).max(dismissVenomAppImprovementSuggestionResponsePurposeMax),
+  "brand": zod.string().min(1).max(dismissVenomAppImprovementSuggestionResponseBrandMax),
+  "status": zod.enum(['draft', 'importing', 'ready', 'attention']),
+  "detectedStack": zod.array(zod.string().min(1).max(dismissVenomAppImprovementSuggestionResponseDetectedStackItemMax)).max(dismissVenomAppImprovementSuggestionResponseDetectedStackMax),
+  "sourceType": zod.enum(['none', 'zip']),
+  "sourceVersion": zod.number().min(dismissVenomAppImprovementSuggestionResponseSourceVersionMin).multipleOf(dismissVenomAppImprovementSuggestionResponseSourceVersionMultipleOf),
+  "deploymentUrl": zod.string().max(dismissVenomAppImprovementSuggestionResponseDeploymentUrlMax).nullable(),
+  "importStatus": zod.union([zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),zod.null()]),
+  "sourceUpdatedAt": zod.coerce.date().nullable(),
+  "linkedProjectId": zod.string().max(dismissVenomAppImprovementSuggestionResponseLinkedProjectIdMax).nullable(),
+  "linkedProjectName": zod.string().max(dismissVenomAppImprovementSuggestionResponseLinkedProjectNameMax).nullable(),
+  "latestIterationNumber": zod.number().min(dismissVenomAppImprovementSuggestionResponseLatestIterationNumberMin).multipleOf(dismissVenomAppImprovementSuggestionResponseLatestIterationNumberMultipleOf),
+  "improvementSignal": zod.union([zod.object({
+  "since": zod.coerce.date(),
+  "knowledgeChanges": zod.number().min(dismissVenomAppImprovementSuggestionResponseImprovementSignalOneKnowledgeChangesMin).multipleOf(dismissVenomAppImprovementSuggestionResponseImprovementSignalOneKnowledgeChangesMultipleOf),
+  "sourceChanges": zod.number().min(dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSourceChangesMin).multipleOf(dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSourceChangesMultipleOf),
+  "totalChanges": zod.number().min(1).multipleOf(dismissVenomAppImprovementSuggestionResponseImprovementSignalOneTotalChangesMultipleOf),
+  "summary": zod.string().min(1).max(dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSummaryMax),
+  "baselineIterationNumber": zod.number().min(1).multipleOf(dismissVenomAppImprovementSuggestionResponseImprovementSignalOneBaselineIterationNumberMultipleOf)
+}),zod.null()]),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Page through the app's full evolution timeline
+ */
+export const getVenomAppTimelinePathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const GetVenomAppTimelineParams = zod.object({
+  "appId": zod.coerce.string().regex(getVenomAppTimelinePathAppIdRegExp)
+})
+
+export const getVenomAppTimelineQueryCursorMax = 300;
+
+export const getVenomAppTimelineQueryLimitDefault = 100;
+export const getVenomAppTimelineQueryLimitMax = 200;
+export const getVenomAppTimelineQueryLimitMultipleOf = 1;
+
+
+export const GetVenomAppTimelineQueryParams = zod.object({
+  "cursor": zod.coerce.string().max(getVenomAppTimelineQueryCursorMax).optional().describe('Opaque cursor from the previous page; omit for the newest entries'),
+  "limit": zod.coerce.number().min(1).max(getVenomAppTimelineQueryLimitMax).multipleOf(getVenomAppTimelineQueryLimitMultipleOf).default(getVenomAppTimelineQueryLimitDefault)
+})
+
+export const getVenomAppTimelineResponseEntriesItemIdMax = 200;
+
+export const getVenomAppTimelineResponseEntriesItemTitleMax = 240;
+
+export const getVenomAppTimelineResponseEntriesItemDetailMax = 2000;
+
+export const getVenomAppTimelineResponseEntriesItemActorMax = 200;
+
+export const getVenomAppTimelineResponseEntriesItemStatusMax = 60;
+
+export const getVenomAppTimelineResponseEntriesItemBuildRunIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppTimelineResponseEntriesItemReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppTimelineResponseEntriesItemSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppTimelineResponseEntriesItemIterationNumberOneMultipleOf = 1;
+
+export const getVenomAppTimelineResponseEntriesMax = 200;
+
+export const getVenomAppTimelineResponseNextCursorMax = 300;
+
+export const getVenomAppTimelineResponseTotalMin = 0;
+export const getVenomAppTimelineResponseTotalMultipleOf = 1;
+
+
+export const GetVenomAppTimelineResponse = zod.object({
+  "entries": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomAppTimelineResponseEntriesItemIdMax),
+  "kind": zod.enum(['source_import', 'package_iteration', 'release_created', 'release_published', 'release_rolled_back']),
+  "occurredAt": zod.coerce.date(),
+  "title": zod.string().min(1).max(getVenomAppTimelineResponseEntriesItemTitleMax),
+  "detail": zod.string().max(getVenomAppTimelineResponseEntriesItemDetailMax).nullable(),
+  "actor": zod.string().min(1).max(getVenomAppTimelineResponseEntriesItemActorMax),
+  "status": zod.string().min(1).max(getVenomAppTimelineResponseEntriesItemStatusMax),
+  "buildRunId": zod.union([zod.string().regex(getVenomAppTimelineResponseEntriesItemBuildRunIdOneRegExp),zod.null()]),
+  "releaseId": zod.union([zod.string().regex(getVenomAppTimelineResponseEntriesItemReleaseIdOneRegExp),zod.null()]),
+  "sourceVersionId": zod.union([zod.string().regex(getVenomAppTimelineResponseEntriesItemSourceVersionIdOneRegExp),zod.null()]),
+  "iterationNumber": zod.union([zod.number().min(1).multipleOf(getVenomAppTimelineResponseEntriesItemIterationNumberOneMultipleOf),zod.null()])
+})).max(getVenomAppTimelineResponseEntriesMax),
+  "nextCursor": zod.string().max(getVenomAppTimelineResponseNextCursorMax).nullable(),
+  "total": zod.number().min(getVenomAppTimelineResponseTotalMin).multipleOf(getVenomAppTimelineResponseTotalMultipleOf)
+})
 
 
 /**
@@ -1828,7 +3829,6 @@ export const listVenomAppVersionsResponseManifestProjectFilesMax = 40;
 export const listVenomAppVersionsResponseManifestDetectedStackItemMax = 60;
 
 export const listVenomAppVersionsResponseManifestDetectedStackMax = 20;
-
 
 
 export const ListVenomAppVersionsResponseItem = zod.object({
@@ -1901,7 +3901,6 @@ export const createVenomAppImportResponseJobSourceVersionIdRegExp = new RegExp('
 export const createVenomAppImportResponseUploadUrlMax = 8192;
 
 
-
 export const CreateVenomAppImportResponse = zod.object({
   "job": zod.object({
   "id": zod.string().regex(createVenomAppImportResponseJobIdRegExp),
@@ -1921,6 +3920,8 @@ export const CreateVenomAppImportResponse = zod.object({
   "maxBytes": zod.literal(52428800),
   "requiredContentType": zod.literal("application/zip")
 })
+
+
 /**
  * @summary Get a ZIP import's observable status
  */
@@ -2041,7 +4042,6 @@ export const retryVenomAppImportResponseJobSourceVersionIdRegExp = new RegExp('^
 export const retryVenomAppImportResponseUploadUrlMax = 8192;
 
 
-
 export const RetryVenomAppImportResponse = zod.object({
   "job": zod.object({
   "id": zod.string().regex(retryVenomAppImportResponseJobIdRegExp),
@@ -2061,3 +4061,4070 @@ export const RetryVenomAppImportResponse = zod.object({
   "maxBytes": zod.literal(52428800),
   "requiredContentType": zod.literal("application/zip")
 })
+
+
+/**
+ * @summary Search the signed-in user's SOP library
+ */
+export const listVenomSopsQueryQueryMax = 120;
+
+export const listVenomSopsQueryAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ListVenomSopsQueryParams = zod.object({
+  "query": zod.coerce.string().max(listVenomSopsQueryQueryMax).optional(),
+  "lifecycle": zod.enum(['draft', 'active', 'archived']).optional(),
+  "appId": zod.coerce.string().regex(listVenomSopsQueryAppIdRegExp).optional()
+})
+
+export const listVenomSopsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSopsResponseTitleMax = 160;
+
+export const listVenomSopsResponseTagsItemMax = 50;
+
+export const listVenomSopsResponseTagsMax = 20;
+
+export const listVenomSopsResponseContentPurposeMax = 2000;
+
+export const listVenomSopsResponseContentPrerequisitesItemMax = 500;
+
+export const listVenomSopsResponseContentPrerequisitesMax = 25;
+
+export const listVenomSopsResponseContentInputsItemMax = 500;
+
+export const listVenomSopsResponseContentInputsMax = 25;
+
+export const listVenomSopsResponseContentGuidanceItemMax = 2000;
+
+export const listVenomSopsResponseContentGuidanceMax = 60;
+
+export const listVenomSopsResponseContentRequiredApprovalsItemMax = 500;
+
+export const listVenomSopsResponseContentRequiredApprovalsMax = 25;
+
+export const listVenomSopsResponseContentAcceptanceChecksItemMax = 500;
+
+export const listVenomSopsResponseContentAcceptanceChecksMax = 25;
+
+export const listVenomSopsResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSopsResponseActiveRevisionNumberMultipleOf = 1;
+
+export const listVenomSopsResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSopsResponseAppIdsMax = 100;
+
+
+export const ListVenomSopsResponseItem = zod.object({
+  "id": zod.string().regex(listVenomSopsResponseIdRegExp),
+  "title": zod.string().min(1).max(listVenomSopsResponseTitleMax),
+  "lifecycle": zod.enum(['draft', 'active', 'archived']),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(listVenomSopsResponseTagsItemMax)).max(listVenomSopsResponseTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(listVenomSopsResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(listVenomSopsResponseContentPrerequisitesItemMax)).max(listVenomSopsResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(listVenomSopsResponseContentInputsItemMax)).max(listVenomSopsResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(listVenomSopsResponseContentGuidanceItemMax)).min(1).max(listVenomSopsResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(listVenomSopsResponseContentRequiredApprovalsItemMax)).max(listVenomSopsResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(listVenomSopsResponseContentAcceptanceChecksItemMax)).max(listVenomSopsResponseContentAcceptanceChecksMax)
+}),
+  "activeRevisionId": zod.union([zod.string().regex(listVenomSopsResponseActiveRevisionIdOneRegExp),zod.null()]),
+  "activeRevisionNumber": zod.number().min(1).multipleOf(listVenomSopsResponseActiveRevisionNumberMultipleOf).nullable(),
+  "appIds": zod.array(zod.string().regex(listVenomSopsResponseAppIdsItemRegExp)).max(listVenomSopsResponseAppIdsMax),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "archivedAt": zod.coerce.date().nullable()
+})
+export const ListVenomSopsResponse = zod.array(ListVenomSopsResponseItem).max(500)
+
+
+/**
+ * @summary Create a mutable SOP draft
+ */
+export const createVenomSopBodyTitleMax = 160;
+
+export const createVenomSopBodyTagsItemMax = 50;
+
+export const createVenomSopBodyTagsMax = 20;
+
+export const createVenomSopBodyContentPurposeMax = 2000;
+
+export const createVenomSopBodyContentPrerequisitesItemMax = 500;
+
+export const createVenomSopBodyContentPrerequisitesMax = 25;
+
+export const createVenomSopBodyContentInputsItemMax = 500;
+
+export const createVenomSopBodyContentInputsMax = 25;
+
+export const createVenomSopBodyContentGuidanceItemMax = 2000;
+
+export const createVenomSopBodyContentGuidanceMax = 60;
+
+export const createVenomSopBodyContentRequiredApprovalsItemMax = 500;
+
+export const createVenomSopBodyContentRequiredApprovalsMax = 25;
+
+export const createVenomSopBodyContentAcceptanceChecksItemMax = 500;
+
+export const createVenomSopBodyContentAcceptanceChecksMax = 25;
+
+
+export const CreateVenomSopBody = zod.object({
+  "title": zod.string().min(1).max(createVenomSopBodyTitleMax),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(createVenomSopBodyTagsItemMax)).max(createVenomSopBodyTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(createVenomSopBodyContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(createVenomSopBodyContentPrerequisitesItemMax)).max(createVenomSopBodyContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(createVenomSopBodyContentInputsItemMax)).max(createVenomSopBodyContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(createVenomSopBodyContentGuidanceItemMax)).min(1).max(createVenomSopBodyContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(createVenomSopBodyContentRequiredApprovalsItemMax)).max(createVenomSopBodyContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(createVenomSopBodyContentAcceptanceChecksItemMax)).max(createVenomSopBodyContentAcceptanceChecksMax)
+})
+})
+
+export const createVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomSopResponseTitleMax = 160;
+
+export const createVenomSopResponseTagsItemMax = 50;
+
+export const createVenomSopResponseTagsMax = 20;
+
+export const createVenomSopResponseContentPurposeMax = 2000;
+
+export const createVenomSopResponseContentPrerequisitesItemMax = 500;
+
+export const createVenomSopResponseContentPrerequisitesMax = 25;
+
+export const createVenomSopResponseContentInputsItemMax = 500;
+
+export const createVenomSopResponseContentInputsMax = 25;
+
+export const createVenomSopResponseContentGuidanceItemMax = 2000;
+
+export const createVenomSopResponseContentGuidanceMax = 60;
+
+export const createVenomSopResponseContentRequiredApprovalsItemMax = 500;
+
+export const createVenomSopResponseContentRequiredApprovalsMax = 25;
+
+export const createVenomSopResponseContentAcceptanceChecksItemMax = 500;
+
+export const createVenomSopResponseContentAcceptanceChecksMax = 25;
+
+export const createVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomSopResponseActiveRevisionNumberMultipleOf = 1;
+
+export const createVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomSopResponseAppIdsMax = 100;
+
+
+export const CreateVenomSopResponse = zod.object({
+  "id": zod.string().regex(createVenomSopResponseIdRegExp),
+  "title": zod.string().min(1).max(createVenomSopResponseTitleMax),
+  "lifecycle": zod.enum(['draft', 'active', 'archived']),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(createVenomSopResponseTagsItemMax)).max(createVenomSopResponseTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(createVenomSopResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(createVenomSopResponseContentPrerequisitesItemMax)).max(createVenomSopResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(createVenomSopResponseContentInputsItemMax)).max(createVenomSopResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(createVenomSopResponseContentGuidanceItemMax)).min(1).max(createVenomSopResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(createVenomSopResponseContentRequiredApprovalsItemMax)).max(createVenomSopResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(createVenomSopResponseContentAcceptanceChecksItemMax)).max(createVenomSopResponseContentAcceptanceChecksMax)
+}),
+  "activeRevisionId": zod.union([zod.string().regex(createVenomSopResponseActiveRevisionIdOneRegExp),zod.null()]),
+  "activeRevisionNumber": zod.number().min(1).multipleOf(createVenomSopResponseActiveRevisionNumberMultipleOf).nullable(),
+  "appIds": zod.array(zod.string().regex(createVenomSopResponseAppIdsItemRegExp)).max(createVenomSopResponseAppIdsMax),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "archivedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Inspect an SOP, its current draft, revisions, and assignments
+ */
+export const getVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const GetVenomSopParams = zod.object({
+  "sopId": zod.coerce.string().regex(getVenomSopPathSopIdRegExp)
+})
+
+export const getVenomSopResponseSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomSopResponseSopTitleMax = 160;
+
+export const getVenomSopResponseSopTagsItemMax = 50;
+
+export const getVenomSopResponseSopTagsMax = 20;
+
+export const getVenomSopResponseSopContentPurposeMax = 2000;
+
+export const getVenomSopResponseSopContentPrerequisitesItemMax = 500;
+
+export const getVenomSopResponseSopContentPrerequisitesMax = 25;
+
+export const getVenomSopResponseSopContentInputsItemMax = 500;
+
+export const getVenomSopResponseSopContentInputsMax = 25;
+
+export const getVenomSopResponseSopContentGuidanceItemMax = 2000;
+
+export const getVenomSopResponseSopContentGuidanceMax = 60;
+
+export const getVenomSopResponseSopContentRequiredApprovalsItemMax = 500;
+
+export const getVenomSopResponseSopContentRequiredApprovalsMax = 25;
+
+export const getVenomSopResponseSopContentAcceptanceChecksItemMax = 500;
+
+export const getVenomSopResponseSopContentAcceptanceChecksMax = 25;
+
+export const getVenomSopResponseSopActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomSopResponseSopActiveRevisionNumberMultipleOf = 1;
+
+export const getVenomSopResponseSopAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomSopResponseSopAppIdsMax = 100;
+
+export const getVenomSopResponseRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomSopResponseRevisionsItemVersionNumberMultipleOf = 1;
+
+export const getVenomSopResponseRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomSopResponseRevisionsItemTitleMax = 160;
+
+export const getVenomSopResponseRevisionsItemTagsItemMax = 50;
+
+export const getVenomSopResponseRevisionsItemTagsMax = 20;
+
+export const getVenomSopResponseRevisionsItemContentPurposeMax = 2000;
+
+export const getVenomSopResponseRevisionsItemContentPrerequisitesItemMax = 500;
+
+export const getVenomSopResponseRevisionsItemContentPrerequisitesMax = 25;
+
+export const getVenomSopResponseRevisionsItemContentInputsItemMax = 500;
+
+export const getVenomSopResponseRevisionsItemContentInputsMax = 25;
+
+export const getVenomSopResponseRevisionsItemContentGuidanceItemMax = 2000;
+
+export const getVenomSopResponseRevisionsItemContentGuidanceMax = 60;
+
+export const getVenomSopResponseRevisionsItemContentRequiredApprovalsItemMax = 500;
+
+export const getVenomSopResponseRevisionsItemContentRequiredApprovalsMax = 25;
+
+export const getVenomSopResponseRevisionsItemContentAcceptanceChecksItemMax = 500;
+
+export const getVenomSopResponseRevisionsItemContentAcceptanceChecksMax = 25;
+
+export const getVenomSopResponseRevisionsMax = 500;
+
+export const getVenomSopResponseAssignmentsItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomSopResponseAssignmentsMax = 100;
+
+
+export const GetVenomSopResponse = zod.object({
+  "sop": zod.object({
+  "id": zod.string().regex(getVenomSopResponseSopIdRegExp),
+  "title": zod.string().min(1).max(getVenomSopResponseSopTitleMax),
+  "lifecycle": zod.enum(['draft', 'active', 'archived']),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(getVenomSopResponseSopTagsItemMax)).max(getVenomSopResponseSopTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(getVenomSopResponseSopContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(getVenomSopResponseSopContentPrerequisitesItemMax)).max(getVenomSopResponseSopContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(getVenomSopResponseSopContentInputsItemMax)).max(getVenomSopResponseSopContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(getVenomSopResponseSopContentGuidanceItemMax)).min(1).max(getVenomSopResponseSopContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(getVenomSopResponseSopContentRequiredApprovalsItemMax)).max(getVenomSopResponseSopContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(getVenomSopResponseSopContentAcceptanceChecksItemMax)).max(getVenomSopResponseSopContentAcceptanceChecksMax)
+}),
+  "activeRevisionId": zod.union([zod.string().regex(getVenomSopResponseSopActiveRevisionIdOneRegExp),zod.null()]),
+  "activeRevisionNumber": zod.number().min(1).multipleOf(getVenomSopResponseSopActiveRevisionNumberMultipleOf).nullable(),
+  "appIds": zod.array(zod.string().regex(getVenomSopResponseSopAppIdsItemRegExp)).max(getVenomSopResponseSopAppIdsMax),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "archivedAt": zod.coerce.date().nullable()
+}),
+  "revisions": zod.array(zod.object({
+  "id": zod.string().regex(getVenomSopResponseRevisionsItemIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(getVenomSopResponseRevisionsItemVersionNumberMultipleOf),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "checksumSha256": zod.string().regex(getVenomSopResponseRevisionsItemChecksumSha256RegExp),
+  "title": zod.string().min(1).max(getVenomSopResponseRevisionsItemTitleMax),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(getVenomSopResponseRevisionsItemTagsItemMax)).max(getVenomSopResponseRevisionsItemTagsMax),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(getVenomSopResponseRevisionsItemContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(getVenomSopResponseRevisionsItemContentPrerequisitesItemMax)).max(getVenomSopResponseRevisionsItemContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(getVenomSopResponseRevisionsItemContentInputsItemMax)).max(getVenomSopResponseRevisionsItemContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(getVenomSopResponseRevisionsItemContentGuidanceItemMax)).min(1).max(getVenomSopResponseRevisionsItemContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(getVenomSopResponseRevisionsItemContentRequiredApprovalsItemMax)).max(getVenomSopResponseRevisionsItemContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(getVenomSopResponseRevisionsItemContentAcceptanceChecksItemMax)).max(getVenomSopResponseRevisionsItemContentAcceptanceChecksMax)
+}),
+  "publishedAt": zod.coerce.date()
+})).max(getVenomSopResponseRevisionsMax),
+  "assignments": zod.array(zod.object({
+  "appId": zod.string().regex(getVenomSopResponseAssignmentsItemAppIdRegExp),
+  "assignedAt": zod.coerce.date()
+})).max(getVenomSopResponseAssignmentsMax)
+})
+
+
+/**
+ * @summary Update a mutable SOP draft
+ */
+export const updateVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const UpdateVenomSopParams = zod.object({
+  "sopId": zod.coerce.string().regex(updateVenomSopPathSopIdRegExp)
+})
+
+export const updateVenomSopBodyOneTitleMax = 160;
+
+export const updateVenomSopBodyOneTagsItemMax = 50;
+
+export const updateVenomSopBodyOneTagsMax = 20;
+
+export const updateVenomSopBodyOneContentPurposeMax = 2000;
+
+export const updateVenomSopBodyOneContentPrerequisitesItemMax = 500;
+
+export const updateVenomSopBodyOneContentPrerequisitesMax = 25;
+
+export const updateVenomSopBodyOneContentInputsItemMax = 500;
+
+export const updateVenomSopBodyOneContentInputsMax = 25;
+
+export const updateVenomSopBodyOneContentGuidanceItemMax = 2000;
+
+export const updateVenomSopBodyOneContentGuidanceMax = 60;
+
+export const updateVenomSopBodyOneContentRequiredApprovalsItemMax = 500;
+
+export const updateVenomSopBodyOneContentRequiredApprovalsMax = 25;
+
+export const updateVenomSopBodyOneContentAcceptanceChecksItemMax = 500;
+
+export const updateVenomSopBodyOneContentAcceptanceChecksMax = 25;
+
+
+export const UpdateVenomSopBody = zod.object({
+  "title": zod.string().min(1).max(updateVenomSopBodyOneTitleMax),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(updateVenomSopBodyOneTagsItemMax)).max(updateVenomSopBodyOneTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(updateVenomSopBodyOneContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(updateVenomSopBodyOneContentPrerequisitesItemMax)).max(updateVenomSopBodyOneContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(updateVenomSopBodyOneContentInputsItemMax)).max(updateVenomSopBodyOneContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(updateVenomSopBodyOneContentGuidanceItemMax)).min(1).max(updateVenomSopBodyOneContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(updateVenomSopBodyOneContentRequiredApprovalsItemMax)).max(updateVenomSopBodyOneContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(updateVenomSopBodyOneContentAcceptanceChecksItemMax)).max(updateVenomSopBodyOneContentAcceptanceChecksMax)
+})
+})
+
+export const updateVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomSopResponseTitleMax = 160;
+
+export const updateVenomSopResponseTagsItemMax = 50;
+
+export const updateVenomSopResponseTagsMax = 20;
+
+export const updateVenomSopResponseContentPurposeMax = 2000;
+
+export const updateVenomSopResponseContentPrerequisitesItemMax = 500;
+
+export const updateVenomSopResponseContentPrerequisitesMax = 25;
+
+export const updateVenomSopResponseContentInputsItemMax = 500;
+
+export const updateVenomSopResponseContentInputsMax = 25;
+
+export const updateVenomSopResponseContentGuidanceItemMax = 2000;
+
+export const updateVenomSopResponseContentGuidanceMax = 60;
+
+export const updateVenomSopResponseContentRequiredApprovalsItemMax = 500;
+
+export const updateVenomSopResponseContentRequiredApprovalsMax = 25;
+
+export const updateVenomSopResponseContentAcceptanceChecksItemMax = 500;
+
+export const updateVenomSopResponseContentAcceptanceChecksMax = 25;
+
+export const updateVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomSopResponseActiveRevisionNumberMultipleOf = 1;
+
+export const updateVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomSopResponseAppIdsMax = 100;
+
+
+export const UpdateVenomSopResponse = zod.object({
+  "id": zod.string().regex(updateVenomSopResponseIdRegExp),
+  "title": zod.string().min(1).max(updateVenomSopResponseTitleMax),
+  "lifecycle": zod.enum(['draft', 'active', 'archived']),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(updateVenomSopResponseTagsItemMax)).max(updateVenomSopResponseTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(updateVenomSopResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(updateVenomSopResponseContentPrerequisitesItemMax)).max(updateVenomSopResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(updateVenomSopResponseContentInputsItemMax)).max(updateVenomSopResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(updateVenomSopResponseContentGuidanceItemMax)).min(1).max(updateVenomSopResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(updateVenomSopResponseContentRequiredApprovalsItemMax)).max(updateVenomSopResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(updateVenomSopResponseContentAcceptanceChecksItemMax)).max(updateVenomSopResponseContentAcceptanceChecksMax)
+}),
+  "activeRevisionId": zod.union([zod.string().regex(updateVenomSopResponseActiveRevisionIdOneRegExp),zod.null()]),
+  "activeRevisionNumber": zod.number().min(1).multipleOf(updateVenomSopResponseActiveRevisionNumberMultipleOf).nullable(),
+  "appIds": zod.array(zod.string().regex(updateVenomSopResponseAppIdsItemRegExp)).max(updateVenomSopResponseAppIdsMax),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "archivedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Publish the current draft as an immutable SOP revision
+ */
+export const publishVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const PublishVenomSopParams = zod.object({
+  "sopId": zod.coerce.string().regex(publishVenomSopPathSopIdRegExp)
+})
+
+export const publishVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishVenomSopResponseVersionNumberMultipleOf = 1;
+
+export const publishVenomSopResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const publishVenomSopResponseTitleMax = 160;
+
+export const publishVenomSopResponseTagsItemMax = 50;
+
+export const publishVenomSopResponseTagsMax = 20;
+
+export const publishVenomSopResponseContentPurposeMax = 2000;
+
+export const publishVenomSopResponseContentPrerequisitesItemMax = 500;
+
+export const publishVenomSopResponseContentPrerequisitesMax = 25;
+
+export const publishVenomSopResponseContentInputsItemMax = 500;
+
+export const publishVenomSopResponseContentInputsMax = 25;
+
+export const publishVenomSopResponseContentGuidanceItemMax = 2000;
+
+export const publishVenomSopResponseContentGuidanceMax = 60;
+
+export const publishVenomSopResponseContentRequiredApprovalsItemMax = 500;
+
+export const publishVenomSopResponseContentRequiredApprovalsMax = 25;
+
+export const publishVenomSopResponseContentAcceptanceChecksItemMax = 500;
+
+export const publishVenomSopResponseContentAcceptanceChecksMax = 25;
+
+
+export const PublishVenomSopResponse = zod.object({
+  "id": zod.string().regex(publishVenomSopResponseIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(publishVenomSopResponseVersionNumberMultipleOf),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "checksumSha256": zod.string().regex(publishVenomSopResponseChecksumSha256RegExp),
+  "title": zod.string().min(1).max(publishVenomSopResponseTitleMax),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(publishVenomSopResponseTagsItemMax)).max(publishVenomSopResponseTagsMax),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(publishVenomSopResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(publishVenomSopResponseContentPrerequisitesItemMax)).max(publishVenomSopResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(publishVenomSopResponseContentInputsItemMax)).max(publishVenomSopResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(publishVenomSopResponseContentGuidanceItemMax)).min(1).max(publishVenomSopResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(publishVenomSopResponseContentRequiredApprovalsItemMax)).max(publishVenomSopResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(publishVenomSopResponseContentAcceptanceChecksItemMax)).max(publishVenomSopResponseContentAcceptanceChecksMax)
+}),
+  "publishedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Duplicate an SOP into a new mutable draft
+ */
+export const duplicateVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const DuplicateVenomSopParams = zod.object({
+  "sopId": zod.coerce.string().regex(duplicateVenomSopPathSopIdRegExp)
+})
+
+export const duplicateVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const duplicateVenomSopResponseTitleMax = 160;
+
+export const duplicateVenomSopResponseTagsItemMax = 50;
+
+export const duplicateVenomSopResponseTagsMax = 20;
+
+export const duplicateVenomSopResponseContentPurposeMax = 2000;
+
+export const duplicateVenomSopResponseContentPrerequisitesItemMax = 500;
+
+export const duplicateVenomSopResponseContentPrerequisitesMax = 25;
+
+export const duplicateVenomSopResponseContentInputsItemMax = 500;
+
+export const duplicateVenomSopResponseContentInputsMax = 25;
+
+export const duplicateVenomSopResponseContentGuidanceItemMax = 2000;
+
+export const duplicateVenomSopResponseContentGuidanceMax = 60;
+
+export const duplicateVenomSopResponseContentRequiredApprovalsItemMax = 500;
+
+export const duplicateVenomSopResponseContentRequiredApprovalsMax = 25;
+
+export const duplicateVenomSopResponseContentAcceptanceChecksItemMax = 500;
+
+export const duplicateVenomSopResponseContentAcceptanceChecksMax = 25;
+
+export const duplicateVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const duplicateVenomSopResponseActiveRevisionNumberMultipleOf = 1;
+
+export const duplicateVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const duplicateVenomSopResponseAppIdsMax = 100;
+
+
+export const DuplicateVenomSopResponse = zod.object({
+  "id": zod.string().regex(duplicateVenomSopResponseIdRegExp),
+  "title": zod.string().min(1).max(duplicateVenomSopResponseTitleMax),
+  "lifecycle": zod.enum(['draft', 'active', 'archived']),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(duplicateVenomSopResponseTagsItemMax)).max(duplicateVenomSopResponseTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(duplicateVenomSopResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(duplicateVenomSopResponseContentPrerequisitesItemMax)).max(duplicateVenomSopResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(duplicateVenomSopResponseContentInputsItemMax)).max(duplicateVenomSopResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(duplicateVenomSopResponseContentGuidanceItemMax)).min(1).max(duplicateVenomSopResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(duplicateVenomSopResponseContentRequiredApprovalsItemMax)).max(duplicateVenomSopResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(duplicateVenomSopResponseContentAcceptanceChecksItemMax)).max(duplicateVenomSopResponseContentAcceptanceChecksMax)
+}),
+  "activeRevisionId": zod.union([zod.string().regex(duplicateVenomSopResponseActiveRevisionIdOneRegExp),zod.null()]),
+  "activeRevisionNumber": zod.number().min(1).multipleOf(duplicateVenomSopResponseActiveRevisionNumberMultipleOf).nullable(),
+  "appIds": zod.array(zod.string().regex(duplicateVenomSopResponseAppIdsItemRegExp)).max(duplicateVenomSopResponseAppIdsMax),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "archivedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Archive an SOP without deleting its revision history
+ */
+export const archiveVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ArchiveVenomSopParams = zod.object({
+  "sopId": zod.coerce.string().regex(archiveVenomSopPathSopIdRegExp)
+})
+
+export const archiveVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const archiveVenomSopResponseTitleMax = 160;
+
+export const archiveVenomSopResponseTagsItemMax = 50;
+
+export const archiveVenomSopResponseTagsMax = 20;
+
+export const archiveVenomSopResponseContentPurposeMax = 2000;
+
+export const archiveVenomSopResponseContentPrerequisitesItemMax = 500;
+
+export const archiveVenomSopResponseContentPrerequisitesMax = 25;
+
+export const archiveVenomSopResponseContentInputsItemMax = 500;
+
+export const archiveVenomSopResponseContentInputsMax = 25;
+
+export const archiveVenomSopResponseContentGuidanceItemMax = 2000;
+
+export const archiveVenomSopResponseContentGuidanceMax = 60;
+
+export const archiveVenomSopResponseContentRequiredApprovalsItemMax = 500;
+
+export const archiveVenomSopResponseContentRequiredApprovalsMax = 25;
+
+export const archiveVenomSopResponseContentAcceptanceChecksItemMax = 500;
+
+export const archiveVenomSopResponseContentAcceptanceChecksMax = 25;
+
+export const archiveVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const archiveVenomSopResponseActiveRevisionNumberMultipleOf = 1;
+
+export const archiveVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const archiveVenomSopResponseAppIdsMax = 100;
+
+
+export const ArchiveVenomSopResponse = zod.object({
+  "id": zod.string().regex(archiveVenomSopResponseIdRegExp),
+  "title": zod.string().min(1).max(archiveVenomSopResponseTitleMax),
+  "lifecycle": zod.enum(['draft', 'active', 'archived']),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(archiveVenomSopResponseTagsItemMax)).max(archiveVenomSopResponseTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(archiveVenomSopResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(archiveVenomSopResponseContentPrerequisitesItemMax)).max(archiveVenomSopResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(archiveVenomSopResponseContentInputsItemMax)).max(archiveVenomSopResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(archiveVenomSopResponseContentGuidanceItemMax)).min(1).max(archiveVenomSopResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(archiveVenomSopResponseContentRequiredApprovalsItemMax)).max(archiveVenomSopResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(archiveVenomSopResponseContentAcceptanceChecksItemMax)).max(archiveVenomSopResponseContentAcceptanceChecksMax)
+}),
+  "activeRevisionId": zod.union([zod.string().regex(archiveVenomSopResponseActiveRevisionIdOneRegExp),zod.null()]),
+  "activeRevisionNumber": zod.number().min(1).multipleOf(archiveVenomSopResponseActiveRevisionNumberMultipleOf).nullable(),
+  "appIds": zod.array(zod.string().regex(archiveVenomSopResponseAppIdsItemRegExp)).max(archiveVenomSopResponseAppIdsMax),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "archivedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Assign an SOP to registered apps, or remove assignments for account-wide use
+ */
+export const assignVenomSopAppsPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const AssignVenomSopAppsParams = zod.object({
+  "sopId": zod.coerce.string().regex(assignVenomSopAppsPathSopIdRegExp)
+})
+
+export const assignVenomSopAppsBodyAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const assignVenomSopAppsBodyAppIdsMax = 100;
+
+
+export const AssignVenomSopAppsBody = zod.object({
+  "appIds": zod.array(zod.string().regex(assignVenomSopAppsBodyAppIdsItemRegExp)).max(assignVenomSopAppsBodyAppIdsMax)
+})
+
+export const assignVenomSopAppsResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const AssignVenomSopAppsResponseItem = zod.object({
+  "appId": zod.string().regex(assignVenomSopAppsResponseAppIdRegExp),
+  "assignedAt": zod.coerce.date()
+})
+export const AssignVenomSopAppsResponse = zod.array(AssignVenomSopAppsResponseItem).max(100)
+
+
+/**
+ * @summary List immutable SOP revisions
+ */
+export const listVenomSopRevisionsPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ListVenomSopRevisionsParams = zod.object({
+  "sopId": zod.coerce.string().regex(listVenomSopRevisionsPathSopIdRegExp)
+})
+
+export const listVenomSopRevisionsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSopRevisionsResponseVersionNumberMultipleOf = 1;
+
+export const listVenomSopRevisionsResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listVenomSopRevisionsResponseTitleMax = 160;
+
+export const listVenomSopRevisionsResponseTagsItemMax = 50;
+
+export const listVenomSopRevisionsResponseTagsMax = 20;
+
+export const listVenomSopRevisionsResponseContentPurposeMax = 2000;
+
+export const listVenomSopRevisionsResponseContentPrerequisitesItemMax = 500;
+
+export const listVenomSopRevisionsResponseContentPrerequisitesMax = 25;
+
+export const listVenomSopRevisionsResponseContentInputsItemMax = 500;
+
+export const listVenomSopRevisionsResponseContentInputsMax = 25;
+
+export const listVenomSopRevisionsResponseContentGuidanceItemMax = 2000;
+
+export const listVenomSopRevisionsResponseContentGuidanceMax = 60;
+
+export const listVenomSopRevisionsResponseContentRequiredApprovalsItemMax = 500;
+
+export const listVenomSopRevisionsResponseContentRequiredApprovalsMax = 25;
+
+export const listVenomSopRevisionsResponseContentAcceptanceChecksItemMax = 500;
+
+export const listVenomSopRevisionsResponseContentAcceptanceChecksMax = 25;
+
+
+export const ListVenomSopRevisionsResponseItem = zod.object({
+  "id": zod.string().regex(listVenomSopRevisionsResponseIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(listVenomSopRevisionsResponseVersionNumberMultipleOf),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "checksumSha256": zod.string().regex(listVenomSopRevisionsResponseChecksumSha256RegExp),
+  "title": zod.string().min(1).max(listVenomSopRevisionsResponseTitleMax),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(listVenomSopRevisionsResponseTagsItemMax)).max(listVenomSopRevisionsResponseTagsMax),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(listVenomSopRevisionsResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(listVenomSopRevisionsResponseContentPrerequisitesItemMax)).max(listVenomSopRevisionsResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(listVenomSopRevisionsResponseContentInputsItemMax)).max(listVenomSopRevisionsResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(listVenomSopRevisionsResponseContentGuidanceItemMax)).min(1).max(listVenomSopRevisionsResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(listVenomSopRevisionsResponseContentRequiredApprovalsItemMax)).max(listVenomSopRevisionsResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(listVenomSopRevisionsResponseContentAcceptanceChecksItemMax)).max(listVenomSopRevisionsResponseContentAcceptanceChecksMax)
+}),
+  "publishedAt": zod.coerce.date()
+})
+export const ListVenomSopRevisionsResponse = zod.array(ListVenomSopRevisionsResponseItem).max(500)
+
+
+/**
+ * @summary List active SOP revision references selected for a workspace project
+ */
+export const listVenomProjectSopsPathProjectIdMax = 120;
+
+
+export const ListVenomProjectSopsParams = zod.object({
+  "projectId": zod.coerce.string().min(1).max(listVenomProjectSopsPathProjectIdMax)
+})
+
+export const listVenomProjectSopsResponseSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomProjectSopsResponseRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomProjectSopsResponseRevisionNumberMultipleOf = 1;
+
+export const listVenomProjectSopsResponseTitleMax = 160;
+
+export const listVenomProjectSopsResponsePurposeMax = 2000;
+
+
+export const ListVenomProjectSopsResponseItem = zod.object({
+  "sopId": zod.string().regex(listVenomProjectSopsResponseSopIdRegExp),
+  "revisionId": zod.string().regex(listVenomProjectSopsResponseRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(listVenomProjectSopsResponseRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(listVenomProjectSopsResponseTitleMax),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "purpose": zod.string().min(1).max(listVenomProjectSopsResponsePurposeMax),
+  "selectedAt": zod.coerce.date()
+})
+export const ListVenomProjectSopsResponse = zod.array(ListVenomProjectSopsResponseItem).max(30)
+
+
+/**
+ * @summary Select active SOP revisions for a workspace project
+ */
+export const selectVenomProjectSopsPathProjectIdMax = 120;
+
+
+export const SelectVenomProjectSopsParams = zod.object({
+  "projectId": zod.coerce.string().min(1).max(selectVenomProjectSopsPathProjectIdMax)
+})
+
+export const selectVenomProjectSopsBodySopIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const selectVenomProjectSopsBodySopIdsMax = 30;
+
+
+export const SelectVenomProjectSopsBody = zod.object({
+  "sopIds": zod.array(zod.string().regex(selectVenomProjectSopsBodySopIdsItemRegExp)).max(selectVenomProjectSopsBodySopIdsMax)
+})
+
+export const selectVenomProjectSopsResponseSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const selectVenomProjectSopsResponseRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const selectVenomProjectSopsResponseRevisionNumberMultipleOf = 1;
+
+export const selectVenomProjectSopsResponseTitleMax = 160;
+
+export const selectVenomProjectSopsResponsePurposeMax = 2000;
+
+
+export const SelectVenomProjectSopsResponseItem = zod.object({
+  "sopId": zod.string().regex(selectVenomProjectSopsResponseSopIdRegExp),
+  "revisionId": zod.string().regex(selectVenomProjectSopsResponseRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(selectVenomProjectSopsResponseRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(selectVenomProjectSopsResponseTitleMax),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "purpose": zod.string().min(1).max(selectVenomProjectSopsResponsePurposeMax),
+  "selectedAt": zod.coerce.date()
+})
+export const SelectVenomProjectSopsResponse = zod.array(SelectVenomProjectSopsResponseItem).max(30)
+
+
+/**
+ * @summary Get the signed-in user's public community profile
+ */
+export const getCommunityProfileResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityProfileResponseDisplayNameMax = 60;
+
+export const getCommunityProfileResponseBioMax = 300;
+
+
+export const GetCommunityProfileResponse = zod.object({
+  "id": zod.string().regex(getCommunityProfileResponseIdRegExp),
+  "displayName": zod.string().min(1).max(getCommunityProfileResponseDisplayNameMax),
+  "bio": zod.string().max(getCommunityProfileResponseBioMax).nullable(),
+  "joinedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Create or update the signed-in user's public community profile
+ */
+export const upsertCommunityProfileBodyDisplayNameMax = 60;
+
+export const upsertCommunityProfileBodyBioMax = 300;
+
+
+export const UpsertCommunityProfileBody = zod.object({
+  "displayName": zod.string().min(1).max(upsertCommunityProfileBodyDisplayNameMax),
+  "bio": zod.string().max(upsertCommunityProfileBodyBioMax).nullish()
+})
+
+export const upsertCommunityProfileResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const upsertCommunityProfileResponseDisplayNameMax = 60;
+
+export const upsertCommunityProfileResponseBioMax = 300;
+
+
+export const UpsertCommunityProfileResponse = zod.object({
+  "id": zod.string().regex(upsertCommunityProfileResponseIdRegExp),
+  "displayName": zod.string().min(1).max(upsertCommunityProfileResponseDisplayNameMax),
+  "bio": zod.string().max(upsertCommunityProfileResponseBioMax).nullable(),
+  "joinedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get a cursor page of community threads
+ */
+export const getCommunityFeedQueryCursorMax = 240;
+
+export const getCommunityFeedQueryLimitDefault = 20;
+export const getCommunityFeedQueryLimitMax = 50;
+export const getCommunityFeedQueryLimitMultipleOf = 1;
+
+
+export const GetCommunityFeedQueryParams = zod.object({
+  "order": zod.enum(['new', 'top']),
+  "cursor": zod.coerce.string().max(getCommunityFeedQueryCursorMax).optional(),
+  "limit": zod.coerce.number().min(1).max(getCommunityFeedQueryLimitMax).multipleOf(getCommunityFeedQueryLimitMultipleOf).default(getCommunityFeedQueryLimitDefault)
+})
+
+export const getCommunityFeedResponseItemsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityFeedResponseItemsItemAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityFeedResponseItemsItemAuthorDisplayNameMax = 60;
+
+export const getCommunityFeedResponseItemsItemBodyMax = 2000;
+
+export const getCommunityFeedResponseItemsItemSummaryTextMax = 320;
+
+export const getCommunityFeedResponseItemsItemSummarySourceRevisionMin = 0;
+export const getCommunityFeedResponseItemsItemSummarySourceRevisionMultipleOf = 1;
+
+export const getCommunityFeedResponseItemsItemScoreMin = 0;
+export const getCommunityFeedResponseItemsItemScoreMultipleOf = 1;
+
+export const getCommunityFeedResponseItemsItemReplyCountMin = 0;
+export const getCommunityFeedResponseItemsItemReplyCountMultipleOf = 1;
+
+export const getCommunityFeedResponseItemsItemRevisionMin = 0;
+export const getCommunityFeedResponseItemsItemRevisionMultipleOf = 1;
+
+export const getCommunityFeedResponseNextCursorMax = 240;
+
+
+export const GetCommunityFeedResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().regex(getCommunityFeedResponseItemsItemIdRegExp),
+  "author": zod.object({
+  "id": zod.string().regex(getCommunityFeedResponseItemsItemAuthorIdRegExp),
+  "displayName": zod.string().min(1).max(getCommunityFeedResponseItemsItemAuthorDisplayNameMax)
+}),
+  "body": zod.string().min(1).max(getCommunityFeedResponseItemsItemBodyMax),
+  "summary": zod.object({
+  "text": zod.string().max(getCommunityFeedResponseItemsItemSummaryTextMax),
+  "status": zod.enum(['generated', 'fallback', 'pending']),
+  "sourceRevision": zod.number().min(getCommunityFeedResponseItemsItemSummarySourceRevisionMin).multipleOf(getCommunityFeedResponseItemsItemSummarySourceRevisionMultipleOf),
+  "generatedAt": zod.coerce.date().nullable(),
+  "label": zod.enum(['AI summary'])
+}),
+  "score": zod.number().min(getCommunityFeedResponseItemsItemScoreMin).multipleOf(getCommunityFeedResponseItemsItemScoreMultipleOf),
+  "replyCount": zod.number().min(getCommunityFeedResponseItemsItemReplyCountMin).multipleOf(getCommunityFeedResponseItemsItemReplyCountMultipleOf),
+  "viewerHasUpvoted": zod.boolean(),
+  "viewerIsAuthor": zod.boolean(),
+  "revision": zod.number().min(getCommunityFeedResponseItemsItemRevisionMin).multipleOf(getCommunityFeedResponseItemsItemRevisionMultipleOf),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "nextCursor": zod.string().max(getCommunityFeedResponseNextCursorMax).nullable()
+})
+
+
+/**
+ * @summary Get the community briefing with personal agenda and calendar status
+ */
+export const getCommunityBriefingQueryTimezoneMax = 80;
+
+export const getCommunityBriefingQueryDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getCommunityBriefingQueryOrderDefault = `new`;
+export const getCommunityBriefingQueryCursorMax = 240;
+
+export const getCommunityBriefingQueryLimitDefault = 20;
+export const getCommunityBriefingQueryLimitMax = 50;
+export const getCommunityBriefingQueryLimitMultipleOf = 1;
+
+
+export const GetCommunityBriefingQueryParams = zod.object({
+  "timezone": zod.coerce.string().min(1).max(getCommunityBriefingQueryTimezoneMax),
+  "date": zod.coerce.string().regex(getCommunityBriefingQueryDateRegExp).optional(),
+  "order": zod.enum(['new', 'top']).default(getCommunityBriefingQueryOrderDefault),
+  "cursor": zod.coerce.string().max(getCommunityBriefingQueryCursorMax).optional(),
+  "limit": zod.coerce.number().min(1).max(getCommunityBriefingQueryLimitMax).multipleOf(getCommunityBriefingQueryLimitMultipleOf).default(getCommunityBriefingQueryLimitDefault)
+})
+
+export const getCommunityBriefingResponseCommunityItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityBriefingResponseCommunityItemAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityBriefingResponseCommunityItemAuthorDisplayNameMax = 60;
+
+export const getCommunityBriefingResponseCommunityItemBodyMax = 2000;
+
+export const getCommunityBriefingResponseCommunityItemSummaryTextMax = 320;
+
+export const getCommunityBriefingResponseCommunityItemSummarySourceRevisionMin = 0;
+export const getCommunityBriefingResponseCommunityItemSummarySourceRevisionMultipleOf = 1;
+
+export const getCommunityBriefingResponseCommunityItemScoreMin = 0;
+export const getCommunityBriefingResponseCommunityItemScoreMultipleOf = 1;
+
+export const getCommunityBriefingResponseCommunityItemReplyCountMin = 0;
+export const getCommunityBriefingResponseCommunityItemReplyCountMultipleOf = 1;
+
+export const getCommunityBriefingResponseCommunityItemRevisionMin = 0;
+export const getCommunityBriefingResponseCommunityItemRevisionMultipleOf = 1;
+
+export const getCommunityBriefingResponseAgendaItemIdMax = 120;
+
+export const getCommunityBriefingResponseAgendaItemTitleMax = 300;
+
+export const getCommunityBriefingResponseAgendaItemDetailMax = 500;
+
+export const getCommunityBriefingResponseAgendaItemDueDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getCommunityBriefingResponseAgendaItemProjectNameMax = 120;
+
+export const getCommunityBriefingResponseViewerProfileOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityBriefingResponseViewerProfileOneDisplayNameMax = 60;
+
+export const getCommunityBriefingResponseViewerProfileOneBioMax = 300;
+
+export const getCommunityBriefingResponseNextCursorMax = 240;
+
+
+export const GetCommunityBriefingResponse = zod.object({
+  "community": zod.array(zod.object({
+  "id": zod.string().regex(getCommunityBriefingResponseCommunityItemIdRegExp),
+  "author": zod.object({
+  "id": zod.string().regex(getCommunityBriefingResponseCommunityItemAuthorIdRegExp),
+  "displayName": zod.string().min(1).max(getCommunityBriefingResponseCommunityItemAuthorDisplayNameMax)
+}),
+  "body": zod.string().min(1).max(getCommunityBriefingResponseCommunityItemBodyMax),
+  "summary": zod.object({
+  "text": zod.string().max(getCommunityBriefingResponseCommunityItemSummaryTextMax),
+  "status": zod.enum(['generated', 'fallback', 'pending']),
+  "sourceRevision": zod.number().min(getCommunityBriefingResponseCommunityItemSummarySourceRevisionMin).multipleOf(getCommunityBriefingResponseCommunityItemSummarySourceRevisionMultipleOf),
+  "generatedAt": zod.coerce.date().nullable(),
+  "label": zod.enum(['AI summary'])
+}),
+  "score": zod.number().min(getCommunityBriefingResponseCommunityItemScoreMin).multipleOf(getCommunityBriefingResponseCommunityItemScoreMultipleOf),
+  "replyCount": zod.number().min(getCommunityBriefingResponseCommunityItemReplyCountMin).multipleOf(getCommunityBriefingResponseCommunityItemReplyCountMultipleOf),
+  "viewerHasUpvoted": zod.boolean(),
+  "viewerIsAuthor": zod.boolean(),
+  "revision": zod.number().min(getCommunityBriefingResponseCommunityItemRevisionMin).multipleOf(getCommunityBriefingResponseCommunityItemRevisionMultipleOf),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "agenda": zod.array(zod.object({
+  "id": zod.string().max(getCommunityBriefingResponseAgendaItemIdMax),
+  "source": zod.enum(['calendar', 'todo']),
+  "privacy": zod.enum(['personal']),
+  "title": zod.string().max(getCommunityBriefingResponseAgendaItemTitleMax),
+  "detail": zod.string().max(getCommunityBriefingResponseAgendaItemDetailMax).nullable(),
+  "startsAt": zod.coerce.date().nullable(),
+  "dueDate": zod.string().regex(getCommunityBriefingResponseAgendaItemDueDateRegExp).nullable(),
+  "state": zod.enum(['open', 'in_progress']),
+  "projectName": zod.string().max(getCommunityBriefingResponseAgendaItemProjectNameMax).nullable()
+})),
+  "calendarStatus": zod.enum(['connected', 'not_connected', 'unavailable']),
+  "viewerProfile": zod.union([zod.object({
+  "id": zod.string().regex(getCommunityBriefingResponseViewerProfileOneIdRegExp),
+  "displayName": zod.string().min(1).max(getCommunityBriefingResponseViewerProfileOneDisplayNameMax),
+  "bio": zod.string().max(getCommunityBriefingResponseViewerProfileOneBioMax).nullable(),
+  "joinedAt": zod.coerce.date()
+}),zod.null()]),
+  "nextCursor": zod.string().max(getCommunityBriefingResponseNextCursorMax).nullable()
+})
+
+
+/**
+ * @summary Create a new community thread
+ */
+export const createCommunityThreadBodyBodyMax = 2000;
+
+
+export const CreateCommunityThreadBody = zod.object({
+  "body": zod.string().min(1).max(createCommunityThreadBodyBodyMax)
+})
+
+export const createCommunityThreadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityThreadResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityThreadResponseAuthorDisplayNameMax = 60;
+
+export const createCommunityThreadResponseBodyMax = 2000;
+
+export const createCommunityThreadResponseSummaryTextMax = 320;
+
+export const createCommunityThreadResponseSummarySourceRevisionMin = 0;
+export const createCommunityThreadResponseSummarySourceRevisionMultipleOf = 1;
+
+export const createCommunityThreadResponseScoreMin = 0;
+export const createCommunityThreadResponseScoreMultipleOf = 1;
+
+export const createCommunityThreadResponseReplyCountMin = 0;
+export const createCommunityThreadResponseReplyCountMultipleOf = 1;
+
+export const createCommunityThreadResponseRevisionMin = 0;
+export const createCommunityThreadResponseRevisionMultipleOf = 1;
+
+
+export const CreateCommunityThreadResponse = zod.object({
+  "id": zod.string().regex(createCommunityThreadResponseIdRegExp),
+  "author": zod.object({
+  "id": zod.string().regex(createCommunityThreadResponseAuthorIdRegExp),
+  "displayName": zod.string().min(1).max(createCommunityThreadResponseAuthorDisplayNameMax)
+}),
+  "body": zod.string().min(1).max(createCommunityThreadResponseBodyMax),
+  "summary": zod.object({
+  "text": zod.string().max(createCommunityThreadResponseSummaryTextMax),
+  "status": zod.enum(['generated', 'fallback', 'pending']),
+  "sourceRevision": zod.number().min(createCommunityThreadResponseSummarySourceRevisionMin).multipleOf(createCommunityThreadResponseSummarySourceRevisionMultipleOf),
+  "generatedAt": zod.coerce.date().nullable(),
+  "label": zod.enum(['AI summary'])
+}),
+  "score": zod.number().min(createCommunityThreadResponseScoreMin).multipleOf(createCommunityThreadResponseScoreMultipleOf),
+  "replyCount": zod.number().min(createCommunityThreadResponseReplyCountMin).multipleOf(createCommunityThreadResponseReplyCountMultipleOf),
+  "viewerHasUpvoted": zod.boolean(),
+  "viewerIsAuthor": zod.boolean(),
+  "revision": zod.number().min(createCommunityThreadResponseRevisionMin).multipleOf(createCommunityThreadResponseRevisionMultipleOf),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get a community thread with its replies
+ */
+export const getCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const GetCommunityThreadParams = zod.object({
+  "threadId": zod.coerce.string().regex(getCommunityThreadPathThreadIdRegExp)
+})
+
+export const getCommunityThreadQueryReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const GetCommunityThreadQueryParams = zod.object({
+  "replyId": zod.coerce.string().regex(getCommunityThreadQueryReplyIdRegExp).optional().describe('Include this specific reply even when it falls outside the normal reply window')
+})
+
+export const getCommunityThreadResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseThreadAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseThreadAuthorDisplayNameMax = 60;
+
+export const getCommunityThreadResponseThreadBodyMax = 2000;
+
+export const getCommunityThreadResponseThreadSummaryTextMax = 320;
+
+export const getCommunityThreadResponseThreadSummarySourceRevisionMin = 0;
+export const getCommunityThreadResponseThreadSummarySourceRevisionMultipleOf = 1;
+
+export const getCommunityThreadResponseThreadScoreMin = 0;
+export const getCommunityThreadResponseThreadScoreMultipleOf = 1;
+
+export const getCommunityThreadResponseThreadReplyCountMin = 0;
+export const getCommunityThreadResponseThreadReplyCountMultipleOf = 1;
+
+export const getCommunityThreadResponseThreadRevisionMin = 0;
+export const getCommunityThreadResponseThreadRevisionMultipleOf = 1;
+
+export const getCommunityThreadResponseRepliesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseRepliesItemThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseRepliesItemAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseRepliesItemAuthorDisplayNameMax = 60;
+
+export const getCommunityThreadResponseRepliesItemBodyMax = 1000;
+
+export const getCommunityThreadResponseRepliesItemParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseRepliesMax = 502;
+
+
+export const GetCommunityThreadResponse = zod.object({
+  "thread": zod.object({
+  "id": zod.string().regex(getCommunityThreadResponseThreadIdRegExp),
+  "author": zod.object({
+  "id": zod.string().regex(getCommunityThreadResponseThreadAuthorIdRegExp),
+  "displayName": zod.string().min(1).max(getCommunityThreadResponseThreadAuthorDisplayNameMax)
+}),
+  "body": zod.string().min(1).max(getCommunityThreadResponseThreadBodyMax),
+  "summary": zod.object({
+  "text": zod.string().max(getCommunityThreadResponseThreadSummaryTextMax),
+  "status": zod.enum(['generated', 'fallback', 'pending']),
+  "sourceRevision": zod.number().min(getCommunityThreadResponseThreadSummarySourceRevisionMin).multipleOf(getCommunityThreadResponseThreadSummarySourceRevisionMultipleOf),
+  "generatedAt": zod.coerce.date().nullable(),
+  "label": zod.enum(['AI summary'])
+}),
+  "score": zod.number().min(getCommunityThreadResponseThreadScoreMin).multipleOf(getCommunityThreadResponseThreadScoreMultipleOf),
+  "replyCount": zod.number().min(getCommunityThreadResponseThreadReplyCountMin).multipleOf(getCommunityThreadResponseThreadReplyCountMultipleOf),
+  "viewerHasUpvoted": zod.boolean(),
+  "viewerIsAuthor": zod.boolean(),
+  "revision": zod.number().min(getCommunityThreadResponseThreadRevisionMin).multipleOf(getCommunityThreadResponseThreadRevisionMultipleOf),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "replies": zod.array(zod.object({
+  "id": zod.string().regex(getCommunityThreadResponseRepliesItemIdRegExp),
+  "threadId": zod.string().regex(getCommunityThreadResponseRepliesItemThreadIdRegExp),
+  "author": zod.object({
+  "id": zod.string().regex(getCommunityThreadResponseRepliesItemAuthorIdRegExp),
+  "displayName": zod.string().min(1).max(getCommunityThreadResponseRepliesItemAuthorDisplayNameMax)
+}),
+  "body": zod.string().min(1).max(getCommunityThreadResponseRepliesItemBodyMax),
+  "parentReplyId": zod.string().regex(getCommunityThreadResponseRepliesItemParentReplyIdRegExp).nullable(),
+  "viewerIsAuthor": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})).max(getCommunityThreadResponseRepliesMax)
+})
+
+
+/**
+ * @summary Update a community thread (owner only)
+ */
+export const updateCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const UpdateCommunityThreadParams = zod.object({
+  "threadId": zod.coerce.string().regex(updateCommunityThreadPathThreadIdRegExp)
+})
+
+export const updateCommunityThreadBodyBodyMax = 2000;
+
+
+export const UpdateCommunityThreadBody = zod.object({
+  "body": zod.string().min(1).max(updateCommunityThreadBodyBodyMax).optional()
+})
+
+export const updateCommunityThreadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityThreadResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityThreadResponseAuthorDisplayNameMax = 60;
+
+export const updateCommunityThreadResponseBodyMax = 2000;
+
+export const updateCommunityThreadResponseSummaryTextMax = 320;
+
+export const updateCommunityThreadResponseSummarySourceRevisionMin = 0;
+export const updateCommunityThreadResponseSummarySourceRevisionMultipleOf = 1;
+
+export const updateCommunityThreadResponseScoreMin = 0;
+export const updateCommunityThreadResponseScoreMultipleOf = 1;
+
+export const updateCommunityThreadResponseReplyCountMin = 0;
+export const updateCommunityThreadResponseReplyCountMultipleOf = 1;
+
+export const updateCommunityThreadResponseRevisionMin = 0;
+export const updateCommunityThreadResponseRevisionMultipleOf = 1;
+
+
+export const UpdateCommunityThreadResponse = zod.object({
+  "id": zod.string().regex(updateCommunityThreadResponseIdRegExp),
+  "author": zod.object({
+  "id": zod.string().regex(updateCommunityThreadResponseAuthorIdRegExp),
+  "displayName": zod.string().min(1).max(updateCommunityThreadResponseAuthorDisplayNameMax)
+}),
+  "body": zod.string().min(1).max(updateCommunityThreadResponseBodyMax),
+  "summary": zod.object({
+  "text": zod.string().max(updateCommunityThreadResponseSummaryTextMax),
+  "status": zod.enum(['generated', 'fallback', 'pending']),
+  "sourceRevision": zod.number().min(updateCommunityThreadResponseSummarySourceRevisionMin).multipleOf(updateCommunityThreadResponseSummarySourceRevisionMultipleOf),
+  "generatedAt": zod.coerce.date().nullable(),
+  "label": zod.enum(['AI summary'])
+}),
+  "score": zod.number().min(updateCommunityThreadResponseScoreMin).multipleOf(updateCommunityThreadResponseScoreMultipleOf),
+  "replyCount": zod.number().min(updateCommunityThreadResponseReplyCountMin).multipleOf(updateCommunityThreadResponseReplyCountMultipleOf),
+  "viewerHasUpvoted": zod.boolean(),
+  "viewerIsAuthor": zod.boolean(),
+  "revision": zod.number().min(updateCommunityThreadResponseRevisionMin).multipleOf(updateCommunityThreadResponseRevisionMultipleOf),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a community thread (owner only)
+ */
+export const deleteCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const DeleteCommunityThreadParams = zod.object({
+  "threadId": zod.coerce.string().regex(deleteCommunityThreadPathThreadIdRegExp)
+})
+
+export const DeleteCommunityThreadResponse = zod.void()
+
+
+/**
+ * @summary Post a reply to a community thread
+ */
+export const createCommunityReplyPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const CreateCommunityReplyParams = zod.object({
+  "threadId": zod.coerce.string().regex(createCommunityReplyPathThreadIdRegExp)
+})
+
+export const createCommunityReplyBodyBodyMax = 1000;
+
+export const createCommunityReplyBodyClientRequestIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReplyBodyParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const CreateCommunityReplyBody = zod.object({
+  "body": zod.string().min(1).max(createCommunityReplyBodyBodyMax),
+  "clientRequestId": zod.string().regex(createCommunityReplyBodyClientRequestIdRegExp).describe('Client-generated operation id reused when retrying the same post'),
+  "parentReplyId": zod.string().regex(createCommunityReplyBodyParentReplyIdRegExp).nullish()
+})
+
+export const createCommunityReplyResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReplyResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReplyResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReplyResponseAuthorDisplayNameMax = 60;
+
+export const createCommunityReplyResponseBodyMax = 1000;
+
+export const createCommunityReplyResponseParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const CreateCommunityReplyResponse = zod.object({
+  "id": zod.string().regex(createCommunityReplyResponseIdRegExp),
+  "threadId": zod.string().regex(createCommunityReplyResponseThreadIdRegExp),
+  "author": zod.object({
+  "id": zod.string().regex(createCommunityReplyResponseAuthorIdRegExp),
+  "displayName": zod.string().min(1).max(createCommunityReplyResponseAuthorDisplayNameMax)
+}),
+  "body": zod.string().min(1).max(createCommunityReplyResponseBodyMax),
+  "parentReplyId": zod.string().regex(createCommunityReplyResponseParentReplyIdRegExp).nullable(),
+  "viewerIsAuthor": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a community reply (owner only)
+ */
+export const updateCommunityReplyPathReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const UpdateCommunityReplyParams = zod.object({
+  "replyId": zod.coerce.string().regex(updateCommunityReplyPathReplyIdRegExp)
+})
+
+export const updateCommunityReplyBodyBodyMax = 1000;
+
+
+export const UpdateCommunityReplyBody = zod.object({
+  "body": zod.string().min(1).max(updateCommunityReplyBodyBodyMax).optional()
+})
+
+export const updateCommunityReplyResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityReplyResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityReplyResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityReplyResponseAuthorDisplayNameMax = 60;
+
+export const updateCommunityReplyResponseBodyMax = 1000;
+
+export const updateCommunityReplyResponseParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const UpdateCommunityReplyResponse = zod.object({
+  "id": zod.string().regex(updateCommunityReplyResponseIdRegExp),
+  "threadId": zod.string().regex(updateCommunityReplyResponseThreadIdRegExp),
+  "author": zod.object({
+  "id": zod.string().regex(updateCommunityReplyResponseAuthorIdRegExp),
+  "displayName": zod.string().min(1).max(updateCommunityReplyResponseAuthorDisplayNameMax)
+}),
+  "body": zod.string().min(1).max(updateCommunityReplyResponseBodyMax),
+  "parentReplyId": zod.string().regex(updateCommunityReplyResponseParentReplyIdRegExp).nullable(),
+  "viewerIsAuthor": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a community reply (owner only)
+ */
+export const deleteCommunityReplyPathReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const DeleteCommunityReplyParams = zod.object({
+  "replyId": zod.coerce.string().regex(deleteCommunityReplyPathReplyIdRegExp)
+})
+
+export const DeleteCommunityReplyResponse = zod.void()
+
+
+/**
+ * @summary Set the viewer's upvote state on a thread (idempotent)
+ */
+export const voteCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const VoteCommunityThreadParams = zod.object({
+  "threadId": zod.coerce.string().regex(voteCommunityThreadPathThreadIdRegExp)
+})
+
+export const VoteCommunityThreadBody = zod.object({
+  "upvoted": zod.boolean()
+})
+
+export const voteCommunityThreadResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const voteCommunityThreadResponseScoreMin = 0;
+export const voteCommunityThreadResponseScoreMultipleOf = 1;
+
+
+export const VoteCommunityThreadResponse = zod.object({
+  "threadId": zod.string().regex(voteCommunityThreadResponseThreadIdRegExp),
+  "upvoted": zod.boolean(),
+  "score": zod.number().min(voteCommunityThreadResponseScoreMin).multipleOf(voteCommunityThreadResponseScoreMultipleOf)
+})
+
+
+/**
+ * @summary Submit a content report for a thread or reply
+ */
+export const createCommunityReportBodyTargetIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReportBodyDetailsMax = 500;
+
+
+export const CreateCommunityReportBody = zod.object({
+  "targetType": zod.enum(['thread', 'reply']),
+  "targetId": zod.string().regex(createCommunityReportBodyTargetIdRegExp),
+  "reason": zod.enum(['spam', 'abuse', 'harassment', 'other']),
+  "details": zod.string().max(createCommunityReportBodyDetailsMax).optional()
+})
+
+export const createCommunityReportResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const CreateCommunityReportResponse = zod.object({
+  "id": zod.string().regex(createCommunityReportResponseIdRegExp),
+  "status": zod.enum(['received'])
+})
+
+
+/**
+ * @summary List the signed-in user's community notifications (cursor paginated)
+ */
+export const listCommunityNotificationsQueryCursorMax = 240;
+
+export const listCommunityNotificationsQueryLimitDefault = 20;
+export const listCommunityNotificationsQueryLimitMax = 50;
+export const listCommunityNotificationsQueryLimitMultipleOf = 1;
+
+
+export const ListCommunityNotificationsQueryParams = zod.object({
+  "cursor": zod.coerce.string().max(listCommunityNotificationsQueryCursorMax).optional(),
+  "limit": zod.coerce.number().min(1).max(listCommunityNotificationsQueryLimitMax).multipleOf(listCommunityNotificationsQueryLimitMultipleOf).default(listCommunityNotificationsQueryLimitDefault)
+})
+
+export const listCommunityNotificationsResponseItemsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listCommunityNotificationsResponseItemsItemActorDisplayNameMax = 60;
+
+export const listCommunityNotificationsResponseItemsItemActorAvatarUrlMax = 2048;
+
+export const listCommunityNotificationsResponseItemsItemThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listCommunityNotificationsResponseItemsItemReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listCommunityNotificationsResponseItemsItemParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listCommunityNotificationsResponseItemsMax = 50;
+
+export const listCommunityNotificationsResponseNextCursorMax = 240;
+
+
+export const ListCommunityNotificationsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().regex(listCommunityNotificationsResponseItemsItemIdRegExp),
+  "type": zod.enum(['reply']),
+  "actor": zod.object({
+  "displayName": zod.string().min(1).max(listCommunityNotificationsResponseItemsItemActorDisplayNameMax),
+  "avatarUrl": zod.string().max(listCommunityNotificationsResponseItemsItemActorAvatarUrlMax).nullable()
+}),
+  "threadId": zod.string().regex(listCommunityNotificationsResponseItemsItemThreadIdRegExp),
+  "replyId": zod.string().regex(listCommunityNotificationsResponseItemsItemReplyIdRegExp),
+  "parentReplyId": zod.string().regex(listCommunityNotificationsResponseItemsItemParentReplyIdRegExp).nullable(),
+  "available": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "readAt": zod.coerce.date().nullable()
+})).max(listCommunityNotificationsResponseItemsMax),
+  "nextCursor": zod.string().max(listCommunityNotificationsResponseNextCursorMax).nullable()
+})
+
+
+/**
+ * @summary Get the signed-in user's unread community notification count
+ */
+export const getCommunityNotificationUnreadCountResponseCountMin = 0;
+export const getCommunityNotificationUnreadCountResponseCountMultipleOf = 1;
+
+
+export const GetCommunityNotificationUnreadCountResponse = zod.object({
+  "count": zod.number().min(getCommunityNotificationUnreadCountResponseCountMin).multipleOf(getCommunityNotificationUnreadCountResponseCountMultipleOf)
+})
+
+
+/**
+ * @summary Mark all of the signed-in user's community notifications as read
+ */
+export const markAllCommunityNotificationsReadResponseMarkedMin = 0;
+export const markAllCommunityNotificationsReadResponseMarkedMultipleOf = 1;
+
+
+export const MarkAllCommunityNotificationsReadResponse = zod.object({
+  "marked": zod.number().min(markAllCommunityNotificationsReadResponseMarkedMin).multipleOf(markAllCommunityNotificationsReadResponseMarkedMultipleOf)
+})
+
+
+/**
+ * @summary Mark a single community notification as read (idempotent)
+ */
+export const markCommunityNotificationReadPathNotificationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const MarkCommunityNotificationReadParams = zod.object({
+  "notificationId": zod.coerce.string().regex(markCommunityNotificationReadPathNotificationIdRegExp)
+})
+
+export const markCommunityNotificationReadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const markCommunityNotificationReadResponseActorDisplayNameMax = 60;
+
+export const markCommunityNotificationReadResponseActorAvatarUrlMax = 2048;
+
+export const markCommunityNotificationReadResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const markCommunityNotificationReadResponseReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const markCommunityNotificationReadResponseParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const MarkCommunityNotificationReadResponse = zod.object({
+  "id": zod.string().regex(markCommunityNotificationReadResponseIdRegExp),
+  "type": zod.enum(['reply']),
+  "actor": zod.object({
+  "displayName": zod.string().min(1).max(markCommunityNotificationReadResponseActorDisplayNameMax),
+  "avatarUrl": zod.string().max(markCommunityNotificationReadResponseActorAvatarUrlMax).nullable()
+}),
+  "threadId": zod.string().regex(markCommunityNotificationReadResponseThreadIdRegExp),
+  "replyId": zod.string().regex(markCommunityNotificationReadResponseReplyIdRegExp),
+  "parentReplyId": zod.string().regex(markCommunityNotificationReadResponseParentReplyIdRegExp).nullable(),
+  "available": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "readAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary List durable product-package generation runs
+ */
+export const listVenomBuildRunsQueryAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ListVenomBuildRunsQueryParams = zod.object({
+  "appId": zod.union([zod.coerce.string().regex(listVenomBuildRunsQueryAppIdOneRegExp),zod.null()]).optional()
+})
+
+export const listVenomBuildRunsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomBuildRunsResponseCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomBuildRunsResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomBuildRunsResponseTargetNameMax = 120;
+
+export const listVenomBuildRunsResponseProgressMin = 0;
+export const listVenomBuildRunsResponseProgressMax = 100;
+export const listVenomBuildRunsResponseProgressMultipleOf = 1;
+
+export const listVenomBuildRunsResponseCurrentRevisionNumberMin = 0;
+export const listVenomBuildRunsResponseCurrentRevisionNumberMultipleOf = 1;
+
+export const listVenomBuildRunsResponseApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomBuildRunsResponseFailureMessageMax = 240;
+
+export const listVenomBuildRunsResponseCancelledReasonMax = 500;
+
+
+export const ListVenomBuildRunsResponseItem = zod.object({
+  "id": zod.string().regex(listVenomBuildRunsResponseIdRegExp),
+  "correlationId": zod.string().regex(listVenomBuildRunsResponseCorrelationIdRegExp),
+  "appId": zod.union([zod.string().regex(listVenomBuildRunsResponseAppIdOneRegExp),zod.null()]),
+  "runKind": zod.enum(['standard', 'app_iteration']),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(listVenomBuildRunsResponseTargetNameMax),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(listVenomBuildRunsResponseProgressMin).max(listVenomBuildRunsResponseProgressMax).multipleOf(listVenomBuildRunsResponseProgressMultipleOf),
+  "currentRevisionNumber": zod.number().min(listVenomBuildRunsResponseCurrentRevisionNumberMin).multipleOf(listVenomBuildRunsResponseCurrentRevisionNumberMultipleOf),
+  "approvedRevisionId": zod.union([zod.string().regex(listVenomBuildRunsResponseApprovedRevisionIdOneRegExp),zod.null()]),
+  "failureMessage": zod.string().max(listVenomBuildRunsResponseFailureMessageMax).nullable(),
+  "cancelledReason": zod.string().max(listVenomBuildRunsResponseCancelledReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListVenomBuildRunsResponse = zod.array(ListVenomBuildRunsResponseItem).max(200)
+
+
+/**
+ * @summary Queue a review-required product package generation run
+ */
+export const createVenomBuildRunBodyTargetNameMax = 120;
+
+export const createVenomBuildRunBodyRequirementsMax = 8000;
+
+export const createVenomBuildRunBodyConstraintsMax = 4000;
+
+export const createVenomBuildRunBodyBrandDirectionMax = 3000;
+
+export const createVenomBuildRunBodyAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunBodySourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunBodyProjectIdMax = 120;
+
+export const createVenomBuildRunBodySopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunBodySopRevisionIdsMax = 20;
+
+export const createVenomBuildRunBodyIdempotencyKeyMin = 16;
+export const createVenomBuildRunBodyIdempotencyKeyMax = 120;
+
+
+export const createVenomBuildRunBodyIdempotencyKeyRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+
+
+export const CreateVenomBuildRunBody = zod.object({
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(createVenomBuildRunBodyTargetNameMax),
+  "requirements": zod.string().min(1).max(createVenomBuildRunBodyRequirementsMax),
+  "constraints": zod.string().max(createVenomBuildRunBodyConstraintsMax),
+  "brandDirection": zod.string().max(createVenomBuildRunBodyBrandDirectionMax),
+  "appId": zod.union([zod.string().regex(createVenomBuildRunBodyAppIdOneRegExp),zod.null()]),
+  "sourceVersionId": zod.union([zod.string().regex(createVenomBuildRunBodySourceVersionIdOneRegExp),zod.null()]),
+  "projectId": zod.string().max(createVenomBuildRunBodyProjectIdMax).nullable(),
+  "sopRevisionIds": zod.array(zod.string().regex(createVenomBuildRunBodySopRevisionIdsItemRegExp)).max(createVenomBuildRunBodySopRevisionIdsMax),
+  "idempotencyKey": zod.string().min(createVenomBuildRunBodyIdempotencyKeyMin).max(createVenomBuildRunBodyIdempotencyKeyMax).regex(createVenomBuildRunBodyIdempotencyKeyRegExp)
+})
+
+export const createVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseOneTargetNameMax = 120;
+
+export const createVenomBuildRunResponseOneProgressMin = 0;
+export const createVenomBuildRunResponseOneProgressMax = 100;
+export const createVenomBuildRunResponseOneProgressMultipleOf = 1;
+
+export const createVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const createVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+
+export const createVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseOneFailureMessageMax = 240;
+
+export const createVenomBuildRunResponseOneCancelledReasonMax = 500;
+
+export const createVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+
+export const createVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+
+export const createVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+
+export const createVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+
+export const createVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+
+export const createVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+
+export const createVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+
+export const createVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+
+export const createVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+
+export const createVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+
+export const createVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomBuildRunResponseTwoRevisionsMax = 50;
+
+export const createVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const createVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const createVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+
+export const createVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+
+export const createVenomBuildRunResponseTwoEventsMax = 200;
+
+export const createVenomBuildRunResponseTwoAttemptMax = 10;
+export const createVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+
+export const createVenomBuildRunResponseTwoFailureCodeMax = 80;
+
+
+export const CreateVenomBuildRunResponse = zod.object({
+  "id": zod.string().regex(createVenomBuildRunResponseOneIdRegExp),
+  "correlationId": zod.string().regex(createVenomBuildRunResponseOneCorrelationIdRegExp),
+  "appId": zod.union([zod.string().regex(createVenomBuildRunResponseOneAppIdOneRegExp),zod.null()]),
+  "runKind": zod.enum(['standard', 'app_iteration']),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(createVenomBuildRunResponseOneTargetNameMax),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(createVenomBuildRunResponseOneProgressMin).max(createVenomBuildRunResponseOneProgressMax).multipleOf(createVenomBuildRunResponseOneProgressMultipleOf),
+  "currentRevisionNumber": zod.number().min(createVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(createVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
+  "approvedRevisionId": zod.union([zod.string().regex(createVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "failureMessage": zod.string().max(createVenomBuildRunResponseOneFailureMessageMax).nullable(),
+  "cancelledReason": zod.string().max(createVenomBuildRunResponseOneCancelledReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "request": zod.object({
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(createVenomBuildRunResponseTwoRequestTargetNameMax),
+  "requirements": zod.string().min(1).max(createVenomBuildRunResponseTwoRequestRequirementsMax),
+  "constraints": zod.string().max(createVenomBuildRunResponseTwoRequestConstraintsMax),
+  "brandDirection": zod.string().max(createVenomBuildRunResponseTwoRequestBrandDirectionMax),
+  "appId": zod.union([zod.string().regex(createVenomBuildRunResponseTwoRequestAppIdOneRegExp),zod.null()]),
+  "sourceVersionId": zod.union([zod.string().regex(createVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp),zod.null()]),
+  "projectId": zod.string().max(createVenomBuildRunResponseTwoRequestProjectIdMax).nullable(),
+  "sopRevisionIds": zod.array(zod.string().regex(createVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(createVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
+  "baselineIterationId": zod.union([zod.string().regex(createVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
+  "baselineRevisionId": zod.union([zod.string().regex(createVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
+  "changesSummary": zod.string().max(createVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+}),
+  "revisions": zod.array(zod.object({
+  "id": zod.string().regex(createVenomBuildRunResponseTwoRevisionsItemIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(createVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf),
+  "reason": zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemReasonMax),
+  "package": zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax)).max(createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax)).max(createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax)).max(createVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax)).max(createVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax)).max(createVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax)).max(createVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp)
+})).max(createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp)
+})).max(createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax)).max(createVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax)).max(createVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax)).min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax)).min(1).max(createVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax)
+}),
+  "checksumSha256": zod.string().regex(createVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp),
+  "createdAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullable()
+})).max(createVenomBuildRunResponseTwoRevisionsMax),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(createVenomBuildRunResponseTwoEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(createVenomBuildRunResponseTwoEventsItemProgressMin).max(createVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(createVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
+  "message": zod.string().min(1).max(createVenomBuildRunResponseTwoEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(createVenomBuildRunResponseTwoEventsMax),
+  "attempt": zod.number().min(1).max(createVenomBuildRunResponseTwoAttemptMax).multipleOf(createVenomBuildRunResponseTwoAttemptMultipleOf),
+  "failureCode": zod.string().max(createVenomBuildRunResponseTwoFailureCodeMax).nullable(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}))
+
+
+/**
+ * @summary Inspect a generation run, package revisions, and activity
+ */
+export const getVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const GetVenomBuildRunParams = zod.object({
+  "buildRunId": zod.coerce.string().regex(getVenomBuildRunPathBuildRunIdRegExp)
+})
+
+export const getVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseOneTargetNameMax = 120;
+
+export const getVenomBuildRunResponseOneProgressMin = 0;
+export const getVenomBuildRunResponseOneProgressMax = 100;
+export const getVenomBuildRunResponseOneProgressMultipleOf = 1;
+
+export const getVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const getVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+
+export const getVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseOneFailureMessageMax = 240;
+
+export const getVenomBuildRunResponseOneCancelledReasonMax = 500;
+
+export const getVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+
+export const getVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+
+export const getVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+
+export const getVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+
+export const getVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+
+export const getVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+
+export const getVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+
+export const getVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+
+export const getVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+
+export const getVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+
+export const getVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomBuildRunResponseTwoRevisionsMax = 50;
+
+export const getVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const getVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const getVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+
+export const getVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+
+export const getVenomBuildRunResponseTwoEventsMax = 200;
+
+export const getVenomBuildRunResponseTwoAttemptMax = 10;
+export const getVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+
+export const getVenomBuildRunResponseTwoFailureCodeMax = 80;
+
+
+export const GetVenomBuildRunResponse = zod.object({
+  "id": zod.string().regex(getVenomBuildRunResponseOneIdRegExp),
+  "correlationId": zod.string().regex(getVenomBuildRunResponseOneCorrelationIdRegExp),
+  "appId": zod.union([zod.string().regex(getVenomBuildRunResponseOneAppIdOneRegExp),zod.null()]),
+  "runKind": zod.enum(['standard', 'app_iteration']),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(getVenomBuildRunResponseOneTargetNameMax),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(getVenomBuildRunResponseOneProgressMin).max(getVenomBuildRunResponseOneProgressMax).multipleOf(getVenomBuildRunResponseOneProgressMultipleOf),
+  "currentRevisionNumber": zod.number().min(getVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(getVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
+  "approvedRevisionId": zod.union([zod.string().regex(getVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "failureMessage": zod.string().max(getVenomBuildRunResponseOneFailureMessageMax).nullable(),
+  "cancelledReason": zod.string().max(getVenomBuildRunResponseOneCancelledReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "request": zod.object({
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(getVenomBuildRunResponseTwoRequestTargetNameMax),
+  "requirements": zod.string().min(1).max(getVenomBuildRunResponseTwoRequestRequirementsMax),
+  "constraints": zod.string().max(getVenomBuildRunResponseTwoRequestConstraintsMax),
+  "brandDirection": zod.string().max(getVenomBuildRunResponseTwoRequestBrandDirectionMax),
+  "appId": zod.union([zod.string().regex(getVenomBuildRunResponseTwoRequestAppIdOneRegExp),zod.null()]),
+  "sourceVersionId": zod.union([zod.string().regex(getVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp),zod.null()]),
+  "projectId": zod.string().max(getVenomBuildRunResponseTwoRequestProjectIdMax).nullable(),
+  "sopRevisionIds": zod.array(zod.string().regex(getVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(getVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
+  "baselineIterationId": zod.union([zod.string().regex(getVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
+  "baselineRevisionId": zod.union([zod.string().regex(getVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
+  "changesSummary": zod.string().max(getVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+}),
+  "revisions": zod.array(zod.object({
+  "id": zod.string().regex(getVenomBuildRunResponseTwoRevisionsItemIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(getVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf),
+  "reason": zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemReasonMax),
+  "package": zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax)).max(getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax)).max(getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax)).max(getVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax)).max(getVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax)).max(getVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax)).max(getVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp)
+})).max(getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp)
+})).max(getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax)).max(getVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax)).max(getVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax)).min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax)).min(1).max(getVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax)
+}),
+  "checksumSha256": zod.string().regex(getVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp),
+  "createdAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullable()
+})).max(getVenomBuildRunResponseTwoRevisionsMax),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(getVenomBuildRunResponseTwoEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(getVenomBuildRunResponseTwoEventsItemProgressMin).max(getVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(getVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
+  "message": zod.string().min(1).max(getVenomBuildRunResponseTwoEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(getVenomBuildRunResponseTwoEventsMax),
+  "attempt": zod.number().min(1).max(getVenomBuildRunResponseTwoAttemptMax).multipleOf(getVenomBuildRunResponseTwoAttemptMultipleOf),
+  "failureCode": zod.string().max(getVenomBuildRunResponseTwoFailureCodeMax).nullable(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}))
+
+
+/**
+ * @summary Cancel a queued or preparing generation run
+ */
+export const cancelVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const CancelVenomBuildRunParams = zod.object({
+  "buildRunId": zod.coerce.string().regex(cancelVenomBuildRunPathBuildRunIdRegExp)
+})
+
+export const cancelVenomBuildRunBodyReasonMax = 500;
+
+
+export const CancelVenomBuildRunBody = zod.object({
+  "reason": zod.string().min(1).max(cancelVenomBuildRunBodyReasonMax)
+})
+
+export const cancelVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseOneTargetNameMax = 120;
+
+export const cancelVenomBuildRunResponseOneProgressMin = 0;
+export const cancelVenomBuildRunResponseOneProgressMax = 100;
+export const cancelVenomBuildRunResponseOneProgressMultipleOf = 1;
+
+export const cancelVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const cancelVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+
+export const cancelVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseOneFailureMessageMax = 240;
+
+export const cancelVenomBuildRunResponseOneCancelledReasonMax = 500;
+
+export const cancelVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+
+export const cancelVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+
+export const cancelVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+
+export const cancelVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+
+export const cancelVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+
+export const cancelVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+
+export const cancelVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+
+export const cancelVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const cancelVenomBuildRunResponseTwoRevisionsMax = 50;
+
+export const cancelVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const cancelVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const cancelVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+
+export const cancelVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+
+export const cancelVenomBuildRunResponseTwoEventsMax = 200;
+
+export const cancelVenomBuildRunResponseTwoAttemptMax = 10;
+export const cancelVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+
+export const cancelVenomBuildRunResponseTwoFailureCodeMax = 80;
+
+
+export const CancelVenomBuildRunResponse = zod.object({
+  "id": zod.string().regex(cancelVenomBuildRunResponseOneIdRegExp),
+  "correlationId": zod.string().regex(cancelVenomBuildRunResponseOneCorrelationIdRegExp),
+  "appId": zod.union([zod.string().regex(cancelVenomBuildRunResponseOneAppIdOneRegExp),zod.null()]),
+  "runKind": zod.enum(['standard', 'app_iteration']),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(cancelVenomBuildRunResponseOneTargetNameMax),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(cancelVenomBuildRunResponseOneProgressMin).max(cancelVenomBuildRunResponseOneProgressMax).multipleOf(cancelVenomBuildRunResponseOneProgressMultipleOf),
+  "currentRevisionNumber": zod.number().min(cancelVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(cancelVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
+  "approvedRevisionId": zod.union([zod.string().regex(cancelVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "failureMessage": zod.string().max(cancelVenomBuildRunResponseOneFailureMessageMax).nullable(),
+  "cancelledReason": zod.string().max(cancelVenomBuildRunResponseOneCancelledReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "request": zod.object({
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(cancelVenomBuildRunResponseTwoRequestTargetNameMax),
+  "requirements": zod.string().min(1).max(cancelVenomBuildRunResponseTwoRequestRequirementsMax),
+  "constraints": zod.string().max(cancelVenomBuildRunResponseTwoRequestConstraintsMax),
+  "brandDirection": zod.string().max(cancelVenomBuildRunResponseTwoRequestBrandDirectionMax),
+  "appId": zod.union([zod.string().regex(cancelVenomBuildRunResponseTwoRequestAppIdOneRegExp),zod.null()]),
+  "sourceVersionId": zod.union([zod.string().regex(cancelVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp),zod.null()]),
+  "projectId": zod.string().max(cancelVenomBuildRunResponseTwoRequestProjectIdMax).nullable(),
+  "sopRevisionIds": zod.array(zod.string().regex(cancelVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(cancelVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
+  "baselineIterationId": zod.union([zod.string().regex(cancelVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
+  "baselineRevisionId": zod.union([zod.string().regex(cancelVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
+  "changesSummary": zod.string().max(cancelVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+}),
+  "revisions": zod.array(zod.object({
+  "id": zod.string().regex(cancelVenomBuildRunResponseTwoRevisionsItemIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(cancelVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf),
+  "reason": zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemReasonMax),
+  "package": zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax)).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax)).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax)).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax)).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax)).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax)).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp)
+})).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp)
+})).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax)).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax)).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax)).min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax)).min(1).max(cancelVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax)
+}),
+  "checksumSha256": zod.string().regex(cancelVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp),
+  "createdAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullable()
+})).max(cancelVenomBuildRunResponseTwoRevisionsMax),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(cancelVenomBuildRunResponseTwoEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(cancelVenomBuildRunResponseTwoEventsItemProgressMin).max(cancelVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(cancelVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
+  "message": zod.string().min(1).max(cancelVenomBuildRunResponseTwoEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(cancelVenomBuildRunResponseTwoEventsMax),
+  "attempt": zod.number().min(1).max(cancelVenomBuildRunResponseTwoAttemptMax).multipleOf(cancelVenomBuildRunResponseTwoAttemptMultipleOf),
+  "failureCode": zod.string().max(cancelVenomBuildRunResponseTwoFailureCodeMax).nullable(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}))
+
+
+/**
+ * @summary Safely retry a failed or cancelled generation run
+ */
+export const retryVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const RetryVenomBuildRunParams = zod.object({
+  "buildRunId": zod.coerce.string().regex(retryVenomBuildRunPathBuildRunIdRegExp)
+})
+
+export const retryVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseOneTargetNameMax = 120;
+
+export const retryVenomBuildRunResponseOneProgressMin = 0;
+export const retryVenomBuildRunResponseOneProgressMax = 100;
+export const retryVenomBuildRunResponseOneProgressMultipleOf = 1;
+
+export const retryVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const retryVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+
+export const retryVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseOneFailureMessageMax = 240;
+
+export const retryVenomBuildRunResponseOneCancelledReasonMax = 500;
+
+export const retryVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+
+export const retryVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+
+export const retryVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+
+export const retryVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+
+export const retryVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+
+export const retryVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+
+export const retryVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+
+export const retryVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryVenomBuildRunResponseTwoRevisionsMax = 50;
+
+export const retryVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const retryVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const retryVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+
+export const retryVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+
+export const retryVenomBuildRunResponseTwoEventsMax = 200;
+
+export const retryVenomBuildRunResponseTwoAttemptMax = 10;
+export const retryVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+
+export const retryVenomBuildRunResponseTwoFailureCodeMax = 80;
+
+
+export const RetryVenomBuildRunResponse = zod.object({
+  "id": zod.string().regex(retryVenomBuildRunResponseOneIdRegExp),
+  "correlationId": zod.string().regex(retryVenomBuildRunResponseOneCorrelationIdRegExp),
+  "appId": zod.union([zod.string().regex(retryVenomBuildRunResponseOneAppIdOneRegExp),zod.null()]),
+  "runKind": zod.enum(['standard', 'app_iteration']),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(retryVenomBuildRunResponseOneTargetNameMax),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(retryVenomBuildRunResponseOneProgressMin).max(retryVenomBuildRunResponseOneProgressMax).multipleOf(retryVenomBuildRunResponseOneProgressMultipleOf),
+  "currentRevisionNumber": zod.number().min(retryVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(retryVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
+  "approvedRevisionId": zod.union([zod.string().regex(retryVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "failureMessage": zod.string().max(retryVenomBuildRunResponseOneFailureMessageMax).nullable(),
+  "cancelledReason": zod.string().max(retryVenomBuildRunResponseOneCancelledReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "request": zod.object({
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(retryVenomBuildRunResponseTwoRequestTargetNameMax),
+  "requirements": zod.string().min(1).max(retryVenomBuildRunResponseTwoRequestRequirementsMax),
+  "constraints": zod.string().max(retryVenomBuildRunResponseTwoRequestConstraintsMax),
+  "brandDirection": zod.string().max(retryVenomBuildRunResponseTwoRequestBrandDirectionMax),
+  "appId": zod.union([zod.string().regex(retryVenomBuildRunResponseTwoRequestAppIdOneRegExp),zod.null()]),
+  "sourceVersionId": zod.union([zod.string().regex(retryVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp),zod.null()]),
+  "projectId": zod.string().max(retryVenomBuildRunResponseTwoRequestProjectIdMax).nullable(),
+  "sopRevisionIds": zod.array(zod.string().regex(retryVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(retryVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
+  "baselineIterationId": zod.union([zod.string().regex(retryVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
+  "baselineRevisionId": zod.union([zod.string().regex(retryVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
+  "changesSummary": zod.string().max(retryVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+}),
+  "revisions": zod.array(zod.object({
+  "id": zod.string().regex(retryVenomBuildRunResponseTwoRevisionsItemIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(retryVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf),
+  "reason": zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemReasonMax),
+  "package": zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax)).max(retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax)).max(retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax)).max(retryVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax)).max(retryVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax)).max(retryVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax)).max(retryVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp)
+})).max(retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp)
+})).max(retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax)).max(retryVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax)).max(retryVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax)).min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax)).min(1).max(retryVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax)
+}),
+  "checksumSha256": zod.string().regex(retryVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp),
+  "createdAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullable()
+})).max(retryVenomBuildRunResponseTwoRevisionsMax),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(retryVenomBuildRunResponseTwoEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(retryVenomBuildRunResponseTwoEventsItemProgressMin).max(retryVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(retryVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
+  "message": zod.string().min(1).max(retryVenomBuildRunResponseTwoEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(retryVenomBuildRunResponseTwoEventsMax),
+  "attempt": zod.number().min(1).max(retryVenomBuildRunResponseTwoAttemptMax).multipleOf(retryVenomBuildRunResponseTwoAttemptMultipleOf),
+  "failureCode": zod.string().max(retryVenomBuildRunResponseTwoFailureCodeMax).nullable(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}))
+
+
+/**
+ * @summary Queue an immutable package revision for human review
+ */
+export const reviseVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ReviseVenomBuildRunParams = zod.object({
+  "buildRunId": zod.coerce.string().regex(reviseVenomBuildRunPathBuildRunIdRegExp)
+})
+
+export const reviseVenomBuildRunBodyInstructionMax = 3000;
+
+
+export const ReviseVenomBuildRunBody = zod.object({
+  "instruction": zod.string().min(1).max(reviseVenomBuildRunBodyInstructionMax)
+})
+
+export const reviseVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseOneTargetNameMax = 120;
+
+export const reviseVenomBuildRunResponseOneProgressMin = 0;
+export const reviseVenomBuildRunResponseOneProgressMax = 100;
+export const reviseVenomBuildRunResponseOneProgressMultipleOf = 1;
+
+export const reviseVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const reviseVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+
+export const reviseVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseOneFailureMessageMax = 240;
+
+export const reviseVenomBuildRunResponseOneCancelledReasonMax = 500;
+
+export const reviseVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+
+export const reviseVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+
+export const reviseVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+
+export const reviseVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+
+export const reviseVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+
+export const reviseVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+
+export const reviseVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+
+export const reviseVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const reviseVenomBuildRunResponseTwoRevisionsMax = 50;
+
+export const reviseVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const reviseVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const reviseVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+
+export const reviseVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+
+export const reviseVenomBuildRunResponseTwoEventsMax = 200;
+
+export const reviseVenomBuildRunResponseTwoAttemptMax = 10;
+export const reviseVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+
+export const reviseVenomBuildRunResponseTwoFailureCodeMax = 80;
+
+
+export const ReviseVenomBuildRunResponse = zod.object({
+  "id": zod.string().regex(reviseVenomBuildRunResponseOneIdRegExp),
+  "correlationId": zod.string().regex(reviseVenomBuildRunResponseOneCorrelationIdRegExp),
+  "appId": zod.union([zod.string().regex(reviseVenomBuildRunResponseOneAppIdOneRegExp),zod.null()]),
+  "runKind": zod.enum(['standard', 'app_iteration']),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(reviseVenomBuildRunResponseOneTargetNameMax),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(reviseVenomBuildRunResponseOneProgressMin).max(reviseVenomBuildRunResponseOneProgressMax).multipleOf(reviseVenomBuildRunResponseOneProgressMultipleOf),
+  "currentRevisionNumber": zod.number().min(reviseVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(reviseVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
+  "approvedRevisionId": zod.union([zod.string().regex(reviseVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "failureMessage": zod.string().max(reviseVenomBuildRunResponseOneFailureMessageMax).nullable(),
+  "cancelledReason": zod.string().max(reviseVenomBuildRunResponseOneCancelledReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "request": zod.object({
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(reviseVenomBuildRunResponseTwoRequestTargetNameMax),
+  "requirements": zod.string().min(1).max(reviseVenomBuildRunResponseTwoRequestRequirementsMax),
+  "constraints": zod.string().max(reviseVenomBuildRunResponseTwoRequestConstraintsMax),
+  "brandDirection": zod.string().max(reviseVenomBuildRunResponseTwoRequestBrandDirectionMax),
+  "appId": zod.union([zod.string().regex(reviseVenomBuildRunResponseTwoRequestAppIdOneRegExp),zod.null()]),
+  "sourceVersionId": zod.union([zod.string().regex(reviseVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp),zod.null()]),
+  "projectId": zod.string().max(reviseVenomBuildRunResponseTwoRequestProjectIdMax).nullable(),
+  "sopRevisionIds": zod.array(zod.string().regex(reviseVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(reviseVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
+  "baselineIterationId": zod.union([zod.string().regex(reviseVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
+  "baselineRevisionId": zod.union([zod.string().regex(reviseVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
+  "changesSummary": zod.string().max(reviseVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+}),
+  "revisions": zod.array(zod.object({
+  "id": zod.string().regex(reviseVenomBuildRunResponseTwoRevisionsItemIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(reviseVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf),
+  "reason": zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemReasonMax),
+  "package": zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax)).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax)).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax)).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax)).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax)).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax)).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp)
+})).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp)
+})).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax)).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax)).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax)).min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax)).min(1).max(reviseVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax)
+}),
+  "checksumSha256": zod.string().regex(reviseVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp),
+  "createdAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullable()
+})).max(reviseVenomBuildRunResponseTwoRevisionsMax),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(reviseVenomBuildRunResponseTwoEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(reviseVenomBuildRunResponseTwoEventsItemProgressMin).max(reviseVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(reviseVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
+  "message": zod.string().min(1).max(reviseVenomBuildRunResponseTwoEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(reviseVenomBuildRunResponseTwoEventsMax),
+  "attempt": zod.number().min(1).max(reviseVenomBuildRunResponseTwoAttemptMax).multipleOf(reviseVenomBuildRunResponseTwoAttemptMultipleOf),
+  "failureCode": zod.string().max(reviseVenomBuildRunResponseTwoFailureCodeMax).nullable(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}))
+
+
+/**
+ * @summary Approve one immutable revision for later provisioning
+ */
+export const approveVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ApproveVenomBuildRunParams = zod.object({
+  "buildRunId": zod.coerce.string().regex(approveVenomBuildRunPathBuildRunIdRegExp)
+})
+
+export const approveVenomBuildRunBodyRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ApproveVenomBuildRunBody = zod.object({
+  "revisionId": zod.string().regex(approveVenomBuildRunBodyRevisionIdRegExp)
+})
+
+export const approveVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseOneTargetNameMax = 120;
+
+export const approveVenomBuildRunResponseOneProgressMin = 0;
+export const approveVenomBuildRunResponseOneProgressMax = 100;
+export const approveVenomBuildRunResponseOneProgressMultipleOf = 1;
+
+export const approveVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const approveVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+
+export const approveVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseOneFailureMessageMax = 240;
+
+export const approveVenomBuildRunResponseOneCancelledReasonMax = 500;
+
+export const approveVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+
+export const approveVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+
+export const approveVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+
+export const approveVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+
+export const approveVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+
+export const approveVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+
+export const approveVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+
+export const approveVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const approveVenomBuildRunResponseTwoRevisionsMax = 50;
+
+export const approveVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const approveVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const approveVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+
+export const approveVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+
+export const approveVenomBuildRunResponseTwoEventsMax = 200;
+
+export const approveVenomBuildRunResponseTwoAttemptMax = 10;
+export const approveVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+
+export const approveVenomBuildRunResponseTwoFailureCodeMax = 80;
+
+
+export const ApproveVenomBuildRunResponse = zod.object({
+  "id": zod.string().regex(approveVenomBuildRunResponseOneIdRegExp),
+  "correlationId": zod.string().regex(approveVenomBuildRunResponseOneCorrelationIdRegExp),
+  "appId": zod.union([zod.string().regex(approveVenomBuildRunResponseOneAppIdOneRegExp),zod.null()]),
+  "runKind": zod.enum(['standard', 'app_iteration']),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(approveVenomBuildRunResponseOneTargetNameMax),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(approveVenomBuildRunResponseOneProgressMin).max(approveVenomBuildRunResponseOneProgressMax).multipleOf(approveVenomBuildRunResponseOneProgressMultipleOf),
+  "currentRevisionNumber": zod.number().min(approveVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(approveVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
+  "approvedRevisionId": zod.union([zod.string().regex(approveVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "failureMessage": zod.string().max(approveVenomBuildRunResponseOneFailureMessageMax).nullable(),
+  "cancelledReason": zod.string().max(approveVenomBuildRunResponseOneCancelledReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "request": zod.object({
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(approveVenomBuildRunResponseTwoRequestTargetNameMax),
+  "requirements": zod.string().min(1).max(approveVenomBuildRunResponseTwoRequestRequirementsMax),
+  "constraints": zod.string().max(approveVenomBuildRunResponseTwoRequestConstraintsMax),
+  "brandDirection": zod.string().max(approveVenomBuildRunResponseTwoRequestBrandDirectionMax),
+  "appId": zod.union([zod.string().regex(approveVenomBuildRunResponseTwoRequestAppIdOneRegExp),zod.null()]),
+  "sourceVersionId": zod.union([zod.string().regex(approveVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp),zod.null()]),
+  "projectId": zod.string().max(approveVenomBuildRunResponseTwoRequestProjectIdMax).nullable(),
+  "sopRevisionIds": zod.array(zod.string().regex(approveVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(approveVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
+  "baselineIterationId": zod.union([zod.string().regex(approveVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
+  "baselineRevisionId": zod.union([zod.string().regex(approveVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
+  "changesSummary": zod.string().max(approveVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+}),
+  "revisions": zod.array(zod.object({
+  "id": zod.string().regex(approveVenomBuildRunResponseTwoRevisionsItemIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(approveVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf),
+  "reason": zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemReasonMax),
+  "package": zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax)).max(approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax)).max(approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax)).max(approveVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax)).max(approveVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax)).max(approveVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax)).max(approveVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp)
+})).max(approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp)
+})).max(approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax)).max(approveVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax)).max(approveVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax)).min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax)).min(1).max(approveVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax)
+}),
+  "checksumSha256": zod.string().regex(approveVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp),
+  "createdAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullable()
+})).max(approveVenomBuildRunResponseTwoRevisionsMax),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(approveVenomBuildRunResponseTwoEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(approveVenomBuildRunResponseTwoEventsItemProgressMin).max(approveVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(approveVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
+  "message": zod.string().min(1).max(approveVenomBuildRunResponseTwoEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(approveVenomBuildRunResponseTwoEventsMax),
+  "attempt": zod.number().min(1).max(approveVenomBuildRunResponseTwoAttemptMax).multipleOf(approveVenomBuildRunResponseTwoAttemptMultipleOf),
+  "failureCode": zod.string().max(approveVenomBuildRunResponseTwoFailureCodeMax).nullable(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}))
+
+
+/**
+ * @summary Reject a review-required package without executing it
+ */
+export const rejectVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const RejectVenomBuildRunParams = zod.object({
+  "buildRunId": zod.coerce.string().regex(rejectVenomBuildRunPathBuildRunIdRegExp)
+})
+
+export const rejectVenomBuildRunBodyReasonMax = 500;
+
+
+export const RejectVenomBuildRunBody = zod.object({
+  "reason": zod.string().min(1).max(rejectVenomBuildRunBodyReasonMax)
+})
+
+export const rejectVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseOneTargetNameMax = 120;
+
+export const rejectVenomBuildRunResponseOneProgressMin = 0;
+export const rejectVenomBuildRunResponseOneProgressMax = 100;
+export const rejectVenomBuildRunResponseOneProgressMultipleOf = 1;
+
+export const rejectVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const rejectVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+
+export const rejectVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseOneFailureMessageMax = 240;
+
+export const rejectVenomBuildRunResponseOneCancelledReasonMax = 500;
+
+export const rejectVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+
+export const rejectVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+
+export const rejectVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+
+export const rejectVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+
+export const rejectVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+
+export const rejectVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+
+export const rejectVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+
+export const rejectVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const rejectVenomBuildRunResponseTwoRevisionsMax = 50;
+
+export const rejectVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const rejectVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const rejectVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+
+export const rejectVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+
+export const rejectVenomBuildRunResponseTwoEventsMax = 200;
+
+export const rejectVenomBuildRunResponseTwoAttemptMax = 10;
+export const rejectVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+
+export const rejectVenomBuildRunResponseTwoFailureCodeMax = 80;
+
+
+export const RejectVenomBuildRunResponse = zod.object({
+  "id": zod.string().regex(rejectVenomBuildRunResponseOneIdRegExp),
+  "correlationId": zod.string().regex(rejectVenomBuildRunResponseOneCorrelationIdRegExp),
+  "appId": zod.union([zod.string().regex(rejectVenomBuildRunResponseOneAppIdOneRegExp),zod.null()]),
+  "runKind": zod.enum(['standard', 'app_iteration']),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(rejectVenomBuildRunResponseOneTargetNameMax),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(rejectVenomBuildRunResponseOneProgressMin).max(rejectVenomBuildRunResponseOneProgressMax).multipleOf(rejectVenomBuildRunResponseOneProgressMultipleOf),
+  "currentRevisionNumber": zod.number().min(rejectVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(rejectVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
+  "approvedRevisionId": zod.union([zod.string().regex(rejectVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "failureMessage": zod.string().max(rejectVenomBuildRunResponseOneFailureMessageMax).nullable(),
+  "cancelledReason": zod.string().max(rejectVenomBuildRunResponseOneCancelledReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "request": zod.object({
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(rejectVenomBuildRunResponseTwoRequestTargetNameMax),
+  "requirements": zod.string().min(1).max(rejectVenomBuildRunResponseTwoRequestRequirementsMax),
+  "constraints": zod.string().max(rejectVenomBuildRunResponseTwoRequestConstraintsMax),
+  "brandDirection": zod.string().max(rejectVenomBuildRunResponseTwoRequestBrandDirectionMax),
+  "appId": zod.union([zod.string().regex(rejectVenomBuildRunResponseTwoRequestAppIdOneRegExp),zod.null()]),
+  "sourceVersionId": zod.union([zod.string().regex(rejectVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp),zod.null()]),
+  "projectId": zod.string().max(rejectVenomBuildRunResponseTwoRequestProjectIdMax).nullable(),
+  "sopRevisionIds": zod.array(zod.string().regex(rejectVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(rejectVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
+  "baselineIterationId": zod.union([zod.string().regex(rejectVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
+  "baselineRevisionId": zod.union([zod.string().regex(rejectVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
+  "changesSummary": zod.string().max(rejectVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+}),
+  "revisions": zod.array(zod.object({
+  "id": zod.string().regex(rejectVenomBuildRunResponseTwoRevisionsItemIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(rejectVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf),
+  "reason": zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemReasonMax),
+  "package": zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax)).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax)).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax)).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax)).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax)).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax)).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp)
+})).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp)
+})).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax)).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax)).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax)).min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax)).min(1).max(rejectVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax)
+}),
+  "checksumSha256": zod.string().regex(rejectVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp),
+  "createdAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullable()
+})).max(rejectVenomBuildRunResponseTwoRevisionsMax),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(rejectVenomBuildRunResponseTwoEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
+  "progress": zod.number().min(rejectVenomBuildRunResponseTwoEventsItemProgressMin).max(rejectVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(rejectVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
+  "message": zod.string().min(1).max(rejectVenomBuildRunResponseTwoEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(rejectVenomBuildRunResponseTwoEventsMax),
+  "attempt": zod.number().min(1).max(rejectVenomBuildRunResponseTwoAttemptMax).multipleOf(rejectVenomBuildRunResponseTwoAttemptMultipleOf),
+  "failureCode": zod.string().max(rejectVenomBuildRunResponseTwoFailureCodeMax).nullable(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}))
+
+
+/**
+ * @summary Export the latest package revision as JSON or Markdown
+ */
+export const exportVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ExportVenomBuildRunParams = zod.object({
+  "buildRunId": zod.coerce.string().regex(exportVenomBuildRunPathBuildRunIdRegExp),
+  "format": zod.enum(['json', 'markdown'])
+})
+
+export const exportVenomBuildRunResponseTitleMax = 160;
+
+export const exportVenomBuildRunResponseProductBriefSummaryMax = 3000;
+
+export const exportVenomBuildRunResponseProductBriefAudienceItemMax = 300;
+
+export const exportVenomBuildRunResponseProductBriefAudienceMax = 12;
+
+export const exportVenomBuildRunResponseProductBriefOutcomesItemMax = 500;
+
+export const exportVenomBuildRunResponseProductBriefOutcomesMax = 20;
+
+export const exportVenomBuildRunResponseFunctionalScopeItemMax = 800;
+
+export const exportVenomBuildRunResponseFunctionalScopeMax = 40;
+
+export const exportVenomBuildRunResponseBrandDirectionItemMax = 600;
+
+export const exportVenomBuildRunResponseBrandDirectionMax = 30;
+
+export const exportVenomBuildRunResponseContentRequirementsItemMax = 600;
+
+export const exportVenomBuildRunResponseContentRequirementsMax = 30;
+
+export const exportVenomBuildRunResponseServiceFlowRequirementsItemMax = 600;
+
+export const exportVenomBuildRunResponseServiceFlowRequirementsMax = 30;
+
+export const exportVenomBuildRunResponseSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const exportVenomBuildRunResponseSourceReferencesItemAppNameMax = 120;
+
+export const exportVenomBuildRunResponseSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const exportVenomBuildRunResponseSourceReferencesItemVersionNumberMultipleOf = 1;
+
+export const exportVenomBuildRunResponseSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const exportVenomBuildRunResponseSourceReferencesMax = 1;
+
+export const exportVenomBuildRunResponseSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const exportVenomBuildRunResponseSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const exportVenomBuildRunResponseSopReferencesItemRevisionNumberMultipleOf = 1;
+
+export const exportVenomBuildRunResponseSopReferencesItemTitleMax = 160;
+
+export const exportVenomBuildRunResponseSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const exportVenomBuildRunResponseSopReferencesMax = 20;
+
+export const exportVenomBuildRunResponseDataNeedsItemMax = 600;
+
+export const exportVenomBuildRunResponseDataNeedsMax = 30;
+
+export const exportVenomBuildRunResponseIntegrationNeedsItemMax = 600;
+
+export const exportVenomBuildRunResponseIntegrationNeedsMax = 30;
+
+export const exportVenomBuildRunResponsePermissionRequestsItemCapabilityMax = 160;
+
+export const exportVenomBuildRunResponsePermissionRequestsItemReasonMax = 600;
+
+export const exportVenomBuildRunResponsePermissionRequestsMax = 30;
+
+export const exportVenomBuildRunResponseAcceptanceChecksItemMax = 800;
+
+export const exportVenomBuildRunResponseAcceptanceChecksMax = 40;
+
+export const exportVenomBuildRunResponseLaunchConstraintsItemMax = 600;
+
+export const exportVenomBuildRunResponseLaunchConstraintsMax = 30;
+
+
+export const ExportVenomBuildRunResponse = zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(exportVenomBuildRunResponseTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(exportVenomBuildRunResponseProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(exportVenomBuildRunResponseProductBriefAudienceItemMax)).max(exportVenomBuildRunResponseProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(exportVenomBuildRunResponseProductBriefOutcomesItemMax)).max(exportVenomBuildRunResponseProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(exportVenomBuildRunResponseFunctionalScopeItemMax)).max(exportVenomBuildRunResponseFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(exportVenomBuildRunResponseBrandDirectionItemMax)).max(exportVenomBuildRunResponseBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(exportVenomBuildRunResponseContentRequirementsItemMax)).max(exportVenomBuildRunResponseContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(exportVenomBuildRunResponseServiceFlowRequirementsItemMax)).max(exportVenomBuildRunResponseServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(exportVenomBuildRunResponseSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(exportVenomBuildRunResponseSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(exportVenomBuildRunResponseSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(exportVenomBuildRunResponseSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(exportVenomBuildRunResponseSourceReferencesItemChecksumSha256RegExp)
+})).max(exportVenomBuildRunResponseSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(exportVenomBuildRunResponseSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(exportVenomBuildRunResponseSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(exportVenomBuildRunResponseSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(exportVenomBuildRunResponseSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(exportVenomBuildRunResponseSopReferencesItemChecksumSha256RegExp)
+})).max(exportVenomBuildRunResponseSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(exportVenomBuildRunResponseDataNeedsItemMax)).max(exportVenomBuildRunResponseDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(exportVenomBuildRunResponseIntegrationNeedsItemMax)).max(exportVenomBuildRunResponseIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(exportVenomBuildRunResponsePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(exportVenomBuildRunResponsePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(exportVenomBuildRunResponsePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(exportVenomBuildRunResponseAcceptanceChecksItemMax)).min(1).max(exportVenomBuildRunResponseAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(exportVenomBuildRunResponseLaunchConstraintsItemMax)).min(1).max(exportVenomBuildRunResponseLaunchConstraintsMax)
+})
+
+
+/**
+ * @summary Report provisioning provider capability and permission summary
+ */
+export const getProvisioningCapabilityResponseSummaryMax = 2000;
+
+export const getProvisioningCapabilityResponseRecoveryGuidanceMax = 2000;
+
+export const getProvisioningCapabilityResponseSupportedTargetTypesMax = 10;
+
+export const getProvisioningCapabilityResponsePermissionSummaryOneAllowedItemMax = 200;
+
+export const getProvisioningCapabilityResponsePermissionSummaryOneAllowedMax = 100;
+
+export const getProvisioningCapabilityResponsePermissionSummaryOneDeniedItemIntegrationMax = 200;
+
+export const getProvisioningCapabilityResponsePermissionSummaryOneDeniedItemReasonMax = 500;
+
+export const getProvisioningCapabilityResponsePermissionSummaryOneDeniedMax = 100;
+
+
+export const GetProvisioningCapabilityResponse = zod.object({
+  "health": zod.enum(['healthy', 'degraded', 'unavailable', 'unconfigured']),
+  "summary": zod.string().max(getProvisioningCapabilityResponseSummaryMax),
+  "recoveryGuidance": zod.string().max(getProvisioningCapabilityResponseRecoveryGuidanceMax).nullable(),
+  "supportedTargetTypes": zod.array(zod.enum(['app', 'website'])).max(getProvisioningCapabilityResponseSupportedTargetTypesMax),
+  "rollbackSupported": zod.boolean(),
+  "publishSupported": zod.boolean(),
+  "permissionSummary": zod.union([zod.object({
+  "allowed": zod.array(zod.string().max(getProvisioningCapabilityResponsePermissionSummaryOneAllowedItemMax)).max(getProvisioningCapabilityResponsePermissionSummaryOneAllowedMax),
+  "denied": zod.array(zod.object({
+  "integration": zod.string().max(getProvisioningCapabilityResponsePermissionSummaryOneDeniedItemIntegrationMax),
+  "reason": zod.string().max(getProvisioningCapabilityResponsePermissionSummaryOneDeniedItemReasonMax)
+})).max(getProvisioningCapabilityResponsePermissionSummaryOneDeniedMax)
+}),zod.null()])
+})
+
+
+/**
+ * @summary Provision an approved immutable revision into a candidate
+ */
+export const provisionBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ProvisionBuildRunParams = zod.object({
+  "buildRunId": zod.coerce.string().regex(provisionBuildRunPathBuildRunIdRegExp)
+})
+
+export const provisionBuildRunBodyApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunBodyIdempotencyKeyMax = 120;
+
+export const provisionBuildRunBodyTargetNameMax = 120;
+
+export const provisionBuildRunBodyRequestedIntegrationsItemMax = 200;
+
+export const provisionBuildRunBodyRequestedIntegrationsMax = 50;
+
+
+export const ProvisionBuildRunBody = zod.object({
+  "approvedRevisionId": zod.string().regex(provisionBuildRunBodyApprovedRevisionIdRegExp),
+  "idempotencyKey": zod.string().min(1).max(provisionBuildRunBodyIdempotencyKeyMax),
+  "targetName": zod.string().min(1).max(provisionBuildRunBodyTargetNameMax),
+  "requestedIntegrations": zod.array(zod.string().max(provisionBuildRunBodyRequestedIntegrationsItemMax)).max(provisionBuildRunBodyRequestedIntegrationsMax),
+  "deploymentIntent": zod.enum(['create_candidate'])
+})
+
+export const provisionBuildRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseTargetNameMax = 120;
+
+export const provisionBuildRunResponseProgressMin = 0;
+export const provisionBuildRunResponseProgressMax = 100;
+export const provisionBuildRunResponseProgressMultipleOf = 1;
+
+export const provisionBuildRunResponseAttemptMin = 0;
+export const provisionBuildRunResponseAttemptMultipleOf = 1;
+
+export const provisionBuildRunResponseProviderProjectIdMax = 120;
+
+export const provisionBuildRunResponseProviderCandidateIdMax = 120;
+
+export const provisionBuildRunResponseFailureCodeMax = 200;
+
+export const provisionBuildRunResponseFailureMessageMax = 2000;
+
+export const provisionBuildRunResponseBlockedReasonMax = 2000;
+
+export const provisionBuildRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseEventsItemProgressMin = 0;
+export const provisionBuildRunResponseEventsItemProgressMax = 100;
+export const provisionBuildRunResponseEventsItemProgressMultipleOf = 1;
+
+export const provisionBuildRunResponseEventsItemMessageMax = 2000;
+
+export const provisionBuildRunResponseEventsMax = 200;
+
+export const provisionBuildRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseReleasesItemTargetNameMax = 120;
+
+export const provisionBuildRunResponseReleasesItemProviderProjectIdMax = 120;
+
+export const provisionBuildRunResponseReleasesItemProviderCandidateIdMax = 120;
+
+export const provisionBuildRunResponseReleasesItemProviderReleaseIdMax = 120;
+
+export const provisionBuildRunResponseReleasesItemLaunchUrlMax = 2048;
+
+export const provisionBuildRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
+
+export const provisionBuildRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
+
+export const provisionBuildRunResponseReleasesMax = 50;
+
+
+export const ProvisionBuildRunResponse = zod.object({
+  "id": zod.string().regex(provisionBuildRunResponseIdRegExp),
+  "buildRunId": zod.string().regex(provisionBuildRunResponseBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(provisionBuildRunResponseApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(provisionBuildRunResponseAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().min(1).max(provisionBuildRunResponseTargetNameMax),
+  "status": zod.enum(['blocked', 'queued', 'checking_capability', 'creating_project', 'handing_off', 'building', 'testing', 'candidate_ready', 'publishing', 'published', 'cancelled', 'failed']),
+  "stage": zod.union([zod.enum(['capability_check', 'project_setup', 'source_handoff', 'build', 'test', 'candidate', 'publish']),zod.null()]),
+  "progress": zod.number().min(provisionBuildRunResponseProgressMin).max(provisionBuildRunResponseProgressMax).multipleOf(provisionBuildRunResponseProgressMultipleOf),
+  "attempt": zod.number().min(provisionBuildRunResponseAttemptMin).multipleOf(provisionBuildRunResponseAttemptMultipleOf),
+  "providerProjectId": zod.string().max(provisionBuildRunResponseProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().max(provisionBuildRunResponseProviderCandidateIdMax).nullable(),
+  "failureCode": zod.string().max(provisionBuildRunResponseFailureCodeMax).nullable(),
+  "failureMessage": zod.string().max(provisionBuildRunResponseFailureMessageMax).nullable(),
+  "blockedReason": zod.string().max(provisionBuildRunResponseBlockedReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(provisionBuildRunResponseEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'blocked', 'capability_checked', 'project_created', 'project_linked', 'source_handed_off', 'build_started', 'build_complete', 'test_started', 'test_complete', 'candidate_ready', 'publish_started', 'published', 'cancel_requested', 'cancelled', 'failed', 'retried', 'heartbeat']),
+  "status": zod.enum(['blocked', 'queued', 'checking_capability', 'creating_project', 'handing_off', 'building', 'testing', 'candidate_ready', 'publishing', 'published', 'cancelled', 'failed']),
+  "stage": zod.union([zod.enum(['capability_check', 'project_setup', 'source_handoff', 'build', 'test', 'candidate', 'publish']),zod.null()]),
+  "progress": zod.number().min(provisionBuildRunResponseEventsItemProgressMin).max(provisionBuildRunResponseEventsItemProgressMax).multipleOf(provisionBuildRunResponseEventsItemProgressMultipleOf),
+  "message": zod.string().max(provisionBuildRunResponseEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(provisionBuildRunResponseEventsMax),
+  "releases": zod.array(zod.object({
+  "id": zod.string().regex(provisionBuildRunResponseReleasesItemIdRegExp),
+  "provisioningRunId": zod.string().regex(provisionBuildRunResponseReleasesItemProvisioningRunIdRegExp),
+  "buildRunId": zod.string().regex(provisionBuildRunResponseReleasesItemBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(provisionBuildRunResponseReleasesItemApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(provisionBuildRunResponseReleasesItemAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().max(provisionBuildRunResponseReleasesItemTargetNameMax),
+  "providerProjectId": zod.string().max(provisionBuildRunResponseReleasesItemProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().min(1).max(provisionBuildRunResponseReleasesItemProviderCandidateIdMax),
+  "providerReleaseId": zod.string().max(provisionBuildRunResponseReleasesItemProviderReleaseIdMax).nullable(),
+  "launchUrl": zod.string().max(provisionBuildRunResponseReleasesItemLaunchUrlMax).nullable(),
+  "status": zod.enum(['candidate', 'published', 'superseded', 'rolled_back', 'failed']),
+  "rollbackSupported": zod.boolean(),
+  "publishIdempotencyKey": zod.string().max(provisionBuildRunResponseReleasesItemPublishIdempotencyKeyMax).nullable(),
+  "rollbackIdempotencyKey": zod.string().max(provisionBuildRunResponseReleasesItemRollbackIdempotencyKeyMax).nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "rolledBackAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})).max(provisionBuildRunResponseReleasesMax),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "cancelRequested": zod.boolean()
+})
+
+
+/**
+ * @summary List provisioning runs for the current user
+ */
+export const listProvisioningRunsQueryBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listProvisioningRunsQueryAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const ListProvisioningRunsQueryParams = zod.object({
+  "buildRunId": zod.coerce.string().regex(listProvisioningRunsQueryBuildRunIdRegExp).optional(),
+  "appId": zod.coerce.string().regex(listProvisioningRunsQueryAppIdRegExp).optional()
+})
+
+export const listProvisioningRunsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listProvisioningRunsResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listProvisioningRunsResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listProvisioningRunsResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listProvisioningRunsResponseTargetNameMax = 120;
+
+export const listProvisioningRunsResponseProgressMin = 0;
+export const listProvisioningRunsResponseProgressMax = 100;
+export const listProvisioningRunsResponseProgressMultipleOf = 1;
+
+export const listProvisioningRunsResponseAttemptMin = 0;
+export const listProvisioningRunsResponseAttemptMultipleOf = 1;
+
+export const listProvisioningRunsResponseProviderProjectIdMax = 120;
+
+export const listProvisioningRunsResponseProviderCandidateIdMax = 120;
+
+export const listProvisioningRunsResponseFailureCodeMax = 200;
+
+export const listProvisioningRunsResponseFailureMessageMax = 2000;
+
+export const listProvisioningRunsResponseBlockedReasonMax = 2000;
+
+
+export const ListProvisioningRunsResponseItem = zod.object({
+  "id": zod.string().regex(listProvisioningRunsResponseIdRegExp),
+  "buildRunId": zod.string().regex(listProvisioningRunsResponseBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(listProvisioningRunsResponseApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(listProvisioningRunsResponseAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().min(1).max(listProvisioningRunsResponseTargetNameMax),
+  "status": zod.enum(['blocked', 'queued', 'checking_capability', 'creating_project', 'handing_off', 'building', 'testing', 'candidate_ready', 'publishing', 'published', 'cancelled', 'failed']),
+  "stage": zod.union([zod.enum(['capability_check', 'project_setup', 'source_handoff', 'build', 'test', 'candidate', 'publish']),zod.null()]),
+  "progress": zod.number().min(listProvisioningRunsResponseProgressMin).max(listProvisioningRunsResponseProgressMax).multipleOf(listProvisioningRunsResponseProgressMultipleOf),
+  "attempt": zod.number().min(listProvisioningRunsResponseAttemptMin).multipleOf(listProvisioningRunsResponseAttemptMultipleOf),
+  "providerProjectId": zod.string().max(listProvisioningRunsResponseProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().max(listProvisioningRunsResponseProviderCandidateIdMax).nullable(),
+  "failureCode": zod.string().max(listProvisioningRunsResponseFailureCodeMax).nullable(),
+  "failureMessage": zod.string().max(listProvisioningRunsResponseFailureMessageMax).nullable(),
+  "blockedReason": zod.string().max(listProvisioningRunsResponseBlockedReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListProvisioningRunsResponse = zod.array(ListProvisioningRunsResponseItem).max(500)
+
+
+/**
+ * @summary Get one provisioning run with events and releases
+ */
+export const getProvisioningRunPathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const GetProvisioningRunParams = zod.object({
+  "provisioningRunId": zod.coerce.string().regex(getProvisioningRunPathProvisioningRunIdRegExp)
+})
+
+export const getProvisioningRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseTargetNameMax = 120;
+
+export const getProvisioningRunResponseProgressMin = 0;
+export const getProvisioningRunResponseProgressMax = 100;
+export const getProvisioningRunResponseProgressMultipleOf = 1;
+
+export const getProvisioningRunResponseAttemptMin = 0;
+export const getProvisioningRunResponseAttemptMultipleOf = 1;
+
+export const getProvisioningRunResponseProviderProjectIdMax = 120;
+
+export const getProvisioningRunResponseProviderCandidateIdMax = 120;
+
+export const getProvisioningRunResponseFailureCodeMax = 200;
+
+export const getProvisioningRunResponseFailureMessageMax = 2000;
+
+export const getProvisioningRunResponseBlockedReasonMax = 2000;
+
+export const getProvisioningRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseEventsItemProgressMin = 0;
+export const getProvisioningRunResponseEventsItemProgressMax = 100;
+export const getProvisioningRunResponseEventsItemProgressMultipleOf = 1;
+
+export const getProvisioningRunResponseEventsItemMessageMax = 2000;
+
+export const getProvisioningRunResponseEventsMax = 200;
+
+export const getProvisioningRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseReleasesItemTargetNameMax = 120;
+
+export const getProvisioningRunResponseReleasesItemProviderProjectIdMax = 120;
+
+export const getProvisioningRunResponseReleasesItemProviderCandidateIdMax = 120;
+
+export const getProvisioningRunResponseReleasesItemProviderReleaseIdMax = 120;
+
+export const getProvisioningRunResponseReleasesItemLaunchUrlMax = 2048;
+
+export const getProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
+
+export const getProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
+
+export const getProvisioningRunResponseReleasesMax = 50;
+
+
+export const GetProvisioningRunResponse = zod.object({
+  "id": zod.string().regex(getProvisioningRunResponseIdRegExp),
+  "buildRunId": zod.string().regex(getProvisioningRunResponseBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(getProvisioningRunResponseApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(getProvisioningRunResponseAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().min(1).max(getProvisioningRunResponseTargetNameMax),
+  "status": zod.enum(['blocked', 'queued', 'checking_capability', 'creating_project', 'handing_off', 'building', 'testing', 'candidate_ready', 'publishing', 'published', 'cancelled', 'failed']),
+  "stage": zod.union([zod.enum(['capability_check', 'project_setup', 'source_handoff', 'build', 'test', 'candidate', 'publish']),zod.null()]),
+  "progress": zod.number().min(getProvisioningRunResponseProgressMin).max(getProvisioningRunResponseProgressMax).multipleOf(getProvisioningRunResponseProgressMultipleOf),
+  "attempt": zod.number().min(getProvisioningRunResponseAttemptMin).multipleOf(getProvisioningRunResponseAttemptMultipleOf),
+  "providerProjectId": zod.string().max(getProvisioningRunResponseProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().max(getProvisioningRunResponseProviderCandidateIdMax).nullable(),
+  "failureCode": zod.string().max(getProvisioningRunResponseFailureCodeMax).nullable(),
+  "failureMessage": zod.string().max(getProvisioningRunResponseFailureMessageMax).nullable(),
+  "blockedReason": zod.string().max(getProvisioningRunResponseBlockedReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(getProvisioningRunResponseEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'blocked', 'capability_checked', 'project_created', 'project_linked', 'source_handed_off', 'build_started', 'build_complete', 'test_started', 'test_complete', 'candidate_ready', 'publish_started', 'published', 'cancel_requested', 'cancelled', 'failed', 'retried', 'heartbeat']),
+  "status": zod.enum(['blocked', 'queued', 'checking_capability', 'creating_project', 'handing_off', 'building', 'testing', 'candidate_ready', 'publishing', 'published', 'cancelled', 'failed']),
+  "stage": zod.union([zod.enum(['capability_check', 'project_setup', 'source_handoff', 'build', 'test', 'candidate', 'publish']),zod.null()]),
+  "progress": zod.number().min(getProvisioningRunResponseEventsItemProgressMin).max(getProvisioningRunResponseEventsItemProgressMax).multipleOf(getProvisioningRunResponseEventsItemProgressMultipleOf),
+  "message": zod.string().max(getProvisioningRunResponseEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(getProvisioningRunResponseEventsMax),
+  "releases": zod.array(zod.object({
+  "id": zod.string().regex(getProvisioningRunResponseReleasesItemIdRegExp),
+  "provisioningRunId": zod.string().regex(getProvisioningRunResponseReleasesItemProvisioningRunIdRegExp),
+  "buildRunId": zod.string().regex(getProvisioningRunResponseReleasesItemBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(getProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(getProvisioningRunResponseReleasesItemAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().max(getProvisioningRunResponseReleasesItemTargetNameMax),
+  "providerProjectId": zod.string().max(getProvisioningRunResponseReleasesItemProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().min(1).max(getProvisioningRunResponseReleasesItemProviderCandidateIdMax),
+  "providerReleaseId": zod.string().max(getProvisioningRunResponseReleasesItemProviderReleaseIdMax).nullable(),
+  "launchUrl": zod.string().max(getProvisioningRunResponseReleasesItemLaunchUrlMax).nullable(),
+  "status": zod.enum(['candidate', 'published', 'superseded', 'rolled_back', 'failed']),
+  "rollbackSupported": zod.boolean(),
+  "publishIdempotencyKey": zod.string().max(getProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax).nullable(),
+  "rollbackIdempotencyKey": zod.string().max(getProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax).nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "rolledBackAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})).max(getProvisioningRunResponseReleasesMax),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "cancelRequested": zod.boolean()
+})
+
+
+/**
+ * @summary Cancel an in-flight provisioning run
+ */
+export const cancelProvisioningRunPathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const CancelProvisioningRunParams = zod.object({
+  "provisioningRunId": zod.coerce.string().regex(cancelProvisioningRunPathProvisioningRunIdRegExp)
+})
+
+export const cancelProvisioningRunBodyReasonMax = 500;
+
+
+export const CancelProvisioningRunBody = zod.object({
+  "reason": zod.string().min(1).max(cancelProvisioningRunBodyReasonMax)
+})
+
+export const cancelProvisioningRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseTargetNameMax = 120;
+
+export const cancelProvisioningRunResponseProgressMin = 0;
+export const cancelProvisioningRunResponseProgressMax = 100;
+export const cancelProvisioningRunResponseProgressMultipleOf = 1;
+
+export const cancelProvisioningRunResponseAttemptMin = 0;
+export const cancelProvisioningRunResponseAttemptMultipleOf = 1;
+
+export const cancelProvisioningRunResponseProviderProjectIdMax = 120;
+
+export const cancelProvisioningRunResponseProviderCandidateIdMax = 120;
+
+export const cancelProvisioningRunResponseFailureCodeMax = 200;
+
+export const cancelProvisioningRunResponseFailureMessageMax = 2000;
+
+export const cancelProvisioningRunResponseBlockedReasonMax = 2000;
+
+export const cancelProvisioningRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseEventsItemProgressMin = 0;
+export const cancelProvisioningRunResponseEventsItemProgressMax = 100;
+export const cancelProvisioningRunResponseEventsItemProgressMultipleOf = 1;
+
+export const cancelProvisioningRunResponseEventsItemMessageMax = 2000;
+
+export const cancelProvisioningRunResponseEventsMax = 200;
+
+export const cancelProvisioningRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseReleasesItemTargetNameMax = 120;
+
+export const cancelProvisioningRunResponseReleasesItemProviderProjectIdMax = 120;
+
+export const cancelProvisioningRunResponseReleasesItemProviderCandidateIdMax = 120;
+
+export const cancelProvisioningRunResponseReleasesItemProviderReleaseIdMax = 120;
+
+export const cancelProvisioningRunResponseReleasesItemLaunchUrlMax = 2048;
+
+export const cancelProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
+
+export const cancelProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
+
+export const cancelProvisioningRunResponseReleasesMax = 50;
+
+
+export const CancelProvisioningRunResponse = zod.object({
+  "id": zod.string().regex(cancelProvisioningRunResponseIdRegExp),
+  "buildRunId": zod.string().regex(cancelProvisioningRunResponseBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(cancelProvisioningRunResponseApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(cancelProvisioningRunResponseAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().min(1).max(cancelProvisioningRunResponseTargetNameMax),
+  "status": zod.enum(['blocked', 'queued', 'checking_capability', 'creating_project', 'handing_off', 'building', 'testing', 'candidate_ready', 'publishing', 'published', 'cancelled', 'failed']),
+  "stage": zod.union([zod.enum(['capability_check', 'project_setup', 'source_handoff', 'build', 'test', 'candidate', 'publish']),zod.null()]),
+  "progress": zod.number().min(cancelProvisioningRunResponseProgressMin).max(cancelProvisioningRunResponseProgressMax).multipleOf(cancelProvisioningRunResponseProgressMultipleOf),
+  "attempt": zod.number().min(cancelProvisioningRunResponseAttemptMin).multipleOf(cancelProvisioningRunResponseAttemptMultipleOf),
+  "providerProjectId": zod.string().max(cancelProvisioningRunResponseProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().max(cancelProvisioningRunResponseProviderCandidateIdMax).nullable(),
+  "failureCode": zod.string().max(cancelProvisioningRunResponseFailureCodeMax).nullable(),
+  "failureMessage": zod.string().max(cancelProvisioningRunResponseFailureMessageMax).nullable(),
+  "blockedReason": zod.string().max(cancelProvisioningRunResponseBlockedReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(cancelProvisioningRunResponseEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'blocked', 'capability_checked', 'project_created', 'project_linked', 'source_handed_off', 'build_started', 'build_complete', 'test_started', 'test_complete', 'candidate_ready', 'publish_started', 'published', 'cancel_requested', 'cancelled', 'failed', 'retried', 'heartbeat']),
+  "status": zod.enum(['blocked', 'queued', 'checking_capability', 'creating_project', 'handing_off', 'building', 'testing', 'candidate_ready', 'publishing', 'published', 'cancelled', 'failed']),
+  "stage": zod.union([zod.enum(['capability_check', 'project_setup', 'source_handoff', 'build', 'test', 'candidate', 'publish']),zod.null()]),
+  "progress": zod.number().min(cancelProvisioningRunResponseEventsItemProgressMin).max(cancelProvisioningRunResponseEventsItemProgressMax).multipleOf(cancelProvisioningRunResponseEventsItemProgressMultipleOf),
+  "message": zod.string().max(cancelProvisioningRunResponseEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(cancelProvisioningRunResponseEventsMax),
+  "releases": zod.array(zod.object({
+  "id": zod.string().regex(cancelProvisioningRunResponseReleasesItemIdRegExp),
+  "provisioningRunId": zod.string().regex(cancelProvisioningRunResponseReleasesItemProvisioningRunIdRegExp),
+  "buildRunId": zod.string().regex(cancelProvisioningRunResponseReleasesItemBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(cancelProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(cancelProvisioningRunResponseReleasesItemAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().max(cancelProvisioningRunResponseReleasesItemTargetNameMax),
+  "providerProjectId": zod.string().max(cancelProvisioningRunResponseReleasesItemProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().min(1).max(cancelProvisioningRunResponseReleasesItemProviderCandidateIdMax),
+  "providerReleaseId": zod.string().max(cancelProvisioningRunResponseReleasesItemProviderReleaseIdMax).nullable(),
+  "launchUrl": zod.string().max(cancelProvisioningRunResponseReleasesItemLaunchUrlMax).nullable(),
+  "status": zod.enum(['candidate', 'published', 'superseded', 'rolled_back', 'failed']),
+  "rollbackSupported": zod.boolean(),
+  "publishIdempotencyKey": zod.string().max(cancelProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax).nullable(),
+  "rollbackIdempotencyKey": zod.string().max(cancelProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax).nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "rolledBackAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})).max(cancelProvisioningRunResponseReleasesMax),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "cancelRequested": zod.boolean()
+})
+
+
+/**
+ * @summary Retry a failed provisioning run
+ */
+export const retryProvisioningRunPathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const RetryProvisioningRunParams = zod.object({
+  "provisioningRunId": zod.coerce.string().regex(retryProvisioningRunPathProvisioningRunIdRegExp)
+})
+
+export const retryProvisioningRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseTargetNameMax = 120;
+
+export const retryProvisioningRunResponseProgressMin = 0;
+export const retryProvisioningRunResponseProgressMax = 100;
+export const retryProvisioningRunResponseProgressMultipleOf = 1;
+
+export const retryProvisioningRunResponseAttemptMin = 0;
+export const retryProvisioningRunResponseAttemptMultipleOf = 1;
+
+export const retryProvisioningRunResponseProviderProjectIdMax = 120;
+
+export const retryProvisioningRunResponseProviderCandidateIdMax = 120;
+
+export const retryProvisioningRunResponseFailureCodeMax = 200;
+
+export const retryProvisioningRunResponseFailureMessageMax = 2000;
+
+export const retryProvisioningRunResponseBlockedReasonMax = 2000;
+
+export const retryProvisioningRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseEventsItemProgressMin = 0;
+export const retryProvisioningRunResponseEventsItemProgressMax = 100;
+export const retryProvisioningRunResponseEventsItemProgressMultipleOf = 1;
+
+export const retryProvisioningRunResponseEventsItemMessageMax = 2000;
+
+export const retryProvisioningRunResponseEventsMax = 200;
+
+export const retryProvisioningRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseReleasesItemTargetNameMax = 120;
+
+export const retryProvisioningRunResponseReleasesItemProviderProjectIdMax = 120;
+
+export const retryProvisioningRunResponseReleasesItemProviderCandidateIdMax = 120;
+
+export const retryProvisioningRunResponseReleasesItemProviderReleaseIdMax = 120;
+
+export const retryProvisioningRunResponseReleasesItemLaunchUrlMax = 2048;
+
+export const retryProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
+
+export const retryProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
+
+export const retryProvisioningRunResponseReleasesMax = 50;
+
+
+export const RetryProvisioningRunResponse = zod.object({
+  "id": zod.string().regex(retryProvisioningRunResponseIdRegExp),
+  "buildRunId": zod.string().regex(retryProvisioningRunResponseBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(retryProvisioningRunResponseApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(retryProvisioningRunResponseAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().min(1).max(retryProvisioningRunResponseTargetNameMax),
+  "status": zod.enum(['blocked', 'queued', 'checking_capability', 'creating_project', 'handing_off', 'building', 'testing', 'candidate_ready', 'publishing', 'published', 'cancelled', 'failed']),
+  "stage": zod.union([zod.enum(['capability_check', 'project_setup', 'source_handoff', 'build', 'test', 'candidate', 'publish']),zod.null()]),
+  "progress": zod.number().min(retryProvisioningRunResponseProgressMin).max(retryProvisioningRunResponseProgressMax).multipleOf(retryProvisioningRunResponseProgressMultipleOf),
+  "attempt": zod.number().min(retryProvisioningRunResponseAttemptMin).multipleOf(retryProvisioningRunResponseAttemptMultipleOf),
+  "providerProjectId": zod.string().max(retryProvisioningRunResponseProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().max(retryProvisioningRunResponseProviderCandidateIdMax).nullable(),
+  "failureCode": zod.string().max(retryProvisioningRunResponseFailureCodeMax).nullable(),
+  "failureMessage": zod.string().max(retryProvisioningRunResponseFailureMessageMax).nullable(),
+  "blockedReason": zod.string().max(retryProvisioningRunResponseBlockedReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(retryProvisioningRunResponseEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'blocked', 'capability_checked', 'project_created', 'project_linked', 'source_handed_off', 'build_started', 'build_complete', 'test_started', 'test_complete', 'candidate_ready', 'publish_started', 'published', 'cancel_requested', 'cancelled', 'failed', 'retried', 'heartbeat']),
+  "status": zod.enum(['blocked', 'queued', 'checking_capability', 'creating_project', 'handing_off', 'building', 'testing', 'candidate_ready', 'publishing', 'published', 'cancelled', 'failed']),
+  "stage": zod.union([zod.enum(['capability_check', 'project_setup', 'source_handoff', 'build', 'test', 'candidate', 'publish']),zod.null()]),
+  "progress": zod.number().min(retryProvisioningRunResponseEventsItemProgressMin).max(retryProvisioningRunResponseEventsItemProgressMax).multipleOf(retryProvisioningRunResponseEventsItemProgressMultipleOf),
+  "message": zod.string().max(retryProvisioningRunResponseEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(retryProvisioningRunResponseEventsMax),
+  "releases": zod.array(zod.object({
+  "id": zod.string().regex(retryProvisioningRunResponseReleasesItemIdRegExp),
+  "provisioningRunId": zod.string().regex(retryProvisioningRunResponseReleasesItemProvisioningRunIdRegExp),
+  "buildRunId": zod.string().regex(retryProvisioningRunResponseReleasesItemBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(retryProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(retryProvisioningRunResponseReleasesItemAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().max(retryProvisioningRunResponseReleasesItemTargetNameMax),
+  "providerProjectId": zod.string().max(retryProvisioningRunResponseReleasesItemProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().min(1).max(retryProvisioningRunResponseReleasesItemProviderCandidateIdMax),
+  "providerReleaseId": zod.string().max(retryProvisioningRunResponseReleasesItemProviderReleaseIdMax).nullable(),
+  "launchUrl": zod.string().max(retryProvisioningRunResponseReleasesItemLaunchUrlMax).nullable(),
+  "status": zod.enum(['candidate', 'published', 'superseded', 'rolled_back', 'failed']),
+  "rollbackSupported": zod.boolean(),
+  "publishIdempotencyKey": zod.string().max(retryProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax).nullable(),
+  "rollbackIdempotencyKey": zod.string().max(retryProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax).nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "rolledBackAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})).max(retryProvisioningRunResponseReleasesMax),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "cancelRequested": zod.boolean()
+})
+
+
+/**
+ * @summary Publish a healthy candidate release as the primary deployment
+ */
+export const publishProvisioningCandidatePathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const PublishProvisioningCandidateParams = zod.object({
+  "provisioningRunId": zod.coerce.string().regex(publishProvisioningCandidatePathProvisioningRunIdRegExp)
+})
+
+export const publishProvisioningCandidateBodyCandidateReleaseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateBodyIdempotencyKeyMax = 120;
+
+export const publishProvisioningCandidateBodyConfirmTargetNameMax = 120;
+
+
+export const PublishProvisioningCandidateBody = zod.object({
+  "candidateReleaseId": zod.string().regex(publishProvisioningCandidateBodyCandidateReleaseIdRegExp),
+  "idempotencyKey": zod.string().min(1).max(publishProvisioningCandidateBodyIdempotencyKeyMax),
+  "confirmTargetName": zod.string().min(1).max(publishProvisioningCandidateBodyConfirmTargetNameMax)
+})
+
+export const publishProvisioningCandidateResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseTargetNameMax = 120;
+
+export const publishProvisioningCandidateResponseProgressMin = 0;
+export const publishProvisioningCandidateResponseProgressMax = 100;
+export const publishProvisioningCandidateResponseProgressMultipleOf = 1;
+
+export const publishProvisioningCandidateResponseAttemptMin = 0;
+export const publishProvisioningCandidateResponseAttemptMultipleOf = 1;
+
+export const publishProvisioningCandidateResponseProviderProjectIdMax = 120;
+
+export const publishProvisioningCandidateResponseProviderCandidateIdMax = 120;
+
+export const publishProvisioningCandidateResponseFailureCodeMax = 200;
+
+export const publishProvisioningCandidateResponseFailureMessageMax = 2000;
+
+export const publishProvisioningCandidateResponseBlockedReasonMax = 2000;
+
+export const publishProvisioningCandidateResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseEventsItemProgressMin = 0;
+export const publishProvisioningCandidateResponseEventsItemProgressMax = 100;
+export const publishProvisioningCandidateResponseEventsItemProgressMultipleOf = 1;
+
+export const publishProvisioningCandidateResponseEventsItemMessageMax = 2000;
+
+export const publishProvisioningCandidateResponseEventsMax = 200;
+
+export const publishProvisioningCandidateResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseReleasesItemTargetNameMax = 120;
+
+export const publishProvisioningCandidateResponseReleasesItemProviderProjectIdMax = 120;
+
+export const publishProvisioningCandidateResponseReleasesItemProviderCandidateIdMax = 120;
+
+export const publishProvisioningCandidateResponseReleasesItemProviderReleaseIdMax = 120;
+
+export const publishProvisioningCandidateResponseReleasesItemLaunchUrlMax = 2048;
+
+export const publishProvisioningCandidateResponseReleasesItemPublishIdempotencyKeyMax = 120;
+
+export const publishProvisioningCandidateResponseReleasesItemRollbackIdempotencyKeyMax = 120;
+
+export const publishProvisioningCandidateResponseReleasesMax = 50;
+
+
+export const PublishProvisioningCandidateResponse = zod.object({
+  "id": zod.string().regex(publishProvisioningCandidateResponseIdRegExp),
+  "buildRunId": zod.string().regex(publishProvisioningCandidateResponseBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(publishProvisioningCandidateResponseApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(publishProvisioningCandidateResponseAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().min(1).max(publishProvisioningCandidateResponseTargetNameMax),
+  "status": zod.enum(['blocked', 'queued', 'checking_capability', 'creating_project', 'handing_off', 'building', 'testing', 'candidate_ready', 'publishing', 'published', 'cancelled', 'failed']),
+  "stage": zod.union([zod.enum(['capability_check', 'project_setup', 'source_handoff', 'build', 'test', 'candidate', 'publish']),zod.null()]),
+  "progress": zod.number().min(publishProvisioningCandidateResponseProgressMin).max(publishProvisioningCandidateResponseProgressMax).multipleOf(publishProvisioningCandidateResponseProgressMultipleOf),
+  "attempt": zod.number().min(publishProvisioningCandidateResponseAttemptMin).multipleOf(publishProvisioningCandidateResponseAttemptMultipleOf),
+  "providerProjectId": zod.string().max(publishProvisioningCandidateResponseProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().max(publishProvisioningCandidateResponseProviderCandidateIdMax).nullable(),
+  "failureCode": zod.string().max(publishProvisioningCandidateResponseFailureCodeMax).nullable(),
+  "failureMessage": zod.string().max(publishProvisioningCandidateResponseFailureMessageMax).nullable(),
+  "blockedReason": zod.string().max(publishProvisioningCandidateResponseBlockedReasonMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "events": zod.array(zod.object({
+  "id": zod.string().regex(publishProvisioningCandidateResponseEventsItemIdRegExp),
+  "eventType": zod.enum(['queued', 'blocked', 'capability_checked', 'project_created', 'project_linked', 'source_handed_off', 'build_started', 'build_complete', 'test_started', 'test_complete', 'candidate_ready', 'publish_started', 'published', 'cancel_requested', 'cancelled', 'failed', 'retried', 'heartbeat']),
+  "status": zod.enum(['blocked', 'queued', 'checking_capability', 'creating_project', 'handing_off', 'building', 'testing', 'candidate_ready', 'publishing', 'published', 'cancelled', 'failed']),
+  "stage": zod.union([zod.enum(['capability_check', 'project_setup', 'source_handoff', 'build', 'test', 'candidate', 'publish']),zod.null()]),
+  "progress": zod.number().min(publishProvisioningCandidateResponseEventsItemProgressMin).max(publishProvisioningCandidateResponseEventsItemProgressMax).multipleOf(publishProvisioningCandidateResponseEventsItemProgressMultipleOf),
+  "message": zod.string().max(publishProvisioningCandidateResponseEventsItemMessageMax),
+  "createdAt": zod.coerce.date()
+})).max(publishProvisioningCandidateResponseEventsMax),
+  "releases": zod.array(zod.object({
+  "id": zod.string().regex(publishProvisioningCandidateResponseReleasesItemIdRegExp),
+  "provisioningRunId": zod.string().regex(publishProvisioningCandidateResponseReleasesItemProvisioningRunIdRegExp),
+  "buildRunId": zod.string().regex(publishProvisioningCandidateResponseReleasesItemBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(publishProvisioningCandidateResponseReleasesItemApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(publishProvisioningCandidateResponseReleasesItemAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().max(publishProvisioningCandidateResponseReleasesItemTargetNameMax),
+  "providerProjectId": zod.string().max(publishProvisioningCandidateResponseReleasesItemProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().min(1).max(publishProvisioningCandidateResponseReleasesItemProviderCandidateIdMax),
+  "providerReleaseId": zod.string().max(publishProvisioningCandidateResponseReleasesItemProviderReleaseIdMax).nullable(),
+  "launchUrl": zod.string().max(publishProvisioningCandidateResponseReleasesItemLaunchUrlMax).nullable(),
+  "status": zod.enum(['candidate', 'published', 'superseded', 'rolled_back', 'failed']),
+  "rollbackSupported": zod.boolean(),
+  "publishIdempotencyKey": zod.string().max(publishProvisioningCandidateResponseReleasesItemPublishIdempotencyKeyMax).nullable(),
+  "rollbackIdempotencyKey": zod.string().max(publishProvisioningCandidateResponseReleasesItemRollbackIdempotencyKeyMax).nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "rolledBackAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})).max(publishProvisioningCandidateResponseReleasesMax),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "cancelRequested": zod.boolean()
+})
+
+
+/**
+ * @summary Roll back to a previous healthy release
+ */
+export const rollbackProvisioningReleasePathReleaseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+
+
+export const RollbackProvisioningReleaseParams = zod.object({
+  "releaseId": zod.coerce.string().regex(rollbackProvisioningReleasePathReleaseIdRegExp)
+})
+
+export const rollbackProvisioningReleaseBodyIdempotencyKeyMax = 120;
+
+export const rollbackProvisioningReleaseBodyConfirmTargetNameMax = 120;
+
+
+export const RollbackProvisioningReleaseBody = zod.object({
+  "idempotencyKey": zod.string().min(1).max(rollbackProvisioningReleaseBodyIdempotencyKeyMax),
+  "confirmTargetName": zod.string().min(1).max(rollbackProvisioningReleaseBodyConfirmTargetNameMax)
+})
+
+export const rollbackProvisioningReleaseResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rollbackProvisioningReleaseResponseProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rollbackProvisioningReleaseResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rollbackProvisioningReleaseResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rollbackProvisioningReleaseResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rollbackProvisioningReleaseResponseTargetNameMax = 120;
+
+export const rollbackProvisioningReleaseResponseProviderProjectIdMax = 120;
+
+export const rollbackProvisioningReleaseResponseProviderCandidateIdMax = 120;
+
+export const rollbackProvisioningReleaseResponseProviderReleaseIdMax = 120;
+
+export const rollbackProvisioningReleaseResponseLaunchUrlMax = 2048;
+
+export const rollbackProvisioningReleaseResponsePublishIdempotencyKeyMax = 120;
+
+export const rollbackProvisioningReleaseResponseRollbackIdempotencyKeyMax = 120;
+
+
+export const RollbackProvisioningReleaseResponse = zod.object({
+  "id": zod.string().regex(rollbackProvisioningReleaseResponseIdRegExp),
+  "provisioningRunId": zod.string().regex(rollbackProvisioningReleaseResponseProvisioningRunIdRegExp),
+  "buildRunId": zod.string().regex(rollbackProvisioningReleaseResponseBuildRunIdRegExp),
+  "approvedRevisionId": zod.string().regex(rollbackProvisioningReleaseResponseApprovedRevisionIdRegExp),
+  "appId": zod.union([zod.string().regex(rollbackProvisioningReleaseResponseAppIdOneRegExp),zod.null()]),
+  "targetName": zod.string().max(rollbackProvisioningReleaseResponseTargetNameMax),
+  "providerProjectId": zod.string().max(rollbackProvisioningReleaseResponseProviderProjectIdMax).nullable(),
+  "providerCandidateId": zod.string().min(1).max(rollbackProvisioningReleaseResponseProviderCandidateIdMax),
+  "providerReleaseId": zod.string().max(rollbackProvisioningReleaseResponseProviderReleaseIdMax).nullable(),
+  "launchUrl": zod.string().max(rollbackProvisioningReleaseResponseLaunchUrlMax).nullable(),
+  "status": zod.enum(['candidate', 'published', 'superseded', 'rolled_back', 'failed']),
+  "rollbackSupported": zod.boolean(),
+  "publishIdempotencyKey": zod.string().max(rollbackProvisioningReleaseResponsePublishIdempotencyKeyMax).nullable(),
+  "rollbackIdempotencyKey": zod.string().max(rollbackProvisioningReleaseResponseRollbackIdempotencyKeyMax).nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "rolledBackAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+

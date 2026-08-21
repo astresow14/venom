@@ -386,6 +386,75 @@ test("generated contract accepts a fully typed customizable board", () => {
   assert.deepEqual(validateVenomBoardState(state), []);
 });
 
+test("generated contract round-trips a bounded retired-citation archive", () => {
+  const state = createBoardWorkspace();
+  state.archivedCitations = Array.from({ length: 500 }, (_, index) => ({
+    id: `cite_${index}`,
+    title: `Retired evidence ${index}`,
+    url: `https://github.com/acme/venom/issues/${index}`,
+    retiredAt: 1_700 + index,
+  }));
+
+  const parsed = SaveVenomWorkspaceBody.safeParse({ state, baseRevision: 0 });
+  assert.equal(parsed.success, true);
+  assert.deepEqual(parsed.data.state.archivedCitations[0], {
+    id: "cite_0",
+    title: "Retired evidence 0",
+    url: "https://github.com/acme/venom/issues/0",
+    retiredAt: 1_700,
+  });
+});
+
+test("generated contract carries a replaced source tombstone", () => {
+  const state = createBoardWorkspace();
+  state.tombstones.sources = [
+    { id: "source_retired", deletedAt: 1_700, replaced: true },
+    { id: "source_removed", deletedAt: 1_800 },
+  ];
+
+  const parsed = SaveVenomWorkspaceBody.safeParse({ state, baseRevision: 0 });
+  assert.equal(parsed.success, true);
+  assert.deepEqual(parsed.data.state.tombstones.sources, [
+    { id: "source_retired", deletedAt: 1_700, replaced: true },
+    { id: "source_removed", deletedAt: 1_800 },
+  ]);
+
+  const malformed = createBoardWorkspace();
+  malformed.tombstones.sources = [
+    { id: "source_retired", deletedAt: 1_700, replaced: "yes" },
+  ];
+  assert.equal(
+    SaveVenomWorkspaceBody.safeParse({ state: malformed, baseRevision: 0 })
+      .success,
+    false,
+  );
+});
+
+test("generated contract rejects an unbounded or malformed archive", () => {
+  const oversized = createBoardWorkspace();
+  oversized.archivedCitations = Array.from({ length: 501 }, (_, index) => ({
+    id: `cite_${index}`,
+    title: "Retired evidence",
+    url: "https://example.com",
+    retiredAt: index,
+  }));
+  assert.equal(
+    SaveVenomWorkspaceBody.safeParse({ state: oversized, baseRevision: 0 })
+      .success,
+    false,
+  );
+
+  const malformed = createBoardWorkspace();
+  malformed.archivedCitations = [
+    { id: "cite_untitled", title: "", url: "https://example.com", retiredAt: 1 },
+  ];
+  assert.equal(
+    SaveVenomWorkspaceBody.safeParse({ state: malformed, baseRevision: 0 })
+      .success,
+    false,
+  );
+});
+
 test("board validation rejects stale field values and invalid typed values", () => {
   const state = createBoardWorkspace();
   state.projects[0].tasks[0].values["field-date"] = "August 20";
@@ -414,4 +483,213 @@ test("board validation requires valid ordering and explicit done semantics", () 
   assert.ok(messages.includes("Stage positions must be unique"));
   assert.ok(messages.includes("At least one stage must mark cards done"));
   assert.ok(messages.includes("Task positions must be unique within a stage"));
+});
+function deliberatedConversation(now) {
+  const voiceIds = ["direct", "skeptic", "evidence", "direct"];
+  return {
+    id: "conversation-deliberate",
+    title: "Deliberated turn",
+    projectId: "project-board",
+    updatedAt: now,
+    messages: [
+      {
+        id: "message-collective",
+        role: "assistant",
+        content: "Collective answer",
+        createdAt: now,
+        status: "sent",
+        modelId: "venom-gpt",
+        modelName: "Venom GPT",
+        deliberation: {
+          voices: voiceIds.map((voiceId, index) => ({
+            voiceId,
+            name: `Voice ${index}`,
+            modelId: "venom-claude",
+            modelName: "Venom Claude",
+            content: "x".repeat(8000),
+            status: index === 3 ? "failed" : "ok",
+          })),
+          disagreements: Array.from({ length: 8 }, () => "d".repeat(500)),
+        },
+      },
+    ],
+  };
+}
+
+test("generated contract accepts a deliberated message at every cap", () => {
+  const state = createBoardWorkspace();
+  const now = 1_700;
+  state.conversations = [deliberatedConversation(now)];
+  state.activeConversationId = "conversation-deliberate";
+
+  const parsed = SaveVenomWorkspaceBody.safeParse({ state, baseRevision: 0 });
+  assert.equal(parsed.success, true);
+  const saved = parsed.data.state.conversations[0].messages[0].deliberation;
+  assert.equal(saved.voices.length, 4);
+  assert.equal(saved.voices[0].content.length, 8000);
+  assert.equal(saved.disagreements.length, 8);
+});
+
+test("generated contract rejects deliberation past the caps", () => {
+  const now = 1_700;
+  const cases = [
+    (deliberation) => {
+      deliberation.voices.push({ ...deliberation.voices[0] });
+    },
+    (deliberation) => {
+      deliberation.voices[0].content = "x".repeat(8001);
+    },
+    (deliberation) => {
+      deliberation.disagreements = ["d".repeat(501)];
+    },
+    (deliberation) => {
+      deliberation.disagreements = Array.from({ length: 9 }, () => "d");
+    },
+    (deliberation) => {
+      deliberation.voices[0].voiceId = "oracle";
+    },
+  ];
+  for (const mutate of cases) {
+    const state = createBoardWorkspace();
+    const conversation = deliberatedConversation(now);
+    mutate(conversation.messages[0].deliberation);
+    state.conversations = [conversation];
+    assert.equal(
+      SaveVenomWorkspaceBody.safeParse({ state, baseRevision: 0 }).success,
+      false,
+    );
+  }
+});
+
+test("generated contract keeps plain messages valid without deliberation", () => {
+  const state = createBoardWorkspace();
+  const conversation = deliberatedConversation(1_700);
+  delete conversation.messages[0].deliberation;
+  state.conversations = [conversation];
+  assert.equal(
+    SaveVenomWorkspaceBody.safeParse({ state, baseRevision: 0 }).success,
+    true,
+  );
+});
+
+test("generated contract bounds a scheduled-sync claim", () => {
+  const claimedSource = {
+    id: "source_claimed",
+    projectId: "project-board",
+    provider: "website",
+    name: "Example",
+    url: "https://example.com",
+    status: "connected",
+    syncedAt: "2026-08-20T10:00:00.000Z",
+    summary: "Example source",
+    context: "[source:cite_claim] Example",
+    citations: [
+      {
+        id: "cite_claim",
+        provider: "website",
+        kind: "website",
+        title: "Example",
+        url: "https://example.com",
+        excerpt: "Copy",
+        reference: null,
+      },
+    ],
+    clusters: [],
+    schedule: {
+      cadence: "daily",
+      updatedAt: 1_700,
+      claimedAt: 1_800,
+      claimedBy: "s".repeat(120),
+    },
+  };
+
+  const state = createBoardWorkspace();
+  state.sources = [claimedSource];
+  const parsed = SaveVenomWorkspaceBody.safeParse({ state, baseRevision: 0 });
+  assert.equal(parsed.success, true);
+  assert.deepEqual(
+    parsed.data.state.sources[0].schedule,
+    claimedSource.schedule,
+  );
+
+  for (const schedule of [
+    // Token past the cap, no token at all, and non-integer or negative times.
+    { cadence: "daily", updatedAt: 1_700, claimedAt: 1_800, claimedBy: "s".repeat(121) },
+    { cadence: "daily", updatedAt: 1_700, claimedAt: 1_800, claimedBy: "" },
+    { cadence: "daily", updatedAt: 1_700, claimedAt: -1, claimedBy: "device" },
+    { cadence: "daily", updatedAt: 1_700, claimedAt: 1_800.5, claimedBy: "device" },
+  ]) {
+    const malformed = createBoardWorkspace();
+    malformed.sources = [{ ...claimedSource, schedule }];
+    assert.equal(
+      SaveVenomWorkspaceBody.safeParse({ state: malformed, baseRevision: 0 })
+        .success,
+      false,
+    );
+  }
+});
+
+test("generated contract accepts response-mode prefs and attributed debate turns", () => {
+  const state = createBoardWorkspace();
+  const conversation = deliberatedConversation(1_700);
+  delete conversation.messages[0].deliberation;
+  conversation.responseMode = "debate";
+  conversation.blend = {
+    corners: ["venom-gpt", "venom-claude", "venom-gemini"],
+    weights: [0.5, 0.3, 0.2],
+  };
+  conversation.modeUpdatedAt = 1_701;
+  conversation.messages[0].speakerId = "venom-claude";
+  conversation.messages[0].speakerName = "Venom Claude";
+  state.conversations = [conversation];
+
+  const parsed = SaveVenomWorkspaceBody.safeParse({ state, baseRevision: 0 });
+  assert.equal(parsed.success, true);
+  const saved = parsed.data.state.conversations[0];
+  assert.equal(saved.responseMode, "debate");
+  assert.deepEqual(saved.blend.weights, [0.5, 0.3, 0.2]);
+  assert.equal(saved.messages[0].speakerName, "Venom Claude");
+});
+
+test("generated contract rejects malformed mode and blend prefs", () => {
+  const cases = [
+    (conversation) => {
+      conversation.responseMode = "argue";
+    },
+    (conversation) => {
+      conversation.blend = {
+        corners: ["a", "b", "c", "d"],
+        weights: [0.25, 0.25, 0.25, 0.25],
+      };
+    },
+    (conversation) => {
+      conversation.blend = {
+        corners: ["a", "b", "c"],
+        weights: [2, 0, 0],
+      };
+    },
+    (conversation) => {
+      conversation.blend = { corners: ["a", "b", "c"] };
+    },
+    (conversation) => {
+      conversation.modeUpdatedAt = -5;
+    },
+    (conversation) => {
+      conversation.messages[0].speakerId = "";
+    },
+    (conversation) => {
+      conversation.messages[0].speakerName = "n".repeat(81);
+    },
+  ];
+  for (const mutate of cases) {
+    const state = createBoardWorkspace();
+    const conversation = deliberatedConversation(1_700);
+    delete conversation.messages[0].deliberation;
+    mutate(conversation);
+    state.conversations = [conversation];
+    assert.equal(
+      SaveVenomWorkspaceBody.safeParse({ state, baseRevision: 0 }).success,
+      false,
+    );
+  }
 });

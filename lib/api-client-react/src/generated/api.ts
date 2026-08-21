@@ -20,24 +20,101 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CancelProvisioningRunInput,
+  CommunityBriefingPage,
+  CommunityFeedPage,
+  CommunityNotification,
+  CommunityNotificationMarkAllResult,
+  CommunityNotificationPage,
+  CommunityNotificationUnreadCount,
+  CommunityProfileInput,
+  CommunityPublicProfile,
+  CommunityReply,
+  CommunityReplyInput,
+  CommunityReplyUpdate,
+  CommunityReportInput,
+  CommunityReportReceipt,
+  CommunityThread,
+  CommunityThreadDetail,
+  CommunityThreadInput,
+  CommunityThreadUpdate,
+  CommunityVoteInput,
+  CommunityVoteResult,
+  GetCommunityBriefingParams,
+  GetCommunityFeedParams,
+  GetCommunityThreadParams,
+  GetVenomAppTimelineParams,
   GitHubRepository,
   GitHubSourceInput,
   HealthStatus,
   KnowledgeExtraction,
   KnowledgeExtractionInput,
+  ListCommunityNotificationsParams,
+  ListProvisioningRunsParams,
+  ListVenomBuildRunsParams,
+  ListVenomSopsParams,
   ProjectSource,
+  ProvisionBuildRunInput,
+  ProvisioningCandidateRelease,
+  ProvisioningCapability,
+  ProvisioningRun,
+  ProvisioningRunSummary,
+  PublishProvisioningCandidateInput,
+  RemoveSharedWorkspaceMember200,
+  RollbackProvisioningReleaseInput,
   SaveVenomWorkspace413,
+  SearchVenomOntologyParams,
+  SharedWorkspace,
+  SharedWorkspaceAccessError,
+  SharedWorkspaceCreateInput,
+  SharedWorkspaceKnowledge,
+  SharedWorkspaceMember,
+  SharedWorkspaceMemberInput,
+  SharedWorkspaceSop,
   VenomApp,
   VenomAppDetail,
   VenomAppInput,
+  VenomAppIterationContext,
+  VenomAppIterationInput,
+  VenomAppTimelinePage,
   VenomAppUpdate,
+  VenomBuildApprovalInput,
+  VenomBuildCancellationInput,
+  VenomBuildPackage,
+  VenomBuildRejectionInput,
+  VenomBuildRevisionInput,
+  VenomBuildRun,
+  VenomBuildRunInput,
+  VenomBuildRunSummary,
   VenomChatRequest,
+  VenomDeliberationAvailability,
+  VenomIdentity,
   VenomImportInput,
   VenomImportJob,
   VenomImportUploadTicket,
+  VenomManagedModel,
   VenomNoteImprovement,
   VenomNoteInput,
+  VenomOntologyConceptDetail,
+  VenomOntologySearchResponse,
+  VenomProjectSopSelectionInput,
+  VenomSop,
+  VenomSopAppAssignment,
+  VenomSopAppAssignmentsInput,
+  VenomSopDetail,
+  VenomSopInput,
+  VenomSopProjectSelection,
+  VenomSopRevision,
+  VenomSopUpdate,
   VenomSourceVersion,
+  VenomVoiceDecisionOutcomeRequest,
+  VenomVoiceDecisionOutcomeResult,
+  VenomVoicePreset,
+  VenomVoiceSpeechRequest,
+  VenomVoiceTranscription,
+  VenomVoiceTranscriptionRequest,
+  VenomVoiceTurnDecision,
+  VenomVoiceTurnDecisionRequest,
   VenomWorkspaceSaveInput,
   VenomWorkspaceSnapshot,
   WebsiteSourceInput
@@ -174,7 +251,7 @@ export const sendVenomMessage = async (venomChatRequest: VenomChatRequest, optio
 
 
 
-export const getSendVenomMessageMutationOptions = <TError = ErrorType<void>,
+export const getSendVenomMessageMutationOptions = <TError = ErrorType<void | SharedWorkspaceAccessError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendVenomMessage>>, TError,{data: BodyType<VenomChatRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof sendVenomMessage>>, TError,{data: BodyType<VenomChatRequest>}, TContext> => {
 
@@ -203,12 +280,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type SendVenomMessageMutationResult = NonNullable<Awaited<ReturnType<typeof sendVenomMessage>>>
     export type SendVenomMessageMutationBody = BodyType<VenomChatRequest>
-    export type SendVenomMessageMutationError = ErrorType<void>
+    export type SendVenomMessageMutationError = ErrorType<void | SharedWorkspaceAccessError>
 
     /**
  * @summary Stream a response from the Venom assistant
  */
-export const useSendVenomMessage = <TError = ErrorType<void>,
+export const useSendVenomMessage = <TError = ErrorType<void | SharedWorkspaceAccessError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendVenomMessage>>, TError,{data: BodyType<VenomChatRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof sendVenomMessage>>,
@@ -217,6 +294,524 @@ export const useSendVenomMessage = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getSendVenomMessageMutationOptions(options));
+    }
+
+export const getGetVenomModelsUrl = () => {
+
+
+
+
+  return `/api/venom/models`
+}
+
+/**
+ * @summary List the server-managed text models available to Venom
+ */
+export const getVenomModels = async ( options?: Parameters<typeof customFetch>[1]): Promise<VenomManagedModel[]> => {
+
+  return customFetch<VenomManagedModel[]>(getGetVenomModelsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomModelsQueryKey = () => {
+    return [
+    `/api/venom/models`
+    ] as const;
+    }
+
+
+export const getGetVenomModelsQueryOptions = <TData = Awaited<ReturnType<typeof getVenomModels>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomModels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomModelsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomModels>>> = ({ signal }) => getVenomModels({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomModels>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomModelsQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomModels>>>
+export type GetVenomModelsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List the server-managed text models available to Venom
+ */
+
+export function useGetVenomModels<TData = Awaited<ReturnType<typeof getVenomModels>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomModels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomModelsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetVenomDeliberationUrl = () => {
+
+
+
+
+  return `/api/venom/deliberation`
+}
+
+/**
+ * @summary Describe multi-voice deliberation availability and its voice roster
+ */
+export const getVenomDeliberation = async ( options?: Parameters<typeof customFetch>[1]): Promise<VenomDeliberationAvailability> => {
+
+  return customFetch<VenomDeliberationAvailability>(getGetVenomDeliberationUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomDeliberationQueryKey = () => {
+    return [
+    `/api/venom/deliberation`
+    ] as const;
+    }
+
+
+export const getGetVenomDeliberationQueryOptions = <TData = Awaited<ReturnType<typeof getVenomDeliberation>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomDeliberation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomDeliberationQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomDeliberation>>> = ({ signal }) => getVenomDeliberation({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomDeliberation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomDeliberationQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomDeliberation>>>
+export type GetVenomDeliberationQueryError = ErrorType<void>
+
+
+/**
+ * @summary Describe multi-voice deliberation availability and its voice roster
+ */
+
+export function useGetVenomDeliberation<TData = Awaited<ReturnType<typeof getVenomDeliberation>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomDeliberation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomDeliberationQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetVenomVoicesUrl = () => {
+
+
+
+
+  return `/api/venom/voice/catalog`
+}
+
+/**
+ * @summary List the named voice presets for hands-free voice chat
+ */
+export const getVenomVoices = async ( options?: Parameters<typeof customFetch>[1]): Promise<VenomVoicePreset[]> => {
+
+  return customFetch<VenomVoicePreset[]>(getGetVenomVoicesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomVoicesQueryKey = () => {
+    return [
+    `/api/venom/voice/catalog`
+    ] as const;
+    }
+
+
+export const getGetVenomVoicesQueryOptions = <TData = Awaited<ReturnType<typeof getVenomVoices>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomVoices>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomVoicesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomVoices>>> = ({ signal }) => getVenomVoices({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomVoices>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomVoicesQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomVoices>>>
+export type GetVenomVoicesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List the named voice presets for hands-free voice chat
+ */
+
+export function useGetVenomVoices<TData = Awaited<ReturnType<typeof getVenomVoices>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomVoices>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomVoicesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getTranscribeVenomVoiceUrl = () => {
+
+
+
+
+  return `/api/venom/voice/transcribe`
+}
+
+/**
+ * Audio is processed transiently in memory and never persisted or logged; only the recognized text is returned.
+ * @summary Transcribe one spoken utterance to text
+ */
+export const transcribeVenomVoice = async (venomVoiceTranscriptionRequest: VenomVoiceTranscriptionRequest, options?: Parameters<typeof customFetch>[1]): Promise<VenomVoiceTranscription> => {
+
+  return customFetch<VenomVoiceTranscription>(getTranscribeVenomVoiceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomVoiceTranscriptionRequest)
+  }
+);}
+
+
+
+
+
+export const getTranscribeVenomVoiceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transcribeVenomVoice>>, TError,{data: BodyType<VenomVoiceTranscriptionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof transcribeVenomVoice>>, TError,{data: BodyType<VenomVoiceTranscriptionRequest>}, TContext> => {
+
+const mutationKey = ['transcribeVenomVoice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof transcribeVenomVoice>>, {data: BodyType<VenomVoiceTranscriptionRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  transcribeVenomVoice(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TranscribeVenomVoiceMutationResult = NonNullable<Awaited<ReturnType<typeof transcribeVenomVoice>>>
+    export type TranscribeVenomVoiceMutationBody = BodyType<VenomVoiceTranscriptionRequest>
+    export type TranscribeVenomVoiceMutationError = ErrorType<void>
+
+    /**
+ * @summary Transcribe one spoken utterance to text
+ */
+export const useTranscribeVenomVoice = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transcribeVenomVoice>>, TError,{data: BodyType<VenomVoiceTranscriptionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof transcribeVenomVoice>>,
+        TError,
+        {data: BodyType<VenomVoiceTranscriptionRequest>},
+        TContext
+      > => {
+      return useMutation(getTranscribeVenomVoiceMutationOptions(options));
+    }
+
+export const getSpeakVenomVoiceUrl = () => {
+
+
+
+
+  return `/api/venom/voice/speak`
+}
+
+/**
+ * @summary Stream spoken audio for a piece of assistant text
+ */
+export const speakVenomVoice = async (venomVoiceSpeechRequest: VenomVoiceSpeechRequest, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getSpeakVenomVoiceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomVoiceSpeechRequest)
+  }
+);}
+
+
+
+
+
+export const getSpeakVenomVoiceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof speakVenomVoice>>, TError,{data: BodyType<VenomVoiceSpeechRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof speakVenomVoice>>, TError,{data: BodyType<VenomVoiceSpeechRequest>}, TContext> => {
+
+const mutationKey = ['speakVenomVoice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof speakVenomVoice>>, {data: BodyType<VenomVoiceSpeechRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  speakVenomVoice(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SpeakVenomVoiceMutationResult = NonNullable<Awaited<ReturnType<typeof speakVenomVoice>>>
+    export type SpeakVenomVoiceMutationBody = BodyType<VenomVoiceSpeechRequest>
+    export type SpeakVenomVoiceMutationError = ErrorType<void>
+
+    /**
+ * @summary Stream spoken audio for a piece of assistant text
+ */
+export const useSpeakVenomVoice = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof speakVenomVoice>>, TError,{data: BodyType<VenomVoiceSpeechRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof speakVenomVoice>>,
+        TError,
+        {data: BodyType<VenomVoiceSpeechRequest>},
+        TContext
+      > => {
+      return useMutation(getSpeakVenomVoiceMutationOptions(options));
+    }
+
+export const getDecideVenomVoiceTurnUrl = () => {
+
+
+
+
+  return `/api/venom/voice/decide`
+}
+
+/**
+ * Classifies one finished voice turn from its transcript and recent conversation momentum. Hard-biased toward responding: questions and direct requests always get a full reply, and any uncertainty or internal failure resolves to "respond". Applies only to voice mode; typed chat never consults this endpoint.
+ * @summary Decide whether a finished spoken turn deserves a reply, a brief acknowledgment, or silence
+ */
+export const decideVenomVoiceTurn = async (venomVoiceTurnDecisionRequest: VenomVoiceTurnDecisionRequest, options?: Parameters<typeof customFetch>[1]): Promise<VenomVoiceTurnDecision> => {
+
+  return customFetch<VenomVoiceTurnDecision>(getDecideVenomVoiceTurnUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomVoiceTurnDecisionRequest)
+  }
+);}
+
+
+
+
+
+export const getDecideVenomVoiceTurnMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideVenomVoiceTurn>>, TError,{data: BodyType<VenomVoiceTurnDecisionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideVenomVoiceTurn>>, TError,{data: BodyType<VenomVoiceTurnDecisionRequest>}, TContext> => {
+
+const mutationKey = ['decideVenomVoiceTurn'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideVenomVoiceTurn>>, {data: BodyType<VenomVoiceTurnDecisionRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  decideVenomVoiceTurn(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideVenomVoiceTurnMutationResult = NonNullable<Awaited<ReturnType<typeof decideVenomVoiceTurn>>>
+    export type DecideVenomVoiceTurnMutationBody = BodyType<VenomVoiceTurnDecisionRequest>
+    export type DecideVenomVoiceTurnMutationError = ErrorType<void>
+
+    /**
+ * @summary Decide whether a finished spoken turn deserves a reply, a brief acknowledgment, or silence
+ */
+export const useDecideVenomVoiceTurn = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideVenomVoiceTurn>>, TError,{data: BodyType<VenomVoiceTurnDecisionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideVenomVoiceTurn>>,
+        TError,
+        {data: BodyType<VenomVoiceTurnDecisionRequest>},
+        TContext
+      > => {
+      return useMutation(getDecideVenomVoiceTurnMutationOptions(options));
+    }
+
+export const getReportVenomVoiceDecisionOutcomeUrl = () => {
+
+
+
+
+  return `/api/venom/voice/decision-outcome`
+}
+
+/**
+ * Pairs a prior decision with its observed outcome (reply interrupted, user re-asked after silence, session wound down cleanly, ...) so restraint thresholds can be tuned from real usage. No audio is ever attached.
+ * @summary Record what actually happened after a speak/stay-quiet decision
+ */
+export const reportVenomVoiceDecisionOutcome = async (venomVoiceDecisionOutcomeRequest: VenomVoiceDecisionOutcomeRequest, options?: Parameters<typeof customFetch>[1]): Promise<VenomVoiceDecisionOutcomeResult> => {
+
+  return customFetch<VenomVoiceDecisionOutcomeResult>(getReportVenomVoiceDecisionOutcomeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomVoiceDecisionOutcomeRequest)
+  }
+);}
+
+
+
+
+
+export const getReportVenomVoiceDecisionOutcomeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportVenomVoiceDecisionOutcome>>, TError,{data: BodyType<VenomVoiceDecisionOutcomeRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reportVenomVoiceDecisionOutcome>>, TError,{data: BodyType<VenomVoiceDecisionOutcomeRequest>}, TContext> => {
+
+const mutationKey = ['reportVenomVoiceDecisionOutcome'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reportVenomVoiceDecisionOutcome>>, {data: BodyType<VenomVoiceDecisionOutcomeRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reportVenomVoiceDecisionOutcome(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReportVenomVoiceDecisionOutcomeMutationResult = NonNullable<Awaited<ReturnType<typeof reportVenomVoiceDecisionOutcome>>>
+    export type ReportVenomVoiceDecisionOutcomeMutationBody = BodyType<VenomVoiceDecisionOutcomeRequest>
+    export type ReportVenomVoiceDecisionOutcomeMutationError = ErrorType<void>
+
+    /**
+ * @summary Record what actually happened after a speak/stay-quiet decision
+ */
+export const useReportVenomVoiceDecisionOutcome = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportVenomVoiceDecisionOutcome>>, TError,{data: BodyType<VenomVoiceDecisionOutcomeRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reportVenomVoiceDecisionOutcome>>,
+        TError,
+        {data: BodyType<VenomVoiceDecisionOutcomeRequest>},
+        TContext
+      > => {
+      return useMutation(getReportVenomVoiceDecisionOutcomeMutationOptions(options));
     }
 
 export const getExtractVenomKnowledgeUrl = () => {
@@ -245,7 +840,7 @@ export const extractVenomKnowledge = async (knowledgeExtractionInput: KnowledgeE
 
 
 
-export const getExtractVenomKnowledgeMutationOptions = <TError = ErrorType<void>,
+export const getExtractVenomKnowledgeMutationOptions = <TError = ErrorType<void | SharedWorkspaceAccessError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractVenomKnowledge>>, TError,{data: BodyType<KnowledgeExtractionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof extractVenomKnowledge>>, TError,{data: BodyType<KnowledgeExtractionInput>}, TContext> => {
 
@@ -274,12 +869,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type ExtractVenomKnowledgeMutationResult = NonNullable<Awaited<ReturnType<typeof extractVenomKnowledge>>>
     export type ExtractVenomKnowledgeMutationBody = BodyType<KnowledgeExtractionInput>
-    export type ExtractVenomKnowledgeMutationError = ErrorType<void>
+    export type ExtractVenomKnowledgeMutationError = ErrorType<void | SharedWorkspaceAccessError>
 
     /**
  * @summary Extract knowledge clusters from a project conversation
  */
-export const useExtractVenomKnowledge = <TError = ErrorType<void>,
+export const useExtractVenomKnowledge = <TError = ErrorType<void | SharedWorkspaceAccessError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractVenomKnowledge>>, TError,{data: BodyType<KnowledgeExtractionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof extractVenomKnowledge>>,
@@ -289,6 +884,245 @@ export const useExtractVenomKnowledge = <TError = ErrorType<void>,
       > => {
       return useMutation(getExtractVenomKnowledgeMutationOptions(options));
     }
+
+export const getSearchVenomOntologyUrl = (params: SearchVenomOntologyParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/venom/ontology/search?${stringifiedParams}` : `/api/venom/ontology/search`
+}
+
+/**
+ * @summary Search the signed-in user's knowledge ontology across projects
+ */
+export const searchVenomOntology = async (params: SearchVenomOntologyParams, options?: Parameters<typeof customFetch>[1]): Promise<VenomOntologySearchResponse> => {
+
+  return customFetch<VenomOntologySearchResponse>(getSearchVenomOntologyUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSearchVenomOntologyQueryKey = (params?: SearchVenomOntologyParams,) => {
+    return [
+    `/api/venom/ontology/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSearchVenomOntologyQueryOptions = <TData = Awaited<ReturnType<typeof searchVenomOntology>>, TError = ErrorType<void>>(params: SearchVenomOntologyParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchVenomOntology>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSearchVenomOntologyQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchVenomOntology>>> = ({ signal }) => searchVenomOntology(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof searchVenomOntology>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type SearchVenomOntologyQueryResult = NonNullable<Awaited<ReturnType<typeof searchVenomOntology>>>
+export type SearchVenomOntologyQueryError = ErrorType<void>
+
+
+/**
+ * @summary Search the signed-in user's knowledge ontology across projects
+ */
+
+export function useSearchVenomOntology<TData = Awaited<ReturnType<typeof searchVenomOntology>>, TError = ErrorType<void>>(
+ params: SearchVenomOntologyParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchVenomOntology>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getSearchVenomOntologyQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetVenomOntologyConceptUrl = (conceptId: string,) => {
+
+
+
+
+  return `/api/venom/ontology/concepts/${conceptId}`
+}
+
+/**
+ * @summary Get one ontology concept with its neighbors and evidence
+ */
+export const getVenomOntologyConcept = async (conceptId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomOntologyConceptDetail> => {
+
+  return customFetch<VenomOntologyConceptDetail>(getGetVenomOntologyConceptUrl(conceptId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomOntologyConceptQueryKey = (conceptId: string,) => {
+    return [
+    `/api/venom/ontology/concepts/${conceptId}`
+    ] as const;
+    }
+
+
+export const getGetVenomOntologyConceptQueryOptions = <TData = Awaited<ReturnType<typeof getVenomOntologyConcept>>, TError = ErrorType<void>>(conceptId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomOntologyConcept>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomOntologyConceptQueryKey(conceptId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomOntologyConcept>>> = ({ signal }) => getVenomOntologyConcept(conceptId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: conceptId !== null && conceptId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomOntologyConcept>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomOntologyConceptQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomOntologyConcept>>>
+export type GetVenomOntologyConceptQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get one ontology concept with its neighbors and evidence
+ */
+
+export function useGetVenomOntologyConcept<TData = Awaited<ReturnType<typeof getVenomOntologyConcept>>, TError = ErrorType<void>>(
+ conceptId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomOntologyConcept>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomOntologyConceptQueryOptions(conceptId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetVenomIdentityUrl = () => {
+
+
+
+
+  return `/api/venom/identity`
+}
+
+/**
+ * Resolves the signed-in account into its per-user identity record (display name, email, sign-in provider), creating the record on first authenticated use and refreshing it when stale.
+ * @summary Who Venom recognizes the signed-in account as
+ */
+export const getVenomIdentity = async ( options?: Parameters<typeof customFetch>[1]): Promise<VenomIdentity> => {
+
+  return customFetch<VenomIdentity>(getGetVenomIdentityUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomIdentityQueryKey = () => {
+    return [
+    `/api/venom/identity`
+    ] as const;
+    }
+
+
+export const getGetVenomIdentityQueryOptions = <TData = Awaited<ReturnType<typeof getVenomIdentity>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomIdentity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomIdentityQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomIdentity>>> = ({ signal }) => getVenomIdentity({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomIdentity>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomIdentityQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomIdentity>>>
+export type GetVenomIdentityQueryError = ErrorType<void>
+
+
+/**
+ * @summary Who Venom recognizes the signed-in account as
+ */
+
+export function useGetVenomIdentity<TData = Awaited<ReturnType<typeof getVenomIdentity>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomIdentity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomIdentityQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getImproveVenomNoteUrl = () => {
 
@@ -730,6 +1564,676 @@ export const useSaveVenomWorkspace = <TError = ErrorType<void | VenomWorkspaceSn
       return useMutation(getSaveVenomWorkspaceMutationOptions(options));
     }
 
+export const getListSharedWorkspacesUrl = () => {
+
+
+
+
+  return `/api/venom/workspaces`
+}
+
+/**
+ * @summary List the shared workspaces the signed-in user belongs to
+ */
+export const listSharedWorkspaces = async ( options?: Parameters<typeof customFetch>[1]): Promise<SharedWorkspace[]> => {
+
+  return customFetch<SharedWorkspace[]>(getListSharedWorkspacesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSharedWorkspacesQueryKey = () => {
+    return [
+    `/api/venom/workspaces`
+    ] as const;
+    }
+
+
+export const getListSharedWorkspacesQueryOptions = <TData = Awaited<ReturnType<typeof listSharedWorkspaces>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSharedWorkspaces>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSharedWorkspacesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSharedWorkspaces>>> = ({ signal }) => listSharedWorkspaces({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSharedWorkspaces>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSharedWorkspacesQueryResult = NonNullable<Awaited<ReturnType<typeof listSharedWorkspaces>>>
+export type ListSharedWorkspacesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List the shared workspaces the signed-in user belongs to
+ */
+
+export function useListSharedWorkspaces<TData = Awaited<ReturnType<typeof listSharedWorkspaces>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSharedWorkspaces>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSharedWorkspacesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateSharedWorkspaceUrl = () => {
+
+
+
+
+  return `/api/venom/workspaces`
+}
+
+/**
+ * @summary Create a shared workspace with the caller as its first admin
+ */
+export const createSharedWorkspace = async (sharedWorkspaceCreateInput: SharedWorkspaceCreateInput, options?: Parameters<typeof customFetch>[1]): Promise<SharedWorkspace> => {
+
+  return customFetch<SharedWorkspace>(getCreateSharedWorkspaceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sharedWorkspaceCreateInput)
+  }
+);}
+
+
+
+
+
+export const getCreateSharedWorkspaceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspace>>, TError,{data: BodyType<SharedWorkspaceCreateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspace>>, TError,{data: BodyType<SharedWorkspaceCreateInput>}, TContext> => {
+
+const mutationKey = ['createSharedWorkspace'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSharedWorkspace>>, {data: BodyType<SharedWorkspaceCreateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createSharedWorkspace(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSharedWorkspaceMutationResult = NonNullable<Awaited<ReturnType<typeof createSharedWorkspace>>>
+    export type CreateSharedWorkspaceMutationBody = BodyType<SharedWorkspaceCreateInput>
+    export type CreateSharedWorkspaceMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a shared workspace with the caller as its first admin
+ */
+export const useCreateSharedWorkspace = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspace>>, TError,{data: BodyType<SharedWorkspaceCreateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createSharedWorkspace>>,
+        TError,
+        {data: BodyType<SharedWorkspaceCreateInput>},
+        TContext
+      > => {
+      return useMutation(getCreateSharedWorkspaceMutationOptions(options));
+    }
+
+export const getListSharedWorkspaceMembersUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/members`
+}
+
+/**
+ * @summary List the members of a shared workspace (members only)
+ */
+export const listSharedWorkspaceMembers = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<SharedWorkspaceMember[]> => {
+
+  return customFetch<SharedWorkspaceMember[]>(getListSharedWorkspaceMembersUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSharedWorkspaceMembersQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/venom/workspaces/${workspaceId}/members`
+    ] as const;
+    }
+
+
+export const getListSharedWorkspaceMembersQueryOptions = <TData = Awaited<ReturnType<typeof listSharedWorkspaceMembers>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSharedWorkspaceMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSharedWorkspaceMembersQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSharedWorkspaceMembers>>> = ({ signal }) => listSharedWorkspaceMembers(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSharedWorkspaceMembers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSharedWorkspaceMembersQueryResult = NonNullable<Awaited<ReturnType<typeof listSharedWorkspaceMembers>>>
+export type ListSharedWorkspaceMembersQueryError = ErrorType<void | SharedWorkspaceAccessError>
+
+
+/**
+ * @summary List the members of a shared workspace (members only)
+ */
+
+export function useListSharedWorkspaceMembers<TData = Awaited<ReturnType<typeof listSharedWorkspaceMembers>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(
+ workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSharedWorkspaceMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSharedWorkspaceMembersQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAddSharedWorkspaceMemberUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/members`
+}
+
+/**
+ * @summary Add an account to a shared workspace (admins only)
+ */
+export const addSharedWorkspaceMember = async (workspaceId: string,
+    sharedWorkspaceMemberInput: SharedWorkspaceMemberInput, options?: Parameters<typeof customFetch>[1]): Promise<SharedWorkspaceMember> => {
+
+  return customFetch<SharedWorkspaceMember>(getAddSharedWorkspaceMemberUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sharedWorkspaceMemberInput)
+  }
+);}
+
+
+
+
+
+export const getAddSharedWorkspaceMemberMutationOptions = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addSharedWorkspaceMember>>, TError,{workspaceId: string;data: BodyType<SharedWorkspaceMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addSharedWorkspaceMember>>, TError,{workspaceId: string;data: BodyType<SharedWorkspaceMemberInput>}, TContext> => {
+
+const mutationKey = ['addSharedWorkspaceMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addSharedWorkspaceMember>>, {workspaceId: string;data: BodyType<SharedWorkspaceMemberInput>}> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  addSharedWorkspaceMember(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddSharedWorkspaceMemberMutationResult = NonNullable<Awaited<ReturnType<typeof addSharedWorkspaceMember>>>
+    export type AddSharedWorkspaceMemberMutationBody = BodyType<SharedWorkspaceMemberInput>
+    export type AddSharedWorkspaceMemberMutationError = ErrorType<void | SharedWorkspaceAccessError>
+
+    /**
+ * @summary Add an account to a shared workspace (admins only)
+ */
+export const useAddSharedWorkspaceMember = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addSharedWorkspaceMember>>, TError,{workspaceId: string;data: BodyType<SharedWorkspaceMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addSharedWorkspaceMember>>,
+        TError,
+        {workspaceId: string;data: BodyType<SharedWorkspaceMemberInput>},
+        TContext
+      > => {
+      return useMutation(getAddSharedWorkspaceMemberMutationOptions(options));
+    }
+
+export const getRemoveSharedWorkspaceMemberUrl = (workspaceId: string,
+    memberUserId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/members/${memberUserId}`
+}
+
+/**
+ * @summary Remove a member; their workspace access ends at their next request (admins only)
+ */
+export const removeSharedWorkspaceMember = async (workspaceId: string,
+    memberUserId: string, options?: Parameters<typeof customFetch>[1]): Promise<RemoveSharedWorkspaceMember200> => {
+
+  return customFetch<RemoveSharedWorkspaceMember200>(getRemoveSharedWorkspaceMemberUrl(workspaceId,memberUserId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRemoveSharedWorkspaceMemberMutationOptions = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeSharedWorkspaceMember>>, TError,{workspaceId: string;memberUserId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeSharedWorkspaceMember>>, TError,{workspaceId: string;memberUserId: string}, TContext> => {
+
+const mutationKey = ['removeSharedWorkspaceMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeSharedWorkspaceMember>>, {workspaceId: string;memberUserId: string}> = (props) => {
+          const {workspaceId,memberUserId} = props ?? {};
+
+          return  removeSharedWorkspaceMember(workspaceId,memberUserId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveSharedWorkspaceMemberMutationResult = NonNullable<Awaited<ReturnType<typeof removeSharedWorkspaceMember>>>
+
+    export type RemoveSharedWorkspaceMemberMutationError = ErrorType<void | SharedWorkspaceAccessError>
+
+    /**
+ * @summary Remove a member; their workspace access ends at their next request (admins only)
+ */
+export const useRemoveSharedWorkspaceMember = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeSharedWorkspaceMember>>, TError,{workspaceId: string;memberUserId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof removeSharedWorkspaceMember>>,
+        TError,
+        {workspaceId: string;memberUserId: string},
+        TContext
+      > => {
+      return useMutation(getRemoveSharedWorkspaceMemberMutationOptions(options));
+    }
+
+export const getGetSharedWorkspaceKnowledgeUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/knowledge`
+}
+
+/**
+ * Workspace-tier knowledge is served exclusively through this membership-checked endpoint and is never embedded in any per-user sync snapshot, so revoking membership revokes access.
+ * @summary Read a shared workspace's knowledge clusters (members only)
+ */
+export const getSharedWorkspaceKnowledge = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<SharedWorkspaceKnowledge> => {
+
+  return customFetch<SharedWorkspaceKnowledge>(getGetSharedWorkspaceKnowledgeUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSharedWorkspaceKnowledgeQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/venom/workspaces/${workspaceId}/knowledge`
+    ] as const;
+    }
+
+
+export const getGetSharedWorkspaceKnowledgeQueryOptions = <TData = Awaited<ReturnType<typeof getSharedWorkspaceKnowledge>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceKnowledge>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSharedWorkspaceKnowledgeQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSharedWorkspaceKnowledge>>> = ({ signal }) => getSharedWorkspaceKnowledge(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceKnowledge>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSharedWorkspaceKnowledgeQueryResult = NonNullable<Awaited<ReturnType<typeof getSharedWorkspaceKnowledge>>>
+export type GetSharedWorkspaceKnowledgeQueryError = ErrorType<void | SharedWorkspaceAccessError>
+
+
+/**
+ * @summary Read a shared workspace's knowledge clusters (members only)
+ */
+
+export function useGetSharedWorkspaceKnowledge<TData = Awaited<ReturnType<typeof getSharedWorkspaceKnowledge>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(
+ workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceKnowledge>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSharedWorkspaceKnowledgeQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListSharedWorkspaceSopsUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/sops`
+}
+
+/**
+ * @summary List a shared workspace's SOPs (members only)
+ */
+export const listSharedWorkspaceSops = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<SharedWorkspaceSop[]> => {
+
+  return customFetch<SharedWorkspaceSop[]>(getListSharedWorkspaceSopsUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSharedWorkspaceSopsQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/venom/workspaces/${workspaceId}/sops`
+    ] as const;
+    }
+
+
+export const getListSharedWorkspaceSopsQueryOptions = <TData = Awaited<ReturnType<typeof listSharedWorkspaceSops>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSharedWorkspaceSops>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSharedWorkspaceSopsQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSharedWorkspaceSops>>> = ({ signal }) => listSharedWorkspaceSops(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSharedWorkspaceSops>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSharedWorkspaceSopsQueryResult = NonNullable<Awaited<ReturnType<typeof listSharedWorkspaceSops>>>
+export type ListSharedWorkspaceSopsQueryError = ErrorType<void | SharedWorkspaceAccessError>
+
+
+/**
+ * @summary List a shared workspace's SOPs (members only)
+ */
+
+export function useListSharedWorkspaceSops<TData = Awaited<ReturnType<typeof listSharedWorkspaceSops>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(
+ workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSharedWorkspaceSops>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSharedWorkspaceSopsQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateSharedWorkspaceSopUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/sops`
+}
+
+/**
+ * @summary Create an SOP owned by the shared workspace (members only)
+ */
+export const createSharedWorkspaceSop = async (workspaceId: string,
+    venomSopInput: VenomSopInput, options?: Parameters<typeof customFetch>[1]): Promise<SharedWorkspaceSop> => {
+
+  return customFetch<SharedWorkspaceSop>(getCreateSharedWorkspaceSopUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomSopInput)
+  }
+);}
+
+
+
+
+
+export const getCreateSharedWorkspaceSopMutationOptions = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspaceSop>>, TError,{workspaceId: string;data: BodyType<VenomSopInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspaceSop>>, TError,{workspaceId: string;data: BodyType<VenomSopInput>}, TContext> => {
+
+const mutationKey = ['createSharedWorkspaceSop'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSharedWorkspaceSop>>, {workspaceId: string;data: BodyType<VenomSopInput>}> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  createSharedWorkspaceSop(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSharedWorkspaceSopMutationResult = NonNullable<Awaited<ReturnType<typeof createSharedWorkspaceSop>>>
+    export type CreateSharedWorkspaceSopMutationBody = BodyType<VenomSopInput>
+    export type CreateSharedWorkspaceSopMutationError = ErrorType<void | SharedWorkspaceAccessError>
+
+    /**
+ * @summary Create an SOP owned by the shared workspace (members only)
+ */
+export const useCreateSharedWorkspaceSop = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspaceSop>>, TError,{workspaceId: string;data: BodyType<VenomSopInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createSharedWorkspaceSop>>,
+        TError,
+        {workspaceId: string;data: BodyType<VenomSopInput>},
+        TContext
+      > => {
+      return useMutation(getCreateSharedWorkspaceSopMutationOptions(options));
+    }
+
+export const getPublishSharedWorkspaceSopUrl = (workspaceId: string,
+    sopId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/sops/${sopId}/publish`
+}
+
+/**
+ * @summary Publish the current draft of a workspace SOP (members only)
+ */
+export const publishSharedWorkspaceSop = async (workspaceId: string,
+    sopId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomSopRevision> => {
+
+  return customFetch<VenomSopRevision>(getPublishSharedWorkspaceSopUrl(workspaceId,sopId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getPublishSharedWorkspaceSopMutationOptions = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishSharedWorkspaceSop>>, TError,{workspaceId: string;sopId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishSharedWorkspaceSop>>, TError,{workspaceId: string;sopId: string}, TContext> => {
+
+const mutationKey = ['publishSharedWorkspaceSop'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishSharedWorkspaceSop>>, {workspaceId: string;sopId: string}> = (props) => {
+          const {workspaceId,sopId} = props ?? {};
+
+          return  publishSharedWorkspaceSop(workspaceId,sopId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PublishSharedWorkspaceSopMutationResult = NonNullable<Awaited<ReturnType<typeof publishSharedWorkspaceSop>>>
+
+    export type PublishSharedWorkspaceSopMutationError = ErrorType<void | SharedWorkspaceAccessError>
+
+    /**
+ * @summary Publish the current draft of a workspace SOP (members only)
+ */
+export const usePublishSharedWorkspaceSop = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishSharedWorkspaceSop>>, TError,{workspaceId: string;sopId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof publishSharedWorkspaceSop>>,
+        TError,
+        {workspaceId: string;sopId: string},
+        TContext
+      > => {
+      return useMutation(getPublishSharedWorkspaceSopMutationOptions(options));
+    }
+
 export const getListVenomAppsUrl = () => {
 
 
@@ -1097,6 +2601,315 @@ export const useDeleteVenomApp = <TError = ErrorType<void>,
       > => {
       return useMutation(getDeleteVenomAppMutationOptions(options));
     }
+
+export const getGetVenomAppIterationContextUrl = (appId: string,) => {
+
+
+
+
+  return `/api/venom/apps/${appId}/iteration-context`
+}
+
+/**
+ * @summary Get the pre-seeded context for improving this app
+ */
+export const getVenomAppIterationContext = async (appId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomAppIterationContext> => {
+
+  return customFetch<VenomAppIterationContext>(getGetVenomAppIterationContextUrl(appId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomAppIterationContextQueryKey = (appId: string,) => {
+    return [
+    `/api/venom/apps/${appId}/iteration-context`
+    ] as const;
+    }
+
+
+export const getGetVenomAppIterationContextQueryOptions = <TData = Awaited<ReturnType<typeof getVenomAppIterationContext>>, TError = ErrorType<void>>(appId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomAppIterationContext>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomAppIterationContextQueryKey(appId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomAppIterationContext>>> = ({ signal }) => getVenomAppIterationContext(appId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: appId !== null && appId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomAppIterationContext>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomAppIterationContextQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomAppIterationContext>>>
+export type GetVenomAppIterationContextQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the pre-seeded context for improving this app
+ */
+
+export function useGetVenomAppIterationContext<TData = Awaited<ReturnType<typeof getVenomAppIterationContext>>, TError = ErrorType<void>>(
+ appId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomAppIterationContext>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomAppIterationContextQueryOptions(appId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVenomAppIterationUrl = (appId: string,) => {
+
+
+
+
+  return `/api/venom/apps/${appId}/iterations`
+}
+
+/**
+ * @summary Start an improvement build run from the app's approved baseline
+ */
+export const createVenomAppIteration = async (appId: string,
+    venomAppIterationInput: VenomAppIterationInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomBuildRun> => {
+
+  return customFetch<VenomBuildRun>(getCreateVenomAppIterationUrl(appId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomAppIterationInput)
+  }
+);}
+
+
+
+
+
+export const getCreateVenomAppIterationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomAppIteration>>, TError,{appId: string;data: BodyType<VenomAppIterationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVenomAppIteration>>, TError,{appId: string;data: BodyType<VenomAppIterationInput>}, TContext> => {
+
+const mutationKey = ['createVenomAppIteration'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVenomAppIteration>>, {appId: string;data: BodyType<VenomAppIterationInput>}> = (props) => {
+          const {appId,data} = props ?? {};
+
+          return  createVenomAppIteration(appId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVenomAppIterationMutationResult = NonNullable<Awaited<ReturnType<typeof createVenomAppIteration>>>
+    export type CreateVenomAppIterationMutationBody = BodyType<VenomAppIterationInput>
+    export type CreateVenomAppIterationMutationError = ErrorType<void>
+
+    /**
+ * @summary Start an improvement build run from the app's approved baseline
+ */
+export const useCreateVenomAppIteration = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomAppIteration>>, TError,{appId: string;data: BodyType<VenomAppIterationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVenomAppIteration>>,
+        TError,
+        {appId: string;data: BodyType<VenomAppIterationInput>},
+        TContext
+      > => {
+      return useMutation(getCreateVenomAppIterationMutationOptions(options));
+    }
+
+export const getDismissVenomAppImprovementSuggestionUrl = (appId: string,) => {
+
+
+
+
+  return `/api/venom/apps/${appId}/improvement-suggestion/dismiss`
+}
+
+/**
+ * @summary Dismiss the current new-data improvement suggestion
+ */
+export const dismissVenomAppImprovementSuggestion = async (appId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomApp> => {
+
+  return customFetch<VenomApp>(getDismissVenomAppImprovementSuggestionUrl(appId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getDismissVenomAppImprovementSuggestionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissVenomAppImprovementSuggestion>>, TError,{appId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof dismissVenomAppImprovementSuggestion>>, TError,{appId: string}, TContext> => {
+
+const mutationKey = ['dismissVenomAppImprovementSuggestion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dismissVenomAppImprovementSuggestion>>, {appId: string}> = (props) => {
+          const {appId} = props ?? {};
+
+          return  dismissVenomAppImprovementSuggestion(appId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DismissVenomAppImprovementSuggestionMutationResult = NonNullable<Awaited<ReturnType<typeof dismissVenomAppImprovementSuggestion>>>
+
+    export type DismissVenomAppImprovementSuggestionMutationError = ErrorType<void>
+
+    /**
+ * @summary Dismiss the current new-data improvement suggestion
+ */
+export const useDismissVenomAppImprovementSuggestion = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissVenomAppImprovementSuggestion>>, TError,{appId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof dismissVenomAppImprovementSuggestion>>,
+        TError,
+        {appId: string},
+        TContext
+      > => {
+      return useMutation(getDismissVenomAppImprovementSuggestionMutationOptions(options));
+    }
+
+export const getGetVenomAppTimelineUrl = (appId: string,
+    params?: GetVenomAppTimelineParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/venom/apps/${appId}/timeline?${stringifiedParams}` : `/api/venom/apps/${appId}/timeline`
+}
+
+/**
+ * @summary Page through the app's full evolution timeline
+ */
+export const getVenomAppTimeline = async (appId: string,
+    params?: GetVenomAppTimelineParams, options?: Parameters<typeof customFetch>[1]): Promise<VenomAppTimelinePage> => {
+
+  return customFetch<VenomAppTimelinePage>(getGetVenomAppTimelineUrl(appId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomAppTimelineQueryKey = (appId: string,
+    params?: GetVenomAppTimelineParams,) => {
+    return [
+    `/api/venom/apps/${appId}/timeline`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetVenomAppTimelineQueryOptions = <TData = Awaited<ReturnType<typeof getVenomAppTimeline>>, TError = ErrorType<void>>(appId: string,
+    params?: GetVenomAppTimelineParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomAppTimeline>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomAppTimelineQueryKey(appId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomAppTimeline>>> = ({ signal }) => getVenomAppTimeline(appId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: appId !== null && appId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomAppTimeline>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomAppTimelineQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomAppTimeline>>>
+export type GetVenomAppTimelineQueryError = ErrorType<void>
+
+
+/**
+ * @summary Page through the app's full evolution timeline
+ */
+
+export function useGetVenomAppTimeline<TData = Awaited<ReturnType<typeof getVenomAppTimeline>>, TError = ErrorType<void>>(
+ appId: string,
+    params?: GetVenomAppTimelineParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomAppTimeline>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomAppTimelineQueryOptions(appId,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListVenomAppVersionsUrl = (appId: string,) => {
 
@@ -1474,3 +3287,3369 @@ export const useRetryVenomAppImport = <TError = ErrorType<void>,
       > => {
       return useMutation(getRetryVenomAppImportMutationOptions(options));
     }
+
+export const getListVenomSopsUrl = (params?: ListVenomSopsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/venom/sops?${stringifiedParams}` : `/api/venom/sops`
+}
+
+/**
+ * @summary Search the signed-in user's SOP library
+ */
+export const listVenomSops = async (params?: ListVenomSopsParams, options?: Parameters<typeof customFetch>[1]): Promise<VenomSop[]> => {
+
+  return customFetch<VenomSop[]>(getListVenomSopsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVenomSopsQueryKey = (params?: ListVenomSopsParams,) => {
+    return [
+    `/api/venom/sops`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListVenomSopsQueryOptions = <TData = Awaited<ReturnType<typeof listVenomSops>>, TError = ErrorType<void>>(params?: ListVenomSopsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomSops>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVenomSopsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVenomSops>>> = ({ signal }) => listVenomSops(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVenomSops>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVenomSopsQueryResult = NonNullable<Awaited<ReturnType<typeof listVenomSops>>>
+export type ListVenomSopsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Search the signed-in user's SOP library
+ */
+
+export function useListVenomSops<TData = Awaited<ReturnType<typeof listVenomSops>>, TError = ErrorType<void>>(
+ params?: ListVenomSopsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomSops>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVenomSopsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVenomSopUrl = () => {
+
+
+
+
+  return `/api/venom/sops`
+}
+
+/**
+ * @summary Create a mutable SOP draft
+ */
+export const createVenomSop = async (venomSopInput: VenomSopInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomSop> => {
+
+  return customFetch<VenomSop>(getCreateVenomSopUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomSopInput)
+  }
+);}
+
+
+
+
+
+export const getCreateVenomSopMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomSop>>, TError,{data: BodyType<VenomSopInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVenomSop>>, TError,{data: BodyType<VenomSopInput>}, TContext> => {
+
+const mutationKey = ['createVenomSop'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVenomSop>>, {data: BodyType<VenomSopInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createVenomSop(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVenomSopMutationResult = NonNullable<Awaited<ReturnType<typeof createVenomSop>>>
+    export type CreateVenomSopMutationBody = BodyType<VenomSopInput>
+    export type CreateVenomSopMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a mutable SOP draft
+ */
+export const useCreateVenomSop = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomSop>>, TError,{data: BodyType<VenomSopInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVenomSop>>,
+        TError,
+        {data: BodyType<VenomSopInput>},
+        TContext
+      > => {
+      return useMutation(getCreateVenomSopMutationOptions(options));
+    }
+
+export const getGetVenomSopUrl = (sopId: string,) => {
+
+
+
+
+  return `/api/venom/sops/${sopId}`
+}
+
+/**
+ * @summary Inspect an SOP, its current draft, revisions, and assignments
+ */
+export const getVenomSop = async (sopId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomSopDetail> => {
+
+  return customFetch<VenomSopDetail>(getGetVenomSopUrl(sopId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomSopQueryKey = (sopId: string,) => {
+    return [
+    `/api/venom/sops/${sopId}`
+    ] as const;
+    }
+
+
+export const getGetVenomSopQueryOptions = <TData = Awaited<ReturnType<typeof getVenomSop>>, TError = ErrorType<void>>(sopId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomSop>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomSopQueryKey(sopId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomSop>>> = ({ signal }) => getVenomSop(sopId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: sopId !== null && sopId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomSop>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomSopQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomSop>>>
+export type GetVenomSopQueryError = ErrorType<void>
+
+
+/**
+ * @summary Inspect an SOP, its current draft, revisions, and assignments
+ */
+
+export function useGetVenomSop<TData = Awaited<ReturnType<typeof getVenomSop>>, TError = ErrorType<void>>(
+ sopId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomSop>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomSopQueryOptions(sopId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateVenomSopUrl = (sopId: string,) => {
+
+
+
+
+  return `/api/venom/sops/${sopId}`
+}
+
+/**
+ * @summary Update a mutable SOP draft
+ */
+export const updateVenomSop = async (sopId: string,
+    venomSopUpdate: VenomSopUpdate, options?: Parameters<typeof customFetch>[1]): Promise<VenomSop> => {
+
+  return customFetch<VenomSop>(getUpdateVenomSopUrl(sopId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomSopUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateVenomSopMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVenomSop>>, TError,{sopId: string;data: BodyType<VenomSopUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateVenomSop>>, TError,{sopId: string;data: BodyType<VenomSopUpdate>}, TContext> => {
+
+const mutationKey = ['updateVenomSop'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateVenomSop>>, {sopId: string;data: BodyType<VenomSopUpdate>}> = (props) => {
+          const {sopId,data} = props ?? {};
+
+          return  updateVenomSop(sopId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateVenomSopMutationResult = NonNullable<Awaited<ReturnType<typeof updateVenomSop>>>
+    export type UpdateVenomSopMutationBody = BodyType<VenomSopUpdate>
+    export type UpdateVenomSopMutationError = ErrorType<void>
+
+    /**
+ * @summary Update a mutable SOP draft
+ */
+export const useUpdateVenomSop = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVenomSop>>, TError,{sopId: string;data: BodyType<VenomSopUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateVenomSop>>,
+        TError,
+        {sopId: string;data: BodyType<VenomSopUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateVenomSopMutationOptions(options));
+    }
+
+export const getPublishVenomSopUrl = (sopId: string,) => {
+
+
+
+
+  return `/api/venom/sops/${sopId}/publish`
+}
+
+/**
+ * @summary Publish the current draft as an immutable SOP revision
+ */
+export const publishVenomSop = async (sopId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomSopRevision> => {
+
+  return customFetch<VenomSopRevision>(getPublishVenomSopUrl(sopId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getPublishVenomSopMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishVenomSop>>, TError,{sopId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishVenomSop>>, TError,{sopId: string}, TContext> => {
+
+const mutationKey = ['publishVenomSop'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishVenomSop>>, {sopId: string}> = (props) => {
+          const {sopId} = props ?? {};
+
+          return  publishVenomSop(sopId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PublishVenomSopMutationResult = NonNullable<Awaited<ReturnType<typeof publishVenomSop>>>
+
+    export type PublishVenomSopMutationError = ErrorType<void>
+
+    /**
+ * @summary Publish the current draft as an immutable SOP revision
+ */
+export const usePublishVenomSop = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishVenomSop>>, TError,{sopId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof publishVenomSop>>,
+        TError,
+        {sopId: string},
+        TContext
+      > => {
+      return useMutation(getPublishVenomSopMutationOptions(options));
+    }
+
+export const getDuplicateVenomSopUrl = (sopId: string,) => {
+
+
+
+
+  return `/api/venom/sops/${sopId}/duplicate`
+}
+
+/**
+ * @summary Duplicate an SOP into a new mutable draft
+ */
+export const duplicateVenomSop = async (sopId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomSop> => {
+
+  return customFetch<VenomSop>(getDuplicateVenomSopUrl(sopId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getDuplicateVenomSopMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof duplicateVenomSop>>, TError,{sopId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof duplicateVenomSop>>, TError,{sopId: string}, TContext> => {
+
+const mutationKey = ['duplicateVenomSop'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof duplicateVenomSop>>, {sopId: string}> = (props) => {
+          const {sopId} = props ?? {};
+
+          return  duplicateVenomSop(sopId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DuplicateVenomSopMutationResult = NonNullable<Awaited<ReturnType<typeof duplicateVenomSop>>>
+
+    export type DuplicateVenomSopMutationError = ErrorType<void>
+
+    /**
+ * @summary Duplicate an SOP into a new mutable draft
+ */
+export const useDuplicateVenomSop = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof duplicateVenomSop>>, TError,{sopId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof duplicateVenomSop>>,
+        TError,
+        {sopId: string},
+        TContext
+      > => {
+      return useMutation(getDuplicateVenomSopMutationOptions(options));
+    }
+
+export const getArchiveVenomSopUrl = (sopId: string,) => {
+
+
+
+
+  return `/api/venom/sops/${sopId}/archive`
+}
+
+/**
+ * @summary Archive an SOP without deleting its revision history
+ */
+export const archiveVenomSop = async (sopId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomSop> => {
+
+  return customFetch<VenomSop>(getArchiveVenomSopUrl(sopId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getArchiveVenomSopMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveVenomSop>>, TError,{sopId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveVenomSop>>, TError,{sopId: string}, TContext> => {
+
+const mutationKey = ['archiveVenomSop'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveVenomSop>>, {sopId: string}> = (props) => {
+          const {sopId} = props ?? {};
+
+          return  archiveVenomSop(sopId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveVenomSopMutationResult = NonNullable<Awaited<ReturnType<typeof archiveVenomSop>>>
+
+    export type ArchiveVenomSopMutationError = ErrorType<void>
+
+    /**
+ * @summary Archive an SOP without deleting its revision history
+ */
+export const useArchiveVenomSop = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveVenomSop>>, TError,{sopId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof archiveVenomSop>>,
+        TError,
+        {sopId: string},
+        TContext
+      > => {
+      return useMutation(getArchiveVenomSopMutationOptions(options));
+    }
+
+export const getAssignVenomSopAppsUrl = (sopId: string,) => {
+
+
+
+
+  return `/api/venom/sops/${sopId}/apps`
+}
+
+/**
+ * @summary Assign an SOP to registered apps, or remove assignments for account-wide use
+ */
+export const assignVenomSopApps = async (sopId: string,
+    venomSopAppAssignmentsInput: VenomSopAppAssignmentsInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomSopAppAssignment[]> => {
+
+  return customFetch<VenomSopAppAssignment[]>(getAssignVenomSopAppsUrl(sopId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomSopAppAssignmentsInput)
+  }
+);}
+
+
+
+
+
+export const getAssignVenomSopAppsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignVenomSopApps>>, TError,{sopId: string;data: BodyType<VenomSopAppAssignmentsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof assignVenomSopApps>>, TError,{sopId: string;data: BodyType<VenomSopAppAssignmentsInput>}, TContext> => {
+
+const mutationKey = ['assignVenomSopApps'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof assignVenomSopApps>>, {sopId: string;data: BodyType<VenomSopAppAssignmentsInput>}> = (props) => {
+          const {sopId,data} = props ?? {};
+
+          return  assignVenomSopApps(sopId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AssignVenomSopAppsMutationResult = NonNullable<Awaited<ReturnType<typeof assignVenomSopApps>>>
+    export type AssignVenomSopAppsMutationBody = BodyType<VenomSopAppAssignmentsInput>
+    export type AssignVenomSopAppsMutationError = ErrorType<void>
+
+    /**
+ * @summary Assign an SOP to registered apps, or remove assignments for account-wide use
+ */
+export const useAssignVenomSopApps = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignVenomSopApps>>, TError,{sopId: string;data: BodyType<VenomSopAppAssignmentsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof assignVenomSopApps>>,
+        TError,
+        {sopId: string;data: BodyType<VenomSopAppAssignmentsInput>},
+        TContext
+      > => {
+      return useMutation(getAssignVenomSopAppsMutationOptions(options));
+    }
+
+export const getListVenomSopRevisionsUrl = (sopId: string,) => {
+
+
+
+
+  return `/api/venom/sops/${sopId}/revisions`
+}
+
+/**
+ * @summary List immutable SOP revisions
+ */
+export const listVenomSopRevisions = async (sopId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomSopRevision[]> => {
+
+  return customFetch<VenomSopRevision[]>(getListVenomSopRevisionsUrl(sopId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVenomSopRevisionsQueryKey = (sopId: string,) => {
+    return [
+    `/api/venom/sops/${sopId}/revisions`
+    ] as const;
+    }
+
+
+export const getListVenomSopRevisionsQueryOptions = <TData = Awaited<ReturnType<typeof listVenomSopRevisions>>, TError = ErrorType<void>>(sopId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomSopRevisions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVenomSopRevisionsQueryKey(sopId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVenomSopRevisions>>> = ({ signal }) => listVenomSopRevisions(sopId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: sopId !== null && sopId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVenomSopRevisions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVenomSopRevisionsQueryResult = NonNullable<Awaited<ReturnType<typeof listVenomSopRevisions>>>
+export type ListVenomSopRevisionsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List immutable SOP revisions
+ */
+
+export function useListVenomSopRevisions<TData = Awaited<ReturnType<typeof listVenomSopRevisions>>, TError = ErrorType<void>>(
+ sopId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomSopRevisions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVenomSopRevisionsQueryOptions(sopId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListVenomProjectSopsUrl = (projectId: string,) => {
+
+
+
+
+  return `/api/venom/projects/${projectId}/sops`
+}
+
+/**
+ * @summary List active SOP revision references selected for a workspace project
+ */
+export const listVenomProjectSops = async (projectId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomSopProjectSelection[]> => {
+
+  return customFetch<VenomSopProjectSelection[]>(getListVenomProjectSopsUrl(projectId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVenomProjectSopsQueryKey = (projectId: string,) => {
+    return [
+    `/api/venom/projects/${projectId}/sops`
+    ] as const;
+    }
+
+
+export const getListVenomProjectSopsQueryOptions = <TData = Awaited<ReturnType<typeof listVenomProjectSops>>, TError = ErrorType<void>>(projectId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomProjectSops>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVenomProjectSopsQueryKey(projectId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVenomProjectSops>>> = ({ signal }) => listVenomProjectSops(projectId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: projectId !== null && projectId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVenomProjectSops>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVenomProjectSopsQueryResult = NonNullable<Awaited<ReturnType<typeof listVenomProjectSops>>>
+export type ListVenomProjectSopsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List active SOP revision references selected for a workspace project
+ */
+
+export function useListVenomProjectSops<TData = Awaited<ReturnType<typeof listVenomProjectSops>>, TError = ErrorType<void>>(
+ projectId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomProjectSops>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVenomProjectSopsQueryOptions(projectId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSelectVenomProjectSopsUrl = (projectId: string,) => {
+
+
+
+
+  return `/api/venom/projects/${projectId}/sops`
+}
+
+/**
+ * @summary Select active SOP revisions for a workspace project
+ */
+export const selectVenomProjectSops = async (projectId: string,
+    venomProjectSopSelectionInput: VenomProjectSopSelectionInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomSopProjectSelection[]> => {
+
+  return customFetch<VenomSopProjectSelection[]>(getSelectVenomProjectSopsUrl(projectId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomProjectSopSelectionInput)
+  }
+);}
+
+
+
+
+
+export const getSelectVenomProjectSopsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof selectVenomProjectSops>>, TError,{projectId: string;data: BodyType<VenomProjectSopSelectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof selectVenomProjectSops>>, TError,{projectId: string;data: BodyType<VenomProjectSopSelectionInput>}, TContext> => {
+
+const mutationKey = ['selectVenomProjectSops'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof selectVenomProjectSops>>, {projectId: string;data: BodyType<VenomProjectSopSelectionInput>}> = (props) => {
+          const {projectId,data} = props ?? {};
+
+          return  selectVenomProjectSops(projectId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SelectVenomProjectSopsMutationResult = NonNullable<Awaited<ReturnType<typeof selectVenomProjectSops>>>
+    export type SelectVenomProjectSopsMutationBody = BodyType<VenomProjectSopSelectionInput>
+    export type SelectVenomProjectSopsMutationError = ErrorType<void>
+
+    /**
+ * @summary Select active SOP revisions for a workspace project
+ */
+export const useSelectVenomProjectSops = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof selectVenomProjectSops>>, TError,{projectId: string;data: BodyType<VenomProjectSopSelectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof selectVenomProjectSops>>,
+        TError,
+        {projectId: string;data: BodyType<VenomProjectSopSelectionInput>},
+        TContext
+      > => {
+      return useMutation(getSelectVenomProjectSopsMutationOptions(options));
+    }
+
+export const getGetCommunityProfileUrl = () => {
+
+
+
+
+  return `/api/venom/community/profile`
+}
+
+/**
+ * @summary Get the signed-in user's public community profile
+ */
+export const getCommunityProfile = async ( options?: Parameters<typeof customFetch>[1]): Promise<CommunityPublicProfile> => {
+
+  return customFetch<CommunityPublicProfile>(getGetCommunityProfileUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCommunityProfileQueryKey = () => {
+    return [
+    `/api/venom/community/profile`
+    ] as const;
+    }
+
+
+export const getGetCommunityProfileQueryOptions = <TData = Awaited<ReturnType<typeof getCommunityProfile>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommunityProfile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCommunityProfileQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCommunityProfile>>> = ({ signal }) => getCommunityProfile({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCommunityProfile>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCommunityProfileQueryResult = NonNullable<Awaited<ReturnType<typeof getCommunityProfile>>>
+export type GetCommunityProfileQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the signed-in user's public community profile
+ */
+
+export function useGetCommunityProfile<TData = Awaited<ReturnType<typeof getCommunityProfile>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommunityProfile>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCommunityProfileQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpsertCommunityProfileUrl = () => {
+
+
+
+
+  return `/api/venom/community/profile`
+}
+
+/**
+ * @summary Create or update the signed-in user's public community profile
+ */
+export const upsertCommunityProfile = async (communityProfileInput: CommunityProfileInput, options?: Parameters<typeof customFetch>[1]): Promise<CommunityPublicProfile> => {
+
+  return customFetch<CommunityPublicProfile>(getUpsertCommunityProfileUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(communityProfileInput)
+  }
+);}
+
+
+
+
+
+export const getUpsertCommunityProfileMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertCommunityProfile>>, TError,{data: BodyType<CommunityProfileInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertCommunityProfile>>, TError,{data: BodyType<CommunityProfileInput>}, TContext> => {
+
+const mutationKey = ['upsertCommunityProfile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertCommunityProfile>>, {data: BodyType<CommunityProfileInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  upsertCommunityProfile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertCommunityProfileMutationResult = NonNullable<Awaited<ReturnType<typeof upsertCommunityProfile>>>
+    export type UpsertCommunityProfileMutationBody = BodyType<CommunityProfileInput>
+    export type UpsertCommunityProfileMutationError = ErrorType<void>
+
+    /**
+ * @summary Create or update the signed-in user's public community profile
+ */
+export const useUpsertCommunityProfile = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertCommunityProfile>>, TError,{data: BodyType<CommunityProfileInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertCommunityProfile>>,
+        TError,
+        {data: BodyType<CommunityProfileInput>},
+        TContext
+      > => {
+      return useMutation(getUpsertCommunityProfileMutationOptions(options));
+    }
+
+export const getGetCommunityFeedUrl = (params: GetCommunityFeedParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/venom/community/feed?${stringifiedParams}` : `/api/venom/community/feed`
+}
+
+/**
+ * @summary Get a cursor page of community threads
+ */
+export const getCommunityFeed = async (params: GetCommunityFeedParams, options?: Parameters<typeof customFetch>[1]): Promise<CommunityFeedPage> => {
+
+  return customFetch<CommunityFeedPage>(getGetCommunityFeedUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCommunityFeedQueryKey = (params?: GetCommunityFeedParams,) => {
+    return [
+    `/api/venom/community/feed`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCommunityFeedQueryOptions = <TData = Awaited<ReturnType<typeof getCommunityFeed>>, TError = ErrorType<void>>(params: GetCommunityFeedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommunityFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCommunityFeedQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCommunityFeed>>> = ({ signal }) => getCommunityFeed(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCommunityFeed>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCommunityFeedQueryResult = NonNullable<Awaited<ReturnType<typeof getCommunityFeed>>>
+export type GetCommunityFeedQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a cursor page of community threads
+ */
+
+export function useGetCommunityFeed<TData = Awaited<ReturnType<typeof getCommunityFeed>>, TError = ErrorType<void>>(
+ params: GetCommunityFeedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommunityFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCommunityFeedQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCommunityBriefingUrl = (params: GetCommunityBriefingParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/venom/community/briefing?${stringifiedParams}` : `/api/venom/community/briefing`
+}
+
+/**
+ * @summary Get the community briefing with personal agenda and calendar status
+ */
+export const getCommunityBriefing = async (params: GetCommunityBriefingParams, options?: Parameters<typeof customFetch>[1]): Promise<CommunityBriefingPage> => {
+
+  return customFetch<CommunityBriefingPage>(getGetCommunityBriefingUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCommunityBriefingQueryKey = (params?: GetCommunityBriefingParams,) => {
+    return [
+    `/api/venom/community/briefing`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCommunityBriefingQueryOptions = <TData = Awaited<ReturnType<typeof getCommunityBriefing>>, TError = ErrorType<void>>(params: GetCommunityBriefingParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommunityBriefing>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCommunityBriefingQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCommunityBriefing>>> = ({ signal }) => getCommunityBriefing(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCommunityBriefing>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCommunityBriefingQueryResult = NonNullable<Awaited<ReturnType<typeof getCommunityBriefing>>>
+export type GetCommunityBriefingQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the community briefing with personal agenda and calendar status
+ */
+
+export function useGetCommunityBriefing<TData = Awaited<ReturnType<typeof getCommunityBriefing>>, TError = ErrorType<void>>(
+ params: GetCommunityBriefingParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommunityBriefing>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCommunityBriefingQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateCommunityThreadUrl = () => {
+
+
+
+
+  return `/api/venom/community/threads`
+}
+
+/**
+ * @summary Create a new community thread
+ */
+export const createCommunityThread = async (communityThreadInput: CommunityThreadInput, options?: Parameters<typeof customFetch>[1]): Promise<CommunityThread> => {
+
+  return customFetch<CommunityThread>(getCreateCommunityThreadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(communityThreadInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCommunityThreadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCommunityThread>>, TError,{data: BodyType<CommunityThreadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCommunityThread>>, TError,{data: BodyType<CommunityThreadInput>}, TContext> => {
+
+const mutationKey = ['createCommunityThread'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCommunityThread>>, {data: BodyType<CommunityThreadInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCommunityThread(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCommunityThreadMutationResult = NonNullable<Awaited<ReturnType<typeof createCommunityThread>>>
+    export type CreateCommunityThreadMutationBody = BodyType<CommunityThreadInput>
+    export type CreateCommunityThreadMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a new community thread
+ */
+export const useCreateCommunityThread = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCommunityThread>>, TError,{data: BodyType<CommunityThreadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCommunityThread>>,
+        TError,
+        {data: BodyType<CommunityThreadInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCommunityThreadMutationOptions(options));
+    }
+
+export const getGetCommunityThreadUrl = (threadId: string,
+    params?: GetCommunityThreadParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/venom/community/threads/${threadId}?${stringifiedParams}` : `/api/venom/community/threads/${threadId}`
+}
+
+/**
+ * @summary Get a community thread with its replies
+ */
+export const getCommunityThread = async (threadId: string,
+    params?: GetCommunityThreadParams, options?: Parameters<typeof customFetch>[1]): Promise<CommunityThreadDetail> => {
+
+  return customFetch<CommunityThreadDetail>(getGetCommunityThreadUrl(threadId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCommunityThreadQueryKey = (threadId: string,
+    params?: GetCommunityThreadParams,) => {
+    return [
+    `/api/venom/community/threads/${threadId}`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCommunityThreadQueryOptions = <TData = Awaited<ReturnType<typeof getCommunityThread>>, TError = ErrorType<void>>(threadId: string,
+    params?: GetCommunityThreadParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommunityThread>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCommunityThreadQueryKey(threadId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCommunityThread>>> = ({ signal }) => getCommunityThread(threadId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: threadId !== null && threadId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCommunityThread>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCommunityThreadQueryResult = NonNullable<Awaited<ReturnType<typeof getCommunityThread>>>
+export type GetCommunityThreadQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a community thread with its replies
+ */
+
+export function useGetCommunityThread<TData = Awaited<ReturnType<typeof getCommunityThread>>, TError = ErrorType<void>>(
+ threadId: string,
+    params?: GetCommunityThreadParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommunityThread>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCommunityThreadQueryOptions(threadId,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateCommunityThreadUrl = (threadId: string,) => {
+
+
+
+
+  return `/api/venom/community/threads/${threadId}`
+}
+
+/**
+ * @summary Update a community thread (owner only)
+ */
+export const updateCommunityThread = async (threadId: string,
+    communityThreadUpdate: CommunityThreadUpdate, options?: Parameters<typeof customFetch>[1]): Promise<CommunityThread> => {
+
+  return customFetch<CommunityThread>(getUpdateCommunityThreadUrl(threadId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(communityThreadUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateCommunityThreadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCommunityThread>>, TError,{threadId: string;data: BodyType<CommunityThreadUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCommunityThread>>, TError,{threadId: string;data: BodyType<CommunityThreadUpdate>}, TContext> => {
+
+const mutationKey = ['updateCommunityThread'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCommunityThread>>, {threadId: string;data: BodyType<CommunityThreadUpdate>}> = (props) => {
+          const {threadId,data} = props ?? {};
+
+          return  updateCommunityThread(threadId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCommunityThreadMutationResult = NonNullable<Awaited<ReturnType<typeof updateCommunityThread>>>
+    export type UpdateCommunityThreadMutationBody = BodyType<CommunityThreadUpdate>
+    export type UpdateCommunityThreadMutationError = ErrorType<void>
+
+    /**
+ * @summary Update a community thread (owner only)
+ */
+export const useUpdateCommunityThread = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCommunityThread>>, TError,{threadId: string;data: BodyType<CommunityThreadUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCommunityThread>>,
+        TError,
+        {threadId: string;data: BodyType<CommunityThreadUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateCommunityThreadMutationOptions(options));
+    }
+
+export const getDeleteCommunityThreadUrl = (threadId: string,) => {
+
+
+
+
+  return `/api/venom/community/threads/${threadId}`
+}
+
+/**
+ * @summary Delete a community thread (owner only)
+ */
+export const deleteCommunityThread = async (threadId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteCommunityThreadUrl(threadId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteCommunityThreadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCommunityThread>>, TError,{threadId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCommunityThread>>, TError,{threadId: string}, TContext> => {
+
+const mutationKey = ['deleteCommunityThread'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCommunityThread>>, {threadId: string}> = (props) => {
+          const {threadId} = props ?? {};
+
+          return  deleteCommunityThread(threadId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCommunityThreadMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCommunityThread>>>
+
+    export type DeleteCommunityThreadMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete a community thread (owner only)
+ */
+export const useDeleteCommunityThread = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCommunityThread>>, TError,{threadId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCommunityThread>>,
+        TError,
+        {threadId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteCommunityThreadMutationOptions(options));
+    }
+
+export const getCreateCommunityReplyUrl = (threadId: string,) => {
+
+
+
+
+  return `/api/venom/community/threads/${threadId}/replies`
+}
+
+/**
+ * @summary Post a reply to a community thread
+ */
+export const createCommunityReply = async (threadId: string,
+    communityReplyInput: CommunityReplyInput, options?: Parameters<typeof customFetch>[1]): Promise<CommunityReply> => {
+
+  return customFetch<CommunityReply>(getCreateCommunityReplyUrl(threadId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(communityReplyInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCommunityReplyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCommunityReply>>, TError,{threadId: string;data: BodyType<CommunityReplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCommunityReply>>, TError,{threadId: string;data: BodyType<CommunityReplyInput>}, TContext> => {
+
+const mutationKey = ['createCommunityReply'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCommunityReply>>, {threadId: string;data: BodyType<CommunityReplyInput>}> = (props) => {
+          const {threadId,data} = props ?? {};
+
+          return  createCommunityReply(threadId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCommunityReplyMutationResult = NonNullable<Awaited<ReturnType<typeof createCommunityReply>>>
+    export type CreateCommunityReplyMutationBody = BodyType<CommunityReplyInput>
+    export type CreateCommunityReplyMutationError = ErrorType<void>
+
+    /**
+ * @summary Post a reply to a community thread
+ */
+export const useCreateCommunityReply = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCommunityReply>>, TError,{threadId: string;data: BodyType<CommunityReplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCommunityReply>>,
+        TError,
+        {threadId: string;data: BodyType<CommunityReplyInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCommunityReplyMutationOptions(options));
+    }
+
+export const getUpdateCommunityReplyUrl = (replyId: string,) => {
+
+
+
+
+  return `/api/venom/community/replies/${replyId}`
+}
+
+/**
+ * @summary Update a community reply (owner only)
+ */
+export const updateCommunityReply = async (replyId: string,
+    communityReplyUpdate: CommunityReplyUpdate, options?: Parameters<typeof customFetch>[1]): Promise<CommunityReply> => {
+
+  return customFetch<CommunityReply>(getUpdateCommunityReplyUrl(replyId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(communityReplyUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateCommunityReplyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCommunityReply>>, TError,{replyId: string;data: BodyType<CommunityReplyUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCommunityReply>>, TError,{replyId: string;data: BodyType<CommunityReplyUpdate>}, TContext> => {
+
+const mutationKey = ['updateCommunityReply'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCommunityReply>>, {replyId: string;data: BodyType<CommunityReplyUpdate>}> = (props) => {
+          const {replyId,data} = props ?? {};
+
+          return  updateCommunityReply(replyId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCommunityReplyMutationResult = NonNullable<Awaited<ReturnType<typeof updateCommunityReply>>>
+    export type UpdateCommunityReplyMutationBody = BodyType<CommunityReplyUpdate>
+    export type UpdateCommunityReplyMutationError = ErrorType<void>
+
+    /**
+ * @summary Update a community reply (owner only)
+ */
+export const useUpdateCommunityReply = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCommunityReply>>, TError,{replyId: string;data: BodyType<CommunityReplyUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCommunityReply>>,
+        TError,
+        {replyId: string;data: BodyType<CommunityReplyUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateCommunityReplyMutationOptions(options));
+    }
+
+export const getDeleteCommunityReplyUrl = (replyId: string,) => {
+
+
+
+
+  return `/api/venom/community/replies/${replyId}`
+}
+
+/**
+ * @summary Delete a community reply (owner only)
+ */
+export const deleteCommunityReply = async (replyId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteCommunityReplyUrl(replyId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteCommunityReplyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCommunityReply>>, TError,{replyId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCommunityReply>>, TError,{replyId: string}, TContext> => {
+
+const mutationKey = ['deleteCommunityReply'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCommunityReply>>, {replyId: string}> = (props) => {
+          const {replyId} = props ?? {};
+
+          return  deleteCommunityReply(replyId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCommunityReplyMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCommunityReply>>>
+
+    export type DeleteCommunityReplyMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete a community reply (owner only)
+ */
+export const useDeleteCommunityReply = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCommunityReply>>, TError,{replyId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCommunityReply>>,
+        TError,
+        {replyId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteCommunityReplyMutationOptions(options));
+    }
+
+export const getVoteCommunityThreadUrl = (threadId: string,) => {
+
+
+
+
+  return `/api/venom/community/threads/${threadId}/vote`
+}
+
+/**
+ * @summary Set the viewer's upvote state on a thread (idempotent)
+ */
+export const voteCommunityThread = async (threadId: string,
+    communityVoteInput: CommunityVoteInput, options?: Parameters<typeof customFetch>[1]): Promise<CommunityVoteResult> => {
+
+  return customFetch<CommunityVoteResult>(getVoteCommunityThreadUrl(threadId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(communityVoteInput)
+  }
+);}
+
+
+
+
+
+export const getVoteCommunityThreadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof voteCommunityThread>>, TError,{threadId: string;data: BodyType<CommunityVoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof voteCommunityThread>>, TError,{threadId: string;data: BodyType<CommunityVoteInput>}, TContext> => {
+
+const mutationKey = ['voteCommunityThread'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof voteCommunityThread>>, {threadId: string;data: BodyType<CommunityVoteInput>}> = (props) => {
+          const {threadId,data} = props ?? {};
+
+          return  voteCommunityThread(threadId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VoteCommunityThreadMutationResult = NonNullable<Awaited<ReturnType<typeof voteCommunityThread>>>
+    export type VoteCommunityThreadMutationBody = BodyType<CommunityVoteInput>
+    export type VoteCommunityThreadMutationError = ErrorType<void>
+
+    /**
+ * @summary Set the viewer's upvote state on a thread (idempotent)
+ */
+export const useVoteCommunityThread = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof voteCommunityThread>>, TError,{threadId: string;data: BodyType<CommunityVoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof voteCommunityThread>>,
+        TError,
+        {threadId: string;data: BodyType<CommunityVoteInput>},
+        TContext
+      > => {
+      return useMutation(getVoteCommunityThreadMutationOptions(options));
+    }
+
+export const getCreateCommunityReportUrl = () => {
+
+
+
+
+  return `/api/venom/community/reports`
+}
+
+/**
+ * @summary Submit a content report for a thread or reply
+ */
+export const createCommunityReport = async (communityReportInput: CommunityReportInput, options?: Parameters<typeof customFetch>[1]): Promise<CommunityReportReceipt> => {
+
+  return customFetch<CommunityReportReceipt>(getCreateCommunityReportUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(communityReportInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCommunityReportMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCommunityReport>>, TError,{data: BodyType<CommunityReportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCommunityReport>>, TError,{data: BodyType<CommunityReportInput>}, TContext> => {
+
+const mutationKey = ['createCommunityReport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCommunityReport>>, {data: BodyType<CommunityReportInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCommunityReport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCommunityReportMutationResult = NonNullable<Awaited<ReturnType<typeof createCommunityReport>>>
+    export type CreateCommunityReportMutationBody = BodyType<CommunityReportInput>
+    export type CreateCommunityReportMutationError = ErrorType<void>
+
+    /**
+ * @summary Submit a content report for a thread or reply
+ */
+export const useCreateCommunityReport = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCommunityReport>>, TError,{data: BodyType<CommunityReportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCommunityReport>>,
+        TError,
+        {data: BodyType<CommunityReportInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCommunityReportMutationOptions(options));
+    }
+
+export const getListCommunityNotificationsUrl = (params?: ListCommunityNotificationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/venom/community/notifications?${stringifiedParams}` : `/api/venom/community/notifications`
+}
+
+/**
+ * @summary List the signed-in user's community notifications (cursor paginated)
+ */
+export const listCommunityNotifications = async (params?: ListCommunityNotificationsParams, options?: Parameters<typeof customFetch>[1]): Promise<CommunityNotificationPage> => {
+
+  return customFetch<CommunityNotificationPage>(getListCommunityNotificationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCommunityNotificationsQueryKey = (params?: ListCommunityNotificationsParams,) => {
+    return [
+    `/api/venom/community/notifications`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCommunityNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof listCommunityNotifications>>, TError = ErrorType<void>>(params?: ListCommunityNotificationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCommunityNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCommunityNotificationsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCommunityNotifications>>> = ({ signal }) => listCommunityNotifications(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCommunityNotifications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCommunityNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof listCommunityNotifications>>>
+export type ListCommunityNotificationsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List the signed-in user's community notifications (cursor paginated)
+ */
+
+export function useListCommunityNotifications<TData = Awaited<ReturnType<typeof listCommunityNotifications>>, TError = ErrorType<void>>(
+ params?: ListCommunityNotificationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCommunityNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCommunityNotificationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCommunityNotificationUnreadCountUrl = () => {
+
+
+
+
+  return `/api/venom/community/notifications/unread-count`
+}
+
+/**
+ * @summary Get the signed-in user's unread community notification count
+ */
+export const getCommunityNotificationUnreadCount = async ( options?: Parameters<typeof customFetch>[1]): Promise<CommunityNotificationUnreadCount> => {
+
+  return customFetch<CommunityNotificationUnreadCount>(getGetCommunityNotificationUnreadCountUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCommunityNotificationUnreadCountQueryKey = () => {
+    return [
+    `/api/venom/community/notifications/unread-count`
+    ] as const;
+    }
+
+
+export const getGetCommunityNotificationUnreadCountQueryOptions = <TData = Awaited<ReturnType<typeof getCommunityNotificationUnreadCount>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommunityNotificationUnreadCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCommunityNotificationUnreadCountQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCommunityNotificationUnreadCount>>> = ({ signal }) => getCommunityNotificationUnreadCount({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCommunityNotificationUnreadCount>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCommunityNotificationUnreadCountQueryResult = NonNullable<Awaited<ReturnType<typeof getCommunityNotificationUnreadCount>>>
+export type GetCommunityNotificationUnreadCountQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the signed-in user's unread community notification count
+ */
+
+export function useGetCommunityNotificationUnreadCount<TData = Awaited<ReturnType<typeof getCommunityNotificationUnreadCount>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommunityNotificationUnreadCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCommunityNotificationUnreadCountQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getMarkAllCommunityNotificationsReadUrl = () => {
+
+
+
+
+  return `/api/venom/community/notifications/read-all`
+}
+
+/**
+ * @summary Mark all of the signed-in user's community notifications as read
+ */
+export const markAllCommunityNotificationsRead = async ( options?: Parameters<typeof customFetch>[1]): Promise<CommunityNotificationMarkAllResult> => {
+
+  return customFetch<CommunityNotificationMarkAllResult>(getMarkAllCommunityNotificationsReadUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkAllCommunityNotificationsReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAllCommunityNotificationsRead>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markAllCommunityNotificationsRead>>, TError,void, TContext> => {
+
+const mutationKey = ['markAllCommunityNotificationsRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markAllCommunityNotificationsRead>>, void> = () => {
+
+
+          return  markAllCommunityNotificationsRead(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkAllCommunityNotificationsReadMutationResult = NonNullable<Awaited<ReturnType<typeof markAllCommunityNotificationsRead>>>
+
+    export type MarkAllCommunityNotificationsReadMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark all of the signed-in user's community notifications as read
+ */
+export const useMarkAllCommunityNotificationsRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAllCommunityNotificationsRead>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markAllCommunityNotificationsRead>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getMarkAllCommunityNotificationsReadMutationOptions(options));
+    }
+
+export const getMarkCommunityNotificationReadUrl = (notificationId: string,) => {
+
+
+
+
+  return `/api/venom/community/notifications/${notificationId}/read`
+}
+
+/**
+ * @summary Mark a single community notification as read (idempotent)
+ */
+export const markCommunityNotificationRead = async (notificationId: string, options?: Parameters<typeof customFetch>[1]): Promise<CommunityNotification> => {
+
+  return customFetch<CommunityNotification>(getMarkCommunityNotificationReadUrl(notificationId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkCommunityNotificationReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markCommunityNotificationRead>>, TError,{notificationId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markCommunityNotificationRead>>, TError,{notificationId: string}, TContext> => {
+
+const mutationKey = ['markCommunityNotificationRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markCommunityNotificationRead>>, {notificationId: string}> = (props) => {
+          const {notificationId} = props ?? {};
+
+          return  markCommunityNotificationRead(notificationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkCommunityNotificationReadMutationResult = NonNullable<Awaited<ReturnType<typeof markCommunityNotificationRead>>>
+
+    export type MarkCommunityNotificationReadMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark a single community notification as read (idempotent)
+ */
+export const useMarkCommunityNotificationRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markCommunityNotificationRead>>, TError,{notificationId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markCommunityNotificationRead>>,
+        TError,
+        {notificationId: string},
+        TContext
+      > => {
+      return useMutation(getMarkCommunityNotificationReadMutationOptions(options));
+    }
+
+export const getListVenomBuildRunsUrl = (params?: ListVenomBuildRunsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/venom/build-runs?${stringifiedParams}` : `/api/venom/build-runs`
+}
+
+/**
+ * @summary List durable product-package generation runs
+ */
+export const listVenomBuildRuns = async (params?: ListVenomBuildRunsParams, options?: Parameters<typeof customFetch>[1]): Promise<VenomBuildRunSummary[]> => {
+
+  return customFetch<VenomBuildRunSummary[]>(getListVenomBuildRunsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVenomBuildRunsQueryKey = (params?: ListVenomBuildRunsParams,) => {
+    return [
+    `/api/venom/build-runs`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListVenomBuildRunsQueryOptions = <TData = Awaited<ReturnType<typeof listVenomBuildRuns>>, TError = ErrorType<void>>(params?: ListVenomBuildRunsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomBuildRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVenomBuildRunsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVenomBuildRuns>>> = ({ signal }) => listVenomBuildRuns(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVenomBuildRuns>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVenomBuildRunsQueryResult = NonNullable<Awaited<ReturnType<typeof listVenomBuildRuns>>>
+export type ListVenomBuildRunsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List durable product-package generation runs
+ */
+
+export function useListVenomBuildRuns<TData = Awaited<ReturnType<typeof listVenomBuildRuns>>, TError = ErrorType<void>>(
+ params?: ListVenomBuildRunsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVenomBuildRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVenomBuildRunsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVenomBuildRunUrl = () => {
+
+
+
+
+  return `/api/venom/build-runs`
+}
+
+/**
+ * @summary Queue a review-required product package generation run
+ */
+export const createVenomBuildRun = async (venomBuildRunInput: VenomBuildRunInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomBuildRun> => {
+
+  return customFetch<VenomBuildRun>(getCreateVenomBuildRunUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomBuildRunInput)
+  }
+);}
+
+
+
+
+
+export const getCreateVenomBuildRunMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomBuildRun>>, TError,{data: BodyType<VenomBuildRunInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVenomBuildRun>>, TError,{data: BodyType<VenomBuildRunInput>}, TContext> => {
+
+const mutationKey = ['createVenomBuildRun'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVenomBuildRun>>, {data: BodyType<VenomBuildRunInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createVenomBuildRun(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVenomBuildRunMutationResult = NonNullable<Awaited<ReturnType<typeof createVenomBuildRun>>>
+    export type CreateVenomBuildRunMutationBody = BodyType<VenomBuildRunInput>
+    export type CreateVenomBuildRunMutationError = ErrorType<void>
+
+    /**
+ * @summary Queue a review-required product package generation run
+ */
+export const useCreateVenomBuildRun = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomBuildRun>>, TError,{data: BodyType<VenomBuildRunInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVenomBuildRun>>,
+        TError,
+        {data: BodyType<VenomBuildRunInput>},
+        TContext
+      > => {
+      return useMutation(getCreateVenomBuildRunMutationOptions(options));
+    }
+
+export const getGetVenomBuildRunUrl = (buildRunId: string,) => {
+
+
+
+
+  return `/api/venom/build-runs/${buildRunId}`
+}
+
+/**
+ * @summary Inspect a generation run, package revisions, and activity
+ */
+export const getVenomBuildRun = async (buildRunId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomBuildRun> => {
+
+  return customFetch<VenomBuildRun>(getGetVenomBuildRunUrl(buildRunId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomBuildRunQueryKey = (buildRunId: string,) => {
+    return [
+    `/api/venom/build-runs/${buildRunId}`
+    ] as const;
+    }
+
+
+export const getGetVenomBuildRunQueryOptions = <TData = Awaited<ReturnType<typeof getVenomBuildRun>>, TError = ErrorType<void>>(buildRunId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomBuildRun>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomBuildRunQueryKey(buildRunId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomBuildRun>>> = ({ signal }) => getVenomBuildRun(buildRunId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: buildRunId !== null && buildRunId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomBuildRun>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomBuildRunQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomBuildRun>>>
+export type GetVenomBuildRunQueryError = ErrorType<void>
+
+
+/**
+ * @summary Inspect a generation run, package revisions, and activity
+ */
+
+export function useGetVenomBuildRun<TData = Awaited<ReturnType<typeof getVenomBuildRun>>, TError = ErrorType<void>>(
+ buildRunId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomBuildRun>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomBuildRunQueryOptions(buildRunId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCancelVenomBuildRunUrl = (buildRunId: string,) => {
+
+
+
+
+  return `/api/venom/build-runs/${buildRunId}/cancel`
+}
+
+/**
+ * @summary Cancel a queued or preparing generation run
+ */
+export const cancelVenomBuildRun = async (buildRunId: string,
+    venomBuildCancellationInput: VenomBuildCancellationInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomBuildRun> => {
+
+  return customFetch<VenomBuildRun>(getCancelVenomBuildRunUrl(buildRunId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomBuildCancellationInput)
+  }
+);}
+
+
+
+
+
+export const getCancelVenomBuildRunMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildCancellationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildCancellationInput>}, TContext> => {
+
+const mutationKey = ['cancelVenomBuildRun'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelVenomBuildRun>>, {buildRunId: string;data: BodyType<VenomBuildCancellationInput>}> = (props) => {
+          const {buildRunId,data} = props ?? {};
+
+          return  cancelVenomBuildRun(buildRunId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelVenomBuildRunMutationResult = NonNullable<Awaited<ReturnType<typeof cancelVenomBuildRun>>>
+    export type CancelVenomBuildRunMutationBody = BodyType<VenomBuildCancellationInput>
+    export type CancelVenomBuildRunMutationError = ErrorType<void>
+
+    /**
+ * @summary Cancel a queued or preparing generation run
+ */
+export const useCancelVenomBuildRun = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildCancellationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelVenomBuildRun>>,
+        TError,
+        {buildRunId: string;data: BodyType<VenomBuildCancellationInput>},
+        TContext
+      > => {
+      return useMutation(getCancelVenomBuildRunMutationOptions(options));
+    }
+
+export const getRetryVenomBuildRunUrl = (buildRunId: string,) => {
+
+
+
+
+  return `/api/venom/build-runs/${buildRunId}/retry`
+}
+
+/**
+ * @summary Safely retry a failed or cancelled generation run
+ */
+export const retryVenomBuildRun = async (buildRunId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomBuildRun> => {
+
+  return customFetch<VenomBuildRun>(getRetryVenomBuildRunUrl(buildRunId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryVenomBuildRunMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryVenomBuildRun>>, TError,{buildRunId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryVenomBuildRun>>, TError,{buildRunId: string}, TContext> => {
+
+const mutationKey = ['retryVenomBuildRun'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryVenomBuildRun>>, {buildRunId: string}> = (props) => {
+          const {buildRunId} = props ?? {};
+
+          return  retryVenomBuildRun(buildRunId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryVenomBuildRunMutationResult = NonNullable<Awaited<ReturnType<typeof retryVenomBuildRun>>>
+
+    export type RetryVenomBuildRunMutationError = ErrorType<void>
+
+    /**
+ * @summary Safely retry a failed or cancelled generation run
+ */
+export const useRetryVenomBuildRun = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryVenomBuildRun>>, TError,{buildRunId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryVenomBuildRun>>,
+        TError,
+        {buildRunId: string},
+        TContext
+      > => {
+      return useMutation(getRetryVenomBuildRunMutationOptions(options));
+    }
+
+export const getReviseVenomBuildRunUrl = (buildRunId: string,) => {
+
+
+
+
+  return `/api/venom/build-runs/${buildRunId}/revise`
+}
+
+/**
+ * @summary Queue an immutable package revision for human review
+ */
+export const reviseVenomBuildRun = async (buildRunId: string,
+    venomBuildRevisionInput: VenomBuildRevisionInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomBuildRun> => {
+
+  return customFetch<VenomBuildRun>(getReviseVenomBuildRunUrl(buildRunId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomBuildRevisionInput)
+  }
+);}
+
+
+
+
+
+export const getReviseVenomBuildRunMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviseVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildRevisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviseVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildRevisionInput>}, TContext> => {
+
+const mutationKey = ['reviseVenomBuildRun'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviseVenomBuildRun>>, {buildRunId: string;data: BodyType<VenomBuildRevisionInput>}> = (props) => {
+          const {buildRunId,data} = props ?? {};
+
+          return  reviseVenomBuildRun(buildRunId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviseVenomBuildRunMutationResult = NonNullable<Awaited<ReturnType<typeof reviseVenomBuildRun>>>
+    export type ReviseVenomBuildRunMutationBody = BodyType<VenomBuildRevisionInput>
+    export type ReviseVenomBuildRunMutationError = ErrorType<void>
+
+    /**
+ * @summary Queue an immutable package revision for human review
+ */
+export const useReviseVenomBuildRun = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviseVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildRevisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviseVenomBuildRun>>,
+        TError,
+        {buildRunId: string;data: BodyType<VenomBuildRevisionInput>},
+        TContext
+      > => {
+      return useMutation(getReviseVenomBuildRunMutationOptions(options));
+    }
+
+export const getApproveVenomBuildRunUrl = (buildRunId: string,) => {
+
+
+
+
+  return `/api/venom/build-runs/${buildRunId}/approve`
+}
+
+/**
+ * @summary Approve one immutable revision for later provisioning
+ */
+export const approveVenomBuildRun = async (buildRunId: string,
+    venomBuildApprovalInput: VenomBuildApprovalInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomBuildRun> => {
+
+  return customFetch<VenomBuildRun>(getApproveVenomBuildRunUrl(buildRunId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomBuildApprovalInput)
+  }
+);}
+
+
+
+
+
+export const getApproveVenomBuildRunMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildApprovalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildApprovalInput>}, TContext> => {
+
+const mutationKey = ['approveVenomBuildRun'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveVenomBuildRun>>, {buildRunId: string;data: BodyType<VenomBuildApprovalInput>}> = (props) => {
+          const {buildRunId,data} = props ?? {};
+
+          return  approveVenomBuildRun(buildRunId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveVenomBuildRunMutationResult = NonNullable<Awaited<ReturnType<typeof approveVenomBuildRun>>>
+    export type ApproveVenomBuildRunMutationBody = BodyType<VenomBuildApprovalInput>
+    export type ApproveVenomBuildRunMutationError = ErrorType<void>
+
+    /**
+ * @summary Approve one immutable revision for later provisioning
+ */
+export const useApproveVenomBuildRun = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildApprovalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approveVenomBuildRun>>,
+        TError,
+        {buildRunId: string;data: BodyType<VenomBuildApprovalInput>},
+        TContext
+      > => {
+      return useMutation(getApproveVenomBuildRunMutationOptions(options));
+    }
+
+export const getRejectVenomBuildRunUrl = (buildRunId: string,) => {
+
+
+
+
+  return `/api/venom/build-runs/${buildRunId}/reject`
+}
+
+/**
+ * @summary Reject a review-required package without executing it
+ */
+export const rejectVenomBuildRun = async (buildRunId: string,
+    venomBuildRejectionInput: VenomBuildRejectionInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomBuildRun> => {
+
+  return customFetch<VenomBuildRun>(getRejectVenomBuildRunUrl(buildRunId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomBuildRejectionInput)
+  }
+);}
+
+
+
+
+
+export const getRejectVenomBuildRunMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildRejectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildRejectionInput>}, TContext> => {
+
+const mutationKey = ['rejectVenomBuildRun'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectVenomBuildRun>>, {buildRunId: string;data: BodyType<VenomBuildRejectionInput>}> = (props) => {
+          const {buildRunId,data} = props ?? {};
+
+          return  rejectVenomBuildRun(buildRunId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectVenomBuildRunMutationResult = NonNullable<Awaited<ReturnType<typeof rejectVenomBuildRun>>>
+    export type RejectVenomBuildRunMutationBody = BodyType<VenomBuildRejectionInput>
+    export type RejectVenomBuildRunMutationError = ErrorType<void>
+
+    /**
+ * @summary Reject a review-required package without executing it
+ */
+export const useRejectVenomBuildRun = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectVenomBuildRun>>, TError,{buildRunId: string;data: BodyType<VenomBuildRejectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rejectVenomBuildRun>>,
+        TError,
+        {buildRunId: string;data: BodyType<VenomBuildRejectionInput>},
+        TContext
+      > => {
+      return useMutation(getRejectVenomBuildRunMutationOptions(options));
+    }
+
+export const getExportVenomBuildRunUrl = (buildRunId: string,
+    format: 'json' | 'markdown',) => {
+
+
+
+
+  return `/api/venom/build-runs/${buildRunId}/export/${format}`
+}
+
+/**
+ * @summary Export the latest package revision as JSON or Markdown
+ */
+export const exportVenomBuildRun = async (buildRunId: string,
+    format: 'json' | 'markdown', options?: Parameters<typeof customFetch>[1]): Promise<VenomBuildPackage | string> => {
+
+  return customFetch<VenomBuildPackage | string>(getExportVenomBuildRunUrl(buildRunId,format),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportVenomBuildRunQueryKey = (buildRunId: string,
+    format: 'json' | 'markdown',) => {
+    return [
+    `/api/venom/build-runs/${buildRunId}/export/${format}`
+    ] as const;
+    }
+
+
+export const getExportVenomBuildRunQueryOptions = <TData = Awaited<ReturnType<typeof exportVenomBuildRun>>, TError = ErrorType<void>>(buildRunId: string,
+    format: 'json' | 'markdown', options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportVenomBuildRun>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportVenomBuildRunQueryKey(buildRunId,format);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportVenomBuildRun>>> = ({ signal }) => exportVenomBuildRun(buildRunId,format, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: buildRunId !== null && buildRunId !== undefined && format !== null && format !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportVenomBuildRun>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportVenomBuildRunQueryResult = NonNullable<Awaited<ReturnType<typeof exportVenomBuildRun>>>
+export type ExportVenomBuildRunQueryError = ErrorType<void>
+
+
+/**
+ * @summary Export the latest package revision as JSON or Markdown
+ */
+
+export function useExportVenomBuildRun<TData = Awaited<ReturnType<typeof exportVenomBuildRun>>, TError = ErrorType<void>>(
+ buildRunId: string,
+    format: 'json' | 'markdown', options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportVenomBuildRun>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportVenomBuildRunQueryOptions(buildRunId,format,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetProvisioningCapabilityUrl = () => {
+
+
+
+
+  return `/api/venom/provisioning/capability`
+}
+
+/**
+ * @summary Report provisioning provider capability and permission summary
+ */
+export const getProvisioningCapability = async ( options?: Parameters<typeof customFetch>[1]): Promise<ProvisioningCapability> => {
+
+  return customFetch<ProvisioningCapability>(getGetProvisioningCapabilityUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProvisioningCapabilityQueryKey = () => {
+    return [
+    `/api/venom/provisioning/capability`
+    ] as const;
+    }
+
+
+export const getGetProvisioningCapabilityQueryOptions = <TData = Awaited<ReturnType<typeof getProvisioningCapability>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProvisioningCapability>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProvisioningCapabilityQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProvisioningCapability>>> = ({ signal }) => getProvisioningCapability({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProvisioningCapability>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProvisioningCapabilityQueryResult = NonNullable<Awaited<ReturnType<typeof getProvisioningCapability>>>
+export type GetProvisioningCapabilityQueryError = ErrorType<void>
+
+
+/**
+ * @summary Report provisioning provider capability and permission summary
+ */
+
+export function useGetProvisioningCapability<TData = Awaited<ReturnType<typeof getProvisioningCapability>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProvisioningCapability>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProvisioningCapabilityQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getProvisionBuildRunUrl = (buildRunId: string,) => {
+
+
+
+
+  return `/api/venom/build-runs/${buildRunId}/provision`
+}
+
+/**
+ * @summary Provision an approved immutable revision into a candidate
+ */
+export const provisionBuildRun = async (buildRunId: string,
+    provisionBuildRunInput: ProvisionBuildRunInput, options?: Parameters<typeof customFetch>[1]): Promise<ProvisioningRun> => {
+
+  return customFetch<ProvisioningRun>(getProvisionBuildRunUrl(buildRunId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(provisionBuildRunInput)
+  }
+);}
+
+
+
+
+
+export const getProvisionBuildRunMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof provisionBuildRun>>, TError,{buildRunId: string;data: BodyType<ProvisionBuildRunInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof provisionBuildRun>>, TError,{buildRunId: string;data: BodyType<ProvisionBuildRunInput>}, TContext> => {
+
+const mutationKey = ['provisionBuildRun'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof provisionBuildRun>>, {buildRunId: string;data: BodyType<ProvisionBuildRunInput>}> = (props) => {
+          const {buildRunId,data} = props ?? {};
+
+          return  provisionBuildRun(buildRunId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProvisionBuildRunMutationResult = NonNullable<Awaited<ReturnType<typeof provisionBuildRun>>>
+    export type ProvisionBuildRunMutationBody = BodyType<ProvisionBuildRunInput>
+    export type ProvisionBuildRunMutationError = ErrorType<void>
+
+    /**
+ * @summary Provision an approved immutable revision into a candidate
+ */
+export const useProvisionBuildRun = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof provisionBuildRun>>, TError,{buildRunId: string;data: BodyType<ProvisionBuildRunInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof provisionBuildRun>>,
+        TError,
+        {buildRunId: string;data: BodyType<ProvisionBuildRunInput>},
+        TContext
+      > => {
+      return useMutation(getProvisionBuildRunMutationOptions(options));
+    }
+
+export const getListProvisioningRunsUrl = (params?: ListProvisioningRunsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/venom/provisioning/runs?${stringifiedParams}` : `/api/venom/provisioning/runs`
+}
+
+/**
+ * @summary List provisioning runs for the current user
+ */
+export const listProvisioningRuns = async (params?: ListProvisioningRunsParams, options?: Parameters<typeof customFetch>[1]): Promise<ProvisioningRunSummary[]> => {
+
+  return customFetch<ProvisioningRunSummary[]>(getListProvisioningRunsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProvisioningRunsQueryKey = (params?: ListProvisioningRunsParams,) => {
+    return [
+    `/api/venom/provisioning/runs`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListProvisioningRunsQueryOptions = <TData = Awaited<ReturnType<typeof listProvisioningRuns>>, TError = ErrorType<void>>(params?: ListProvisioningRunsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProvisioningRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProvisioningRunsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProvisioningRuns>>> = ({ signal }) => listProvisioningRuns(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProvisioningRuns>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProvisioningRunsQueryResult = NonNullable<Awaited<ReturnType<typeof listProvisioningRuns>>>
+export type ListProvisioningRunsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List provisioning runs for the current user
+ */
+
+export function useListProvisioningRuns<TData = Awaited<ReturnType<typeof listProvisioningRuns>>, TError = ErrorType<void>>(
+ params?: ListProvisioningRunsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProvisioningRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProvisioningRunsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetProvisioningRunUrl = (provisioningRunId: string,) => {
+
+
+
+
+  return `/api/venom/provisioning/runs/${provisioningRunId}`
+}
+
+/**
+ * @summary Get one provisioning run with events and releases
+ */
+export const getProvisioningRun = async (provisioningRunId: string, options?: Parameters<typeof customFetch>[1]): Promise<ProvisioningRun> => {
+
+  return customFetch<ProvisioningRun>(getGetProvisioningRunUrl(provisioningRunId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProvisioningRunQueryKey = (provisioningRunId: string,) => {
+    return [
+    `/api/venom/provisioning/runs/${provisioningRunId}`
+    ] as const;
+    }
+
+
+export const getGetProvisioningRunQueryOptions = <TData = Awaited<ReturnType<typeof getProvisioningRun>>, TError = ErrorType<void>>(provisioningRunId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProvisioningRun>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProvisioningRunQueryKey(provisioningRunId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProvisioningRun>>> = ({ signal }) => getProvisioningRun(provisioningRunId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: provisioningRunId !== null && provisioningRunId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProvisioningRun>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProvisioningRunQueryResult = NonNullable<Awaited<ReturnType<typeof getProvisioningRun>>>
+export type GetProvisioningRunQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get one provisioning run with events and releases
+ */
+
+export function useGetProvisioningRun<TData = Awaited<ReturnType<typeof getProvisioningRun>>, TError = ErrorType<void>>(
+ provisioningRunId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProvisioningRun>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProvisioningRunQueryOptions(provisioningRunId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCancelProvisioningRunUrl = (provisioningRunId: string,) => {
+
+
+
+
+  return `/api/venom/provisioning/runs/${provisioningRunId}/cancel`
+}
+
+/**
+ * @summary Cancel an in-flight provisioning run
+ */
+export const cancelProvisioningRun = async (provisioningRunId: string,
+    cancelProvisioningRunInput: CancelProvisioningRunInput, options?: Parameters<typeof customFetch>[1]): Promise<ProvisioningRun> => {
+
+  return customFetch<ProvisioningRun>(getCancelProvisioningRunUrl(provisioningRunId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cancelProvisioningRunInput)
+  }
+);}
+
+
+
+
+
+export const getCancelProvisioningRunMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelProvisioningRun>>, TError,{provisioningRunId: string;data: BodyType<CancelProvisioningRunInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelProvisioningRun>>, TError,{provisioningRunId: string;data: BodyType<CancelProvisioningRunInput>}, TContext> => {
+
+const mutationKey = ['cancelProvisioningRun'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelProvisioningRun>>, {provisioningRunId: string;data: BodyType<CancelProvisioningRunInput>}> = (props) => {
+          const {provisioningRunId,data} = props ?? {};
+
+          return  cancelProvisioningRun(provisioningRunId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelProvisioningRunMutationResult = NonNullable<Awaited<ReturnType<typeof cancelProvisioningRun>>>
+    export type CancelProvisioningRunMutationBody = BodyType<CancelProvisioningRunInput>
+    export type CancelProvisioningRunMutationError = ErrorType<void>
+
+    /**
+ * @summary Cancel an in-flight provisioning run
+ */
+export const useCancelProvisioningRun = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelProvisioningRun>>, TError,{provisioningRunId: string;data: BodyType<CancelProvisioningRunInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelProvisioningRun>>,
+        TError,
+        {provisioningRunId: string;data: BodyType<CancelProvisioningRunInput>},
+        TContext
+      > => {
+      return useMutation(getCancelProvisioningRunMutationOptions(options));
+    }
+
+export const getRetryProvisioningRunUrl = (provisioningRunId: string,) => {
+
+
+
+
+  return `/api/venom/provisioning/runs/${provisioningRunId}/retry`
+}
+
+/**
+ * @summary Retry a failed provisioning run
+ */
+export const retryProvisioningRun = async (provisioningRunId: string, options?: Parameters<typeof customFetch>[1]): Promise<ProvisioningRun> => {
+
+  return customFetch<ProvisioningRun>(getRetryProvisioningRunUrl(provisioningRunId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryProvisioningRunMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryProvisioningRun>>, TError,{provisioningRunId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryProvisioningRun>>, TError,{provisioningRunId: string}, TContext> => {
+
+const mutationKey = ['retryProvisioningRun'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryProvisioningRun>>, {provisioningRunId: string}> = (props) => {
+          const {provisioningRunId} = props ?? {};
+
+          return  retryProvisioningRun(provisioningRunId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryProvisioningRunMutationResult = NonNullable<Awaited<ReturnType<typeof retryProvisioningRun>>>
+
+    export type RetryProvisioningRunMutationError = ErrorType<void>
+
+    /**
+ * @summary Retry a failed provisioning run
+ */
+export const useRetryProvisioningRun = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryProvisioningRun>>, TError,{provisioningRunId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryProvisioningRun>>,
+        TError,
+        {provisioningRunId: string},
+        TContext
+      > => {
+      return useMutation(getRetryProvisioningRunMutationOptions(options));
+    }
+
+export const getPublishProvisioningCandidateUrl = (provisioningRunId: string,) => {
+
+
+
+
+  return `/api/venom/provisioning/runs/${provisioningRunId}/publish`
+}
+
+/**
+ * @summary Publish a healthy candidate release as the primary deployment
+ */
+export const publishProvisioningCandidate = async (provisioningRunId: string,
+    publishProvisioningCandidateInput: PublishProvisioningCandidateInput, options?: Parameters<typeof customFetch>[1]): Promise<ProvisioningRun> => {
+
+  return customFetch<ProvisioningRun>(getPublishProvisioningCandidateUrl(provisioningRunId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(publishProvisioningCandidateInput)
+  }
+);}
+
+
+
+
+
+export const getPublishProvisioningCandidateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishProvisioningCandidate>>, TError,{provisioningRunId: string;data: BodyType<PublishProvisioningCandidateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishProvisioningCandidate>>, TError,{provisioningRunId: string;data: BodyType<PublishProvisioningCandidateInput>}, TContext> => {
+
+const mutationKey = ['publishProvisioningCandidate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishProvisioningCandidate>>, {provisioningRunId: string;data: BodyType<PublishProvisioningCandidateInput>}> = (props) => {
+          const {provisioningRunId,data} = props ?? {};
+
+          return  publishProvisioningCandidate(provisioningRunId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PublishProvisioningCandidateMutationResult = NonNullable<Awaited<ReturnType<typeof publishProvisioningCandidate>>>
+    export type PublishProvisioningCandidateMutationBody = BodyType<PublishProvisioningCandidateInput>
+    export type PublishProvisioningCandidateMutationError = ErrorType<void>
+
+    /**
+ * @summary Publish a healthy candidate release as the primary deployment
+ */
+export const usePublishProvisioningCandidate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishProvisioningCandidate>>, TError,{provisioningRunId: string;data: BodyType<PublishProvisioningCandidateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof publishProvisioningCandidate>>,
+        TError,
+        {provisioningRunId: string;data: BodyType<PublishProvisioningCandidateInput>},
+        TContext
+      > => {
+      return useMutation(getPublishProvisioningCandidateMutationOptions(options));
+    }
+
+export const getRollbackProvisioningReleaseUrl = (releaseId: string,) => {
+
+
+
+
+  return `/api/venom/provisioning/releases/${releaseId}/rollback`
+}
+
+/**
+ * @summary Roll back to a previous healthy release
+ */
+export const rollbackProvisioningRelease = async (releaseId: string,
+    rollbackProvisioningReleaseInput: RollbackProvisioningReleaseInput, options?: Parameters<typeof customFetch>[1]): Promise<ProvisioningCandidateRelease> => {
+
+  return customFetch<ProvisioningCandidateRelease>(getRollbackProvisioningReleaseUrl(releaseId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rollbackProvisioningReleaseInput)
+  }
+);}
+
+
+
+
+
+export const getRollbackProvisioningReleaseMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rollbackProvisioningRelease>>, TError,{releaseId: string;data: BodyType<RollbackProvisioningReleaseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rollbackProvisioningRelease>>, TError,{releaseId: string;data: BodyType<RollbackProvisioningReleaseInput>}, TContext> => {
+
+const mutationKey = ['rollbackProvisioningRelease'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rollbackProvisioningRelease>>, {releaseId: string;data: BodyType<RollbackProvisioningReleaseInput>}> = (props) => {
+          const {releaseId,data} = props ?? {};
+
+          return  rollbackProvisioningRelease(releaseId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RollbackProvisioningReleaseMutationResult = NonNullable<Awaited<ReturnType<typeof rollbackProvisioningRelease>>>
+    export type RollbackProvisioningReleaseMutationBody = BodyType<RollbackProvisioningReleaseInput>
+    export type RollbackProvisioningReleaseMutationError = ErrorType<void>
+
+    /**
+ * @summary Roll back to a previous healthy release
+ */
+export const useRollbackProvisioningRelease = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rollbackProvisioningRelease>>, TError,{releaseId: string;data: BodyType<RollbackProvisioningReleaseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rollbackProvisioningRelease>>,
+        TError,
+        {releaseId: string;data: BodyType<RollbackProvisioningReleaseInput>},
+        TContext
+      > => {
+      return useMutation(getRollbackProvisioningReleaseMutationOptions(options));
+    }
+

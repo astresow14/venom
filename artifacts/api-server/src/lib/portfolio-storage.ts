@@ -86,6 +86,20 @@ export async function createArchiveUploadUrl(
   return signObjectUrl(objectPath, "PUT");
 }
 
+/**
+ * Generate a short-lived (≈15 min TTL) signed GET URL for a retained source
+ * archive so a trusted external gateway can download and checksum-verify it.
+ *
+ * The returned URL is transient and must NEVER be persisted, returned to
+ * clients, or logged — it grants time-limited read access to a private object.
+ * Callers should place it only in the outbound provider handoff call.
+ */
+export async function createSourceArchiveDownloadUrl(
+  objectPath: string,
+): Promise<string> {
+  return signObjectUrl(objectPath, "GET");
+}
+
 export async function objectExistsWithinLimit(
   objectPath: string,
 ): Promise<{ size: number }> {

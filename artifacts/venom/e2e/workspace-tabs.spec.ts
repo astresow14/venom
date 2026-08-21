@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const WORKSPACE_TABS = ["Chat", "Feed", "Brain", "To-Do"] as const;
+const WORKSPACE_TABS = ["Chat", "Feed", "Notifications", "Brain", "To-Do"] as const;
 
 function tab(page: Page, title: (typeof WORKSPACE_TABS)[number]) {
   return page.getByRole("tab", { name: `Open ${title} workspace` });
@@ -67,8 +67,19 @@ async function expectVisibleTabFocus(
   expect(focusRing.color).not.toBe("rgba(0, 0, 0, 0)");
 }
 
-async function swipeWorkspaceLeft(page: Page) {
-  const workspace = page.getByTestId("workspace-chat");
+const WORKSPACE_TEST_IDS = {
+  Chat: "workspace-chat",
+  Feed: "workspace-feed",
+  Notifications: "workspace-notifications",
+  Brain: "workspace-brain",
+  "To-Do": "workspace-todo",
+} as const;
+
+async function swipeWorkspaceLeft(
+  page: Page,
+  from: (typeof WORKSPACE_TABS)[number],
+) {
+  const workspace = page.getByTestId(WORKSPACE_TEST_IDS[from]);
   const bounds = await workspace.boundingBox();
   expect(bounds).not.toBeNull();
   if (!bounds) return;
@@ -99,8 +110,21 @@ test("keeps exactly one workspace tab selected after clicks, a swipe, and refres
   await tab(page, "Chat").click();
   await expectOnlySelected(page, "Chat");
 
-  await swipeWorkspaceLeft(page);
+  await swipeWorkspaceLeft(page, "Chat");
   await expectOnlySelected(page, "Feed");
+
+  await swipeWorkspaceLeft(page, "Feed");
+  await expectOnlySelected(page, "Notifications");
+
+  await swipeWorkspaceLeft(page, "Notifications");
+  await expectOnlySelected(page, "Brain");
+
+  // Brain owns horizontal gestures for its map, so workspace paging stops here.
+  await swipeWorkspaceLeft(page, "Brain");
+  await expectOnlySelected(page, "Brain");
+
+  await tab(page, "To-Do").click();
+  await expectOnlySelected(page, "To-Do");
 
   await page.reload();
   await expectOnlySelected(page, "Chat");
@@ -120,6 +144,12 @@ test("supports a predictable keyboard tab pattern", async ({ page }) => {
 
   await page.keyboard.press("Enter");
   await expectOnlySelected(page, "Feed");
+
+  await page.keyboard.press("ArrowRight");
+  await expect(tab(page, "Notifications")).toBeFocused();
+  await expectTabStops(page, "Notifications");
+  await page.keyboard.press(" ");
+  await expectOnlySelected(page, "Notifications");
 
   await page.keyboard.press("ArrowRight");
   await expect(tab(page, "Brain")).toBeFocused();

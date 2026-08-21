@@ -205,14 +205,14 @@ export default function UploadVersionDialog({
   return (
     <Dialog open={open} onOpenChange={!isWorking ? setOpen : undefined}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[460px] rounded-none border-border bg-background p-0 overflow-hidden shadow-2xl">
-        <div className="p-6 sm:p-8">
+      <DialogContent className="sm:max-w-[460px] rounded-2xl border-border/60 surface p-0 overflow-hidden shadow-lift">
+        <div className="p-6 sm:p-8 sheen">
           <DialogHeader className="mb-6">
-            <DialogTitle className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
+            <DialogTitle className="text-xl font-semibold tracking-tight flex items-center gap-2">
               <UploadCloud className="h-5 w-5" />
-              {retryJobId ? "Retry Import" : "Source Upload"}
+              {retryJobId ? "Retry import" : "Source upload"}
             </DialogTitle>
-            <DialogDescription className="font-mono text-xs uppercase tracking-widest text-muted-foreground mt-2">
+            <DialogDescription className="text-sm text-muted-foreground mt-2">
               {retryJobId
                 ? `Upload a new archive for ${retryFilename || "this job"}.`
                 : "Upload a .zip archive of your project source."}
@@ -224,7 +224,7 @@ export default function UploadVersionDialog({
                role="button"
                tabIndex={0}
                aria-label="Choose a ZIP archive, or drop one here"
-              className="border-2 border-dashed border-border/50 bg-foreground/[0.02] hover:bg-foreground/[0.04] transition-colors p-10 flex flex-col items-center justify-center cursor-pointer group"
+              className="border border-dashed border-border/60 bg-foreground/[0.02] hover:bg-foreground/[0.04] transition-colors p-10 flex flex-col items-center justify-center cursor-pointer group rounded-xl"
               onClick={() => fileInputRef.current?.click()}
                onKeyDown={(event) => {
                  if (event.key === "Enter" || event.key === " ") {
@@ -238,10 +238,10 @@ export default function UploadVersionDialog({
               <div className="h-12 w-12 rounded-full bg-foreground/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <FileArchive className="h-6 w-6 text-foreground/70" />
               </div>
-              <p className="text-sm font-bold uppercase tracking-widest text-center mb-1">
+              <p className="text-sm font-medium mb-1">
                 Select Archive
               </p>
-              <p className="text-[10px] font-mono text-muted-foreground uppercase text-center">
+              <p className="text-xs text-muted-foreground text-center">
                 Drag & drop or click to browse (Max 50MB)
               </p>
               <input
@@ -256,21 +256,21 @@ export default function UploadVersionDialog({
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="flex items-center justify-between border border-border/50 p-4 bg-foreground/[0.02]">
+              <div className="flex items-center justify-between border border-border/60 p-4 bg-foreground/[0.02] rounded-xl shadow-soft">
                 <div className="flex items-center gap-3 overflow-hidden">
                   <FileArchive className="h-8 w-8 text-foreground/70 shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-sm font-bold truncate" title={file.name}>
+                    <p className="text-sm font-medium truncate" title={file.name}>
                       {file.name}
                     </p>
-                    <p className="text-[10px] font-mono uppercase text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {(file.size / 1024 / 1024).toFixed(2)} MB
                     </p>
                   </div>
                 </div>
                 {!isWorking && uploadState !== "success" && (
                   <button
-                    className="p-2 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    className="p-2 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0 rounded-full"
                     onClick={() => {
                       setFile(null);
                       setUploadState("idle");
@@ -288,7 +288,7 @@ export default function UploadVersionDialog({
                   aria-live="polite"
                   aria-label={`Upload status ${uploadState}, ${progress} percent`}
                 >
-                  <div className="flex justify-between text-[10px] font-mono uppercase tracking-widest text-foreground/70">
+                  <div className="flex justify-between text-xs text-foreground/70 font-medium">
                     <span>
                       {uploadState === "creating_job" && "Initializing job..."}
                       {uploadState === "uploading" && "Transmitting..."}
@@ -296,14 +296,14 @@ export default function UploadVersionDialog({
                     </span>
                     <span>{uploadState === "uploading" ? `${progress}%` : ""}</span>
                   </div>
-                  <Progress value={progress} className="h-1 rounded-none bg-border" />
+                  <Progress value={progress} className="h-1 rounded-full bg-border" />
                 </div>
               )}
 
               {uploadState === "success" && (
                 <div
                   role="status"
-                  className="flex items-center gap-2 text-sm font-bold text-foreground bg-foreground/10 p-3"
+                  className="flex items-center gap-2 text-sm font-medium text-foreground bg-foreground/10 p-3 rounded-lg"
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   Upload successful. Validating...
@@ -313,13 +313,13 @@ export default function UploadVersionDialog({
               {uploadState === "error" && (
                 <div
                   role="alert"
-                  className="flex flex-col gap-1 text-sm font-bold text-destructive bg-destructive/10 p-3"
+                  className="flex flex-col gap-1 text-sm font-medium text-destructive bg-destructive/10 p-3 rounded-lg"
                 >
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4" />
-                    Transmission Failed
+                    Upload failed
                   </div>
-                  <p className="text-[10px] font-mono uppercase">{errorMsg}</p>
+                  <p className="text-xs">{errorMsg}</p>
                 </div>
               )}
 
@@ -328,7 +328,7 @@ export default function UploadVersionDialog({
                   variant="outline"
                   onClick={() => setOpen(false)}
                   disabled={isWorking}
-                  className="rounded-none font-bold uppercase tracking-widest border-border/50 hover:bg-foreground hover:text-background transition-colors"
+                  className="rounded-md font-medium border-border/60 hover:bg-accent hover:text-accent-foreground transition-colors shadow-soft"
                 >
                   {uploadState === "success" ? "Close" : "Cancel"}
                 </Button>
@@ -336,7 +336,7 @@ export default function UploadVersionDialog({
                   <Button
                     onClick={startUpload}
                     disabled={isWorking}
-                    className="rounded-none font-bold uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                    className="rounded-md font-medium bg-foreground text-background hover:bg-foreground/90 transition-transform hover:scale-[1.02] active:scale-[0.98] shadow-soft"
                     data-testid="button-upload-archive"
                   >
                     {isWorking ? (

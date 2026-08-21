@@ -18,15 +18,52 @@ import {
   useGetGitHubRepositories,
   useConnectGitHubSource,
   useConnectWebsiteSource,
+  useGetVenomIdentity,
+  getGetVenomIdentityQueryKey,
+  useGetVenomModels,
+  useGetVenomVoices,
+  useListVenomProjectSops,
+  getListVenomProjectSopsQueryKey,
+  type VenomManagedModel,
 } from "@workspace/api-client-react";
 
 import { useColors } from "@/hooks/useColors";
 import { Header } from "@/components/Header";
-import { useVenom, type ProjectSource } from "@/context/VenomContext";
+import { VoicePresetList } from "@/components/voice/VoicePresetList";
+import { useVoiceSample } from "@/hooks/useVoiceSample";
+import {
+  useVenom,
+  type ProjectSource,
+  type VenomModelId,
+  type VenomVoicePresetId,
+} from "@/context/VenomContext";
+import {
+  DEFAULT_VOICE_PRESET_ID,
+  DEFAULT_VOICE_TALKATIVENESS,
+} from "@/context/workspaceSync";
+import { TalkativenessControl } from "@/components/voice/TalkativenessControl";
 import {
   describeLastSync,
+  describeSourceSchedule,
   sourceRefreshRequest,
+  sourceScheduleCadence,
+  SOURCE_SCHEDULE_CADENCES,
+  SOURCE_SCHEDULE_CADENCE_LABELS,
+  type SourceScheduleCadence,
 } from "@/context/sourceState";
+
+// The API client prefixes every failure with its HTTP status line. People need
+// the server's own sentence — "your account is not authorized", "this website
+// is too large" — not the protocol detail sitting in front of it.
+const HTTP_STATUS_PREFIX = /^HTTP \d{3}[^:]*:\s*/;
+
+function describeSourceFailure(error: unknown, fallback: string): string {
+  const message =
+    error instanceof Error
+      ? error.message.replace(HTTP_STATUS_PREFIX, "").trim()
+      : "";
+  return message === "" || message.startsWith("HTTP ") ? fallback : message;
+}
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -40,7 +77,13 @@ export default function SettingsScreen() {
     lastSyncedAt,
     addSource,
     refreshSource,
+    setSourceSchedule,
     removeSource,
+    enableModel,
+    removeModel,
+    setDefaultModel,
+    setVoicePreset,
+    setVoiceTalkativeness,
   } = useVenom();
 
   const [showGitHubPicker, setShowGitHubPicker] = React.useState(false);
@@ -60,6 +103,50 @@ export default function SettingsScreen() {
     return () => clearInterval(timer);
   }, []);
 
+  const modelPreferences = state.modelPreferences;
+  const enabledModelIds = modelPreferences?.enabledModelIds ?? ["venom-gpt"];
+  const defaultModelId = modelPreferences?.defaultModelId ?? "venom-gpt";
+
+  const modelsQuery = useGetVenomModels({
+    query: {
+      queryKey: ["venom-models"],
+      staleTime: 5 * 60 * 1000,
+    },
+  });
+
+  const voicesQuery = useGetVenomVoices({
+    query: {
+      queryKey: ["venom-voices"],
+      staleTime: 5 * 60 * 1000,
+    },
+  });
+  const voiceSample = useVoiceSample();
+  const selectedVoiceId: VenomVoicePresetId =
+    state.voicePreferences?.presetId ?? DEFAULT_VOICE_PRESET_ID;
+  const voicePresets = voicesQuery.data ?? [];
+  const voiceUnavailable =
+    voicePresets.length > 0 && voicePresets.every((p) => !p.available);
+  const voicePalette = {
+    rowBackground: colors.card,
+    rowBorder: colors.border,
+    selectedBorder: colors.primary,
+    name: colors.foreground,
+    persona: colors.mutedForeground,
+    icon: colors.foreground,
+    radioOn: colors.primary,
+    radioOff: colors.mutedForeground,
+  };
+  const talkativeness =
+    state.voicePreferences?.talkativeness ?? DEFAULT_VOICE_TALKATIVENESS;
+  const talkativenessPalette = {
+    segmentBackground: colors.card,
+    segmentBorder: colors.border,
+    selectedBackground: colors.primary,
+    selectedText: colors.background,
+    text: colors.mutedForeground,
+    description: colors.mutedForeground,
+  };
+
   const { data: health, isError } = useHealthCheck();
   const isConnected = !!health && !isError;
 
@@ -69,6 +156,14 @@ export default function SettingsScreen() {
   const projectSources = (state.sources ?? []).filter(
     (source) => source.projectId === activeProject?.id,
   );
+
+  const projectSopsQuery = useListVenomProjectSops(activeProject?.id ?? "", {
+    query: {
+      queryKey: getListVenomProjectSopsQueryKey(activeProject?.id ?? ""),
+      enabled: Boolean(activeProject?.id),
+    },
+  });
+  const projectSopCount = projectSopsQuery.data?.length ?? 0;
 
   const githubRepositories = useGetGitHubRepositories({
     query: {
@@ -84,7 +179,13 @@ export default function SettingsScreen() {
         setShowGitHubPicker(false);
         setSourceError(null);
       },
-      onError: (error: Error) => setSourceError(error.message),
+      onError: (error: Error) =>
+        setSourceError(
+          describeSourceFailure(
+            error,
+            "Venom could not connect this repository. Try again.",
+          ),
+        ),
     },
   });
 
@@ -95,7 +196,13 @@ export default function SettingsScreen() {
         setWebsiteUrl("");
         setSourceError(null);
       },
-      onError: (error: Error) => setSourceError(error.message),
+      onError: (error: Error) =>
+        setSourceError(
+          describeSourceFailure(
+            error,
+            "Venom could not connect this website. Try again.",
+          ),
+        ),
     },
   });
 
@@ -144,7 +251,13 @@ export default function SettingsScreen() {
       const target = refreshTargetRef.current;
       if (!target) return;
       refreshTargetRef.current = null;
-      failRefresh(target, error.message);
+      failRefresh(
+        target,
+        describeSourceFailure(
+          error,
+          "Venom could not refresh this source. Try again.",
+        ),
+      );
     },
   };
 
@@ -196,8 +309,23 @@ export default function SettingsScreen() {
     error: "Retry needed",
   } as const;
   const isSyncHealthy = syncStatus === "synced" || syncStatus === "syncing";
+  // Who Venom recognizes this account as. The server identity record is the
+  // source of truth (it is what gets stamped onto captured knowledge); the
+  // Clerk client profile fills in while it loads or offline.
+  const { data: identity } = useGetVenomIdentity({
+    query: {
+      queryKey: getGetVenomIdentityQueryKey(),
+      enabled: Boolean(user?.id),
+      staleTime: 5 * 60_000,
+      retry: 1,
+    },
+  });
+  const accountName =
+    identity?.displayName ?? user?.fullName ?? user?.firstName ?? null;
   const accountLabel =
-    user?.primaryEmailAddress?.emailAddress ?? "Authenticated account";
+    identity?.email ??
+    user?.primaryEmailAddress?.emailAddress ??
+    "Authenticated account";
 
   const handleSignOut = async () => {
     await signOut();
@@ -264,8 +392,10 @@ export default function SettingsScreen() {
               <View style={styles.accountCopy}>
                 <Text
                   style={[styles.rowTitle, { color: colors.foreground }]}
+                  numberOfLines={1}
+                  testID="text-account-name"
                 >
-                  Signed in
+                  {accountName ?? "Signed in"}
                 </Text>
                 <Text
                   style={[
@@ -368,10 +498,343 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Model Configuration */}
+        {/* AI Models */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-            Model and sync
+            AI Models
+          </Text>
+          <Text
+            style={[
+              styles.sourceDescription,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            Enable or remove managed models from your account. The default model
+            is used when no specific selection is made.
+          </Text>
+
+          {modelsQuery.isLoading ? (
+            <View style={styles.modelLoading}>
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+          ) : modelsQuery.isError ? (
+            <View
+              style={[
+                styles.sourceError,
+                {
+                  borderColor: colors.destructive,
+                  backgroundColor: colors.card,
+                },
+              ]}
+            >
+              <Feather
+                name="alert-circle"
+                size={15}
+                color={colors.destructive}
+              />
+              <Text
+                style={[
+                  styles.sourceErrorText,
+                  { color: colors.destructive },
+                ]}
+              >
+                Could not load model catalog. Check your connection.
+              </Text>
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              {(modelsQuery.data ?? []).map(
+                (model: VenomManagedModel, index: number) => {
+                  const isEnabled = enabledModelIds.includes(
+                    model.id as VenomModelId,
+                  );
+                  const isDefault = defaultModelId === model.id;
+                  const isOnlyEnabled =
+                    enabledModelIds.length === 1 && isEnabled;
+
+                  return (
+                    <React.Fragment key={model.id}>
+                      {index > 0 && (
+                        <View
+                          style={[
+                            styles.divider,
+                            {
+                              backgroundColor: colors.border,
+                              marginLeft: 0,
+                            },
+                          ]}
+                        />
+                      )}
+                      <View style={styles.modelRow}>
+                        <View style={styles.modelLeft}>
+                          <View
+                            style={[
+                              styles.modelIcon,
+                              {
+                                backgroundColor: isEnabled
+                                  ? colors.primary
+                                  : colors.accent,
+                                borderColor: isEnabled
+                                  ? colors.primary
+                                  : colors.border,
+                              },
+                            ]}
+                          >
+                            <Feather
+                              name="cpu"
+                              size={14}
+                              color={
+                                isEnabled
+                                  ? colors.primaryForeground
+                                  : colors.mutedForeground
+                              }
+                            />
+                          </View>
+                          <View style={styles.modelCopy}>
+                            <View style={styles.modelNameRow}>
+                              <Text
+                                style={[
+                                  styles.modelName,
+                                  {
+                                    color: isEnabled
+                                      ? colors.foreground
+                                      : colors.mutedForeground,
+                                  },
+                                ]}
+                              >
+                                {model.name}
+                              </Text>
+                              {isDefault && isEnabled && (
+                                <View
+                                  style={[
+                                    styles.modelBadge,
+                                    { borderColor: colors.border },
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.modelBadgeText,
+                                      { color: colors.primary },
+                                    ]}
+                                  >
+                                    Default
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text
+                              style={[
+                                styles.modelAvailability,
+                                {
+                                  color: model.available
+                                    ? colors.mutedForeground
+                                    : colors.destructive,
+                                },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {model.availabilityText}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.modelActions}>
+                          {isEnabled && !isDefault && (
+                            <TouchableOpacity
+                              onPress={() =>
+                                setDefaultModel(model.id as VenomModelId)
+                              }
+                              style={[
+                                styles.modelActionButton,
+                                { borderColor: colors.border },
+                              ]}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Set ${model.name} as default`}
+                              hitSlop={8}
+                              testID={`set-default-model-${model.id}`}
+                            >
+                              <Feather
+                                name="star"
+                                size={13}
+                                color={colors.mutedForeground}
+                              />
+                            </TouchableOpacity>
+                          )}
+                          {isEnabled && isDefault && (
+                            <View
+                              style={[
+                                styles.modelActionButton,
+                                {
+                                  borderColor: colors.primary,
+                                  backgroundColor: colors.primary,
+                                },
+                              ]}
+                            >
+                              <Feather
+                                name="star"
+                                size={13}
+                                color={colors.primaryForeground}
+                              />
+                            </View>
+                          )}
+                          <TouchableOpacity
+                            onPress={() =>
+                              isEnabled
+                                ? removeModel(model.id as VenomModelId)
+                                : enableModel(model.id as VenomModelId)
+                            }
+                            disabled={
+                              (isOnlyEnabled && isEnabled) ||
+                              (!isEnabled && !model.available)
+                            }
+                            style={[
+                              styles.modelActionButton,
+                              {
+                                borderColor: isEnabled
+                                  ? colors.destructive
+                                  : colors.border,
+                                opacity:
+                                  (isOnlyEnabled && isEnabled) ||
+                                  (!isEnabled && !model.available)
+                                    ? 0.38
+                                    : 1,
+                              },
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                              isEnabled
+                                ? `Remove ${model.name}`
+                                : `Enable ${model.name}`
+                            }
+                            accessibilityState={{
+                              disabled:
+                                (isOnlyEnabled && isEnabled) ||
+                                (!isEnabled && !model.available),
+                            }}
+                            hitSlop={8}
+                            testID={`toggle-model-${model.id}`}
+                          >
+                            <Feather
+                              name={isEnabled ? "x" : "plus"}
+                              size={13}
+                              color={
+                                isEnabled
+                                  ? colors.destructive
+                                  : colors.mutedForeground
+                              }
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </React.Fragment>
+                  );
+                },
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* Voice */}
+        <View style={styles.section} testID="voice-settings-section">
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            Voice
+          </Text>
+          <Text
+            style={[
+              styles.sourceDescription,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            Pick who talks back in hands-free voice mode. Tap play to hear a
+            sample. Your choice follows your account across devices.
+          </Text>
+
+          {voicesQuery.isLoading ? (
+            <View style={styles.modelLoading}>
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+          ) : voicesQuery.isError ? (
+            <Text
+              style={[
+                styles.sourceDescription,
+                { color: colors.mutedForeground },
+              ]}
+              testID="voice-settings-error"
+            >
+              Voices are unreachable right now. Chat by text works as always.
+            </Text>
+          ) : (
+            <>
+              {voiceUnavailable && (
+                <Text
+                  style={[
+                    styles.sourceDescription,
+                    { color: colors.mutedForeground },
+                  ]}
+                  testID="voice-settings-unavailable"
+                >
+                  {voicePresets[0]?.availabilityText ??
+                    "Voice isn't configured on the server yet."}
+                </Text>
+              )}
+              <VoicePresetList
+                presets={voicePresets}
+                selectedId={selectedVoiceId}
+                onSelect={(id) => setVoicePreset(id)}
+                onPreview={(preset) =>
+                  voiceSample.playSample(preset.id, preset.sampleText)
+                }
+                previewingId={voiceSample.previewingId}
+                palette={voicePalette}
+                previewsDisabled={voiceUnavailable}
+              />
+              {voiceSample.sampleError && (
+                <Text
+                  style={[
+                    styles.sourceDescription,
+                    { color: colors.mutedForeground },
+                  ]}
+                  testID="voice-settings-sample-error"
+                >
+                  {voiceSample.sampleError}
+                </Text>
+              )}
+            </>
+          )}
+
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.primary, marginTop: 18 },
+            ]}
+          >
+            Talkativeness
+          </Text>
+          <Text
+            style={[
+              styles.sourceDescription,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            How eager Venom is to speak in voice mode when a remark doesn't
+            clearly call for an answer. Direct questions always get a full
+            reply. Synced across your devices.
+          </Text>
+          <TalkativenessControl
+            value={talkativeness}
+            onChange={setVoiceTalkativeness}
+            palette={talkativenessPalette}
+          />
+        </View>
+
+        {/* Sync and privacy */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            Sync
           </Text>
           <View
             style={[
@@ -379,24 +842,6 @@ export default function SettingsScreen() {
               { backgroundColor: colors.card, borderColor: colors.border },
             ]}
           >
-            <View style={styles.row}>
-              <View style={styles.rowLeft}>
-                <Feather
-                  name="cpu"
-                  size={18}
-                  color={colors.mutedForeground}
-                />
-                <Text style={[styles.rowTitle, { color: colors.foreground }]}>
-                   Default model
-                </Text>
-              </View>
-              <Text style={[styles.statusText, { color: colors.primary }]}>
-                GPT-5.1
-              </Text>
-            </View>
-            <View
-              style={[styles.divider, { backgroundColor: colors.border }]}
-            />
             <View style={styles.row}>
               <View style={styles.rowLeft}>
                 <Feather
@@ -527,6 +972,9 @@ export default function SettingsScreen() {
                   styles.sourceErrorText,
                   { color: colors.destructive },
                 ]}
+                accessibilityLiveRegion="polite"
+                accessibilityRole="alert"
+                testID="source-error"
               >
                 {sourceError}
               </Text>
@@ -607,8 +1055,14 @@ export default function SettingsScreen() {
                       styles.panelHint,
                       { color: colors.destructive },
                     ]}
+                    accessibilityLiveRegion="polite"
+                    accessibilityRole="alert"
+                    testID="github-repositories-error"
                   >
-                    GitHub could not list repositories. Try again.
+                    {describeSourceFailure(
+                      githubRepositories.error,
+                      "GitHub could not list repositories. Try again.",
+                    )}
                   </Text>
                 ) : (
                   (githubRepositories.data ?? []).slice(0, 12).map(
@@ -743,6 +1197,36 @@ export default function SettingsScreen() {
             </View>
           </View>
 
+          {/* Browse the connected sources and their citations */}
+          <TouchableOpacity
+            style={[
+              styles.browseSources,
+              { borderColor: colors.border, backgroundColor: colors.card },
+            ]}
+            onPress={() =>
+              router.push({
+                pathname: "/knowledge",
+                params: { view: "sources" },
+              })
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Browse connected sources and their citations"
+            activeOpacity={0.7}
+            testID="open-connected-sources"
+          >
+            <Feather name="book-open" size={16} color={colors.primary} />
+            <Text
+              style={[styles.browseSourcesText, { color: colors.foreground }]}
+            >
+              Browse sources and citations
+            </Text>
+            <Feather
+              name="chevron-right"
+              size={16}
+              color={colors.mutedForeground}
+            />
+          </TouchableOpacity>
+
           {/* Connected sources list */}
           {projectSources.length > 0 && (
             <View style={styles.connectedSources}>
@@ -852,7 +1336,69 @@ export default function SettingsScreen() {
                         />
                       </TouchableOpacity>
                     </View>
-                    {refreshError && (
+                    <View
+                      style={styles.scheduleRow}
+                      accessibilityRole="radiogroup"
+                      accessibilityLabel={`Automatic updates for ${source.name}`}
+                    >
+                      <Text
+                        style={[
+                          styles.scheduleStatus,
+                          { color: colors.mutedForeground },
+                        ]}
+                        numberOfLines={1}
+                        testID={`source-schedule-status-${source.id}`}
+                      >
+                        {describeSourceSchedule(source, now) ??
+                          "Manual updates only"}
+                      </Text>
+                      <View style={styles.scheduleOptions}>
+                        {SCHEDULE_OPTIONS.map((option) => {
+                          const selected =
+                            sourceScheduleCadence(source) ===
+                            (option.value ?? "off");
+                          return (
+                            <TouchableOpacity
+                              key={option.label}
+                              onPress={() =>
+                                setSourceSchedule(source.id, option.value)
+                              }
+                              accessibilityRole="radio"
+                              accessibilityLabel={`${option.label} updates for ${source.name}`}
+                              accessibilityState={{ checked: selected }}
+                              aria-checked={selected}
+                              hitSlop={10}
+                              testID={`source-schedule-${option.testId}-${source.id}`}
+                              style={[
+                                styles.scheduleOption,
+                                {
+                                  borderColor: selected
+                                    ? colors.primary
+                                    : colors.border,
+                                  backgroundColor: selected
+                                    ? colors.secondary
+                                    : "transparent",
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.scheduleOptionText,
+                                  {
+                                    color: selected
+                                      ? colors.foreground
+                                      : colors.mutedForeground,
+                                  },
+                                ]}
+                              >
+                                {option.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                    {(refreshError || source.schedule?.lastError) && (
                       <Text
                         style={[
                           styles.refreshError,
@@ -862,7 +1408,8 @@ export default function SettingsScreen() {
                         accessibilityRole="alert"
                         testID={`source-refresh-error-${source.id}`}
                       >
-                        {refreshError}
+                        {refreshError ??
+                          `Automatic update failed: ${source.schedule?.lastError}`}
                       </Text>
                     )}
                   </View>
@@ -870,6 +1417,69 @@ export default function SettingsScreen() {
               })}
             </View>
           )}
+        </View>
+
+        {/* Shared workspaces */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            SHARED WORKSPACES
+          </Text>
+          <TouchableOpacity
+            testID="open-shared-workspaces"
+            accessibilityRole="button"
+            accessibilityLabel="Open shared workspaces"
+            style={[
+              styles.card,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => router.push("/workspaces" as never)}
+            activeOpacity={0.75}
+          >
+            <View style={styles.row}>
+              <View style={styles.rowLeft}>
+                <Feather name="users" size={18} color={colors.mutedForeground} />
+                <Text style={[styles.rowTitle, { color: colors.foreground }]}>
+                  Shared Workspaces
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Procedures */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            PROCEDURES
+          </Text>
+          <TouchableOpacity
+            testID="open-sops"
+            accessibilityRole="button"
+            accessibilityLabel={`Open procedures library. ${projectSopCount} active for this project.`}
+            style={[
+              styles.card,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => router.push("/sops" as never)}
+            activeOpacity={0.75}
+          >
+            <View style={styles.row}>
+              <View style={styles.rowLeft}>
+                <Feather name="file-text" size={18} color={colors.mutedForeground} />
+                <Text style={[styles.rowTitle, { color: colors.foreground }]}>
+                  Procedure Library
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                {activeProject && (
+                  <Text style={[styles.statusText, { color: colors.mutedForeground }]}>
+                    {projectSopCount} ACTIVE
+                  </Text>
+                )}
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+              </View>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Sign out */}
@@ -1135,6 +1745,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 0,
   },
+  browseSources: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderRadius: 18,
+  },
+  browseSourcesText: {
+    flex: 1,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    letterSpacing: -0.2,
+  },
   connectedSources: {
     marginTop: 16,
     gap: 8,
@@ -1153,12 +1779,105 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 10,
   },
+  scheduleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 6,
+    marginLeft: 12,
+  },
+  scheduleStatus: {
+    flexShrink: 1,
+    fontFamily: "Inter_400Regular",
+    fontSize: 11,
+  },
+  scheduleOptions: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  scheduleOption: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  scheduleOptionText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+  },
   refreshError: {
     fontFamily: "Inter_400Regular",
     fontSize: 12,
     lineHeight: 16,
     marginTop: 4,
     marginLeft: 12,
+  },
+  modelLoading: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+  },
+  modelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    gap: 12,
+  },
+  modelLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  modelIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modelCopy: {
+    flex: 1,
+  },
+  modelNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  modelName: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+  },
+  modelBadge: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  modelBadgeText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 10,
+    letterSpacing: 0.2,
+  },
+  modelAvailability: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  modelActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  modelActionButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   signOut: {
     flexDirection: "row",
@@ -1190,3 +1909,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
 });
+
+const SCHEDULE_OPTIONS: Array<{
+  value: SourceScheduleCadence | null;
+  label: string;
+  testId: string;
+}> = [
+  { value: null, label: "Off", testId: "off" },
+  ...SOURCE_SCHEDULE_CADENCES.map((cadence) => ({
+    value: cadence,
+    label: SOURCE_SCHEDULE_CADENCE_LABELS[cadence],
+    testId: cadence,
+  })),
+];

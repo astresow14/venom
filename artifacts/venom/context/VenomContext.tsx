@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { useAuth } from '@clerk/expo';
 import {
+  applyFiledClustersToState,
   applyKnowledgeInsightsToState,
   clearConversationKnowledge,
   fileKnowledgeNoteToState,
@@ -24,26 +25,50 @@ import {
   type BoardValue,
 } from './boardState';
 import {
+  createFallbackWorkspaceProject,
+  mostRecentlyUpdatedProjectId,
+} from './projectLifecycle';
+import {
   createDeletionMarkers,
   createEmptyTombstones,
+  dropRestoredArchivedCitations,
+  dropUncitedArchivedCitations,
   flushWorkspaceState,
   isWorkspaceState,
+  mergeArchivedCitations,
   mergeTombstones,
+  normalizeModelPreferences,
+  normalizeVoicePreferences,
   normalizeWorkspaceState,
+  parseSyncedProjectIds,
   reconcileKnowledgeLinks,
   resolveSuccessfulWorkspaceHydration,
+  workspaceProjectIds,
   type SyncController,
 } from './workspaceSync';
 import { workspaceSyncRetryDelay } from './workspaceSyncRetry';
 import {
   initializeWorkspaceSyncTestHarness,
   IS_WORKSPACE_SYNC_UI_TEST,
+  loadWorkspaceForSyncTest,
   saveWorkspaceForSyncTest,
   WORKSPACE_SYNC_UI_TEST_USER_ID,
 } from './workspaceSyncTestHarness';
-import { mergeProjectSources, replaceRefreshedSource } from './sourceState';
 import {
+  claimScheduledSync,
+  mergeProjectSources,
+  recordScheduledSyncFailure,
+  releaseScheduledSyncClaim,
+  replaceRefreshedSource,
+  setSourceSchedule as applySourceSchedule,
+  type SourceScheduleCadence,
+} from './sourceState';
+import {
+  archivedCitationsFromRemovedSource,
+  archivedCitationsFromRetired,
+  citedCitationIds,
   remapConversationCitations,
+  restoredCitationRemap,
   retiredCitationRemap,
 } from './messageCitations';
 import {
@@ -51,6 +76,7 @@ import {
   getGetVenomWorkspaceQueryKey,
   saveVenomWorkspace,
   useGetVenomWorkspace,
+  VenomModelId as VenomModelIdEnum,
   type KnowledgeCandidate,
   type VenomConversation,
   type VenomKnowledgeCluster,
@@ -58,7 +84,14 @@ import {
   type VenomKanbanField,
   type VenomKanbanFieldType,
   type VenomKanbanStage,
+  type VenomConversationBlend,
   type VenomMessage,
+  type VenomModelId,
+  type VenomModelPreferences,
+  type VenomResponseMode,
+  type VenomVoicePreferences,
+  type VenomVoicePresetId,
+  type VenomVoiceTalkativeness,
   type VenomProject,
   type ProjectSource,
   type SourceCitation,
@@ -68,8 +101,14 @@ import {
   type VenomWorkspaceSnapshot,
   type VenomWorkspaceState,
 } from '@workspace/api-client-react';
+import {
+  isResponseMode,
+  normalizeConversationBlend,
+} from './responsePrefs';
 
 export type { ProjectSource, SourceCitation, SourceCluster };
+export type { VenomModelId, VenomModelPreferences };
+export type { VenomVoicePreferences, VenomVoicePresetId, VenomVoiceTalkativeness };
 
 export type Project = VenomProject;
 export type Task = VenomTask;
@@ -96,6 +135,13 @@ type VenomContextType = {
   isReady: boolean;
   syncStatus: SyncStatus;
   lastSyncedAt: string | null;
+  /**
+   * The workspace state most recently confirmed saved to the cloud for this
+   * account. A device may only act on a scheduled-sync claim it can see in
+   * here: local state says what this device wants, this says what the
+   * account's other devices will actually be told.
+   */
+  lastSyncedState: VenomState | null;
   hasPendingLegacyImport: boolean;
   importDeviceWorkspace: () => void;
   startFreshWorkspace: () => void;
@@ -110,6 +156,16 @@ type VenomContextType = {
   setActiveProject: (id: string | null) => void;
   addSource: (source: ProjectSource) => void;
   refreshSource: (previousSourceId: string, source: ProjectSource) => void;
+  setSourceSchedule: (
+    sourceId: string,
+    cadence: SourceScheduleCadence | null,
+  ) => void;
+  recordSourceSyncFailure: (sourceId: string, message: string) => void;
+  claimScheduledSourceSync: (sourceId: string, claimedBy: string) => void;
+  releaseScheduledSourceSyncClaim: (
+    sourceId: string,
+    claimedBy: string,
+  ) => void;
   removeSource: (sourceId: string) => void;
   addTask: (projectId: string, title: string, stageId?: string) => void;
   updateTask: (
@@ -184,6 +240,10 @@ type VenomContextType = {
     conversation: Pick<Conversation, 'id' | 'title' | 'projectId'>,
     insights: KnowledgeInsight[],
   ) => void;
+  applyFiledKnowledge: (
+    conversation: Pick<Conversation, 'id' | 'title' | 'projectId'>,
+    filed: KnowledgeCluster[],
+  ) => void;
   fileKnowledgeNote: (input: {
     userId: string;
     projectId: string;
@@ -195,6 +255,19 @@ type VenomContextType = {
   mergeKnowledgeClusters: (
     targetClusterId: string,
     sourceClusterId: string,
+  ) => void;
+  enableModel: (modelId: VenomModelId) => void;
+  removeModel: (modelId: VenomModelId) => void;
+  setDefaultModel: (modelId: VenomModelId) => void;
+  setActiveModel: (modelId: VenomModelId) => void;
+  setVoicePreset: (presetId: VenomVoicePresetId) => void;
+  setVoiceTalkativeness: (talkativeness: VenomVoiceTalkativeness) => void;
+  setConversationResponsePrefs: (
+    conversationId: string,
+    prefs: {
+      responseMode?: VenomResponseMode;
+      blend?: VenomConversationBlend | null;
+    },
   ) => void;
 };
 
@@ -276,13 +349,47 @@ const defaultClusters: KnowledgeCluster[] = [
   },
 ];
 
+/**
+ * UI-test fixture: a Brain note written from an assistant answer, so its
+ * summary and source excerpt carry the inline `[source:...]` markers the
+ * answer stored. Browser tests use it to prove the raw marker never reaches
+ * the screen, whether the cited source is connected or long gone.
+ */
+const CITED_FIXTURE_CITATION_ID = 'cite_repository_readme';
+const citedFixtureClusters: KnowledgeCluster[] = [
+  {
+    ...defaultClusters[0],
+    summary: `Structure follows [source:${CITED_FIXTURE_CITATION_ID}] for the mobile release.`,
+    links: [],
+    sources: [
+      {
+        conversationId: 'conv_cited_fixture',
+        projectId: 'proj_default',
+        conversationTitle: 'Release planning',
+        messageIds: ['msg_cited_fixture'],
+        excerpt: `The layout is described in [source:${CITED_FIXTURE_CITATION_ID}].`,
+        updatedAt: 0,
+      },
+    ],
+  },
+];
+
 const LEGACY_STORAGE_KEYS = ['@venom_state_v3', '@venom_state_v1'] as const;
 const storageKeyFor = (userId: string) => `@venom_state_v2:${userId}`;
 const sourcesKeyFor = (userId: string) => `@venom_sources_v1:${userId}`;
+/**
+ * The projects this device knows the cloud has seen. Kept outside the
+ * workspace snapshot because that snapshot is what gets uploaded, and this is
+ * device-local bookkeeping: it is what tells a restore that a project missing
+ * from the cloud was created here offline rather than deleted elsewhere.
+ */
+const syncedProjectsKeyFor = (userId: string) =>
+  `@venom_synced_projects_v1:${userId}`;
 const generateId = (prefix: string) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 const normalizeLabel = (label: string) => label.trim().toLocaleLowerCase();
 
+const ALL_MODEL_IDS_CONST = Object.values(VenomModelIdEnum) as VenomModelId[];
 const normalizeFieldOptions = (options: string[]) => {
   const seen = new Set<string>();
   return options.flatMap((option): string[] => {
@@ -356,7 +463,12 @@ function createDefaultState(): VenomState {
             defaultClusters.slice(0, 2).some((candidate) => candidate.id === id),
           ),
         }))
-      : defaultClusters;
+      : brainFixture === 'cited'
+        ? citedFixtureClusters
+        : defaultClusters;
+  const defaultModelPreferences: VenomModelPreferences = normalizeModelPreferences(undefined);
+  const defaultVoicePreferences: VenomVoicePreferences = normalizeVoicePreferences(undefined);
+
   return {
     projects: [
       {
@@ -413,6 +525,9 @@ function createDefaultState(): VenomState {
     activeProjectId: 'proj_default',
     activeConversationId: 'conv_default',
     tombstones: createEmptyTombstones(),
+    modelPreferences: defaultModelPreferences,
+    voicePreferences: defaultVoicePreferences,
+    archivedCitations: [],
   };
 }
 
@@ -450,11 +565,17 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
   const [localState, setLocalState] = useState<VenomState | null>(null);
   const [legacyState, setLegacyState] = useState<VenomState | null>(null);
   const [hasScopedState, setHasScopedState] = useState(false);
+  const [syncedProjectIds, setSyncedProjectIds] = useState<string[] | null>(
+    null,
+  );
   const [hasPendingLegacyImport, setHasPendingLegacyImport] = useState(false);
   const [localUserId, setLocalUserId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('loading');
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [lastSyncedState, setLastSyncedState] = useState<VenomState | null>(
+    null,
+  );
   const latestStateRef = useRef(state);
   latestStateRef.current = state;
 
@@ -517,20 +638,24 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       setLocalState(null);
       setLegacyState(null);
       setHasScopedState(false);
+      setSyncedProjectIds(null);
       setHasPendingLegacyImport(false);
       setLocalUserId(null);
       setState(createDefaultState());
       setIsReady(false);
       setSyncStatus('loading');
       setLastSyncedAt(null);
+      setLastSyncedState(null);
       return;
     }
 
     setIsReady(false);
     setSyncStatus('loading');
+    setLastSyncedState(null);
     setLocalState(null);
     setLegacyState(null);
     setHasScopedState(false);
+    setSyncedProjectIds(null);
     setHasPendingLegacyImport(false);
     setLocalUserId(null);
     hydratedUserRef.current = null;
@@ -538,11 +663,13 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     lastSerializedRef.current = '';
 
     void (async () => {
-      const [scopedData, legacyEntries, sourcesData] = await Promise.all([
-        AsyncStorage.getItem(storageKeyFor(userId)),
-        AsyncStorage.multiGet([...LEGACY_STORAGE_KEYS]),
-        AsyncStorage.getItem(sourcesKeyFor(userId)),
-      ]);
+      const [scopedData, legacyEntries, sourcesData, syncedProjectsData] =
+        await Promise.all([
+          AsyncStorage.getItem(storageKeyFor(userId)),
+          AsyncStorage.multiGet([...LEGACY_STORAGE_KEYS]),
+          AsyncStorage.getItem(sourcesKeyFor(userId)),
+          AsyncStorage.getItem(syncedProjectsKeyFor(userId)),
+        ]);
       const legacyData =
         legacyEntries.find(([, storedValue]) => storedValue !== null)?.[1] ??
         null;
@@ -550,6 +677,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       let restoredLegacy: VenomState | null = null;
       let scopedStateIsValid = false;
       let migratedSources: ProjectSource[] = [];
+      let restoredSyncedProjectIds: string[] | null = null;
 
       if (scopedData) {
         try {
@@ -589,6 +717,16 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      if (syncedProjectsData) {
+        try {
+          restoredSyncedProjectIds = parseSyncedProjectIds(
+            JSON.parse(syncedProjectsData) as unknown,
+          );
+        } catch {
+          // An unreadable baseline falls back to cloud-only scoping.
+        }
+      }
+
       if (!cancelled) {
         setLocalState({
           ...restored,
@@ -600,6 +738,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         });
         setLegacyState(restoredLegacy);
         setHasScopedState(scopedStateIsValid);
+        setSyncedProjectIds(restoredSyncedProjectIds);
         setLocalUserId(userId);
       }
     })();
@@ -680,14 +819,22 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
           return { kind: 'other' };
         },
         onSyncing: () => setSyncStatus('syncing'),
-        onSaved: async ({ serialized, snapshot }) => {
+        onSaved: async ({ state: savedState, serialized, snapshot }) => {
           lastSerializedRef.current = serialized;
           setLastSyncedAt(snapshot.updatedAt);
+          setLastSyncedState(savedState);
           setSyncStatus('synced');
-          await AsyncStorage.setItem(
-            storageKeyFor(syncUserId),
-            serialized,
-          );
+          // The cloud now holds exactly these projects, so the baseline both
+          // gains what this save uploaded and forgets what it deleted.
+          const savedProjectIds = workspaceProjectIds(savedState);
+          setSyncedProjectIds(savedProjectIds);
+          await Promise.all([
+            AsyncStorage.setItem(storageKeyFor(syncUserId), serialized),
+            AsyncStorage.setItem(
+              syncedProjectsKeyFor(syncUserId),
+              JSON.stringify(savedProjectIds),
+            ),
+          ]);
         },
         onConflictMerged: (candidate, snapshot) => {
           latestStateRef.current = candidate;
@@ -743,7 +890,16 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
     hydratedUserRef.current = userId;
 
-    if (IS_WORKSPACE_SYNC_UI_TEST) {
+    // The sync test mode restores from the harness's fake cloud so it runs the
+    // same hydration a signed-in restore runs; an account that has never saved
+    // has nothing to restore from.
+    const cloud = IS_WORKSPACE_SYNC_UI_TEST
+      ? loadWorkspaceForSyncTest(userId)
+      : workspaceQuery.isSuccess
+        ? workspaceQuery.data
+        : null;
+
+    if (IS_WORKSPACE_SYNC_UI_TEST && !cloud) {
       lastSerializedRef.current = JSON.stringify(localState);
       latestStateRef.current = localState;
       setState(localState);
@@ -752,8 +908,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (workspaceQuery.isSuccess) {
-      const cloud = workspaceQuery.data;
+    if (cloud) {
       revisionRef.current = cloud.revision;
       setLastSyncedAt(cloud.updatedAt);
       setIsReady(true);
@@ -764,6 +919,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         localState,
         legacyState,
         hasScopedState,
+        syncedProjectIds,
         createFreshState: createDefaultState,
       });
       lastSerializedRef.current = JSON.stringify(hydration.state);
@@ -771,6 +927,13 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       setState(hydration.state);
       setHasPendingLegacyImport(hydration.pendingLegacyImport);
       setSyncStatus(hydration.syncStatus);
+      if (hydration.syncedProjectIds) {
+        setSyncedProjectIds(hydration.syncedProjectIds);
+        void AsyncStorage.setItem(
+          syncedProjectsKeyFor(userId),
+          JSON.stringify(hydration.syncedProjectIds),
+        );
+      }
       if (hydration.shouldUpload) {
         void flushCloudState(hydration.state);
       }
@@ -793,6 +956,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     legacyState,
     localState,
     localUserId,
+    syncedProjectIds,
     userId,
     workspaceQuery.data,
     workspaceQuery.isPending,
@@ -915,6 +1079,22 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     setState((current) => {
       const deletedAt = Date.now();
       const project = current.projects.find((item) => item.id === id);
+      const remainingProjects = current.projects.filter(
+        (item) => item.id !== id,
+      );
+      // Deleting the workspace you are in must land somewhere sensible: the
+      // next most recently updated project, or a fresh default workspace when
+      // nothing else remains (a fresh id keeps the deleted project's
+      // tombstone authoritative during sync).
+      const fallbackProject =
+        remainingProjects.length === 0
+          ? createFallbackWorkspaceProject(generateId('proj'), deletedAt)
+          : null;
+      const nextActiveProjectId = fallbackProject
+        ? fallbackProject.id
+        : current.activeProjectId === id
+          ? mostRecentlyUpdatedProjectId(remainingProjects)
+          : current.activeProjectId;
       const removedConversations = current.conversations.filter(
         (conversation) => conversation.projectId === id,
       );
@@ -930,17 +1110,23 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       const activeConversationExists = conversations.some(
         (conversation) => conversation.id === current.activeConversationId,
       );
+      // The deleted project's answers are gone, so the evidence only they could
+      // have named no longer belongs in the bounded archive.
+      const stillCited = citedCitationIds(conversations);
 
       return {
         ...current,
-        projects: current.projects.filter((project) => project.id !== id),
+        projects: fallbackProject ? [fallbackProject] : remainingProjects,
         conversations,
+        archivedCitations: dropUncitedArchivedCitations(
+          current.archivedCitations,
+          (citationId) => stillCited.has(citationId),
+        ),
         clusters: current.clusters.filter(
           (cluster) => cluster.projectId !== id,
         ),
         sources: current.sources.filter((source) => source.projectId !== id),
-        activeProjectId:
-          current.activeProjectId === id ? null : current.activeProjectId,
+        activeProjectId: nextActiveProjectId,
         activeConversationId: activeConversationExists
           ? current.activeConversationId
           : null,
@@ -981,8 +1167,39 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // A chat session belongs to the project it was written in, so switching
+  // project has to move the chat too: otherwise the next message is filed under
+  // the project that was selected when the session started, not the one on
+  // screen. Switching back reopens that project's own latest session, and a
+  // project with no session yet starts empty so the first message opens one
+  // under it.
   const setActiveProject = useCallback((id: string | null) => {
-    setState((current) => ({ ...current, activeProjectId: id }));
+    setState((current) => {
+      if (current.activeProjectId === id) return current;
+
+      const activeConversation = current.conversations.find(
+        (conversation) => conversation.id === current.activeConversationId,
+      );
+      if (activeConversation && activeConversation.projectId === id) {
+        return { ...current, activeProjectId: id };
+      }
+
+      const latestForProject = current.conversations.reduce<
+        Conversation | null
+      >((latest, conversation) => {
+        if (conversation.projectId !== id) return latest;
+        if (!latest || conversation.updatedAt > latest.updatedAt) {
+          return conversation;
+        }
+        return latest;
+      }, null);
+
+      return {
+        ...current,
+        activeProjectId: id,
+        activeConversationId: latestForProject?.id ?? null,
+      };
+    });
   }, []);
 
   const addSource = useCallback((source: ProjectSource) => {
@@ -1016,28 +1233,55 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
         const previous = current.sources.find(
           (item) => item.id === previousSourceId,
         );
+        const refreshedAt = Date.now();
         const replaced = replaceRefreshedSource(
           current.sources,
           previousSourceId,
           source,
+          refreshedAt,
         );
         if (!replaced) return current;
 
-        const refreshedAt = Date.now();
         // Answers saved before the refresh still carry the retired citation
         // ids, so point them at the refreshed equivalent where one exists.
         const citationRemap = retiredCitationRemap(
           previous?.citations ?? [],
           source.citations,
         );
+        // An item that had disappeared can come back (an issue reopened, a page
+        // restored). Point answers at the live citation again so the archived
+        // entry for it becomes droppable.
+        const restoredRemap = restoredCitationRemap(
+          current.archivedCitations,
+          source.citations,
+        );
+        const conversations = remapConversationCitations(
+          current.conversations,
+          source.projectId,
+          new Map([...restoredRemap, ...citationRemap]),
+        );
+        const stillCited = citedCitationIds(conversations);
+        // Citations with no refreshed equivalent are kept in a bounded archive
+        // so older answers can still name the evidence they were based on, and
+        // entries the refresh covers again are dropped from it.
+        const archivedCitations = dropRestoredArchivedCitations(
+          mergeArchivedCitations(
+            archivedCitationsFromRetired(
+              previous?.citations ?? [],
+              source.citations,
+              citationRemap,
+              refreshedAt,
+            ),
+            current.archivedCitations,
+          ),
+          source.citations,
+          (citationId) => stillCited.has(citationId),
+        );
         return {
           ...current,
           sources: replaced.sources,
-          conversations: remapConversationCitations(
-            current.conversations,
-            source.projectId,
-            citationRemap,
-          ),
+          archivedCitations,
+          conversations,
           projects: current.projects.map((project) =>
             project.id === source.projectId
               ? {
@@ -1051,13 +1295,71 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
           ),
           tombstones: replaced.retiredSourceId
             ? mergeTombstones(current.tombstones, {
+                // Marked as replaced, not merely deleted: the refreshed
+                // snapshot already stands in this source's place, so no other
+                // device may hand the retired id back.
                 sources: createDeletionMarkers(
                   [replaced.retiredSourceId],
                   refreshedAt,
+                  { replaced: true },
                 ),
               })
             : current.tombstones,
         };
+      });
+    },
+    [],
+  );
+
+  const setSourceSchedule = useCallback(
+    (sourceId: string, cadence: SourceScheduleCadence | null) => {
+      setState((current) => {
+        const sources = applySourceSchedule(current.sources, sourceId, cadence);
+        return sources ? { ...current, sources } : current;
+      });
+    },
+    [],
+  );
+
+  const recordSourceSyncFailure = useCallback(
+    (sourceId: string, message: string) => {
+      setState((current) => {
+        const sources = recordScheduledSyncFailure(
+          current.sources,
+          sourceId,
+          Date.now(),
+          message,
+        );
+        return sources ? { ...current, sources } : current;
+      });
+    },
+    [],
+  );
+
+  const claimScheduledSourceSync = useCallback(
+    (sourceId: string, claimedBy: string) => {
+      setState((current) => {
+        const sources = claimScheduledSync(
+          current.sources,
+          sourceId,
+          claimedBy,
+          Date.now(),
+        );
+        return sources ? { ...current, sources } : current;
+      });
+    },
+    [],
+  );
+
+  const releaseScheduledSourceSyncClaim = useCallback(
+    (sourceId: string, claimedBy: string) => {
+      setState((current) => {
+        const sources = releaseScheduledSyncClaim(
+          current.sources,
+          sourceId,
+          claimedBy,
+        );
+        return sources ? { ...current, sources } : current;
       });
     },
     [],
@@ -1070,9 +1372,23 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
 
       const deletedAt = Date.now();
       const sources = current.sources.filter((source) => source.id !== sourceId);
+      // Nothing replaces a disconnected source, so its citations go straight
+      // into the bounded archive: answers written before the removal keep
+      // naming the evidence instead of reading as a generic archived marker.
+      // Nothing can cite the removed source any more, so archived evidence no
+      // saved answer still points at is dead weight in the synced workspace.
+      const stillCited = citedCitationIds(current.conversations);
+      const archivedCitations = dropUncitedArchivedCitations(
+        mergeArchivedCitations(
+          archivedCitationsFromRemovedSource(removed.citations, deletedAt),
+          current.archivedCitations,
+        ),
+        (citationId) => stillCited.has(citationId),
+      );
       return {
         ...current,
         sources,
+        archivedCitations,
         projects: current.projects.map((project) =>
           project.id === removed.projectId
             ? {
@@ -1822,6 +2138,25 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const applyFiledKnowledge = useCallback(
+    (
+      conversation: Pick<Conversation, 'id' | 'title' | 'projectId'>,
+      filed: KnowledgeCluster[],
+    ) => {
+      const now = Date.now();
+      setState((current) => ({
+        ...current,
+        ...applyFiledClustersToState({
+          state: current,
+          conversation,
+          filed,
+          now,
+        }),
+      }));
+    },
+    [],
+  );
+
   const fileKnowledgeNote = useCallback(
     (input: {
       userId: string;
@@ -1980,12 +2315,168 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const enableModel = useCallback((modelId: VenomModelId) => {
+    if (!ALL_MODEL_IDS_CONST.includes(modelId)) return;
+    const now = Date.now();
+    setState((current) => {
+      const prefs = normalizeModelPreferences(current.modelPreferences);
+      if (prefs.enabledModelIds.includes(modelId)) return current;
+      return {
+        ...current,
+        modelPreferences: normalizeModelPreferences({
+          ...prefs,
+          enabledModelIds: [...prefs.enabledModelIds, modelId],
+          updatedAt: now,
+        }),
+      };
+    });
+  }, []);
+
+  const removeModel = useCallback((modelId: VenomModelId) => {
+    if (!ALL_MODEL_IDS_CONST.includes(modelId)) return;
+    const now = Date.now();
+    setState((current) => {
+      const prefs = normalizeModelPreferences(current.modelPreferences);
+      // Cannot remove the last enabled model.
+      if (prefs.enabledModelIds.length <= 1) return current;
+      if (!prefs.enabledModelIds.includes(modelId)) return current;
+      const nextEnabled = prefs.enabledModelIds.filter((id) => id !== modelId);
+      // Recover default and active if they pointed to the removed model.
+      const nextDefault = nextEnabled.includes(prefs.defaultModelId)
+        ? prefs.defaultModelId
+        : nextEnabled[0];
+      const nextActive = nextEnabled.includes(prefs.activeModelId)
+        ? prefs.activeModelId
+        : nextDefault;
+      return {
+        ...current,
+        modelPreferences: normalizeModelPreferences({
+          enabledModelIds: nextEnabled,
+          defaultModelId: nextDefault,
+          activeModelId: nextActive,
+          updatedAt: now,
+        }),
+      };
+    });
+  }, []);
+
+  const setDefaultModel = useCallback((modelId: VenomModelId) => {
+    if (!ALL_MODEL_IDS_CONST.includes(modelId)) return;
+    const now = Date.now();
+    setState((current) => {
+      const prefs = normalizeModelPreferences(current.modelPreferences);
+      if (!prefs.enabledModelIds.includes(modelId)) return current;
+      return {
+        ...current,
+        modelPreferences: normalizeModelPreferences({
+          ...prefs,
+          defaultModelId: modelId,
+          updatedAt: now,
+        }),
+      };
+    });
+  }, []);
+
+  const setActiveModel = useCallback((modelId: VenomModelId) => {
+    if (!ALL_MODEL_IDS_CONST.includes(modelId)) return;
+    const now = Date.now();
+    setState((current) => {
+      const prefs = normalizeModelPreferences(current.modelPreferences);
+      if (!prefs.enabledModelIds.includes(modelId)) return current;
+      return {
+        ...current,
+        modelPreferences: normalizeModelPreferences({
+          ...prefs,
+          activeModelId: modelId,
+          updatedAt: now,
+        }),
+      };
+    });
+  }, []);
+
+  const setVoicePreset = useCallback((presetId: VenomVoicePresetId) => {
+    const now = Date.now();
+    setState((current) => {
+      const existing = normalizeVoicePreferences(current.voicePreferences);
+      const next = normalizeVoicePreferences({
+        ...existing,
+        presetId,
+        updatedAt: now,
+      });
+      // Reject unknown ids (normalize recovers them to the default voice,
+      // which is only correct when the caller actually asked for it).
+      if (next.presetId !== presetId) return current;
+      if (existing.presetId === next.presetId) return current;
+      return { ...current, voicePreferences: next };
+    });
+  }, []);
+
+  const setVoiceTalkativeness = useCallback(
+    (talkativeness: VenomVoiceTalkativeness) => {
+      const now = Date.now();
+      setState((current) => {
+        const existing = normalizeVoicePreferences(current.voicePreferences);
+        const next = normalizeVoicePreferences({
+          ...existing,
+          talkativeness,
+          updatedAt: now,
+        });
+        // Reject unknown levels (normalize recovers them to balanced, which
+        // is only correct when the caller actually asked for it).
+        if (next.talkativeness !== talkativeness) return current;
+        if (existing.talkativeness === next.talkativeness) return current;
+        return { ...current, voicePreferences: next };
+      });
+    },
+    [],
+  );
+
+  // Response-mode and blend preferences ride on the conversation but merge by
+  // their own stamp, so setting them must NOT bump conversation.updatedAt —
+  // that would distort the content merge between devices.
+  const setConversationResponsePrefs = useCallback(
+    (
+      conversationId: string,
+      prefs: {
+        responseMode?: VenomResponseMode;
+        blend?: VenomConversationBlend | null;
+      },
+    ) => {
+      const now = Date.now();
+      setState((current) => {
+        const existing = current.conversations.find(
+          (conversation) => conversation.id === conversationId,
+        );
+        if (!existing) return current;
+        const next: Conversation = { ...existing };
+        if (prefs.responseMode !== undefined && isResponseMode(prefs.responseMode)) {
+          next.responseMode = prefs.responseMode;
+        }
+        if (prefs.blend === null) {
+          delete next.blend;
+        } else if (prefs.blend !== undefined) {
+          const blend = normalizeConversationBlend(prefs.blend);
+          if (blend) next.blend = blend;
+        }
+        next.modeUpdatedAt = now;
+        return {
+          ...current,
+          conversations: current.conversations.map((conversation) =>
+            conversation.id === conversationId ? next : conversation,
+          ),
+        };
+      });
+    },
+    [],
+  );
+
   const value = useMemo<VenomContextType>(
     () => ({
       state,
       isReady,
       syncStatus,
       lastSyncedAt,
+      lastSyncedState,
       hasPendingLegacyImport,
       importDeviceWorkspace,
       startFreshWorkspace,
@@ -1995,6 +2486,10 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       setActiveProject,
       addSource,
       refreshSource,
+      setSourceSchedule,
+      recordSourceSyncFailure,
+      claimScheduledSourceSync,
+      releaseScheduledSourceSyncClaim,
       removeSource,
       addTask,
       updateTask,
@@ -2014,10 +2509,18 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       clearConversation,
       createNewConversation,
       applyKnowledgeInsights,
+      applyFiledKnowledge,
       fileKnowledgeNote,
       renameKnowledgeCluster,
       deleteKnowledgeCluster,
       mergeKnowledgeClusters,
+      enableModel,
+      removeModel,
+      setDefaultModel,
+      setActiveModel,
+      setVoicePreset,
+      setVoiceTalkativeness,
+      setConversationResponsePrefs,
     }),
     [
       addMessage,
@@ -2027,6 +2530,8 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       addStage,
       addTask,
       applyKnowledgeInsights,
+      applyFiledKnowledge,
+      claimScheduledSourceSync,
       clearConversation,
       createNewConversation,
       deleteProject,
@@ -2035,10 +2540,13 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       importDeviceWorkspace,
       isReady,
       lastSyncedAt,
+      lastSyncedState,
       fileKnowledgeNote,
       mergeKnowledgeClusters,
       moveTask,
+      recordSourceSyncFailure,
       refreshSource,
+      releaseScheduledSourceSyncClaim,
       renameKnowledgeCluster,
       removeFieldDefinition,
       removeSource,
@@ -2047,6 +2555,7 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       reorderStage,
       setActiveConversation,
       setActiveProject,
+      setSourceSchedule,
       state,
       startFreshWorkspace,
       syncStatus,
@@ -2056,6 +2565,13 @@ export function VenomProvider({ children }: { children: React.ReactNode }) {
       updateProject,
       updateStage,
       updateTask,
+      enableModel,
+      removeModel,
+      setDefaultModel,
+      setActiveModel,
+      setVoicePreset,
+      setVoiceTalkativeness,
+      setConversationResponsePrefs,
     ],
   );
 

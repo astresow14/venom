@@ -6,7 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AttestedSourceSnapshot } from './attestedSourceSnapshot';
+import type { Uuid } from './uuid';
+import type { VenomBlendWeight } from './venomBlendWeight';
 import type { VenomChatMessage } from './venomChatMessage';
+import type { VenomModelId } from './venomModelId';
+import type { VenomResponseMode } from './venomResponseMode';
 
 export interface VenomChatRequest {
   /**
@@ -21,6 +25,8 @@ export interface VenomChatRequest {
      * @maxLength 160
      */
   projectId: string;
+  workspaceId?: Uuid;
+  modelId?: VenomModelId;
   /**
      * @maxItems 200
      * @items.pattern ^[A-Za-z0-9_-]{1,160}$
@@ -28,4 +34,12 @@ export interface VenomChatRequest {
   sourceCitationIds?: string[];
   /** @maxItems 32 */
   sourceSnapshots?: AttestedSourceSnapshot[];
+  /** Opt this message into multi-voice deliberation. */
+  deliberate?: boolean;
+  mode?: VenomResponseMode;
+  /**
+     * Favoring weights for the participating voices in verify and debate. Omitted means an even blend. Weights favor a voice; they never silence the others.
+     * @maxItems 3
+     */
+  blend?: VenomBlendWeight[];
 }

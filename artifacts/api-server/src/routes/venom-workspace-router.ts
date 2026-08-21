@@ -30,6 +30,27 @@ export type WorkspaceStore = {
   ): Promise<WorkspaceRecord | undefined>;
 };
 
+/**
+ * Optional bridge to the server-side ontology store. When present, the blob
+ * is stored without knowledge clusters (they live in the store), accepted
+ * saves are reconciled into the store, and every snapshot sent to a client
+ * gets the stored knowledge re-injected.
+ */
+export type WorkspaceOntologyBridge = {
+  /** Remove knowledge from the state before the blob is persisted. */
+  strip(state: unknown): unknown;
+  /** Run the lazy blob-to-store migration before the blob is overwritten. */
+  ensureOwner(userId: string): Promise<unknown>;
+  /**
+   * Reconcile an accepted save into the store. Returns the response state
+   * (knowledge re-injected). Only called after the optimistic-concurrency
+   * write succeeded, so a stale snapshot can never rewrite the store.
+   */
+  absorb(userId: string, state: unknown): Promise<unknown>;
+  /** Re-inject stored knowledge into a stored blob state. */
+  hydrate(userId: string, state: unknown): Promise<unknown>;
+};
+
 type WorkspaceRouterOptions = {
   resolveUserId: (request: Request) => string | null | undefined;
   parseBody: (value: unknown) =>
@@ -42,6 +63,7 @@ type WorkspaceRouterOptions = {
         issues?: unknown;
       };
   store: WorkspaceStore;
+  ontology?: WorkspaceOntologyBridge;
 };
 
 function snapshot(row: WorkspaceRecord | undefined) {
@@ -95,8 +117,21 @@ export function createVenomWorkspaceRouter({
   resolveUserId,
   parseBody,
   store,
+  ontology,
 }: WorkspaceRouterOptions): IRouter {
   const router: IRouter = Router();
+
+  async function hydratedSnapshot(
+    userId: string,
+    record: WorkspaceRecord | undefined,
+  ) {
+    if (!record || !ontology) return snapshot(record);
+    return {
+      state: await ontology.hydrate(userId, record.state),
+      revision: record.revision,
+      updatedAt: record.updatedAt.toISOString(),
+    };
+  }
 
   router.get("/venom/workspace", async (req, res): Promise<void> => {
     const userId = resolveUserId(req);
@@ -105,7 +140,7 @@ export function createVenomWorkspaceRouter({
       return;
     }
 
-    res.json(snapshot(await store.get(userId)));
+    res.json(await hydratedSnapshot(userId, await store.get(userId)));
   });
 
   router.put("/venom/workspace", async (req, res): Promise<void> => {
@@ -126,24 +161,41 @@ export function createVenomWorkspaceRouter({
     }
 
     const { state, baseRevision } = parsed.data;
-    const payloadBytes = workspacePayloadBytes(state);
+    // Knowledge lives in the ontology store, so it no longer counts against
+    // the snapshot size cap.
+    const stateToStore = ontology ? ontology.strip(state) : state;
+    const payloadBytes = workspacePayloadBytes(stateToStore);
     if (payloadBytes > MAX_VENOM_WORKSPACE_BYTES) {
       res.status(413).json(workspaceTooLargeResponse());
       return;
     }
 
+    // Import any pre-store knowledge out of the current blob before this
+    // save overwrites it with a stripped state.
+    if (ontology) await ontology.ensureOwner(userId);
+
     const now = new Date();
     const saved =
       baseRevision === 0
-        ? await store.create(userId, state, now)
-        : await store.update(userId, state, baseRevision, now);
+        ? await store.create(userId, stateToStore, now)
+        : await store.update(userId, stateToStore, baseRevision, now);
 
     if (saved) {
-      res.json(snapshot(saved));
+      if (!ontology) {
+        res.json(snapshot(saved));
+        return;
+      }
+      res.json({
+        state: await ontology.absorb(userId, state),
+        revision: saved.revision,
+        updatedAt: saved.updatedAt.toISOString(),
+      });
       return;
     }
 
-    res.status(409).json(snapshot(await store.get(userId)));
+    res
+      .status(409)
+      .json(await hydratedSnapshot(userId, await store.get(userId)));
   });
 
   return router;

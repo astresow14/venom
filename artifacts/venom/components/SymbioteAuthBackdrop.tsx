@@ -48,7 +48,11 @@ function clampPosition(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-function useBackdropActivity(): boolean {
+/**
+ * Whether ambient looping motion should run: the app is foregrounded and, on
+ * web, the tab is visible. Shared by the backdrop and the auth hero.
+ */
+export function useBackdropActivity(): boolean {
   const [isActive, setIsActive] = useState(AppState.currentState === 'active');
 
   useEffect(() => {
