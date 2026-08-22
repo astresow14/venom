@@ -43,6 +43,7 @@ import {
   type VoiceDecisionOutcomeKind,
   type VoiceOutcomeTracker,
 } from "@/hooks/voiceRestraint";
+import { useSharedWorkspace } from "@/context/sharedWorkspace";
 import { buildChatProjectContextBundle } from "@/context/sourceContext";
 import {
   createSentenceChunker,
@@ -236,6 +237,15 @@ export function useVoiceConversation(
     setVoicePreset,
   } = useVenom();
   const queryClient = useQueryClient();
+  // Voice turns bill the space the user is working in, exactly like typed
+  // chat: the active workspace rides every billed voice request so admin
+  // caps and model locks bind here too. A ref keeps the long-lived run
+  // callbacks reading the current space without re-arming them.
+  const { activeWorkspace } = useSharedWorkspace();
+  const activeWorkspaceIdRef = useRef<string | null>(
+    activeWorkspace?.id ?? null,
+  );
+  activeWorkspaceIdRef.current = activeWorkspace?.id ?? null;
 
   const [phase, setPhase] = useState<VoicePhase>("idle");
   const [error, setError] = useState<VoiceError | null>(null);
@@ -526,6 +536,9 @@ export function useVoiceConversation(
           body: JSON.stringify({
             text: segment.slice(0, 2000),
             presetId: activePresetIdRef.current,
+            ...(activeWorkspaceIdRef.current
+              ? { workspaceId: activeWorkspaceIdRef.current }
+              : {}),
           }),
           signal: controller.signal,
         });
@@ -863,6 +876,9 @@ export function useVoiceConversation(
             projectContext,
             sourceCitationIds,
             sourceSnapshots,
+            ...(activeWorkspaceIdRef.current
+              ? { workspaceId: activeWorkspaceIdRef.current }
+              : {}),
           }),
           signal: controller.signal,
         });
@@ -1064,6 +1080,9 @@ export function useVoiceConversation(
               transcript: transcriptText.slice(0, 8000),
               recentTurns,
               talkativeness,
+              ...(activeWorkspaceIdRef.current
+                ? { workspaceId: activeWorkspaceIdRef.current }
+                : {}),
             }),
             signal: controller.signal,
           },
@@ -1209,7 +1228,12 @@ export function useVoiceConversation(
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ audioBase64 }),
+            body: JSON.stringify({
+              audioBase64,
+              ...(activeWorkspaceIdRef.current
+                ? { workspaceId: activeWorkspaceIdRef.current }
+                : {}),
+            }),
           },
         );
         if (response.status === 503) {

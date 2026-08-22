@@ -60,6 +60,7 @@ import VoicePreferencesDialog from "@/components/workspace/VoicePreferencesDialo
 import NetworkContributionDialog from "@/components/workspace/NetworkContributionDialog";
 import UsageDialog from "@/components/workspace/UsageDialog";
 import WorkspaceManager from "@/components/workspace/shared/WorkspaceManager";
+import WorkspaceSwitcher from "@/components/workspace/shared/WorkspaceSwitcher";
 import { useGetCommunityNotificationUnreadCount, getGetCommunityNotificationUnreadCountQueryKey, useGetVenomIdentity, getGetVenomIdentityQueryKey } from "@workspace/api-client-react";
 
 
@@ -467,6 +468,7 @@ export default function WorkspaceLayout({
         </button>
       </div>
 
+      <WorkspaceSwitcher idPrefix={idPrefix} />
       <WorkspaceManager idPrefix={idPrefix} />
 
       <div className="shrink-0 px-3 pb-2">
@@ -570,7 +572,7 @@ export default function WorkspaceLayout({
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <h2 className="shrink-0 px-4 pb-1.5 pt-3 text-xs font-medium text-sidebar-foreground/70">
           Chats
         </h2>

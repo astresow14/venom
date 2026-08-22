@@ -16,5 +16,6 @@ export * from "./venom-template-learning";
 export * from "./venom-shared-workspaces";
 export * from "./venom-voice-decisions";
 export * from "./venom-usage";
+export * from "./venom-billing";
 export * from "./venom-app-ai";
 export * from "./venom-canon";

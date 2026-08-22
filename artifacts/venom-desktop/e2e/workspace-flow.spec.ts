@@ -212,7 +212,7 @@ const sections: { link: string; assert: (page: Page) => Promise<void> }[] = [
     link: 'Chat',
     assert: async (page) => {
       await expect(page).toHaveURL(/\/workspace\/chat$/);
-      await expect(page.getByTestId('text-chat-greeting')).toBeVisible();
+      await expect(page.getByTestId('img-chat-empty-mark')).toBeVisible();
     },
   },
 ];
@@ -223,7 +223,7 @@ test('routes into chat and moves between sections from the sidebar', async ({
   await page.goto('/workspace');
 
   await expect(page).toHaveURL(/\/workspace\/chat$/);
-  await expect(page.getByTestId('text-chat-greeting')).toBeVisible();
+  await expect(page.getByTestId('img-chat-empty-mark')).toBeVisible();
 
   const sidebar = page.getByTestId('sidebar-desktop');
   await expect(sidebar).toBeVisible();
@@ -245,7 +245,7 @@ test('routes into chat and moves between sections from the sidebar', async ({
 test('moves between sections from the drawer on a phone', async ({ page }) => {
   await page.setViewportSize(PHONE);
   await page.goto('/workspace/chat');
-  await expect(page.getByTestId('text-chat-greeting')).toBeVisible();
+  await expect(page.getByTestId('img-chat-empty-mark')).toBeVisible();
   await expect(page.getByTestId('sidebar-desktop')).toBeHidden();
 
   const header = page.getByRole('banner');
@@ -543,7 +543,7 @@ test('answers a message from a stubbed model and keeps the thread after a reload
   await mockKnowledgeExtraction(page);
 
   await page.goto('/workspace/chat');
-  await expect(page.getByTestId('text-chat-greeting')).toBeVisible();
+  await expect(page.getByTestId('img-chat-empty-mark')).toBeVisible();
 
   const question = 'What shipped this week?';
   const composer = page.getByTestId('input-message');
@@ -585,7 +585,7 @@ test('starts a new thread from the sidebar and keeps it in the history', async (
   page,
 }) => {
   await page.goto('/workspace/chat');
-  await expect(page.getByTestId('text-chat-greeting')).toBeVisible();
+  await expect(page.getByTestId('img-chat-empty-mark')).toBeVisible();
 
   const sidebar = page.getByTestId('sidebar-desktop');
   const threads = sidebar.getByTestId(/^button-conversation-/);
@@ -594,7 +594,7 @@ test('starts a new thread from the sidebar and keeps it in the history', async (
   await sidebar.getByTestId('button-new-chat-desktop').click();
 
   await expect(page).toHaveURL(/\/workspace\/chat$/);
-  await expect(page.getByTestId('text-chat-greeting')).toBeVisible();
+  await expect(page.getByTestId('img-chat-empty-mark')).toBeVisible();
   await expect(threads).toHaveCount(2);
   // The freshly created thread is the selected one.
   await expect(sidebar.locator('button[aria-current="page"]')).toHaveCount(1);

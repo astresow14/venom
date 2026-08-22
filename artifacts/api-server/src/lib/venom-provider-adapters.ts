@@ -15,7 +15,11 @@ import {
   resolveProviderModelId,
   supportsVenomVision,
 } from "./venom-models";
-import { estimateTokensFromChars } from "./venom-usage-pricing";
+import {
+  estimateTokensFromChars,
+  PROVIDER_MAX_OUTPUT_TOKENS,
+  PROVIDER_MAX_PROMPT_CHARS,
+} from "./venom-usage-pricing";
 
 export type VenomMessageImage = {
   /** Display name only — used in the substituted note for text-only models. */
@@ -215,8 +219,20 @@ export type StreamVenomResponseOptions = {
   maxOutputTokens?: number;
 };
 
-/** Hard per-call output ceiling every adapter enforces. */
-const PROVIDER_MAX_OUTPUT_TOKENS = 8192;
+/**
+ * Thrown before dispatch when a prompt exceeds the enforced ceiling. The
+ * allowance admission bound prices exactly this ceiling, so a prompt above
+ * it must never reach a provider — one call could otherwise settle beyond
+ * what its reservation held.
+ */
+export class PromptTooLargeError extends Error {
+  constructor(chars: number) {
+    super(
+      `Prompt of ${chars} chars exceeds the ${PROVIDER_MAX_PROMPT_CHARS}-char dispatch ceiling`,
+    );
+    this.name = "PromptTooLargeError";
+  }
+}
 
 function outputTokenCeiling(requested?: number): number {
   if (
@@ -257,6 +273,12 @@ export async function* streamVenomResponse(
   const prepared = supportsVenomVision(modelId)
     ? messages
     : replaceImagesWithNotes(messages);
+  // Enforce the ceiling the admission bound priced — before any provider
+  // work, so the refusal costs nothing and no reservation can be outspent.
+  const promptTotal = promptChars(prepared);
+  if (promptTotal > PROVIDER_MAX_PROMPT_CHARS) {
+    throw new PromptTooLargeError(promptTotal);
+  }
   const usageSink: UsageSink = { native: null };
   let outputChars = 0;
   let streamedContent = false;

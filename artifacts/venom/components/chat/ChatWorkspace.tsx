@@ -123,6 +123,10 @@ export function ChatWorkspace({
     enabledModelIds.includes(m.id as VenomModelId),
   );
   const activeModel = allModels.find((m) => m.id === activeModelId) ?? null;
+  // Resolves a turn's model to its family for the speaker avatars; the
+  // catalog is already fetched here, so leaf components never re-query.
+  const familyForModel = (modelId: string) =>
+    allModels.find((m) => m.id === modelId)?.family;
 
   const inputRef = useRef<TextInput>(null);
   const initializedRef = useRef(false);
@@ -498,6 +502,7 @@ export function ChatWorkspace({
         localDeliberation={localDeliberation}
         localFileActivity={localFileActivity}
         showTyping={showTyping}
+        familyForModel={familyForModel}
       />
       {canonTeach && canonTeach.convId === state.activeConversationId ? (
         <CanonTeachCard

@@ -4,8 +4,10 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { type EdgeInsets } from "react-native-safe-area-context";
 import {
+  getGetVenomBillingContextQueryKey,
   type VenomManagedModel,
   type VenomResponseMode,
+  useGetVenomBillingContext,
 } from "@workspace/api-client-react";
 import { type BlendCorner, BlendPad } from "@/components/BlendPad";
 import {
@@ -27,6 +29,7 @@ import {
   type VenomModelSelectionPolicy,
 } from "@/context/VenomContext";
 import { useColors } from "@/hooks/useColors";
+import { useSharedWorkspace } from "@/context/sharedWorkspace";
 import { StyleSheet } from "react-native";
 import { styles } from "./styles";
 
@@ -53,6 +56,18 @@ const composerLocal = StyleSheet.create({
   },
   attachMenuText: {
     fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+  payerHintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+    paddingHorizontal: 2,
+  },
+  payerHintText: {
+    fontSize: 11,
     fontFamily: "Inter_500Medium",
   },
 });
@@ -125,6 +140,28 @@ export function ChatComposer({
   onStopDebate: () => void;
   onSend: () => void;
 }) {
+  const { activeWorkspace } = useSharedWorkspace();
+  const billingContextParams = activeWorkspace
+    ? { workspaceId: activeWorkspace.id }
+    : undefined;
+  const billingContextQuery = useGetVenomBillingContext(billingContextParams, {
+    query: {
+      queryKey: getGetVenomBillingContextQueryKey(billingContextParams),
+      staleTime: 60_000,
+      retry: 1,
+    },
+  });
+  const payerContext = billingContextQuery.data ?? null;
+  // Admin model locks ride the same billing context. Display only — the
+  // server clamps every workspace-billed request regardless, so a failed
+  // read just shows the user's own chips while enforcement holds.
+  const modelLock = activeWorkspace ? (payerContext?.modelLock ?? null) : null;
+  const forcedPolicy = modelLock?.forcedSelectionPolicy ?? null;
+  const lockedTiers =
+    modelLock?.allowedCostTiers && modelLock.allowedCostTiers.length > 0
+      ? modelLock.allowedCostTiers
+      : null;
+  const effectivePolicy = forcedPolicy ?? selectionPolicy;
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [showCornerPicker, setShowCornerPicker] = useState(false);
   // Device-local mixer visibility: entering Verify/Debate for the first time
@@ -359,10 +396,54 @@ export function ChatComposer({
           </TouchableOpacity>
         </View>
         ))}
+      {payerContext?.payer && (
+        <View style={composerLocal.payerHintRow}>
+          <Feather
+            name="credit-card"
+            size={11}
+            color={
+              payerContext.state === "exhausted" ||
+              payerContext.memberCapState === "exhausted"
+                ? colors.destructive
+                : colors.mutedForeground
+            }
+          />
+          <Text
+            testID="composer-payer-hint"
+            numberOfLines={1}
+            style={[
+              composerLocal.payerHintText,
+              {
+                color:
+                  payerContext.state === "exhausted" ||
+                  payerContext.memberCapState === "exhausted"
+                    ? colors.destructive
+                    : colors.mutedForeground,
+              },
+            ]}
+          >
+            {payerContext.payer === "workspace"
+              ? `Billed to ${payerContext.workspaceName ?? "workspace"}`
+              : `${payerContext.planName} plan`}
+            {payerContext.state === "exhausted"
+              ? " · limit reached"
+              : payerContext.memberCapState === "exhausted"
+                ? " · your workspace limit reached"
+                : payerContext.state === "approaching"
+                  ? " · running low"
+                  : payerContext.memberCapState === "approaching"
+                    ? " · nearing your workspace limit"
+                    : ""}
+          </Text>
+        </View>
+      )}
+
       {/* Model selector row. In auto policies the manual chips hand over to
           a single "Venom is choosing" indicator — the server owns the pick
-          on every reply, and each reply is stamped with the model it ran. */}
-      {selectionPolicy !== "manual" ? (
+          on every reply, and each reply is stamped with the model it ran.
+          A workspace-forced policy hands over the same way, labeled with who
+          manages it; the server clamps regardless of what this row shows. */}
+      {effectivePolicy !== "manual" ? (
         <View style={styles.modelSelectorRow}>
           <View
             style={[
@@ -370,19 +451,37 @@ export function ChatComposer({
               styles.policyChip,
               { backgroundColor: colors.card, borderColor: colors.border },
             ]}
-            accessibilityLabel={`Venom is choosing models automatically: ${
-              selectionPolicy === "auto-cheapest"
-                ? "cheapest healthy models"
-                : "most capable models"
-            }`}
-            testID="composer-policy-takeover"
+            accessibilityLabel={
+              forcedPolicy
+                ? `Model choice is managed by ${activeWorkspace?.name ?? "the workspace"}: ${
+                    forcedPolicy === "auto-cheapest"
+                      ? "cheapest healthy models"
+                      : "most capable models"
+                  }. Your personal space keeps your own settings.`
+                : `Venom is choosing models automatically: ${
+                    effectivePolicy === "auto-cheapest"
+                      ? "cheapest healthy models"
+                      : "most capable models"
+                  }`
+            }
+            testID={
+              forcedPolicy
+                ? "composer-policy-managed"
+                : "composer-policy-takeover"
+            }
           >
-            <Feather name="zap" size={11} color={colors.primary} />
+            <Feather
+              name={forcedPolicy ? "lock" : "zap"}
+              size={11}
+              color={colors.primary}
+            />
             <Text
               style={[styles.modelChipText, { color: colors.mutedForeground }]}
             >
-              Venom is choosing ·{" "}
-              {selectionPolicy === "auto-cheapest"
+              {forcedPolicy
+                ? `Managed by ${activeWorkspace?.name ?? "workspace"} · `
+                : "Venom is choosing · "}
+              {effectivePolicy === "auto-cheapest"
                 ? "Auto — cheapest"
                 : "Auto — max power"}
             </Text>
@@ -397,6 +496,13 @@ export function ChatComposer({
           >
             {enabledModels.map((model) => {
               const isSelected = model.id === activeModelId;
+              // A chip the workspace's tier lock excludes stays visible but
+              // disabled — the server would re-choose anyway, so the chip
+              // must not pretend the pick would hold.
+              const managedOut = Boolean(
+                lockedTiers &&
+                  !(model.costTier && lockedTiers.includes(model.costTier)),
+              );
               return (
                 <TouchableOpacity
                   key={model.id}
@@ -404,18 +510,34 @@ export function ChatComposer({
                     onSelectModel(model.id as VenomModelId);
                     setShowModelPicker(false);
                   }}
+                  disabled={managedOut}
                   style={[
                     styles.modelChip,
                     {
                       backgroundColor: isSelected ? colors.primary : colors.card,
                       borderColor: isSelected ? colors.primary : colors.border,
+                      opacity: managedOut ? 0.45 : 1,
                     },
                   ]}
                   accessibilityRole="button"
-                  accessibilityLabel={`Use ${model.name}`}
-                  accessibilityState={{ selected: isSelected }}
+                  accessibilityLabel={
+                    managedOut
+                      ? `${model.name} is not allowed in ${activeWorkspace?.name ?? "this workspace"} — managed by its admins`
+                      : `Use ${model.name}`
+                  }
+                  accessibilityState={{
+                    selected: isSelected,
+                    disabled: managedOut,
+                  }}
                   testID={`select-model-${model.id}`}
                 >
+                  {managedOut && (
+                    <Feather
+                      name="lock"
+                      size={10}
+                      color={colors.mutedForeground}
+                    />
+                  )}
                   <Text
                     style={[
                       styles.modelChipText,

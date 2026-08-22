@@ -267,6 +267,13 @@ async function ensureUsageSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS venom_usage_events_user_time_idx
       ON venom_usage_events (user_id, occurred_at)
   `);
+  // Chat now reads the personal ontology before sending a provider request.
+  // The shared development test database may predate the Unsorted field, so
+  // keep this hermetic setup compatible with the current ontology contract.
+  await db.execute(sql`
+    ALTER TABLE venom_ontology_concepts
+      ADD COLUMN IF NOT EXISTS unsorted boolean NOT NULL DEFAULT false
+  `);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -352,7 +359,11 @@ test("every AI path writes a usage-ledger event for the asking account", async (
   await ensureUsageSchema();
 
   const app = express();
-  app.use(pinoHttp({ logger: pino({ level: "silent" }) }));
+  app.use(
+    pinoHttp({
+      logger: pino({ level: process.env.TEST_LOG_LEVEL ?? "silent" }),
+    }),
+  );
   app.use(express.json({ limit: "1mb" }));
   app.use(fakeClerkAuthMiddleware());
   app.use("/api", venomRouter);

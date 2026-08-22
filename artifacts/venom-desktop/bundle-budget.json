@@ -14,14 +14,14 @@
     "`pnpm --filter @workspace/venom-desktop run update:bundle-budget`",
     "and commit this file. Never widen it to silence a failure you cannot explain."
   ],
-  "generatedAt": "2026-08-22T14:17:29.602Z",
-  "totalGzipBaselineBytes": 171499,
+  "generatedAt": "2026-08-22T14:55:50.555Z",
+  "totalGzipBaselineBytes": 171495,
   "totalGzipBudgetBytes": 189440,
   "chunks": {
     "entry": {
-      "file": "assets/index-C_7AtFZ1.js",
+      "file": "assets/index-BnUQ9AcT.js",
       "rawBaselineBytes": 96459,
-      "gzipBaselineBytes": 35447,
+      "gzipBaselineBytes": 35443,
       "gzipBudgetBytes": 39936
     },
     "vendor-react": {
@@ -113,53 +113,53 @@
     }
   },
   "workspaceGroup": {
-    "totalGzipBaselineBytes": 77806,
-    "totalGzipBudgetBytes": 86016,
+    "totalGzipBaselineBytes": 80380,
+    "totalGzipBudgetBytes": 89088,
     "chunks": {
       "workspace-routes": {
-        "file": "assets/workspace-routes-F-gXwTLv.js",
-        "rawBaselineBytes": 232971,
-        "gzipBaselineBytes": 63922,
-        "gzipBudgetBytes": 70656
+        "file": "assets/workspace-routes-g-Tp9P0R.js",
+        "rawBaselineBytes": 244582,
+        "gzipBaselineBytes": 66488,
+        "gzipBudgetBytes": 73728
       },
       "utils": {
-        "file": "assets/utils-aWm1VVdu.js",
+        "file": "assets/utils-BKWTSgha.js",
         "rawBaselineBytes": 27218,
         "gzipBaselineBytes": 8551,
         "gzipBudgetBytes": 10240
       },
       "button": {
-        "file": "assets/button-DhXqQPm7.js",
+        "file": "assets/button-DSwqkFb6.js",
         "rawBaselineBytes": 2001,
-        "gzipBaselineBytes": 977,
+        "gzipBaselineBytes": 978,
         "gzipBudgetBytes": 2048
       },
       "venom-wordmark": {
-        "file": "assets/venom-wordmark-DHQjC1vK.js",
+        "file": "assets/venom-wordmark-B01kR7md.js",
         "rawBaselineBytes": 8290,
-        "gzipBaselineBytes": 3563,
+        "gzipBaselineBytes": 3565,
         "gzipBudgetBytes": 4096
       },
       "not-found": {
-        "file": "assets/not-found-XVrtCgnR.js",
+        "file": "assets/not-found-BfVUnpaN.js",
         "rawBaselineBytes": 1873,
-        "gzipBaselineBytes": 793,
+        "gzipBaselineBytes": 798,
         "gzipBudgetBytes": 1024
       }
     },
     "composition": {
       "workspace-routes": {
-        "lib/api-client-react/src/generated/api.ts": 109618,
+        "lib/api-client-react/src/generated/api.ts": 115523,
         "npm:@radix-ui/react-select": 51470,
         "src/components/layout/Shell.tsx": 40806,
         "src/lib/workspaceState.ts": 33718,
         "src/context/VenomWorkspaceContext.tsx": 32723,
         "npm:@radix-ui/react-scroll-area": 32551,
-        "src/components/workspace/shared/WorkspaceMembersDialog.tsx": 19690,
+        "src/components/workspace/shared/WorkspaceMembersDialog.tsx": 29921,
+        "src/components/workspace/UsageDialog.tsx": 19131,
         "npm:react-remove-scroll": 15115,
-        "npm:lucide-react": 14576,
+        "npm:lucide-react": 14994,
         "npm:@radix-ui/react-dialog": 12002,
-        "src/components/workspace/UsageDialog.tsx": 10308,
         "src/lib/boardState.ts": 9778,
         "npm:@radix-ui/react-checkbox": 9585,
         "npm:@radix-ui/react-focus-scope": 8976,

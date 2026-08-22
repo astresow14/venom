@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -31,10 +32,17 @@ import {
   getGetVenomIdentityQueryKey,
   useGetVenomModels,
   useGetVenomVoices,
+  useGetVenomBillingContext,
+  getGetVenomBillingContextQueryKey,
   useGetVenomUsageSummary,
   getGetVenomUsageSummaryQueryKey,
+  useGetVenomBillingSummary,
+  getGetVenomBillingSummaryQueryKey,
+  createVenomBillingCheckout,
+  createVenomBillingPortal,
   useListVenomProjectSops,
   getListVenomProjectSopsQueryKey,
+  type VenomBillingSummary,
   type VenomManagedModel,
   type VenomUsageSummary,
 } from "@workspace/api-client-react";
@@ -44,6 +52,7 @@ import {
 } from "@/lib/downloadMarkdown";
 
 import { useColors } from "@/hooks/useColors";
+import { useSharedWorkspace } from "@/context/sharedWorkspace";
 import { Header } from "@/components/Header";
 import { VoicePresetList } from "@/components/voice/VoicePresetList";
 import { useVoiceSample } from "@/hooks/useVoiceSample";
@@ -261,7 +270,33 @@ export default function SettingsScreen() {
   const enabledModelIds = modelPreferences?.enabledModelIds ?? ["venom-gpt"];
   const defaultModelId = modelPreferences?.defaultModelId ?? "venom-gpt";
   const selectionPolicy = modelPreferences?.selectionPolicy ?? "manual";
-  const autoPolicyActive = selectionPolicy !== "manual";
+
+  // Admin model locks ride the billing context of the active shared
+  // workspace. Display only — the server clamps every workspace-billed
+  // request regardless — so a failed read simply shows the user's own
+  // settings while enforcement still holds.
+  const { activeWorkspace } = useSharedWorkspace();
+  const billingContextParams = activeWorkspace
+    ? { workspaceId: activeWorkspace.id }
+    : undefined;
+  const billingContextQuery = useGetVenomBillingContext(billingContextParams, {
+    query: {
+      queryKey: getGetVenomBillingContextQueryKey(billingContextParams),
+      enabled: Boolean(activeWorkspace),
+      staleTime: 60_000,
+      retry: 1,
+    },
+  });
+  const modelLock = activeWorkspace
+    ? (billingContextQuery.data?.modelLock ?? null)
+    : null;
+  const managedByName = activeWorkspace?.name ?? "this workspace";
+  const forcedPolicy = modelLock?.forcedSelectionPolicy ?? null;
+  const policyLocked = Boolean(forcedPolicy);
+  // A workspace-forced policy takes precedence over the user's own while
+  // work is billed there; the stored personal choice stays untouched.
+  const effectivePolicy = forcedPolicy ?? selectionPolicy;
+  const autoPolicyActive = effectivePolicy !== "manual";
 
   const modelsQuery = useGetVenomModels({
     query: {
@@ -269,6 +304,20 @@ export default function SettingsScreen() {
       staleTime: 5 * 60 * 1000,
     },
   });
+
+  // Tier locks bind only when at least one catalog model sits in an allowed
+  // tier — mirroring the server, which fails open rather than serving
+  // nothing when a lock would empty the catalog.
+  const allowedTiersRaw = modelLock?.allowedCostTiers ?? null;
+  const tierLockLive = Boolean(
+    allowedTiersRaw &&
+      allowedTiersRaw.length > 0 &&
+      (modelsQuery.data ?? []).some(
+        (model: VenomManagedModel) =>
+          model.costTier && allowedTiersRaw.includes(model.costTier),
+      ),
+  );
+  const lockedTiers = tierLockLive ? allowedTiersRaw : null;
 
   const voicesQuery = useGetVenomVoices({
     query: {
@@ -542,6 +591,64 @@ export default function SettingsScreen() {
   const usageMaxDailyCost = usageSummary
     ? Math.max(...usageSummary.daily.map((day) => day.costUsd), 0)
     : 0;
+  // Personal plan + allowance for the Billing section. Only personally-
+  // billed spend moves this meter — workspace-billed chats never touch it.
+  // UI-test mode renders a deterministic fixture so no unstubbed fetch fires.
+  const billingQuery = useGetVenomBillingSummary({
+    query: {
+      queryKey: getGetVenomBillingSummaryQueryKey(),
+      enabled: !IS_UI_TEST,
+      staleTime: 60_000,
+      retry: 1,
+    },
+  });
+  const billingSummary: VenomBillingSummary | null = IS_UI_TEST
+    ? UI_TEST_BILLING_SUMMARY
+    : // Only trust a well-shaped summary — an SPA fallback or proxy can
+      // answer with truthy non-JSON garbage that must not crash Settings.
+      (billingQuery.data?.plan ? billingQuery.data : null);
+  const billingFailed = !IS_UI_TEST && billingQuery.isError;
+  const billingLoading = billingSummary === null && !billingFailed;
+  const billingAllowance = billingSummary?.plan.allowanceUsd ?? 0;
+  const billingShare = billingSummary
+    ? billingAllowance > 0
+      ? Math.min(billingSummary.spentUsd / billingAllowance, 1)
+      : 1
+    : 0;
+  const [billingAction, setBillingAction] = React.useState<
+    "checkout" | "portal" | null
+  >(null);
+  const [billingActionError, setBillingActionError] = React.useState<
+    string | null
+  >(null);
+
+  // Upgrading and managing payment happen on Stripe-hosted pages — the app
+  // only ever opens the URL the server minted; card details never pass
+  // through Venom.
+  const openBillingPage = async (kind: "checkout" | "portal") => {
+    if (billingAction) return;
+    setBillingAction(kind);
+    setBillingActionError(null);
+    try {
+      const returnUrl =
+        Platform.OS === "web" && typeof window !== "undefined"
+          ? window.location.href
+          : undefined;
+      const { url } =
+        kind === "checkout"
+          ? await createVenomBillingCheckout(returnUrl ? { returnUrl } : {})
+          : await createVenomBillingPortal(returnUrl ? { returnUrl } : {});
+      await Linking.openURL(url);
+    } catch {
+      setBillingActionError(
+        kind === "checkout"
+          ? "Checkout couldn't be started. Try again in a moment."
+          : "The billing portal couldn't be opened. Try again in a moment.",
+      );
+    } finally {
+      setBillingAction(null);
+    }
+  };
   const accountName =
     identity?.displayName ?? user?.fullName ?? user?.firstName ?? null;
   const accountLabel =
@@ -813,7 +920,7 @@ export default function SettingsScreen() {
             testID="model-policy-control"
           >
             {MODEL_POLICY_OPTIONS.map((option, index) => {
-              const selected = selectionPolicy === option.id;
+              const selected = effectivePolicy === option.id;
               return (
                 <React.Fragment key={option.id}>
                   {index > 0 && (
@@ -826,10 +933,18 @@ export default function SettingsScreen() {
                   )}
                   <TouchableOpacity
                     onPress={() => setModelSelectionPolicy(option.id)}
-                    style={styles.policyRow}
+                    disabled={policyLocked}
+                    style={[
+                      styles.policyRow,
+                      policyLocked && { opacity: 0.55 },
+                    ]}
                     accessibilityRole="radio"
                     accessibilityLabel={option.title}
-                    accessibilityState={{ selected, checked: selected }}
+                    accessibilityState={{
+                      selected,
+                      checked: selected,
+                      disabled: policyLocked,
+                    }}
                     aria-checked={selected}
                     testID={`policy-${option.id}`}
                   >
@@ -878,8 +993,36 @@ export default function SettingsScreen() {
             })}
           </View>
 
-          {/* In auto modes the manual pickers below visibly hand over. */}
-          {autoPolicyActive && (
+          {/* In auto modes the manual pickers below visibly hand over; a
+              workspace-forced policy does the same, labeled with who manages
+              it. The server clamps regardless of what this screen shows. */}
+          {policyLocked ? (
+            <View
+              style={[
+                styles.policyTakeover,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                },
+              ]}
+              testID="model-policy-managed"
+            >
+              <Feather name="lock" size={14} color={colors.primary} />
+              <Text
+                style={[
+                  styles.policyTakeoverText,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                Managed by {managedByName} — its admins{" "}
+                {forcedPolicy === "auto-cheapest"
+                  ? "route every reply billed to the workspace to the cheapest healthy models."
+                  : "route every reply billed to the workspace to the most capable models."}{" "}
+                Your own settings are kept and still apply in your personal
+                space.
+              </Text>
+            </View>
+          ) : autoPolicyActive ? (
             <View
               style={[
                 styles.policyTakeover,
@@ -898,13 +1041,13 @@ export default function SettingsScreen() {
                 ]}
               >
                 Venom is choosing —{" "}
-                {selectionPolicy === "auto-cheapest"
+                {effectivePolicy === "auto-cheapest"
                   ? "the cheapest healthy models carry every reply, and the account switches automatically when availability or account health changes."
                   : "the most capable models carry every reply, and the account switches automatically when availability changes."}{" "}
                 Your manual picks below wake up again on Manual.
               </Text>
             </View>
-          )}
+          ) : null}
 
           {modelsQuery.isLoading ? (
             <View style={styles.modelLoading}>
@@ -949,6 +1092,16 @@ export default function SettingsScreen() {
                   const isDefault = defaultModelId === model.id;
                   const isOnlyEnabled =
                     enabledModelIds.length === 1 && isEnabled;
+                  // The workspace tier lock excludes this model from
+                  // workspace-billed replies; its controls stay visible but
+                  // disabled, labeled managed. Removal stays allowed.
+                  const managedOut = Boolean(
+                    lockedTiers &&
+                      !(
+                        model.costTier &&
+                        lockedTiers.includes(model.costTier)
+                      ),
+                  );
 
                   return (
                     <React.Fragment key={model.id}>
@@ -1038,6 +1191,25 @@ export default function SettingsScreen() {
                                   </Text>
                                 </View>
                               )}
+                              {managedOut && (
+                                <View
+                                  style={[
+                                    styles.modelBadge,
+                                    { borderColor: colors.border },
+                                  ]}
+                                  accessibilityLabel={`Not allowed in ${managedByName} — managed by its admins`}
+                                  testID={`model-managed-${model.id}`}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.modelBadgeText,
+                                      { color: colors.mutedForeground },
+                                    ]}
+                                  >
+                                    Managed
+                                  </Text>
+                                </View>
+                              )}
                             </View>
                             <Text
                               style={[
@@ -1065,18 +1237,19 @@ export default function SettingsScreen() {
                               onPress={() =>
                                 setDefaultModel(model.id as VenomModelId)
                               }
-                              disabled={autoPolicyActive}
+                              disabled={autoPolicyActive || managedOut}
                               style={[
                                 styles.modelActionButton,
                                 {
                                   borderColor: colors.border,
-                                  opacity: autoPolicyActive ? 0.38 : 1,
+                                  opacity:
+                                    autoPolicyActive || managedOut ? 0.38 : 1,
                                 },
                               ]}
                               accessibilityRole="button"
                               accessibilityLabel={`Set ${model.name} as default`}
                               accessibilityState={{
-                                disabled: autoPolicyActive,
+                                disabled: autoPolicyActive || managedOut,
                               }}
                               hitSlop={8}
                               testID={`set-default-model-${model.id}`}
@@ -1114,6 +1287,7 @@ export default function SettingsScreen() {
                             disabled={
                               (isOnlyEnabled && isEnabled) ||
                               (!isEnabled && !model.available) ||
+                              (!isEnabled && managedOut) ||
                               autoPolicyActive
                             }
                             style={[
@@ -1125,6 +1299,7 @@ export default function SettingsScreen() {
                                 opacity:
                                   (isOnlyEnabled && isEnabled) ||
                                   (!isEnabled && !model.available) ||
+                                  (!isEnabled && managedOut) ||
                                   autoPolicyActive
                                     ? 0.38
                                     : 1,
@@ -1140,6 +1315,7 @@ export default function SettingsScreen() {
                               disabled:
                                 (isOnlyEnabled && isEnabled) ||
                                 (!isEnabled && !model.available) ||
+                                (!isEnabled && managedOut) ||
                                 autoPolicyActive,
                             }}
                             hitSlop={8}
@@ -1476,6 +1652,271 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Billing */}
+        <View style={styles.section} testID="settings-billing-section">
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            Billing
+          </Text>
+          <Text
+            style={[
+              styles.sourceDescription,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            Your personal plan covers AI in your personal space. Chats in a
+            workspace with an Organization plan bill that workspace instead.
+          </Text>
+          <View
+            style={[
+              styles.usageCard,
+              { borderColor: colors.border, backgroundColor: colors.card },
+            ]}
+          >
+            {billingLoading ? (
+              <View style={styles.usageStateRow} testID="billing-loading">
+                <ActivityIndicator
+                  size="small"
+                  color={colors.mutedForeground}
+                />
+                <Text
+                  style={[
+                    styles.usageStateText,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Checking your plan…
+                </Text>
+              </View>
+            ) : billingFailed ? (
+              <View testID="billing-error">
+                <Text
+                  style={[styles.usageStateText, { color: colors.destructive }]}
+                >
+                  Your plan couldn&rsquo;t be loaded. Check your connection
+                  and try again.
+                </Text>
+                <TouchableOpacity
+                  testID="billing-retry"
+                  onPress={() => void billingQuery.refetch()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry loading your plan"
+                  style={[styles.usageRetry, { borderColor: colors.border }]}
+                >
+                  <Text
+                    style={[
+                      styles.usageRetryText,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Try again
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : billingSummary ? (
+              <>
+                <View style={styles.billingHeaderRow}>
+                  <View style={{ flexShrink: 1 }}>
+                    <Text
+                      testID="billing-plan-name"
+                      style={[
+                        styles.billingPlanName,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      {billingSummary.plan.name}
+                    </Text>
+                    <Text
+                      testID="billing-renewal"
+                      style={[
+                        styles.billingPlanMeta,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      {billingSummary.plan.priceUsd > 0
+                        ? `$${billingSummary.plan.priceUsd}/mo · `
+                        : "Free · "}
+                      {billingSummary.cancelAtPeriodEnd
+                        ? `ends ${billingDateLabel(billingSummary.periodEnd)}`
+                        : billingSummary.renews
+                          ? `renews ${billingDateLabel(billingSummary.periodEnd)}`
+                          : `allowance resets ${billingDateLabel(billingSummary.periodEnd)}`}
+                    </Text>
+                  </View>
+                  {!billingSummary.configured && (
+                    <View
+                      style={[
+                        styles.billingBadge,
+                        { borderColor: colors.border },
+                      ]}
+                      testID="billing-not-configured"
+                    >
+                      <Text
+                        style={[
+                          styles.billingBadgeText,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        Not set up yet
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View
+                  style={[
+                    styles.billingMeterTrack,
+                    { backgroundColor: colors.accent },
+                  ]}
+                  accessibilityRole="progressbar"
+                  accessibilityValue={{
+                    min: 0,
+                    max: 100,
+                    now: Math.round(billingShare * 100),
+                  }}
+                  accessibilityLabel="Share of included AI used this period"
+                  testID="billing-meter"
+                >
+                  <View
+                    style={[
+                      styles.billingMeterFill,
+                      {
+                        backgroundColor:
+                          billingSummary.state === "exhausted"
+                            ? colors.destructive
+                            : colors.foreground,
+                        width: `${Math.max(billingShare * 100, 2)}%`,
+                      },
+                    ]}
+                  />
+                </View>
+                <View style={styles.billingMeterRow}>
+                  <Text
+                    style={[
+                      styles.billingMeterLabel,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    Included AI this period
+                  </Text>
+                  <Text
+                    testID="billing-meter-figures"
+                    style={[
+                      styles.billingMeterFigures,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    {formatUsdAmount(billingSummary.spentUsd)} of $
+                    {billingSummary.plan.allowanceUsd}
+                  </Text>
+                </View>
+                {billingSummary.state === "exhausted" ? (
+                  <Text
+                    testID="billing-state-exhausted"
+                    style={[
+                      styles.billingStateText,
+                      { color: colors.destructive },
+                    ]}
+                  >
+                    {billingSummary.upgradePlan
+                      ? "You've used this period's included AI. Upgrade to keep going, or wait for the reset."
+                      : "You've used this period's included AI. It comes back at the reset."}
+                  </Text>
+                ) : billingSummary.state === "approaching" ? (
+                  <Text
+                    testID="billing-state-approaching"
+                    style={[
+                      styles.billingStateText,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    You&rsquo;re close to this period&rsquo;s included AI —{" "}
+                    {formatUsdAmount(billingSummary.remainingUsd)} left.
+                  </Text>
+                ) : null}
+                {billingSummary.configured &&
+                  (billingSummary.upgradePlan || billingSummary.manageable) && (
+                    <View style={styles.billingActionsRow}>
+                      {billingSummary.upgradePlan && (
+                        <TouchableOpacity
+                          testID="billing-upgrade"
+                          disabled={billingAction !== null}
+                          onPress={() => void openBillingPage("checkout")}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Upgrade to ${billingSummary.upgradePlan.name}`}
+                          style={[
+                            styles.billingPrimaryButton,
+                            {
+                              backgroundColor: colors.foreground,
+                              opacity: billingAction ? 0.5 : 1,
+                            },
+                          ]}
+                        >
+                          {billingAction === "checkout" ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={colors.background}
+                            />
+                          ) : (
+                            <Text
+                              style={[
+                                styles.billingPrimaryButtonText,
+                                { color: colors.background },
+                              ]}
+                            >
+                              Upgrade to {billingSummary.upgradePlan.name}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                      {billingSummary.manageable && (
+                        <TouchableOpacity
+                          testID="billing-manage"
+                          disabled={billingAction !== null}
+                          onPress={() => void openBillingPage("portal")}
+                          accessibilityRole="button"
+                          accessibilityLabel="Manage billing"
+                          style={[
+                            styles.billingOutlineButton,
+                            {
+                              borderColor: colors.border,
+                              opacity: billingAction ? 0.5 : 1,
+                            },
+                          ]}
+                        >
+                          {billingAction === "portal" ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={colors.foreground}
+                            />
+                          ) : (
+                            <Text
+                              style={[
+                                styles.billingOutlineButtonText,
+                                { color: colors.foreground },
+                              ]}
+                            >
+                              Manage billing
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                {billingActionError && (
+                  <Text
+                    style={[
+                      styles.billingStateText,
+                      { color: colors.destructive },
+                    ]}
+                  >
+                    {billingActionError}
+                  </Text>
+                )}
+              </>
+            ) : null}
+          </View>
+        </View>
+
         {/* Usage */}
         <View style={styles.section} testID="settings-usage-section">
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>
@@ -1696,6 +2137,25 @@ export default function SettingsScreen() {
                       </Text>
                     )}
                   </>
+                )}
+                {(usageSummary.coveredByWorkspaces ?? []).length > 0 && (
+                  <Text
+                    testID="usage-covered-note"
+                    style={[
+                      styles.usageCoveredNote,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    Some of your AI activity was covered by{" "}
+                    {(usageSummary.coveredByWorkspaces ?? [])
+                      .map((workspace) => workspace.name)
+                      .join(", ")}
+                    . It&rsquo;s billed to{" "}
+                    {(usageSummary.coveredByWorkspaces ?? []).length === 1
+                      ? "that workspace's plan"
+                      : "those workspaces' plans"}{" "}
+                    and doesn&rsquo;t count against yours.
+                  </Text>
                 )}
               </>
             ) : null}
@@ -2671,6 +3131,96 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
   },
+  billingHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  billingPlanName: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 22,
+    letterSpacing: -0.5,
+  },
+  billingPlanMeta: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginTop: 3,
+  },
+  billingBadge: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  billingBadgeText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+  },
+  billingMeterTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: "hidden",
+    marginTop: 14,
+  },
+  billingMeterFill: {
+    height: "100%",
+    borderRadius: 999,
+  },
+  billingMeterRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginTop: 6,
+  },
+  billingMeterLabel: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+  },
+  billingMeterFigures: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12.5,
+    fontVariant: ["tabular-nums"],
+  },
+  billingStateText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginTop: 10,
+  },
+  billingActionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 14,
+  },
+  billingPrimaryButton: {
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  billingPrimaryButtonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+  },
+  billingOutlineButton: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  billingOutlineButtonText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+  },
+  usageCoveredNote: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 12,
+  },
   usageStateRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -3197,8 +3747,31 @@ const UI_TEST_USAGE_SUMMARY: VenomUsageSummary = {
       hasEstimates: true,
     },
   ],
+  coveredByWorkspaces: [
+    { id: "6b1de5f2-9c1a-4a41-8f7e-2b6a5c9d0e33", name: "Design Guild" },
+  ],
 };
 
+const UI_TEST_BILLING_SUMMARY: VenomBillingSummary = {
+  configured: true,
+  enforced: true,
+  plan: { id: "free", name: "Free", priceUsd: 0, allowanceUsd: 5 },
+  status: "none",
+  cancelAtPeriodEnd: false,
+  periodStart: "2026-08-01T00:00:00.000Z",
+  periodEnd: "2026-09-01T00:00:00.000Z",
+  renews: false,
+  spentUsd: 1.86,
+  remainingUsd: 3.14,
+  state: "ok",
+  upgradePlan: {
+    id: "plus",
+    name: "Venom Plus",
+    priceUsd: 15,
+    allowanceUsd: 50,
+  },
+  manageable: false,
+};
 function usageDayLabel(date: string): string {
   const month = Number(date.slice(5, 7));
   const day = Number(date.slice(8, 10));
@@ -3215,6 +3788,15 @@ function usageMonthLabel(periodStart: string): string {
   return name ? `${name} ${year}` : "This month";
 }
 
+/** ISO timestamp → "September 1, 2026" for plan renewal/reset lines. */
+function billingDateLabel(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "next period";
+  const month = USAGE_MONTHS[parsed.getUTCMonth()];
+  return month
+    ? `${month} ${parsed.getUTCDate()}, ${parsed.getUTCFullYear()}`
+    : "next period";
+}
 /** Compact token/request counts: 940, 12.4k, 3.1M. */
 function formatCompactCount(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "0";

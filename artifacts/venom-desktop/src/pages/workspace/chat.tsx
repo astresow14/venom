@@ -5,15 +5,18 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import { VenomWordmark } from "@/components/venom-wordmark";
 import {
   commitVenomCanonTeaching,
   extractVenomKnowledge,
   getGetSharedWorkspaceKnowledgeQueryKey,
+  getGetVenomBillingContextQueryKey,
   getGetVenomDeliberationQueryKey,
   getGetVenomIdentityQueryKey,
   getGetVenomModelsQueryKey,
   proposeVenomCanonTeaching,
   undoVenomKnowledgeMove,
+  useGetVenomBillingContext,
   useGetVenomDeliberation,
   useGetVenomIdentity,
   useGetVenomModels,
@@ -43,6 +46,7 @@ import {
   Globe,
   ArrowUpRight,
   CloudOff,
+  CreditCard,
 } from "lucide-react";
 import { useUnsyncedNoticeText } from "@/hooks/useUnsyncedNotice";
 import { cn } from "@/lib/utils";
@@ -70,7 +74,7 @@ import {
   type StreamingDeliberation,
 } from "@/components/workspace/DeliberationPanel";
 import { messageCitationSegments } from "@/lib/messageCitations";
-import { ResponseModeSwitch } from "@/components/workspace/ResponseModeSwitch";
+import { PillSwitch } from "@/components/workspace/PillSwitch";
 import {
   CanonTeachCard,
   type CanonTeachState,
@@ -83,6 +87,10 @@ import {
   type StreamingDebate,
 } from "@/components/workspace/DebatePanel";
 import {
+  SpeakerAvatar,
+  speakerGlyph,
+} from "@/components/workspace/SpeakerAvatar";
+import {
   EVEN_BLEND,
   isResponseMode,
   normalizeConversationBlend,
@@ -94,6 +102,7 @@ import {
 import { normalizeModelPreferences } from "@/lib/workspaceState";
 import { Paperclip } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSharedWorkspace } from "@/context/shared-workspace";
 import type { VenomMessageAttachment } from "@workspace/api-client-react";
 import {
   ComposerAttachmentRow,
@@ -217,7 +226,6 @@ type StreamingState = {
   file?: VenomMessageAttachment;
 };
 
-const GENERIC_PROJECT_NAMES = new Set(["global workspace", "workspace"]);
 
 /** The three verify voices in pad-corner order, with offline label fallbacks. */
 const VERIFY_VOICES: Array<{
@@ -228,30 +236,6 @@ const VERIFY_VOICES: Array<{
   { id: "skeptic", label: "Skeptic" },
   { id: "evidence", label: "Evidence" },
 ];
-
-/** Starter prompts for an empty chat, tuned to the conversation's project. */
-function buildStarterPrompts(projectName?: string): string[] {
-  const named =
-    projectName && !GENERIC_PROJECT_NAMES.has(projectName.trim().toLowerCase())
-      ? projectName.trim()
-      : null;
-
-  if (!named) {
-    return [
-      "Summarise where my work stands",
-      "What did I decide recently?",
-      "Draft the next steps for this week",
-      "Turn this chat into to-dos",
-    ];
-  }
-
-  return [
-    `Summarise where ${named} stands`,
-    `What did I decide recently in ${named}?`,
-    `Draft the next steps for ${named}`,
-    `Turn this chat into to-dos`,
-  ];
-}
 
 export default function ChatPage() {
   const { user } = useUser();
@@ -275,6 +259,21 @@ export default function ChatPage() {
   // chat rather than in the sidebar status alone.
   const unsyncedNoticeText = useUnsyncedNoticeText(syncStatus);
   const queryClient = useQueryClient();
+  const { activeWorkspace } = useSharedWorkspace();
+
+  // The payer is derived from the space this chat lives in. A failed lookup
+  // hides the hint only — sending must never wait on a billing read.
+  const billingContextParams = activeWorkspace
+    ? { workspaceId: activeWorkspace.id }
+    : undefined;
+  const billingContextQuery = useGetVenomBillingContext(billingContextParams, {
+    query: {
+      queryKey: getGetVenomBillingContextQueryKey(billingContextParams),
+      staleTime: 60_000,
+      retry: 1,
+    },
+  });
+  const payerContext = billingContextQuery.data ?? null;
 
   const [, setLocation] = useLocation();
 
@@ -326,6 +325,15 @@ export default function ChatPage() {
   const modelsQuery = useGetVenomModels({
     query: { staleTime: 60_000, retry: false, queryKey: getGetVenomModelsQueryKey() },
   });
+  // Resolves a turn's model to its family for the speaker avatars; the
+  // catalog is already fetched here, so leaf components never re-query.
+  const familyForModel = useCallback(
+    (modelId: string) =>
+      (Array.isArray(modelsQuery.data) ? modelsQuery.data : []).find(
+        (model) => model.id === modelId,
+      )?.family,
+    [modelsQuery.data],
+  );
 
   // Citation lookups so deliberation views resolve [source:id] markers to
   // source references (live links or archived labels), never raw markers.
@@ -850,6 +858,7 @@ export default function ChatPage() {
             projectContext: projectContext?.slice(0, 1000),
             projectId,
             modelId,
+            ...(activeWorkspace ? { workspaceId: activeWorkspace.id } : {}),
             // Talk requests stay byte-identical with today's chat: no mode
             // key at all. Verify and debate declare themselves explicitly.
             ...(mode === "verify" || mode === "debate"
@@ -885,6 +894,15 @@ export default function ChatPage() {
               // Membership ended between selecting the workspace and sending:
               // evict cached workspace content and fall back to personal.
               notifyWorkspaceAccessLost();
+            }
+            if (response.status === 402) {
+              // The allowance can be consumed after the hint was fetched;
+              // refresh it so the composer immediately reports the limit.
+              void queryClient.invalidateQueries({
+                queryKey: getGetVenomBillingContextQueryKey(
+                  billingContextParams,
+                ),
+              });
             }
             if (body?.error) errorDetail = body.error;
           } catch {
@@ -1863,16 +1881,6 @@ export default function ChatPage() {
   );
   const composerLocked = streaming?.status === "sending" && !debateInFlight;
 
-  const conversationProject = state?.projects?.find(
-    (p) => p.id === activeConv?.projectId,
-  );
-  const starterPrompts = buildStarterPrompts(conversationProject?.name);
-
-  const useStarterPrompt = (prompt: string) => {
-    setInputValue(prompt);
-    inputRef.current?.focus();
-  };
-
   const handleClearConversation = () => {
     if (!activeConvId) return;
     if (window.confirm("Clear this chat? This cannot be undone.")) {
@@ -1905,6 +1913,9 @@ export default function ChatPage() {
         if (!composerLocked) handlePickFiles(event.dataTransfer.files);
       }}
     >
+      {/* The visible page is deliberately chrome-light (brand mark + composer),
+          so the document heading is screen-reader-only. */}
+      <h1 className="sr-only">Chat</h1>
       {dragActive && (
         <div
           className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center border-2 border-dashed border-foreground/50 bg-background/80"
@@ -1964,36 +1975,23 @@ export default function ChatPage() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              className="flex flex-1 flex-col justify-center pb-16"
+              className="flex flex-1 flex-col items-center justify-center pb-16"
             >
-              <h1
-                className="text-3xl font-semibold tracking-tight glow-text inline-block pb-1"
-                data-testid="text-chat-greeting"
+              {/* Empty chat is just the brand and the composer: the full
+                  VENOM wordmark is the only thing on stage until the first
+                  message lands. (Starter-prompt chips were removed
+                  deliberately — if they return, they return as algorithmic
+                  recommendations.) */}
+              <div
+                data-testid="img-chat-empty-mark"
+                className="flex justify-center px-6"
               >
-                What are we working on?
-              </h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {conversationProject?.name
-                  ? `Context from ${conversationProject.name} is included in this chat.`
-                  : "Project context is included in this chat."}
-              </p>
-              <div className="mt-6 grid gap-2 sm:grid-cols-2">
-                {starterPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => useStarterPrompt(prompt)}
-                    data-testid="button-starter-prompt"
-                    className="rounded-xl border border-border px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {prompt}
-                  </button>
-                ))}
+                <VenomWordmark className="h-16 md:h-20" title="Venom" />
               </div>
             </motion.div>
           ) : (
             <AnimatePresence initial={false}>
-              {displayMessages.map((msg) => {
+              {displayMessages.map((msg, index) => {
                 // Resolve attribution for completed assistant messages
                 const isStreaming =
                   streaming?.id === msg.id && streaming.convId === activeConvId;
@@ -2018,6 +2016,27 @@ export default function ChatPage() {
                   msg.modelName !== speakerName
                     ? msg.modelName
                     : undefined;
+                // Group-chat runs: consecutive turns from the same speaker
+                // read as one visual group — the avatar and name chip sit
+                // only on the run's first message (the list is chronological
+                // here, so the predecessor is the previous array entry).
+                const chronologicalPrev =
+                  index > 0 ? displayMessages[index - 1] : undefined;
+                const runStart =
+                  Boolean(speakerName) &&
+                  !(
+                    chronologicalPrev &&
+                    chronologicalPrev.role === "assistant" &&
+                    chronologicalPrev.speakerName === speakerName
+                  );
+                const avatarGlyph = speakerName
+                  ? speakerGlyph({
+                      speakerId: msg.speakerId,
+                      modelId: msg.modelId,
+                      name: speakerName,
+                      familyForModel,
+                    })
+                  : null;
 
                 // The connected sources this answer cited, in the order they
                 // appear. Each entry remembers the first citation the answer
@@ -2060,6 +2079,11 @@ export default function ChatPage() {
                     className={cn(
                       "flex w-full flex-col",
                       msg.role === "user" ? "items-end" : "items-start",
+                      // Speaker turns get a left gutter for the group-chat
+                      // avatar; run continuations tuck up under their run
+                      // (the container's gap-6 minus this pull ≈ 6px).
+                      speakerName && "relative pl-8",
+                      speakerName && !runStart && "-mt-[18px]",
                     )}
                     data-testid={`message-${msg.role}`}
                   >
@@ -2068,19 +2092,24 @@ export default function ChatPage() {
                         deliberation={liveDeliberation}
                         citationsById={citationsById}
                         archivedById={archivedCitationsById}
+                        familyForModel={familyForModel}
                       />
                     )}
 
-                    {/* Speaker chip – named debate voices own their turns */}
-                    {speakerName && (
+                    {/* Speaker chip – named debate voices own their turns,
+                        iMessage-style: avatar in the gutter, name above the
+                        run's first bubble only. */}
+                    {speakerName && runStart && avatarGlyph && (
+                      <SpeakerAvatar
+                        glyph={avatarGlyph}
+                        className="absolute left-0 top-0"
+                      />
+                    )}
+                    {speakerName && runStart && (
                       <div
-                        className="mb-1 flex items-center gap-1.5 text-xs font-medium text-foreground/80"
+                        className="mb-1 flex h-6 items-center gap-1.5 text-xs font-medium text-foreground/80"
                         data-testid="chip-speaker"
                       >
-                        <span
-                          className="inline-block h-1.5 w-1.5 rounded-full bg-foreground"
-                          aria-hidden="true"
-                        />
                         {speakerName}
                         {speakerModel && (
                           <span className="font-normal text-muted-foreground">
@@ -2095,6 +2124,7 @@ export default function ChatPage() {
                         debate={liveDebate}
                         citationsById={citationsById}
                         archivedById={archivedCitationsById}
+                        familyForModel={familyForModel}
                       />
                     ) : (
                       <div
@@ -2151,6 +2181,7 @@ export default function ChatPage() {
                           deliberation={msg.deliberation}
                           citationsById={citationsById}
                           archivedById={archivedCitationsById}
+                          familyForModel={familyForModel}
                         />
                       )}
 
@@ -2497,23 +2528,55 @@ export default function ChatPage() {
           {/* Model selector row */}
           <div className="flex items-center gap-2 px-3 pb-1">
             <ModelSelector onOpen={openModelVoices} />
-            <div className="ml-auto flex items-center gap-2">
-              {deliberationAvailable && responseMode !== "talk" && (
-                <button
-                  type="button"
-                  onClick={openModelVoices}
-                  className="rounded-full border border-border/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-haspopup="dialog"
-                  data-testid="button-open-voices"
-                >
-                  Voices
-                </button>
-              )}
+            {payerContext?.payer && (
+              <span
+                className={cn(
+                  "hidden min-w-0 items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground sm:flex",
+                  (payerContext.state === "exhausted" ||
+                    payerContext.memberCapState === "exhausted") &&
+                    "border-destructive/50 text-destructive",
+                )}
+                data-testid="composer-payer-hint"
+                title={
+                  payerContext.payer === "workspace"
+                    ? `AI in this chat draws on ${payerContext.workspaceName ?? "this workspace"}'s ${payerContext.planName} plan, not your personal allowance.${
+                        payerContext.memberCapState
+                          ? " Its admins also set a monthly limit for your share; reaching it pauses your chats here only — never your personal space."
+                          : ""
+                      }`
+                    : `AI in this chat draws on your ${payerContext.planName} plan's included AI.`
+                }
+              >
+                <CreditCard className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">
+                  {payerContext.payer === "workspace"
+                    ? `Billed to ${payerContext.workspaceName ?? "workspace"}`
+                    : `${payerContext.planName} plan`}
+                  {payerContext.state === "exhausted"
+                    ? " · limit reached"
+                    : payerContext.memberCapState === "exhausted"
+                      ? " · your workspace limit reached"
+                      : payerContext.state === "approaching"
+                        ? " · running low"
+                        : payerContext.memberCapState === "approaching"
+                          ? " · nearing your workspace limit"
+                          : ""}
+                </span>
+              </span>
+            )}
+            <div className="ml-auto flex items-center">
+              {/* The composer keeps a single mode affordance: Debate on/off.
+                  Verify lives in the models & voices popup behind the
+                  Select-model pill, so the footer stays minimal. */}
               {deliberationAvailable && (
-                <ResponseModeSwitch
-                  value={responseMode}
-                  onChange={handleModeChange}
+                <PillSwitch
+                  label="Debate"
+                  checked={responseMode === "debate"}
+                  onChange={(on) => handleModeChange(on ? "debate" : "talk")}
                   disabled={streaming?.status === "sending"}
+                  ariaLabel="Debate: voices argue it out in the thread"
+                  title="Voices argue it out in the thread"
+                  testId="switch-debate"
                 />
               )}
             </div>
@@ -2528,7 +2591,9 @@ export default function ChatPage() {
         onOpenChange={setModelVoicesOpen}
         openerRef={modelVoicesOpenerRef}
         responseMode={responseMode}
+        onModeChange={handleModeChange}
         deliberationAvailable={deliberationAvailable}
+        modeLocked={streaming?.status === "sending"}
         distinctModels={deliberationQuery.data?.distinctModels !== false}
         personaVoices={personaVoices}
         voicePicks={voicePicks}

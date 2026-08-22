@@ -15,6 +15,7 @@ import {
   MAX_API_JSON_BODY_BYTES,
   payloadTooLargeErrorHandler,
 } from "./routes/venom-workspace-router";
+import { handleStripeWebhook } from "./routes/venom-billing-router";
 
 const app: Express = express();
 
@@ -71,6 +72,17 @@ app.use(
     },
   }),
 );
+// Stripe webhook: mounted ahead of the JSON parser because signature
+// verification needs the exact raw bytes Stripe signed. It authenticates
+// with that signature alone — Clerk is never involved.
+app.post(
+  "/api/venom/billing/webhook",
+  express.raw({ type: () => true, limit: "1mb" }),
+  (req, res, next) => {
+    handleStripeWebhook(req, res).catch(next);
+  },
+);
+
 app.use(express.json({ limit: MAX_API_JSON_BODY_BYTES }));
 app.use(express.urlencoded({ extended: true }));
 

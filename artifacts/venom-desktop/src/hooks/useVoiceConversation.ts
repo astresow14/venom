@@ -24,6 +24,7 @@ import {
   type MutableRefObject,
 } from 'react';
 import { useUser } from '@clerk/react';
+import { useSharedWorkspace } from '@/context/shared-workspace';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   extractVenomKnowledge,
@@ -236,6 +237,15 @@ export function useVoiceConversation(
     setVoicePreferences,
   } = useVenomWorkspace();
   const queryClient = useQueryClient();
+  // Voice turns bill the space the user is working in, exactly like typed
+  // chat: the active workspace rides every billed voice request so admin
+  // caps and model locks bind here too. A ref keeps the long-lived run
+  // callbacks reading the current space without re-arming them.
+  const { activeWorkspace } = useSharedWorkspace();
+  const activeWorkspaceIdRef = useRef<string | null>(
+    activeWorkspace?.id ?? null,
+  );
+  activeWorkspaceIdRef.current = activeWorkspace?.id ?? null;
 
   const [phase, setPhase] = useState<VoicePhase>('idle');
   const [error, setError] = useState<VoiceError | null>(null);
@@ -518,6 +528,9 @@ export function useVoiceConversation(
           body: JSON.stringify({
             text: segment.slice(0, 2000),
             presetId: activePresetIdRef.current,
+            ...(activeWorkspaceIdRef.current
+              ? { workspaceId: activeWorkspaceIdRef.current }
+              : {}),
           }),
           signal: controller.signal,
         });
@@ -840,6 +853,9 @@ export function useVoiceConversation(
             projectContext: projectContext?.slice(0, 1000),
             projectId: onScreenProjectId ?? 'proj_default',
             modelId: sendingModelId,
+            ...(activeWorkspaceIdRef.current
+              ? { workspaceId: activeWorkspaceIdRef.current }
+              : {}),
           }),
           signal: controller.signal,
         });
@@ -1049,6 +1065,9 @@ export function useVoiceConversation(
             transcript: transcriptText.slice(0, 8000),
             recentTurns,
             talkativeness,
+            ...(activeWorkspaceIdRef.current
+              ? { workspaceId: activeWorkspaceIdRef.current }
+              : {}),
           }),
           signal: controller.signal,
         });
@@ -1173,7 +1192,12 @@ export function useVoiceConversation(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ audioBase64 }),
+          body: JSON.stringify({
+            audioBase64,
+            ...(activeWorkspaceIdRef.current
+              ? { workspaceId: activeWorkspaceIdRef.current }
+              : {}),
+          }),
         });
         if (response.status === 503) {
           failSession({

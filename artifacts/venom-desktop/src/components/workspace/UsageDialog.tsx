@@ -20,8 +20,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { getVenomUsageSummary } from "@workspace/api-client-react";
-import type { VenomUsageSummary } from "@workspace/api-client-react";
+import {
+  createVenomBillingCheckout,
+  createVenomBillingPortal,
+  getVenomBillingSummary,
+  getVenomUsageSummary,
+} from "@workspace/api-client-react";
+import type {
+  VenomBillingSummary,
+  VenomUsageSummary,
+} from "@workspace/api-client-react";
 
 /** Dollar display: exact to the cent, honest about dust. */
 export function formatUsd(value: number): string {
@@ -64,6 +72,195 @@ function dayLabel(date: string): string {
   });
 }
 
+/** ISO timestamp → "September 1, 2026" for renewal/reset lines. */
+function renewalLabel(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "next period";
+  return parsed.toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * The personal plan card: current plan, renewal, and an allowance meter of
+ * this period's personally-billed spend against what the plan includes.
+ * Workspace-billed usage never moves this meter — it isn't the member's
+ * money. With Stripe unconfigured the card stays informative but quiet.
+ */
+function PlanCard({ billing }: { billing: VenomBillingSummary }) {
+  const [busy, setBusy] = useState<"checkout" | "portal" | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const allowance = billing.plan.allowanceUsd;
+  const spentShare =
+    allowance > 0 ? Math.min(billing.spentUsd / allowance, 1) : 1;
+  const periodEndLabel = renewalLabel(billing.periodEnd);
+
+  const openStripePage = async (kind: "checkout" | "portal") => {
+    setBusy(kind);
+    setActionError(null);
+    try {
+      const body = { returnUrl: window.location.href };
+      const { url } =
+        kind === "checkout"
+          ? await createVenomBillingCheckout(body)
+          : await createVenomBillingPortal(body);
+      window.open(url, "_blank", "noopener");
+    } catch {
+      setActionError(
+        kind === "checkout"
+          ? "Checkout couldn't be started. Try again in a moment."
+          : "The billing portal couldn't be opened. Try again in a moment.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div
+      className="rounded-lg border border-border/60 p-4"
+      data-testid="billing-plan-card"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            Your plan
+          </div>
+          <div
+            className="mt-0.5 text-lg font-semibold text-foreground"
+            data-testid="billing-plan-name"
+          >
+            {billing.plan.name}
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              {billing.plan.priceUsd > 0
+                ? `$${billing.plan.priceUsd}/mo`
+                : "Free"}
+            </span>
+          </div>
+          <div
+            className="mt-0.5 text-xs text-muted-foreground"
+            data-testid="billing-renewal"
+          >
+            {billing.cancelAtPeriodEnd
+              ? `Ends ${periodEndLabel}`
+              : billing.renews
+                ? `Renews ${periodEndLabel}`
+                : `Allowance resets ${periodEndLabel}`}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {billing.configured ? (
+            <>
+              {billing.upgradePlan && (
+                <button
+                  type="button"
+                  data-testid="billing-upgrade"
+                  disabled={busy !== null}
+                  onClick={() => void openStripePage("checkout")}
+                  className="rounded-full bg-foreground px-3.5 py-1.5 text-sm font-semibold text-background transition-opacity hover:opacity-85 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {busy === "checkout" ? (
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    `Upgrade to ${billing.upgradePlan.name}`
+                  )}
+                </button>
+              )}
+              {billing.manageable && (
+                <button
+                  type="button"
+                  data-testid="billing-manage"
+                  disabled={busy !== null}
+                  onClick={() => void openStripePage("portal")}
+                  className="rounded-full border border-border/60 px-3.5 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:bg-muted disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {busy === "portal" ? (
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    "Manage billing"
+                  )}
+                </button>
+              )}
+            </>
+          ) : (
+            <span
+              className="rounded-full border border-dashed border-border/60 px-3 py-1 text-xs text-muted-foreground"
+              data-testid="billing-not-configured"
+            >
+              Billing not set up yet
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Allowance meter */}
+      <div className="mt-3">
+        <div className="flex items-baseline justify-between text-xs">
+          <span className="text-muted-foreground">Included AI this period</span>
+          <span
+            className="font-medium tabular-nums text-foreground"
+            data-testid="billing-meter-figures"
+          >
+            {formatUsd(billing.spentUsd)} of ${allowance}
+          </span>
+        </div>
+        <div
+          className="mt-1.5 h-2 overflow-hidden rounded-full bg-foreground/10"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(spentShare * 100)}
+          aria-label="Share of included AI used this period"
+          data-testid="billing-meter"
+        >
+          <div
+            className={cn(
+              "h-full rounded-full bg-foreground/80 transition-[width]",
+              billing.state === "exhausted" && "bg-destructive",
+            )}
+            style={{ width: `${Math.max(spentShare * 100, 2)}%` }}
+          />
+        </div>
+        {billing.state === "exhausted" ? (
+          <p
+            className="mt-2 text-xs font-medium text-destructive"
+            role="status"
+            data-testid="billing-state-exhausted"
+          >
+            {billing.upgradePlan
+              ? "You've used this period's included AI. Upgrade to keep going, or wait for the reset."
+              : "You've used this period's included AI. It comes back at the reset."}
+          </p>
+        ) : billing.state === "approaching" ? (
+          <p
+            className="mt-2 text-xs font-medium text-foreground/80"
+            role="status"
+            data-testid="billing-state-approaching"
+          >
+            You're close to this period's included AI —{" "}
+            {formatUsd(billing.remainingUsd)} left.
+          </p>
+        ) : null}
+        {actionError && (
+          <p className="mt-2 text-xs text-destructive" role="alert">
+            {actionError}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function UsageDialog({
   trigger,
 }: {
@@ -72,6 +269,9 @@ export default function UsageDialog({
   const [open, setOpen] = useState(false);
   const [summary, setSummary] = useState<VenomUsageSummary | null>(null);
   const [failed, setFailed] = useState(false);
+  // Plan/allowance state loads beside the ledger; a billing hiccup only
+  // hides the plan card — the spend view must never depend on Stripe.
+  const [billing, setBilling] = useState<VenomBillingSummary | null>(null);
   // Bumps to refetch after a failure without reopening the dialog.
   const [attempt, setAttempt] = useState(0);
 
@@ -87,6 +287,13 @@ export default function UsageDialog({
       .catch(() => {
         if (!stale) setFailed(true);
       });
+    getVenomBillingSummary()
+      .then((data) => {
+        if (!stale) setBilling(data);
+      })
+      .catch(() => {
+        if (!stale) setBilling(null);
+      });
     return () => {
       stale = true;
     };
@@ -94,6 +301,9 @@ export default function UsageDialog({
 
   const loading = summary === null && !failed;
   const empty = summary !== null && summary.totals.requests === 0;
+  // Older cached payloads can predate the covered-workspaces field; treat
+  // absence as "nothing covered" instead of crashing the dialog.
+  const coveredByWorkspaces = summary?.coveredByWorkspaces ?? [];
   const maxDailyCost = summary
     ? Math.max(...summary.daily.map((day) => day.costUsd), 0)
     : 0;
@@ -138,6 +348,10 @@ export default function UsageDialog({
           </div>
         ) : summary ? (
           <div className="space-y-5">
+            {/* Render only a well-shaped summary: an SPA fallback or proxy
+                can answer this endpoint with truthy non-JSON garbage. */}
+            {billing?.plan && <PlanCard billing={billing} />}
+
             {/* Month headline */}
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -267,6 +481,22 @@ export default function UsageDialog({
                   </p>
                 )}
               </>
+            )}
+
+            {coveredByWorkspaces.length > 0 && (
+              <p
+                className="text-xs leading-5 text-muted-foreground"
+                data-testid="usage-covered-note"
+              >
+                Some of your AI activity was covered by{" "}
+                {coveredByWorkspaces
+                  .map((workspace) => workspace.name)
+                  .join(", ")}
+                . It&rsquo;s billed to {coveredByWorkspaces.length === 1
+                  ? "that workspace's plan"
+                  : "those workspaces' plans"}{" "}
+                and doesn&rsquo;t count against yours.
+              </p>
             )}
           </div>
         ) : null}

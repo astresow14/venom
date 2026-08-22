@@ -1315,6 +1315,11 @@ export interface VenomChatRequest {
      * @maxLength 160
      */
   projectId: string;
+  /**
+     * The shared workspace this chat lives in. It controls filing and billing only; context still spans the caller's permitted spaces.
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  workspaceId?: string;
   modelId?: VenomModelId;
   /**
      * @maxItems 200
@@ -1638,6 +1643,253 @@ export interface VenomVoicePreferences {
   updatedAt: number;
 }
 
+export type VenomPlanId = typeof VenomPlanId[keyof typeof VenomPlanId];
+
+
+export const VenomPlanId = {
+  free: 'free',
+  plus: 'plus',
+  org: 'org',
+} as const;
+
+export interface VenomPlan {
+  id: VenomPlanId;
+  /**
+     * Display name from server configuration.
+     * @maxLength 80
+     */
+  name: string;
+  /**
+     * Monthly price in dollars; zero for the free tier.
+     * @minimum 0
+     */
+  priceUsd: number;
+  /**
+     * Included Venom AI value per month, in dollars.
+     * @minimum 0
+     */
+  allowanceUsd: number;
+}
+
+/**
+ * Where the payer stands against its included AI this period. "approaching" has crossed the warning threshold; "exhausted" means new AI requests from this space are blocked while enforcement is on.
+ */
+export type VenomAllowanceState = typeof VenomAllowanceState[keyof typeof VenomAllowanceState];
+
+
+export const VenomAllowanceState = {
+  ok: 'ok',
+  approaching: 'approaching',
+  exhausted: 'exhausted',
+} as const;
+
+/**
+ * Subscription status mirrored from Stripe; "none" without one.
+ */
+export type VenomBillingSummaryStatus = typeof VenomBillingSummaryStatus[keyof typeof VenomBillingSummaryStatus];
+
+
+export const VenomBillingSummaryStatus = {
+  none: 'none',
+  active: 'active',
+  trialing: 'trialing',
+  past_due: 'past_due',
+  canceled: 'canceled',
+  incomplete: 'incomplete',
+  incomplete_expired: 'incomplete_expired',
+  unpaid: 'unpaid',
+  paused: 'paused',
+} as const;
+
+export interface VenomBillingSummary {
+  /** False when Stripe keys are absent — clients show a "not set up" state. */
+  configured: boolean;
+  /** Whether allowances currently block requests on this server. */
+  enforced: boolean;
+  plan: VenomPlan;
+  /** Subscription status mirrored from Stripe; "none" without one. */
+  status: VenomBillingSummaryStatus;
+  cancelAtPeriodEnd: boolean;
+  periodStart: string;
+  /** When the paid period renews, or the free allowance resets. */
+  periodEnd: string;
+  /** True when a paid subscription renews at periodEnd. */
+  renews: boolean;
+  /**
+     * Personally-billed spend this period, dollars.
+     * @minimum 0
+     */
+  spentUsd: number;
+  /** @minimum 0 */
+  remainingUsd: number;
+  state: VenomAllowanceState;
+  /** Present only when an upgrade is on offer (free tier). */
+  upgradePlan?: VenomPlan;
+  /** True when a Stripe subscription exists to manage via the portal. */
+  manageable: boolean;
+}
+
+/**
+ * Whose allowance a message sent from this space draws on.
+ */
+export type VenomBillingContextPayer = typeof VenomBillingContextPayer[keyof typeof VenomBillingContextPayer];
+
+
+export const VenomBillingContextPayer = {
+  personal: 'personal',
+  workspace: 'workspace',
+} as const;
+
+/**
+ * @nullable
+ */
+export type VenomWorkspaceModelLockForcedSelectionPolicy = typeof VenomWorkspaceModelLockForcedSelectionPolicy[keyof typeof VenomWorkspaceModelLockForcedSelectionPolicy] | null;
+
+
+export const VenomWorkspaceModelLockForcedSelectionPolicy = {
+  'auto-cheapest': 'auto-cheapest',
+  'auto-max-power': 'auto-max-power',
+} as const;
+
+/**
+ * Present on the billing context for workspace payers whose admins manage model choice. Members learn which controls are locked — never cap figures or spend.
+ */
+export interface VenomWorkspaceModelLock {
+  /** @nullable */
+  forcedSelectionPolicy: VenomWorkspaceModelLockForcedSelectionPolicy;
+  /**
+     * @minItems 1
+     * @maxItems 3
+     * @nullable
+     */
+  allowedCostTiers: VenomModelCostTier[] | null;
+}
+
+export interface VenomBillingContext {
+  configured: boolean;
+  enforced: boolean;
+  /** Whose allowance a message sent from this space draws on. */
+  payer: VenomBillingContextPayer;
+  /** @maxLength 80 */
+  planName: string;
+  state: VenomAllowanceState;
+  /**
+     * Present for workspace payers.
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  workspaceId?: string;
+  /**
+     * Present for workspace payers.
+     * @maxLength 200
+     */
+  workspaceName?: string;
+  /**
+     * Present for the personal payer only; workspaces never expose figures to members.
+     * @minimum 0
+     */
+  remainingUsd?: number;
+  /** Present for workspace payers when an admin-set member cap binds the caller's workspace-billed usage. States only — the figures behind them stay with admins. */
+  memberCapState?: VenomAllowanceState;
+  /** Present for workspace payers when admins lock model settings for workspace-billed requests. */
+  modelLock?: VenomWorkspaceModelLock;
+}
+
+export type VenomWorkspaceBillingRole = typeof VenomWorkspaceBillingRole[keyof typeof VenomWorkspaceBillingRole];
+
+
+export const VenomWorkspaceBillingRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+/**
+ * Admin view only.
+ */
+export type VenomWorkspaceBillingStatus = typeof VenomWorkspaceBillingStatus[keyof typeof VenomWorkspaceBillingStatus];
+
+
+export const VenomWorkspaceBillingStatus = {
+  none: 'none',
+  active: 'active',
+  trialing: 'trialing',
+  past_due: 'past_due',
+  canceled: 'canceled',
+  incomplete: 'incomplete',
+  incomplete_expired: 'incomplete_expired',
+  unpaid: 'unpaid',
+  paused: 'paused',
+} as const;
+
+export interface VenomWorkspaceBilling {
+  configured: boolean;
+  enforced: boolean;
+  /** True while the Organization plan keeps this workspace's AI covered. */
+  covered: boolean;
+  /** @maxLength 80 */
+  planName: string;
+  role: VenomWorkspaceBillingRole;
+  /** Admin view only. */
+  plan?: VenomPlan;
+  /** Admin view only. */
+  status?: VenomWorkspaceBillingStatus;
+  /** Admin view only. */
+  cancelAtPeriodEnd?: boolean;
+  /** Admin view only. */
+  periodStart?: string;
+  /** Admin view only. */
+  periodEnd?: string;
+  /**
+     * Admin view only. Aggregate workspace spend this period.
+     * @minimum 0
+     */
+  spentUsd?: number;
+  /**
+     * Admin view only.
+     * @minimum 0
+     */
+  remainingUsd?: number;
+  /** Admin view only (members get coverage without figures). */
+  state?: VenomAllowanceState;
+  /** Admin view only. */
+  manageable?: boolean;
+}
+
+/**
+ * The paid personal plan; defaults to it when omitted.
+ */
+export type VenomBillingCheckoutRequestPlanId = typeof VenomBillingCheckoutRequestPlanId[keyof typeof VenomBillingCheckoutRequestPlanId];
+
+
+export const VenomBillingCheckoutRequestPlanId = {
+  plus: 'plus',
+} as const;
+
+export interface VenomBillingCheckoutRequest {
+  /** The paid personal plan; defaults to it when omitted. */
+  planId?: VenomBillingCheckoutRequestPlanId;
+  /**
+     * Where Stripe sends the user back; defaults to the request origin.
+     * @maxLength 2000
+     */
+  returnUrl?: string;
+}
+
+export interface VenomBillingPortalRequest {
+  /**
+     * Where Stripe sends the user back; defaults to the request origin.
+     * @maxLength 2000
+     */
+  returnUrl?: string;
+}
+
+export interface VenomBillingRedirect {
+  /**
+     * The Stripe-hosted page to open.
+     * @maxLength 4000
+     */
+  url: string;
+}
+
 export type VenomVoiceTranscriptionRequestFormat = typeof VenomVoiceTranscriptionRequestFormat[keyof typeof VenomVoiceTranscriptionRequestFormat];
 
 
@@ -1656,6 +1908,11 @@ export interface VenomVoiceTranscriptionRequest {
      */
   audioBase64: string;
   format?: VenomVoiceTranscriptionRequestFormat;
+  /**
+     * Shared workspace the voice conversation lives in, when it does. Billing follows this space: an Organization-plan workspace pays for its own turns; otherwise the caller's personal plan does.
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  workspaceId?: string;
 }
 
 export interface VenomVoiceTranscription {
@@ -1670,6 +1927,11 @@ export interface VenomVoiceSpeechRequest {
      */
   text: string;
   presetId: VenomVoicePresetId;
+  /**
+     * Shared workspace the voice conversation lives in, for billing attribution.
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  workspaceId?: string;
 }
 
 export type VenomVoiceTurnDecisionRequestRecentTurnsItemRole = typeof VenomVoiceTurnDecisionRequestRecentTurnsItemRole[keyof typeof VenomVoiceTurnDecisionRequestRecentTurnsItemRole];
@@ -1695,6 +1957,11 @@ export interface VenomVoiceTurnDecisionRequest {
   /** @maxItems 12 */
   recentTurns?: VenomVoiceTurnDecisionRequestRecentTurnsItem[];
   talkativeness?: VenomVoiceTalkativeness;
+  /**
+     * Shared workspace the voice conversation lives in, for billing attribution.
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  workspaceId?: string;
 }
 
 export type VenomVoiceTurnDecisionDecision = typeof VenomVoiceTurnDecisionDecision[keyof typeof VenomVoiceTurnDecisionDecision];
@@ -1888,6 +2155,13 @@ export interface VenomVoiceDecisionSummary {
   thresholds: VenomVoiceRestraintThresholds;
 }
 
+export type VenomUsageSummaryCoveredByWorkspacesItem = {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  /** @maxLength 200 */
+  name: string;
+};
+
 export interface VenomUsageTotals {
   /**
      * Dollars, rounded to micro-dollar precision.
@@ -1947,6 +2221,11 @@ export interface VenomUsageSummary {
      * @maxItems 40
      */
   models: VenomUsageModelBreakdown[];
+  /**
+     * Workspaces whose Organization plan covered some of this member's AI calls during the period. Names only — workspace-billed spend belongs to the workspace and never appears in personal figures.
+     * @maxItems 100
+     */
+  coveredByWorkspaces: VenomUsageSummaryCoveredByWorkspacesItem[];
 }
 
 export interface KnowledgeConversation {
@@ -1998,6 +2277,11 @@ export interface KnowledgeExtractionInput {
   messages: KnowledgeMessage[];
   /** When true, the server files the extracted insights into the signed-in user's ontology store and returns the touched concepts in `filed`. The server decides scope per cluster (personal, a workspace the caller belongs to, or the private Unsorted holding area); clients no longer pick a destination. Clients that omit this keep filing locally. */
   file?: boolean;
+  /**
+     * The shared workspace the conversation lives in. It controls billing and is re-checked against the caller's membership.
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  workspaceId?: string;
 }
 
 export interface KnowledgeCandidate {
@@ -3926,6 +4210,175 @@ export interface SharedWorkspaceSettings {
   allowSensitiveExport: boolean;
 }
 
+/**
+ * Model policy forced on workspace-billed requests, beating each member's own policy. Null = members keep their own. "manual" is never forceable — it would just hand the choice back.
+ * @nullable
+ */
+export type VenomWorkspaceAiControlsForcedSelectionPolicy = typeof VenomWorkspaceAiControlsForcedSelectionPolicy[keyof typeof VenomWorkspaceAiControlsForcedSelectionPolicy] | null;
+
+
+export const VenomWorkspaceAiControlsForcedSelectionPolicy = {
+  'auto-cheapest': 'auto-cheapest',
+  'auto-max-power': 'auto-max-power',
+} as const;
+
+export interface VenomWorkspaceMemberAiCap {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  clerkUserId: string;
+  /**
+     * Display name, best effort; falls back to the account id.
+     * @maxLength 200
+     */
+  name: string;
+  /**
+     * This member's own monthly cap; null = explicitly uncapped.
+     * @minimum 0
+     * @maximum 1000000
+     * @nullable
+     */
+  capUsd: number | null;
+}
+
+/**
+ * Admin view of a workspace's AI controls. Everything here binds only usage billed to this workspace — nobody's personal space is read, shown, or constrained.
+ */
+export interface VenomWorkspaceAiControls {
+  /**
+     * Default monthly cap on each member's workspace-billed usage, in dollars. Null = no default cap. Zero deliberately blocks workspace AI for every member without an uncapped override.
+     * @minimum 0
+     * @maximum 1000000
+     * @nullable
+     */
+  defaultMemberCapUsd: number | null;
+  /**
+     * Model policy forced on workspace-billed requests, beating each member's own policy. Null = members keep their own. "manual" is never forceable — it would just hand the choice back.
+     * @nullable
+     */
+  forcedSelectionPolicy: VenomWorkspaceAiControlsForcedSelectionPolicy;
+  /**
+     * Cost tiers workspace-billed requests may use; null = all tiers. Saving an empty list is rejected — a lock can never allow nothing.
+     * @minItems 1
+     * @maxItems 3
+     * @nullable
+     */
+  allowedCostTiers: VenomModelCostTier[] | null;
+  /**
+     * Members whose cap replaces the workspace default.
+     * @maxItems 200
+     */
+  memberOverrides: VenomWorkspaceMemberAiCap[];
+}
+
+/**
+ * @nullable
+ */
+export type VenomWorkspaceAiControlsInputForcedSelectionPolicy = typeof VenomWorkspaceAiControlsInputForcedSelectionPolicy[keyof typeof VenomWorkspaceAiControlsInputForcedSelectionPolicy] | null;
+
+
+export const VenomWorkspaceAiControlsInputForcedSelectionPolicy = {
+  'auto-cheapest': 'auto-cheapest',
+  'auto-max-power': 'auto-max-power',
+} as const;
+
+/**
+ * Full-replace write of the workspace-level controls.
+ */
+export interface VenomWorkspaceAiControlsInput {
+  /**
+     * @minimum 0
+     * @maximum 1000000
+     * @nullable
+     */
+  defaultMemberCapUsd: number | null;
+  /** @nullable */
+  forcedSelectionPolicy: VenomWorkspaceAiControlsInputForcedSelectionPolicy;
+  /**
+     * @minItems 1
+     * @maxItems 3
+     * @nullable
+     */
+  allowedCostTiers: VenomModelCostTier[] | null;
+}
+
+export interface VenomWorkspaceMemberAiCapInput {
+  /**
+     * Monthly cap in dollars; null = explicitly uncapped.
+     * @minimum 0
+     * @maximum 1000000
+     * @nullable
+     */
+  capUsd: number | null;
+}
+
+export type VenomWorkspaceMemberUsageRole = typeof VenomWorkspaceMemberUsageRole[keyof typeof VenomWorkspaceMemberUsageRole];
+
+
+export const VenomWorkspaceMemberUsageRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+/**
+ * Where the effective cap comes from. "override" also appears with a null capUsd — an explicitly uncapped member. Absent when no cap applies at all.
+ */
+export type VenomWorkspaceMemberUsageCapSource = typeof VenomWorkspaceMemberUsageCapSource[keyof typeof VenomWorkspaceMemberUsageCapSource];
+
+
+export const VenomWorkspaceMemberUsageCapSource = {
+  default: 'default',
+  override: 'override',
+} as const;
+
+export interface VenomWorkspaceMemberUsage {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  clerkUserId: string;
+  /** @maxLength 200 */
+  name: string;
+  role: VenomWorkspaceMemberUsageRole;
+  /**
+     * This member's workspace-billed spend this period.
+     * @minimum 0
+     */
+  spentUsd: number;
+  /**
+     * Effective monthly cap for this member; null = uncapped.
+     * @minimum 0
+     * @nullable
+     */
+  capUsd: number | null;
+  /** Where the effective cap comes from. "override" also appears with a null capUsd — an explicitly uncapped member. Absent when no cap applies at all. */
+  capSource?: VenomWorkspaceMemberUsageCapSource;
+  capState: VenomAllowanceState;
+}
+
+/**
+ * Admin-only view of what the workspace paid for this period. Personal usage is structurally absent — rows sum the ledger's workspace-billed entries alone.
+ */
+export interface VenomWorkspaceUsageSummary {
+  /** True while the Organization plan covers this workspace's AI. */
+  covered: boolean;
+  periodStart: string;
+  periodEnd: string;
+  /**
+     * Everything billed to the workspace this period, including calls by since-removed members — it always matches the plan's spend.
+     * @minimum 0
+     */
+  totalUsd: number;
+  /**
+     * The plan's included AI for the period, in dollars.
+     * @minimum 0
+     */
+  allowanceUsd: number;
+  /** @maxItems 200 */
+  members: VenomWorkspaceMemberUsage[];
+}
+
 export interface SensitivityUpdateInput {
   sensitive: boolean;
 }
@@ -4749,6 +5202,13 @@ export type ExportVenomVoiceDecisionsParams = {
  * @maximum 90
  */
 windowDays?: number;
+};
+
+export type GetVenomBillingContextParams = {
+/**
+ * @pattern ^[0-9a-fA-F-]{36}$
+ */
+workspaceId?: string;
 };
 
 export type SearchVenomOntologyParams = {

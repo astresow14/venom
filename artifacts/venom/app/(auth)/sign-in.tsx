@@ -4,13 +4,7 @@ import { useSignIn, useSSO } from '@clerk/expo';
 import * as AuthSession from 'expo-auth-session';
 import { type Href, Link, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import {
-  Platform,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { AuthScreenShell } from '@/components/AuthScreenShell';
 import {
   AuthErrorText,
@@ -18,7 +12,6 @@ import {
   AuthQuietButton,
   AuthTextField,
 } from '@/components/AuthUi';
-import { SymbioteHero } from '@/components/SymbioteHero';
 import { useColors } from '@/hooks/useColors';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -45,7 +38,6 @@ export default function SignInScreen() {
   useWarmUpBrowser();
   const colors = useColors();
   const router = useRouter();
-  const { width, height } = useWindowDimensions();
   const { signIn, errors, fetchStatus } = useSignIn();
   const { startSSOFlow } = useSSO();
   const [view, setView] = useState<'welcome' | 'email'>('welcome');
@@ -156,10 +148,6 @@ export default function SignInScreen() {
   const visibleError =
     step === 'welcome' ? formError : (formError ?? clerkError);
 
-  const heroSize = Math.round(
-    Math.min(Math.min(width, 480) * 0.72, height * 0.32, 300),
-  );
-
   const footerLink = (
     <Text style={[styles.footerText, { color: colors.symbioteMuted }]}>
       New to Venom?{' '}
@@ -175,10 +163,10 @@ export default function SignInScreen() {
   return (
     <AuthScreenShell
       stateKey={step}
-      hero={step === 'welcome' ? <SymbioteHero size={heroSize} /> : undefined}
+      heroWordmark={step === 'welcome'}
       headline={
         step === 'welcome'
-          ? 'Strike first'
+          ? 'Sign in to Venom'
           : step === 'email'
             ? 'Sign in'
             : 'Verify this device'

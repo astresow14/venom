@@ -2,6 +2,11 @@ import React from "react";
 import { Text, View } from "react-native";
 import { BreathingDot } from "@/components/chat/BreathingDot";
 import { type LocalDeliberation } from "@/components/chat/chatTypes";
+import {
+  type FamilyForModel,
+  SpeakerAvatar,
+  speakerGlyph,
+} from "@/components/chat/SpeakerAvatar";
 import { useColors } from "@/hooks/useColors";
 import { styles } from "./styles";
 
@@ -10,10 +15,12 @@ export function DeliberationStreamCard({
   deliberation,
   colors,
   renderContent,
+  familyForModel,
 }: {
   deliberation: LocalDeliberation;
   colors: ReturnType<typeof useColors>;
   renderContent: (content: string, keyPrefix: string) => React.ReactNode;
+  familyForModel: FamilyForModel;
 }) {
   const converging = deliberation.stage === "synthesis";
   const showModels =
@@ -86,6 +93,16 @@ export function DeliberationStreamCard({
                   ]}
                 />
               )}
+              <SpeakerAvatar
+                glyph={speakerGlyph({
+                  speakerId: voice.voiceId,
+                  modelId: voice.modelId,
+                  name: voice.name,
+                  familyForModel,
+                })}
+                colors={colors}
+                size={20}
+              />
               <Text
                 style={[
                   styles.deliberationVoiceName,

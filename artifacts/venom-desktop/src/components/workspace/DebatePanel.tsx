@@ -16,6 +16,11 @@ import type {
   VenomModelId,
 } from "@workspace/api-client-react";
 import { CitationText } from "./DeliberationPanel";
+import {
+  type FamilyForModel,
+  SpeakerAvatar,
+  speakerGlyph,
+} from "./SpeakerAvatar";
 
 export type DebateRosterVoice = {
   voiceId: string;
@@ -48,10 +53,12 @@ export function DebateStreamBlock({
   debate,
   citationsById,
   archivedById,
+  familyForModel,
 }: {
   debate: StreamingDebate;
   citationsById: Map<string, SourceCitation>;
   archivedById: Map<string, VenomArchivedCitation>;
+  familyForModel: FamilyForModel;
 }) {
   const reduceMotion = useReducedMotion();
   const turn = debate.currentTurn;
@@ -106,9 +113,13 @@ export function DebateStreamBlock({
             data-testid={`debate-turn-${turn.index}`}
           >
             <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-foreground/80">
-              <span
-                className="inline-block h-1.5 w-1.5 rounded-full bg-foreground"
-                aria-hidden="true"
+              <SpeakerAvatar
+                glyph={speakerGlyph({
+                  speakerId: turn.voiceId,
+                  modelId: turn.modelId,
+                  name: turn.name,
+                  familyForModel,
+                })}
               />
               {turn.name}
               {modelSuffix && (

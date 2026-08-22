@@ -16,8 +16,11 @@ import express from "express";
 import {
   createVenomVoiceRouter,
   VOICE_DECISION_RECORD_BUDGET_MS,
+  VOICE_LEG_BOUND_MICROS,
   type VenomVoiceAudioModule,
 } from "./venom-voice";
+import type { RecordVenomUsageInput } from "../lib/venom-usage-store";
+import type { VenomAllowanceDecision } from "../lib/venom-billing-enforcement";
 import type {
   VoiceJudgeInput,
   VoiceJudgeVerdict,
@@ -63,6 +66,8 @@ type HarnessOptions = {
   decisionRows?: StoredVoiceDecision[];
   /** Makes the fake store's listForUser reject. */
   failDecisionList?: boolean;
+  /** Fake allowance gate: a reservation to hand out and/or a denial. */
+  billing?: { reservationId?: string; allowed?: boolean };
 };
 
 type Harness = {
@@ -80,6 +85,13 @@ type Harness = {
       outcome: VoiceDecisionOutcome;
     }>;
     decisionListRequests: Array<{ userId: string; since: Date }>;
+    allowanceChecks: Array<{
+      userId: string;
+      workspaceId?: string | null;
+      boundMicros?: number;
+    }>;
+    usageRecorded: RecordVenomUsageInput[];
+    releasedReservations: string[];
   };
 };
 
@@ -92,6 +104,9 @@ async function startHarness(options: HarnessOptions = {}): Promise<Harness> {
     decisionsRecorded: [],
     outcomesRecorded: [],
     decisionListRequests: [],
+    allowanceChecks: [],
+    usageRecorded: [],
+    releasedReservations: [],
   };
 
   const audioModule: VenomVoiceAudioModule = {
@@ -164,6 +179,32 @@ async function startHarness(options: HarnessOptions = {}): Promise<Harness> {
           calls.decisionListRequests.push({ userId, since });
           return options.decisionRows ?? [];
         },
+      },
+      checkAllowance: async (input): Promise<VenomAllowanceDecision> => {
+        calls.allowanceChecks.push(input);
+        if (options.billing?.allowed === false) {
+          return {
+            payer: { kind: "personal", userId: input.userId },
+            billedWorkspaceId: null,
+            allowed: false,
+            blockedCode: "personal_allowance_exhausted",
+            blockedMessage: "Out of included AI for this period.",
+            approaching: false,
+          };
+        }
+        return {
+          payer: { kind: "personal", userId: input.userId },
+          billedWorkspaceId: null,
+          allowed: true,
+          approaching: false,
+          reservationId: options.billing?.reservationId ?? null,
+        };
+      },
+      recordUsage: (input) => {
+        calls.usageRecorded.push(input);
+      },
+      releaseAllowance: (reservationId) => {
+        calls.releasedReservations.push(reservationId);
       },
     }),
   );
@@ -1297,6 +1338,135 @@ test("summary and export share one report rate limit", async () => {
     );
     assert.equal(limited.status, 429);
     assert.ok(limited.headers.get("retry-after"));
+  } finally {
+    await harness.close();
+  }
+});
+
+// ── Billing: claim-once reservation settlement ───────────────────────────────
+
+test("voice legs hand their admission hold to their first usage event", async () => {
+  const harness = await startHarness({
+    billing: { reservationId: "res-transcribe" },
+  });
+  try {
+    const response = await postJson(
+      `${harness.baseUrl}/venom/voice/transcribe`,
+      { audioBase64: WEBM_BYTES.toString("base64") },
+    );
+    assert.equal(response.status, 200);
+    await delay(30); // the response close event runs the release hook
+    assert.equal(harness.calls.usageRecorded.length, 1);
+    assert.equal(harness.calls.usageRecorded[0]!.callKind, "voice_transcribe");
+    assert.equal(
+      harness.calls.usageRecorded[0]!.reservationId,
+      "res-transcribe",
+      "the ledger event settles the admission hold",
+    );
+    assert.deepEqual(
+      harness.calls.releasedReservations,
+      [],
+      "a claimed hold is settled by the ledger, never close-released",
+    );
+    assert.equal(
+      harness.calls.allowanceChecks[0]!.boundMicros,
+      VOICE_LEG_BOUND_MICROS.transcribe,
+      "admission is priced from the leg's own enforced inputs",
+    );
+  } finally {
+    await harness.close();
+  }
+});
+
+test("speak settles its hold into the synthesis usage event", async () => {
+  const harness = await startHarness({ billing: { reservationId: "res-speak" } });
+  try {
+    const response = await postJson(`${harness.baseUrl}/venom/voice/speak`, {
+      text: "hello there",
+      presetId: "sam",
+    });
+    assert.equal(response.status, 200);
+    const events = parseSseEvents(await response.text());
+    assert.ok(events.includes("[DONE]"), "stream ends cleanly");
+    await delay(30);
+    assert.equal(harness.calls.usageRecorded.length, 1);
+    assert.equal(harness.calls.usageRecorded[0]!.callKind, "voice_speak");
+    assert.equal(harness.calls.usageRecorded[0]!.reservationId, "res-speak");
+    assert.deepEqual(harness.calls.releasedReservations, []);
+    assert.equal(
+      harness.calls.allowanceChecks[0]!.boundMicros,
+      VOICE_LEG_BOUND_MICROS.speak,
+    );
+  } finally {
+    await harness.close();
+  }
+});
+
+test("the decide leg's judge usage carries the admission hold", async () => {
+  const harness = await startHarness({
+    billing: { reservationId: "res-judge" },
+    judgeTurn: async (input) => {
+      input.onUsage?.({ promptTokens: 12, outputTokens: 3, estimated: false });
+      return { decision: "silent", windDown: false };
+    },
+  });
+  try {
+    const response = await postJson(`${harness.baseUrl}/venom/voice/decide`, {
+      transcript: "the design still feels a little heavy",
+      talkativeness: "balanced",
+    });
+    assert.equal(response.status, 200);
+    await delay(30);
+    assert.equal(harness.calls.usageRecorded.length, 1);
+    assert.equal(harness.calls.usageRecorded[0]!.callKind, "voice_judge");
+    assert.equal(harness.calls.usageRecorded[0]!.reservationId, "res-judge");
+    assert.deepEqual(harness.calls.releasedReservations, []);
+    assert.equal(
+      harness.calls.allowanceChecks[0]!.boundMicros,
+      VOICE_LEG_BOUND_MICROS.decide,
+      "the judge leg reserves its own priced worst case, not the chat bound",
+    );
+  } finally {
+    await harness.close();
+  }
+});
+
+test("an unclaimed voice hold is released exactly once when the leg stops early", async () => {
+  const harness = await startHarness({
+    available: false,
+    billing: { reservationId: "res-unused" },
+  });
+  try {
+    const response = await postJson(
+      `${harness.baseUrl}/venom/voice/transcribe`,
+      { audioBase64: WEBM_BYTES.toString("base64") },
+    );
+    assert.equal(response.status, 503);
+    await delay(30);
+    assert.deepEqual(
+      harness.calls.releasedReservations,
+      ["res-unused"],
+      "the close hook frees exactly the unclaimed hold",
+    );
+    assert.equal(harness.calls.usageRecorded.length, 0);
+  } finally {
+    await harness.close();
+  }
+});
+
+test("a blocked voice leg reports the personal allowance error and holds nothing", async () => {
+  const harness = await startHarness({ billing: { allowed: false } });
+  try {
+    const response = await postJson(
+      `${harness.baseUrl}/venom/voice/transcribe`,
+      { audioBase64: WEBM_BYTES.toString("base64") },
+    );
+    assert.equal(response.status, 402);
+    const body = (await response.json()) as { code?: string };
+    assert.equal(body.code, "personal_allowance_exhausted");
+    await delay(30);
+    assert.equal(harness.calls.usageRecorded.length, 0);
+    assert.deepEqual(harness.calls.releasedReservations, []);
   } finally {
     await harness.close();
   }

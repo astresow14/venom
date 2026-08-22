@@ -390,6 +390,114 @@ paths:
           description: Authentication required
         "500":
           description: The usage ledger could not be read
+  /venom/billing/summary:
+    get:
+      operationId: getVenomBillingSummary
+      tags: [venom]
+      summary: Your personal plan, renewal, and allowance for this period
+      description: >-
+        The signed-in account's personal billing surface: current plan,
+        subscription status, period window, and spend against the plan's
+        included AI — counting personally-billed calls only. Workspace-billed
+        usage never appears here. When Stripe is not configured the payload
+        says so via `configured: false` and checkout/portal are unavailable,
+        but the plan card still renders.
+      responses:
+        "200":
+          description: The caller's personal billing summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomBillingSummary"
+        "401": { description: Authentication required }
+        "500": { description: Billing state could not be read }
+  /venom/billing/context:
+    get:
+      operationId: getVenomBillingContext
+      tags: [venom]
+      summary: Who pays for AI sent from a given space right now
+      description: >-
+        Resolves the payer the composer should hint at: pass the shared
+        workspace the conversation lives in (or nothing for the personal
+        space). An Organization-plan workspace answers as the workspace
+        payer with its plan name and allowance state — never dollar figures;
+        anything else answers as the caller's personal plan.
+      parameters:
+        - name: workspaceId
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: "^[0-9a-fA-F-]{36}$"
+      responses:
+        "200":
+          description: The effective payer for this space
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomBillingContext"
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not currently a member of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "500": { description: Billing state could not be read }
+  /venom/billing/checkout:
+    post:
+      operationId: createVenomBillingCheckout
+      tags: [venom]
+      summary: Start Stripe checkout for the paid personal plan
+      description: >-
+        Creates a Stripe-hosted checkout session for the paid personal tier
+        and returns its URL. Answers 503 with code `billing_not_configured`
+        when Stripe keys are absent, and 409 when the account is already on
+        the plan.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomBillingCheckoutRequest"
+      responses:
+        "200":
+          description: The Stripe-hosted checkout page to open
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomBillingRedirect"
+        "400": { description: Invalid checkout request }
+        "401": { description: Authentication required }
+        "409": { description: Already subscribed to this plan }
+        "502": { description: Stripe could not start checkout }
+        "503": { description: Billing is not configured on this server }
+  /venom/billing/portal:
+    post:
+      operationId: createVenomBillingPortal
+      tags: [venom]
+      summary: Open the Stripe billing portal for your subscription
+      description: >-
+        Creates a Stripe-hosted billing-portal session for the signed-in
+        account's existing subscription (upgrade, cancel, update payment
+        method). 409 when there is nothing to manage yet; 503 with code
+        `billing_not_configured` when Stripe keys are absent.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomBillingPortalRequest"
+      responses:
+        "200":
+          description: The Stripe-hosted portal page to open
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomBillingRedirect"
+        "401": { description: Authentication required }
+        "409": { description: No subscription to manage }
+        "502": { description: Stripe could not open the portal }
+        "503": { description: Billing is not configured on this server }
   /venom/knowledge/extract:
     post:
       operationId: extractVenomKnowledge
@@ -1835,6 +1943,91 @@ paths:
               schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
         "404": { description: SOP not found in this workspace }
         "409": { description: Archived SOPs cannot be published }
+  /venom/workspaces/{workspaceId}/billing:
+    get:
+      operationId: getSharedWorkspaceBilling
+      tags: [venom]
+      summary: A workspace's Organization plan state (spend for admins only)
+      description: >-
+        Members learn whether the workspace is covered by an Organization
+        plan and its allowance state — enough to explain a blocked chat.
+        Dollar figures (spend, remaining, price) are returned to admins
+        alone; per-member breakdowns do not exist on this surface.
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+      responses:
+        "200":
+          description: The workspace's billing state, shaped by the caller's role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomWorkspaceBilling"
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not currently a member of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "500": { description: Billing state could not be read }
+  /venom/workspaces/{workspaceId}/billing/checkout:
+    post:
+      operationId: createSharedWorkspaceBillingCheckout
+      tags: [venom]
+      summary: Start Stripe checkout for the Organization plan (admins only)
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomBillingPortalRequest"
+      responses:
+        "200":
+          description: The Stripe-hosted checkout page to open
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomBillingRedirect"
+        "400": { description: Invalid checkout request }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "409": { description: The workspace is already on the Organization plan }
+        "502": { description: Stripe could not start checkout }
+        "503": { description: Billing is not configured on this server }
+  /venom/workspaces/{workspaceId}/billing/portal:
+    post:
+      operationId: createSharedWorkspaceBillingPortal
+      tags: [venom]
+      summary: Open the Stripe portal for the workspace plan (admins only)
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomBillingPortalRequest"
+      responses:
+        "200":
+          description: The Stripe-hosted portal page to open
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomBillingRedirect"
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "409": { description: No workspace subscription to manage }
+        "502": { description: Stripe could not open the portal }
+        "503": { description: Billing is not configured on this server }
   /venom/workspaces/{workspaceId}/settings:
     get:
       operationId: getSharedWorkspaceSettings
@@ -1878,6 +2071,146 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+  /venom/workspaces/{workspaceId}/ai-controls:
+    get:
+      operationId: getSharedWorkspaceAiControls
+      tags: [venom]
+      summary: The workspace's AI spend caps and model lock (admins only)
+      description: >-
+        Spend caps and model locks bind only requests billed to this
+        workspace's Organization plan. Admin-only — cap figures are workspace
+        money, and members only ever learn lock/cap state through the billing
+        context, never these numbers. Nothing here reads or touches anyone's
+        personal space.
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+      responses:
+        "200":
+          description: Current controls with per-member cap overrides
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomWorkspaceAiControls" }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+    put:
+      operationId: updateSharedWorkspaceAiControls
+      tags: [venom]
+      summary: Set the workspace's default spend cap and model lock (admins only)
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomWorkspaceAiControlsInput"
+      responses:
+        "200":
+          description: Controls saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomWorkspaceAiControls" }
+        "400": { description: Invalid controls payload }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+  /venom/workspaces/{workspaceId}/ai-controls/members/{memberUserId}:
+    put:
+      operationId: setSharedWorkspaceMemberAiCap
+      tags: [venom]
+      summary: Override one member's monthly workspace AI cap (admins only)
+      description: >-
+        Replaces the workspace default cap for this member. A numeric cap is
+        their own monthly limit on workspace-billed usage; null means this
+        member is explicitly uncapped.
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+        - name: memberUserId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 160
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomWorkspaceMemberAiCapInput"
+      responses:
+        "200":
+          description: Controls after the override
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomWorkspaceAiControls" }
+        "400": { description: Invalid cap payload }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "404": { description: The account is not a member of this workspace }
+    delete:
+      operationId: clearSharedWorkspaceMemberAiCap
+      tags: [venom]
+      summary: Return a member to the workspace's default cap (admins only)
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+        - name: memberUserId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 160
+      responses:
+        "200":
+          description: Controls after the override was removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomWorkspaceAiControls" }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+  /venom/workspaces/{workspaceId}/usage:
+    get:
+      operationId: getSharedWorkspaceUsage
+      tags: [venom]
+      summary: Per-member workspace-billed AI usage this period (admins only)
+      description: >-
+        Sums only usage billed to this workspace's Organization plan for the
+        current period. Members' personal-space usage never appears here —
+        a member's row counts what the workspace paid for, nothing else. The
+        total covers every workspace-billed call this period, including ones
+        by since-removed members, so it always matches the plan's spend.
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+      responses:
+        "200":
+          description: The period's workspace-billed usage by member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomWorkspaceUsageSummary"
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "500": { description: Usage could not be read }
   /venom/workspaces/{workspaceId}/knowledge/{conceptId}/sensitivity:
     patch:
       operationId: setSharedWorkspaceConceptSensitivity
@@ -4789,6 +5122,12 @@ components:
           type: string
           minLength: 1
           maxLength: 160
+        workspaceId:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+          description: >-
+            The shared workspace this chat lives in. It controls filing and
+            billing only; context still spans the caller's permitted spaces.
         modelId:
           $ref: "#/components/schemas/VenomModelId"
         sourceCitationIds:
@@ -5147,6 +5486,233 @@ components:
         How eager voice mode is to answer remarks that don't clearly invite a
         reply. Optional on stored preferences; absent means "balanced".
       enum: [chatty, balanced, reserved]
+    VenomPlan:
+      type: object
+      additionalProperties: false
+      required: [id, name, priceUsd, allowanceUsd]
+      properties:
+        id:
+          type: string
+          enum: [free, plus, org]
+        name:
+          type: string
+          maxLength: 80
+          description: Display name from server configuration.
+        priceUsd:
+          type: number
+          minimum: 0
+          description: Monthly price in dollars; zero for the free tier.
+        allowanceUsd:
+          type: number
+          minimum: 0
+          description: Included Venom AI value per month, in dollars.
+    VenomAllowanceState:
+      type: string
+      enum: [ok, approaching, exhausted]
+      description: >-
+        Where the payer stands against its included AI this period.
+        "approaching" has crossed the warning threshold; "exhausted" means
+        new AI requests from this space are blocked while enforcement is on.
+    VenomBillingSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          configured,
+          enforced,
+          plan,
+          status,
+          cancelAtPeriodEnd,
+          periodStart,
+          periodEnd,
+          renews,
+          spentUsd,
+          remainingUsd,
+          state,
+          manageable,
+        ]
+      properties:
+        configured:
+          type: boolean
+          description: False when Stripe keys are absent — clients show a "not set up" state.
+        enforced:
+          type: boolean
+          description: Whether allowances currently block requests on this server.
+        plan:
+          $ref: "#/components/schemas/VenomPlan"
+        status:
+          type: string
+          enum:
+            [
+              none,
+              active,
+              trialing,
+              past_due,
+              canceled,
+              incomplete,
+              incomplete_expired,
+              unpaid,
+              paused,
+            ]
+          description: Subscription status mirrored from Stripe; "none" without one.
+        cancelAtPeriodEnd:
+          type: boolean
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+          description: When the paid period renews, or the free allowance resets.
+        renews:
+          type: boolean
+          description: True when a paid subscription renews at periodEnd.
+        spentUsd:
+          type: number
+          minimum: 0
+          description: Personally-billed spend this period, dollars.
+        remainingUsd:
+          type: number
+          minimum: 0
+        state:
+          $ref: "#/components/schemas/VenomAllowanceState"
+        upgradePlan:
+          $ref: "#/components/schemas/VenomPlan"
+          description: Present only when an upgrade is on offer (free tier).
+        manageable:
+          type: boolean
+          description: True when a Stripe subscription exists to manage via the portal.
+    VenomBillingContext:
+      type: object
+      additionalProperties: false
+      required: [configured, enforced, payer, planName, state]
+      properties:
+        configured:
+          type: boolean
+        enforced:
+          type: boolean
+        payer:
+          type: string
+          enum: [personal, workspace]
+          description: Whose allowance a message sent from this space draws on.
+        planName:
+          type: string
+          maxLength: 80
+        state:
+          $ref: "#/components/schemas/VenomAllowanceState"
+        workspaceId:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+          description: Present for workspace payers.
+        workspaceName:
+          type: string
+          maxLength: 200
+          description: Present for workspace payers.
+        remainingUsd:
+          type: number
+          minimum: 0
+          description: Present for the personal payer only; workspaces never expose figures to members.
+        memberCapState:
+          $ref: "#/components/schemas/VenomAllowanceState"
+          description: >-
+            Present for workspace payers when an admin-set member cap binds
+            the caller's workspace-billed usage. States only — the figures
+            behind them stay with admins.
+        modelLock:
+          $ref: "#/components/schemas/VenomWorkspaceModelLock"
+          description: >-
+            Present for workspace payers when admins lock model settings for
+            workspace-billed requests.
+    VenomWorkspaceBilling:
+      type: object
+      additionalProperties: false
+      required: [configured, enforced, covered, planName, role]
+      properties:
+        configured:
+          type: boolean
+        enforced:
+          type: boolean
+        covered:
+          type: boolean
+          description: True while the Organization plan keeps this workspace's AI covered.
+        planName:
+          type: string
+          maxLength: 80
+        role:
+          type: string
+          enum: [admin, member]
+        plan:
+          $ref: "#/components/schemas/VenomPlan"
+          description: Admin view only.
+        status:
+          type: string
+          enum:
+            [
+              none,
+              active,
+              trialing,
+              past_due,
+              canceled,
+              incomplete,
+              incomplete_expired,
+              unpaid,
+              paused,
+            ]
+          description: Admin view only.
+        cancelAtPeriodEnd:
+          type: boolean
+          description: Admin view only.
+        periodStart:
+          type: string
+          format: date-time
+          description: Admin view only.
+        periodEnd:
+          type: string
+          format: date-time
+          description: Admin view only.
+        spentUsd:
+          type: number
+          minimum: 0
+          description: Admin view only. Aggregate workspace spend this period.
+        remainingUsd:
+          type: number
+          minimum: 0
+          description: Admin view only.
+        state:
+          $ref: "#/components/schemas/VenomAllowanceState"
+          description: Admin view only (members get coverage without figures).
+        manageable:
+          type: boolean
+          description: Admin view only.
+    VenomBillingCheckoutRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        planId:
+          type: string
+          enum: [plus]
+          description: The paid personal plan; defaults to it when omitted.
+        returnUrl:
+          type: string
+          maxLength: 2000
+          description: Where Stripe sends the user back; defaults to the request origin.
+    VenomBillingPortalRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        returnUrl:
+          type: string
+          maxLength: 2000
+          description: Where Stripe sends the user back; defaults to the request origin.
+    VenomBillingRedirect:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:
+          type: string
+          maxLength: 4000
+          description: The Stripe-hosted page to open.
     VenomVoiceTranscriptionRequest:
       type: object
       additionalProperties: false
@@ -5158,6 +5724,13 @@ components:
         format:
           type: string
           enum: [webm, wav, mp3, mp4, ogg]
+        workspaceId:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+          description: >-
+            Shared workspace the voice conversation lives in, when it does.
+            Billing follows this space: an Organization-plan workspace pays
+            for its own turns; otherwise the caller's personal plan does.
       required: [audioBase64]
     VenomVoiceTranscription:
       type: object
@@ -5177,6 +5750,10 @@ components:
           maxLength: 2000
         presetId:
           $ref: "#/components/schemas/VenomVoicePresetId"
+        workspaceId:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+          description: Shared workspace the voice conversation lives in, for billing attribution.
       required: [text, presetId]
     VenomVoiceTurnDecisionRequest:
       type: object
@@ -5202,6 +5779,10 @@ components:
             required: [role, content]
         talkativeness:
           $ref: "#/components/schemas/VenomVoiceTalkativeness"
+        workspaceId:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+          description: Shared workspace the voice conversation lives in, for billing attribution.
       required: [transcript]
     VenomVoiceTurnDecision:
       type: object
@@ -5444,7 +6025,16 @@ components:
     VenomUsageSummary:
       type: object
       additionalProperties: false
-      required: [periodStart, periodEnd, totals, hasEstimates, daily, models]
+      required:
+        [
+          periodStart,
+          periodEnd,
+          totals,
+          hasEstimates,
+          daily,
+          models,
+          coveredByWorkspaces,
+        ]
       properties:
         periodStart:
           type: string
@@ -5474,6 +6064,24 @@ components:
           description: Per-model breakdown under Venom-branded names, highest spend first.
           items:
             $ref: "#/components/schemas/VenomUsageModelBreakdown"
+        coveredByWorkspaces:
+          type: array
+          maxItems: 100
+          description: >-
+            Workspaces whose Organization plan covered some of this member's
+            AI calls during the period. Names only — workspace-billed spend
+            belongs to the workspace and never appears in personal figures.
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name]
+            properties:
+              id:
+                type: string
+                pattern: "^[0-9a-fA-F-]{36}$"
+              name:
+                type: string
+                maxLength: 200
     VenomUsageTotals:
       type: object
       additionalProperties: false
@@ -5595,6 +6203,12 @@ components:
             a workspace the caller belongs to, or the private Unsorted
             holding area); clients no longer pick a destination. Clients
             that omit this keep filing locally.
+        workspaceId:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+          description: >-
+            The shared workspace the conversation lives in. It controls
+            billing and is re-checked against the caller's membership.
     KnowledgeCandidate:
       type: object
       additionalProperties: false
@@ -7888,6 +8502,171 @@ components:
             export and state how many were withheld.
           type: boolean
       required: [allowSensitiveExport]
+    VenomWorkspaceAiControls:
+      type: object
+      additionalProperties: false
+      description: >-
+        Admin view of a workspace's AI controls. Everything here binds only
+        usage billed to this workspace — nobody's personal space is read,
+        shown, or constrained.
+      required:
+        [defaultMemberCapUsd, forcedSelectionPolicy, allowedCostTiers, memberOverrides]
+      properties:
+        defaultMemberCapUsd:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1000000
+          description: >-
+            Default monthly cap on each member's workspace-billed usage, in
+            dollars. Null = no default cap. Zero deliberately blocks
+            workspace AI for every member without an uncapped override.
+        forcedSelectionPolicy:
+          type: [string, "null"]
+          enum: [auto-cheapest, auto-max-power, null]
+          description: >-
+            Model policy forced on workspace-billed requests, beating each
+            member's own policy. Null = members keep their own. "manual" is
+            never forceable — it would just hand the choice back.
+        allowedCostTiers:
+          type: [array, "null"]
+          items: { $ref: "#/components/schemas/VenomModelCostTier" }
+          minItems: 1
+          maxItems: 3
+          description: >-
+            Cost tiers workspace-billed requests may use; null = all tiers.
+            Saving an empty list is rejected — a lock can never allow nothing.
+        memberOverrides:
+          type: array
+          maxItems: 200
+          items: { $ref: "#/components/schemas/VenomWorkspaceMemberAiCap" }
+          description: Members whose cap replaces the workspace default.
+    VenomWorkspaceMemberAiCap:
+      type: object
+      additionalProperties: false
+      required: [clerkUserId, name, capUsd]
+      properties:
+        clerkUserId:
+          type: string
+          minLength: 1
+          maxLength: 160
+        name:
+          type: string
+          maxLength: 200
+          description: Display name, best effort; falls back to the account id.
+        capUsd:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1000000
+          description: This member's own monthly cap; null = explicitly uncapped.
+    VenomWorkspaceAiControlsInput:
+      type: object
+      additionalProperties: false
+      description: Full-replace write of the workspace-level controls.
+      required: [defaultMemberCapUsd, forcedSelectionPolicy, allowedCostTiers]
+      properties:
+        defaultMemberCapUsd:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1000000
+        forcedSelectionPolicy:
+          type: [string, "null"]
+          enum: [auto-cheapest, auto-max-power, null]
+        allowedCostTiers:
+          type: [array, "null"]
+          items: { $ref: "#/components/schemas/VenomModelCostTier" }
+          minItems: 1
+          maxItems: 3
+    VenomWorkspaceMemberAiCapInput:
+      type: object
+      additionalProperties: false
+      required: [capUsd]
+      properties:
+        capUsd:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1000000
+          description: Monthly cap in dollars; null = explicitly uncapped.
+    VenomWorkspaceUsageSummary:
+      type: object
+      additionalProperties: false
+      description: >-
+        Admin-only view of what the workspace paid for this period. Personal
+        usage is structurally absent — rows sum the ledger's
+        workspace-billed entries alone.
+      required: [covered, periodStart, periodEnd, totalUsd, allowanceUsd, members]
+      properties:
+        covered:
+          type: boolean
+          description: True while the Organization plan covers this workspace's AI.
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+        totalUsd:
+          type: number
+          minimum: 0
+          description: >-
+            Everything billed to the workspace this period, including calls
+            by since-removed members — it always matches the plan's spend.
+        allowanceUsd:
+          type: number
+          minimum: 0
+          description: The plan's included AI for the period, in dollars.
+        members:
+          type: array
+          maxItems: 200
+          items: { $ref: "#/components/schemas/VenomWorkspaceMemberUsage" }
+    VenomWorkspaceMemberUsage:
+      type: object
+      additionalProperties: false
+      required: [clerkUserId, name, role, spentUsd, capUsd, capState]
+      properties:
+        clerkUserId:
+          type: string
+          minLength: 1
+          maxLength: 160
+        name:
+          type: string
+          maxLength: 200
+        role:
+          type: string
+          enum: [admin, member]
+        spentUsd:
+          type: number
+          minimum: 0
+          description: This member's workspace-billed spend this period.
+        capUsd:
+          type: [number, "null"]
+          minimum: 0
+          description: Effective monthly cap for this member; null = uncapped.
+        capSource:
+          type: string
+          enum: [default, override]
+          description: >-
+            Where the effective cap comes from. "override" also appears with
+            a null capUsd — an explicitly uncapped member. Absent when no
+            cap applies at all.
+        capState:
+          $ref: "#/components/schemas/VenomAllowanceState"
+    VenomWorkspaceModelLock:
+      type: object
+      additionalProperties: false
+      description: >-
+        Present on the billing context for workspace payers whose admins
+        manage model choice. Members learn which controls are locked —
+        never cap figures or spend.
+      required: [forcedSelectionPolicy, allowedCostTiers]
+      properties:
+        forcedSelectionPolicy:
+          type: [string, "null"]
+          enum: [auto-cheapest, auto-max-power, null]
+        allowedCostTiers:
+          type: [array, "null"]
+          items: { $ref: "#/components/schemas/VenomModelCostTier" }
+          minItems: 1
+          maxItems: 3
     SensitivityUpdateInput:
       type: object
       additionalProperties: false

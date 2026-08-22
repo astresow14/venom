@@ -193,9 +193,10 @@ type ScopedConcept = {
  * only the on-screen project favored.
  *
  * Failure contract: the personal Brain fails the whole call — the route
- * turns that into its 502. Every workspace scope fails soft into
- * `droppedScopes` (knowledge and SOPs alike) so one broken workspace cannot
- * take chat down; callers log the drop.
+ * turns that into its 502. Workspace membership and every workspace scope
+ * fail soft: a lookup failure omits shared context altogether, while a
+ * loaded scope failure lands in `droppedScopes`. Either way a broken
+ * optional workspace can neither take personal chat down nor leak data.
  */
 export async function loadUserChatContext(input: {
   userId: string;
@@ -206,7 +207,8 @@ export async function loadUserChatContext(input: {
 
   // Live membership list per request: someone removed from a workspace
   // loses its knowledge — and its SOPs — on their very next turn.
-  const memberships = await listSharedWorkspaceMemberships(userId);
+  const membershipsResult = await settle(listSharedWorkspaceMemberships(userId));
+  const memberships = membershipsResult.ok ? membershipsResult.value : [];
 
   const personalPromise = settle(loadOntologyConcepts(userOwner(userId)));
   // Every membership's published SOPs join the prompt, each within an

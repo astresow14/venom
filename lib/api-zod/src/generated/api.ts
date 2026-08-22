@@ -14,6 +14,7 @@ export const sendVenomMessageBodyMessagesItemAttachmentIdsMax = 5;
 export const sendVenomMessageBodyMessagesMax = 24;
 export const sendVenomMessageBodyProjectContextMax = 8000;
 export const sendVenomMessageBodyProjectIdMax = 160;
+export const sendVenomMessageBodyWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 export const sendVenomMessageBodySourceCitationIdsItemRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
 export const sendVenomMessageBodySourceCitationIdsMax = 200;
 export const sendVenomMessageBodySourceSnapshotsItemIdMax = 160;
@@ -68,11 +69,14 @@ export const getVenomVoicesResponsePersonaMax = 160;
 export const getVenomVoicesResponseSampleTextMax = 240;
 export const getVenomVoicesResponseAvailabilityTextMax = 160;
 export const transcribeVenomVoiceBodyAudioBase64Max = 5000000;
+export const transcribeVenomVoiceBodyWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 export const transcribeVenomVoiceResponseTextMax = 8000;
 export const speakVenomVoiceBodyTextMax = 2000;
+export const speakVenomVoiceBodyWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 export const decideVenomVoiceTurnBodyTranscriptMax = 8000;
 export const decideVenomVoiceTurnBodyRecentTurnsItemContentMax = 4000;
 export const decideVenomVoiceTurnBodyRecentTurnsMax = 12;
+export const decideVenomVoiceTurnBodyWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 export const decideVenomVoiceTurnResponseDecisionIdMax = 80;
 export const decideVenomVoiceTurnResponseAcknowledgmentMax = 200;
 export const reportVenomVoiceDecisionOutcomeBodyDecisionIdMax = 80;
@@ -149,12 +153,34 @@ export const getVenomUsageSummaryResponseModelsItemRequestsMin = 0;
 export const getVenomUsageSummaryResponseModelsItemPromptTokensMin = 0;
 export const getVenomUsageSummaryResponseModelsItemOutputTokensMin = 0;
 export const getVenomUsageSummaryResponseModelsMax = 40;
+export const getVenomUsageSummaryResponseCoveredByWorkspacesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomUsageSummaryResponseCoveredByWorkspacesItemNameMax = 200;
+export const getVenomUsageSummaryResponseCoveredByWorkspacesMax = 100;
+export const getVenomBillingSummaryResponsePlanNameMax = 80;
+export const getVenomBillingSummaryResponsePlanPriceUsdMin = 0;
+export const getVenomBillingSummaryResponsePlanAllowanceUsdMin = 0;
+export const getVenomBillingSummaryResponseSpentUsdMin = 0;
+export const getVenomBillingSummaryResponseRemainingUsdMin = 0;
+export const getVenomBillingSummaryResponseUpgradePlanNameMax = 80;
+export const getVenomBillingSummaryResponseUpgradePlanPriceUsdMin = 0;
+export const getVenomBillingSummaryResponseUpgradePlanAllowanceUsdMin = 0;
+export const getVenomBillingContextQueryWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBillingContextResponsePlanNameMax = 80;
+export const getVenomBillingContextResponseWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBillingContextResponseWorkspaceNameMax = 200;
+export const getVenomBillingContextResponseRemainingUsdMin = 0;
+export const getVenomBillingContextResponseModelLockAllowedCostTiersMax = 3;
+export const createVenomBillingCheckoutBodyReturnUrlMax = 2000;
+export const createVenomBillingCheckoutResponseUrlMax = 4000;
+export const createVenomBillingPortalBodyReturnUrlMax = 2000;
+export const createVenomBillingPortalResponseUrlMax = 4000;
 export const extractVenomKnowledgeBodyConversationIdMax = 160;
 export const extractVenomKnowledgeBodyConversationTitleMax = 160;
 export const extractVenomKnowledgeBodyConversationProjectIdMax = 160;
 export const extractVenomKnowledgeBodyMessagesItemIdMax = 160;
 export const extractVenomKnowledgeBodyMessagesItemContentMax = 8000;
 export const extractVenomKnowledgeBodyMessagesMax = 48;
+export const extractVenomKnowledgeBodyWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 export const extractVenomKnowledgeResponseClustersItemLabelMax = 64;
 export const extractVenomKnowledgeResponseClustersItemCategoryMax = 32;
 export const extractVenomKnowledgeResponseClustersItemConfidenceMin = 0;
@@ -1412,8 +1438,72 @@ export const publishSharedWorkspaceSopResponseContentRequiredApprovalsItemMax = 
 export const publishSharedWorkspaceSopResponseContentRequiredApprovalsMax = 25;
 export const publishSharedWorkspaceSopResponseContentAcceptanceChecksItemMax = 500;
 export const publishSharedWorkspaceSopResponseContentAcceptanceChecksMax = 25;
+export const getSharedWorkspaceBillingPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getSharedWorkspaceBillingResponsePlanNameMax = 80;
+export const getSharedWorkspaceBillingResponsePlanNameMaxOne = 80;
+export const getSharedWorkspaceBillingResponsePlanPriceUsdMin = 0;
+export const getSharedWorkspaceBillingResponsePlanAllowanceUsdMin = 0;
+export const getSharedWorkspaceBillingResponseSpentUsdMin = 0;
+export const getSharedWorkspaceBillingResponseRemainingUsdMin = 0;
+export const createSharedWorkspaceBillingCheckoutPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createSharedWorkspaceBillingCheckoutBodyReturnUrlMax = 2000;
+export const createSharedWorkspaceBillingCheckoutResponseUrlMax = 4000;
+export const createSharedWorkspaceBillingPortalPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createSharedWorkspaceBillingPortalBodyReturnUrlMax = 2000;
+export const createSharedWorkspaceBillingPortalResponseUrlMax = 4000;
 export const getSharedWorkspaceSettingsPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 export const updateSharedWorkspaceSettingsPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getSharedWorkspaceAiControlsPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getSharedWorkspaceAiControlsResponseDefaultMemberCapUsdMin = 0;
+export const getSharedWorkspaceAiControlsResponseDefaultMemberCapUsdMax = 1000000;
+export const getSharedWorkspaceAiControlsResponseAllowedCostTiersMax = 3;
+export const getSharedWorkspaceAiControlsResponseMemberOverridesItemClerkUserIdMax = 160;
+export const getSharedWorkspaceAiControlsResponseMemberOverridesItemNameMax = 200;
+export const getSharedWorkspaceAiControlsResponseMemberOverridesItemCapUsdMin = 0;
+export const getSharedWorkspaceAiControlsResponseMemberOverridesItemCapUsdMax = 1000000;
+export const getSharedWorkspaceAiControlsResponseMemberOverridesMax = 200;
+export const updateSharedWorkspaceAiControlsPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateSharedWorkspaceAiControlsBodyDefaultMemberCapUsdMin = 0;
+export const updateSharedWorkspaceAiControlsBodyDefaultMemberCapUsdMax = 1000000;
+export const updateSharedWorkspaceAiControlsBodyAllowedCostTiersMax = 3;
+export const updateSharedWorkspaceAiControlsResponseDefaultMemberCapUsdMin = 0;
+export const updateSharedWorkspaceAiControlsResponseDefaultMemberCapUsdMax = 1000000;
+export const updateSharedWorkspaceAiControlsResponseAllowedCostTiersMax = 3;
+export const updateSharedWorkspaceAiControlsResponseMemberOverridesItemClerkUserIdMax = 160;
+export const updateSharedWorkspaceAiControlsResponseMemberOverridesItemNameMax = 200;
+export const updateSharedWorkspaceAiControlsResponseMemberOverridesItemCapUsdMin = 0;
+export const updateSharedWorkspaceAiControlsResponseMemberOverridesItemCapUsdMax = 1000000;
+export const updateSharedWorkspaceAiControlsResponseMemberOverridesMax = 200;
+export const setSharedWorkspaceMemberAiCapPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceMemberAiCapPathMemberUserIdMax = 160;
+export const setSharedWorkspaceMemberAiCapBodyCapUsdMin = 0;
+export const setSharedWorkspaceMemberAiCapBodyCapUsdMax = 1000000;
+export const setSharedWorkspaceMemberAiCapResponseDefaultMemberCapUsdMin = 0;
+export const setSharedWorkspaceMemberAiCapResponseDefaultMemberCapUsdMax = 1000000;
+export const setSharedWorkspaceMemberAiCapResponseAllowedCostTiersMax = 3;
+export const setSharedWorkspaceMemberAiCapResponseMemberOverridesItemClerkUserIdMax = 160;
+export const setSharedWorkspaceMemberAiCapResponseMemberOverridesItemNameMax = 200;
+export const setSharedWorkspaceMemberAiCapResponseMemberOverridesItemCapUsdMin = 0;
+export const setSharedWorkspaceMemberAiCapResponseMemberOverridesItemCapUsdMax = 1000000;
+export const setSharedWorkspaceMemberAiCapResponseMemberOverridesMax = 200;
+export const clearSharedWorkspaceMemberAiCapPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const clearSharedWorkspaceMemberAiCapPathMemberUserIdMax = 160;
+export const clearSharedWorkspaceMemberAiCapResponseDefaultMemberCapUsdMin = 0;
+export const clearSharedWorkspaceMemberAiCapResponseDefaultMemberCapUsdMax = 1000000;
+export const clearSharedWorkspaceMemberAiCapResponseAllowedCostTiersMax = 3;
+export const clearSharedWorkspaceMemberAiCapResponseMemberOverridesItemClerkUserIdMax = 160;
+export const clearSharedWorkspaceMemberAiCapResponseMemberOverridesItemNameMax = 200;
+export const clearSharedWorkspaceMemberAiCapResponseMemberOverridesItemCapUsdMin = 0;
+export const clearSharedWorkspaceMemberAiCapResponseMemberOverridesItemCapUsdMax = 1000000;
+export const clearSharedWorkspaceMemberAiCapResponseMemberOverridesMax = 200;
+export const getSharedWorkspaceUsagePathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getSharedWorkspaceUsageResponseTotalUsdMin = 0;
+export const getSharedWorkspaceUsageResponseAllowanceUsdMin = 0;
+export const getSharedWorkspaceUsageResponseMembersItemClerkUserIdMax = 160;
+export const getSharedWorkspaceUsageResponseMembersItemNameMax = 200;
+export const getSharedWorkspaceUsageResponseMembersItemSpentUsdMin = 0;
+export const getSharedWorkspaceUsageResponseMembersItemCapUsdMin = 0;
+export const getSharedWorkspaceUsageResponseMembersMax = 200;
 export const setSharedWorkspaceConceptSensitivityPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 export const setSharedWorkspaceConceptSensitivityPathConceptIdMax = 120;
 export const setSharedWorkspaceConceptSensitivityResponseIdMax = 120;
@@ -3492,6 +3582,7 @@ export const SendVenomMessageBody = zod.object({
 })).min(1).max(sendVenomMessageBodyMessagesMax),
   "projectContext": zod.string().max(sendVenomMessageBodyProjectContextMax).optional(),
   "projectId": zod.string().min(1).max(sendVenomMessageBodyProjectIdMax),
+  "workspaceId": zod.string().regex(sendVenomMessageBodyWorkspaceIdRegExp).optional().describe('The shared workspace this chat lives in. It controls filing and billing only; context still spans the caller\'s permitted spaces.'),
   "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']).optional(),
   "sourceCitationIds": zod.array(zod.string().regex(sendVenomMessageBodySourceCitationIdsItemRegExp)).max(sendVenomMessageBodySourceCitationIdsMax).optional(),
   "sourceSnapshots": zod.array(zod.object({
@@ -3642,10 +3733,10 @@ export const GetVenomVoicesResponse = zod.array(GetVenomVoicesResponseItem)
  * @summary Transcribe one spoken utterance to text
  */
 
-
 export const TranscribeVenomVoiceBody = zod.object({
   "audioBase64": zod.string().min(1).max(transcribeVenomVoiceBodyAudioBase64Max),
-  "format": zod.enum(['webm', 'wav', 'mp3', 'mp4', 'ogg']).optional()
+  "format": zod.enum(['webm', 'wav', 'mp3', 'mp4', 'ogg']).optional(),
+  "workspaceId": zod.string().regex(transcribeVenomVoiceBodyWorkspaceIdRegExp).optional().describe('Shared workspace the voice conversation lives in, when it does. Billing follows this space: an Organization-plan workspace pays for its own turns; otherwise the caller\'s personal plan does.')
 })
 
 
@@ -3659,10 +3750,10 @@ export const TranscribeVenomVoiceResponse = zod.object({
  * @summary Stream spoken audio for a piece of assistant text
  */
 
-
 export const SpeakVenomVoiceBody = zod.object({
   "text": zod.string().min(1).max(speakVenomVoiceBodyTextMax),
-  "presetId": zod.enum(['sam', 'marcus', 'rowan', 'elijah', 'maya', 'isla'])
+  "presetId": zod.enum(['sam', 'marcus', 'rowan', 'elijah', 'maya', 'isla']),
+  "workspaceId": zod.string().regex(speakVenomVoiceBodyWorkspaceIdRegExp).optional().describe('Shared workspace the voice conversation lives in, for billing attribution.')
 })
 
 export const SpeakVenomVoiceResponse = zod.unknown()
@@ -3673,14 +3764,14 @@ export const SpeakVenomVoiceResponse = zod.unknown()
  * @summary Decide whether a finished spoken turn deserves a reply, a brief acknowledgment, or silence
  */
 
-
 export const DecideVenomVoiceTurnBody = zod.object({
   "transcript": zod.string().min(1).max(decideVenomVoiceTurnBodyTranscriptMax),
   "recentTurns": zod.array(zod.object({
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string().max(decideVenomVoiceTurnBodyRecentTurnsItemContentMax)
 })).max(decideVenomVoiceTurnBodyRecentTurnsMax).optional(),
-  "talkativeness": zod.enum(['chatty', 'balanced', 'reserved']).optional().describe('How eager voice mode is to answer remarks that don\'t clearly invite a reply. Optional on stored preferences; absent means \"balanced\".')
+  "talkativeness": zod.enum(['chatty', 'balanced', 'reserved']).optional().describe('How eager voice mode is to answer remarks that don\'t clearly invite a reply. Optional on stored preferences; absent means \"balanced\".'),
+  "workspaceId": zod.string().regex(decideVenomVoiceTurnBodyWorkspaceIdRegExp).optional().describe('Shared workspace the voice conversation lives in, for billing attribution.')
 })
 
 
@@ -3863,14 +3954,113 @@ export const GetVenomUsageSummaryResponse = zod.object({
   "promptTokens": zod.number().min(getVenomUsageSummaryResponseModelsItemPromptTokensMin),
   "outputTokens": zod.number().min(getVenomUsageSummaryResponseModelsItemOutputTokensMin),
   "hasEstimates": zod.boolean()
-})).max(getVenomUsageSummaryResponseModelsMax).describe('Per-model breakdown under Venom-branded names, highest spend first.')
+})).max(getVenomUsageSummaryResponseModelsMax).describe('Per-model breakdown under Venom-branded names, highest spend first.'),
+  "coveredByWorkspaces": zod.array(zod.object({
+  "id": zod.string().regex(getVenomUsageSummaryResponseCoveredByWorkspacesItemIdRegExp),
+  "name": zod.string().max(getVenomUsageSummaryResponseCoveredByWorkspacesItemNameMax)
+})).max(getVenomUsageSummaryResponseCoveredByWorkspacesMax).describe('Workspaces whose Organization plan covered some of this member\'s AI calls during the period. Names only — workspace-billed spend belongs to the workspace and never appears in personal figures.')
+})
+
+
+/**
+ * The signed-in account's personal billing surface: current plan, subscription status, period window, and spend against the plan's included AI — counting personally-billed calls only. Workspace-billed usage never appears here. When Stripe is not configured the payload says so via `configured: false` and checkout/portal are unavailable, but the plan card still renders.
+ * @summary Your personal plan, renewal, and allowance for this period
+ */
+
+
+export const GetVenomBillingSummaryResponse = zod.object({
+  "configured": zod.boolean().describe('False when Stripe keys are absent — clients show a \"not set up\" state.'),
+  "enforced": zod.boolean().describe('Whether allowances currently block requests on this server.'),
+  "plan": zod.object({
+  "id": zod.enum(['free', 'plus', 'org']),
+  "name": zod.string().max(getVenomBillingSummaryResponsePlanNameMax).describe('Display name from server configuration.'),
+  "priceUsd": zod.number().min(getVenomBillingSummaryResponsePlanPriceUsdMin).describe('Monthly price in dollars; zero for the free tier.'),
+  "allowanceUsd": zod.number().min(getVenomBillingSummaryResponsePlanAllowanceUsdMin).describe('Included Venom AI value per month, in dollars.')
+}),
+  "status": zod.enum(['none', 'active', 'trialing', 'past_due', 'canceled', 'incomplete', 'incomplete_expired', 'unpaid', 'paused']).describe('Subscription status mirrored from Stripe; \"none\" without one.'),
+  "cancelAtPeriodEnd": zod.boolean(),
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date().describe('When the paid period renews, or the free allowance resets.'),
+  "renews": zod.boolean().describe('True when a paid subscription renews at periodEnd.'),
+  "spentUsd": zod.number().min(getVenomBillingSummaryResponseSpentUsdMin).describe('Personally-billed spend this period, dollars.'),
+  "remainingUsd": zod.number().min(getVenomBillingSummaryResponseRemainingUsdMin),
+  "state": zod.enum(['ok', 'approaching', 'exhausted']).describe('Where the payer stands against its included AI this period. \"approaching\" has crossed the warning threshold; \"exhausted\" means new AI requests from this space are blocked while enforcement is on.'),
+  "upgradePlan": zod.object({
+  "id": zod.enum(['free', 'plus', 'org']),
+  "name": zod.string().max(getVenomBillingSummaryResponseUpgradePlanNameMax).describe('Display name from server configuration.'),
+  "priceUsd": zod.number().min(getVenomBillingSummaryResponseUpgradePlanPriceUsdMin).describe('Monthly price in dollars; zero for the free tier.'),
+  "allowanceUsd": zod.number().min(getVenomBillingSummaryResponseUpgradePlanAllowanceUsdMin).describe('Included Venom AI value per month, in dollars.')
+}).optional().describe('Present only when an upgrade is on offer (free tier).'),
+  "manageable": zod.boolean().describe('True when a Stripe subscription exists to manage via the portal.')
+})
+
+
+/**
+ * Resolves the payer the composer should hint at: pass the shared workspace the conversation lives in (or nothing for the personal space). An Organization-plan workspace answers as the workspace payer with its plan name and allowance state — never dollar figures; anything else answers as the caller's personal plan.
+ * @summary Who pays for AI sent from a given space right now
+ */
+
+export const GetVenomBillingContextQueryParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(getVenomBillingContextQueryWorkspaceIdRegExp).optional()
+})
+
+
+
+export const GetVenomBillingContextResponse = zod.object({
+  "configured": zod.boolean(),
+  "enforced": zod.boolean(),
+  "payer": zod.enum(['personal', 'workspace']).describe('Whose allowance a message sent from this space draws on.'),
+  "planName": zod.string().max(getVenomBillingContextResponsePlanNameMax),
+  "state": zod.enum(['ok', 'approaching', 'exhausted']).describe('Where the payer stands against its included AI this period. \"approaching\" has crossed the warning threshold; \"exhausted\" means new AI requests from this space are blocked while enforcement is on.'),
+  "workspaceId": zod.string().regex(getVenomBillingContextResponseWorkspaceIdRegExp).optional().describe('Present for workspace payers.'),
+  "workspaceName": zod.string().max(getVenomBillingContextResponseWorkspaceNameMax).optional().describe('Present for workspace payers.'),
+  "remainingUsd": zod.number().min(getVenomBillingContextResponseRemainingUsdMin).optional().describe('Present for the personal payer only; workspaces never expose figures to members.'),
+  "memberCapState": zod.enum(['ok', 'approaching', 'exhausted']).optional().describe('Present for workspace payers when an admin-set member cap binds the caller\'s workspace-billed usage. States only — the figures behind them stay with admins.'),
+  "modelLock": zod.object({
+  "forcedSelectionPolicy": zod.union([zod.literal('auto-cheapest'),zod.literal('auto-max-power'),zod.literal(null)]).nullable(),
+  "allowedCostTiers": zod.array(zod.enum(['$', '$$', '$$$']).describe('Coarse relative running cost of a managed model, for comparing models against each other only. Deliberately never a price, currency amount, or provider SKU.')).min(1).max(getVenomBillingContextResponseModelLockAllowedCostTiersMax).nullable()
+}).optional().describe('Present for workspace payers when admins lock model settings for workspace-billed requests.')
+})
+
+
+/**
+ * Creates a Stripe-hosted checkout session for the paid personal tier and returns its URL. Answers 503 with code `billing_not_configured` when Stripe keys are absent, and 409 when the account is already on the plan.
+ * @summary Start Stripe checkout for the paid personal plan
+ */
+
+
+export const CreateVenomBillingCheckoutBody = zod.object({
+  "planId": zod.enum(['plus']).optional().describe('The paid personal plan; defaults to it when omitted.'),
+  "returnUrl": zod.string().max(createVenomBillingCheckoutBodyReturnUrlMax).optional().describe('Where Stripe sends the user back; defaults to the request origin.')
+})
+
+
+
+export const CreateVenomBillingCheckoutResponse = zod.object({
+  "url": zod.string().max(createVenomBillingCheckoutResponseUrlMax).describe('The Stripe-hosted page to open.')
+})
+
+
+/**
+ * Creates a Stripe-hosted billing-portal session for the signed-in account's existing subscription (upgrade, cancel, update payment method). 409 when there is nothing to manage yet; 503 with code `billing_not_configured` when Stripe keys are absent.
+ * @summary Open the Stripe billing portal for your subscription
+ */
+
+
+export const CreateVenomBillingPortalBody = zod.object({
+  "returnUrl": zod.string().max(createVenomBillingPortalBodyReturnUrlMax).optional().describe('Where Stripe sends the user back; defaults to the request origin.')
+})
+
+
+
+export const CreateVenomBillingPortalResponse = zod.object({
+  "url": zod.string().max(createVenomBillingPortalResponseUrlMax).describe('The Stripe-hosted page to open.')
 })
 
 
 /**
  * @summary Extract knowledge clusters from a project conversation
  */
-
 
 export const ExtractVenomKnowledgeBody = zod.object({
   "conversation": zod.object({
@@ -3883,7 +4073,8 @@ export const ExtractVenomKnowledgeBody = zod.object({
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string().min(1).max(extractVenomKnowledgeBodyMessagesItemContentMax)
 })).min(1).max(extractVenomKnowledgeBodyMessagesMax),
-  "file": zod.boolean().optional().describe('When true, the server files the extracted insights into the signed-in user\'s ontology store and returns the touched concepts in `filed`. The server decides scope per cluster (personal, a workspace the caller belongs to, or the private Unsorted holding area); clients no longer pick a destination. Clients that omit this keep filing locally.')
+  "file": zod.boolean().optional().describe('When true, the server files the extracted insights into the signed-in user\'s ontology store and returns the touched concepts in `filed`. The server decides scope per cluster (personal, a workspace the caller belongs to, or the private Unsorted holding area); clients no longer pick a destination. Clients that omit this keep filing locally.'),
+  "workspaceId": zod.string().regex(extractVenomKnowledgeBodyWorkspaceIdRegExp).optional().describe('The shared workspace the conversation lives in. It controls billing and is re-checked against the caller\'s membership.')
 })
 
 
@@ -6177,6 +6368,82 @@ export const PublishSharedWorkspaceSopResponse = zod.object({
 
 
 /**
+ * Members learn whether the workspace is covered by an Organization plan and its allowance state — enough to explain a blocked chat. Dollar figures (spend, remaining, price) are returned to admins alone; per-member breakdowns do not exist on this surface.
+ * @summary A workspace's Organization plan state (spend for admins only)
+ */
+
+export const GetSharedWorkspaceBillingParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(getSharedWorkspaceBillingPathWorkspaceIdRegExp)
+})
+
+
+
+export const GetSharedWorkspaceBillingResponse = zod.object({
+  "configured": zod.boolean(),
+  "enforced": zod.boolean(),
+  "covered": zod.boolean().describe('True while the Organization plan keeps this workspace\'s AI covered.'),
+  "planName": zod.string().max(getSharedWorkspaceBillingResponsePlanNameMax),
+  "role": zod.enum(['admin', 'member']),
+  "plan": zod.object({
+  "id": zod.enum(['free', 'plus', 'org']),
+  "name": zod.string().max(getSharedWorkspaceBillingResponsePlanNameMaxOne).describe('Display name from server configuration.'),
+  "priceUsd": zod.number().min(getSharedWorkspaceBillingResponsePlanPriceUsdMin).describe('Monthly price in dollars; zero for the free tier.'),
+  "allowanceUsd": zod.number().min(getSharedWorkspaceBillingResponsePlanAllowanceUsdMin).describe('Included Venom AI value per month, in dollars.')
+}).optional().describe('Admin view only.'),
+  "status": zod.enum(['none', 'active', 'trialing', 'past_due', 'canceled', 'incomplete', 'incomplete_expired', 'unpaid', 'paused']).optional().describe('Admin view only.'),
+  "cancelAtPeriodEnd": zod.boolean().optional().describe('Admin view only.'),
+  "periodStart": zod.coerce.date().optional().describe('Admin view only.'),
+  "periodEnd": zod.coerce.date().optional().describe('Admin view only.'),
+  "spentUsd": zod.number().min(getSharedWorkspaceBillingResponseSpentUsdMin).optional().describe('Admin view only. Aggregate workspace spend this period.'),
+  "remainingUsd": zod.number().min(getSharedWorkspaceBillingResponseRemainingUsdMin).optional().describe('Admin view only.'),
+  "state": zod.enum(['ok', 'approaching', 'exhausted']).optional().describe('Admin view only (members get coverage without figures).'),
+  "manageable": zod.boolean().optional().describe('Admin view only.')
+})
+
+
+/**
+ * @summary Start Stripe checkout for the Organization plan (admins only)
+ */
+
+export const CreateSharedWorkspaceBillingCheckoutParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(createSharedWorkspaceBillingCheckoutPathWorkspaceIdRegExp)
+})
+
+
+
+export const CreateSharedWorkspaceBillingCheckoutBody = zod.object({
+  "returnUrl": zod.string().max(createSharedWorkspaceBillingCheckoutBodyReturnUrlMax).optional().describe('Where Stripe sends the user back; defaults to the request origin.')
+})
+
+
+
+export const CreateSharedWorkspaceBillingCheckoutResponse = zod.object({
+  "url": zod.string().max(createSharedWorkspaceBillingCheckoutResponseUrlMax).describe('The Stripe-hosted page to open.')
+})
+
+
+/**
+ * @summary Open the Stripe portal for the workspace plan (admins only)
+ */
+
+export const CreateSharedWorkspaceBillingPortalParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(createSharedWorkspaceBillingPortalPathWorkspaceIdRegExp)
+})
+
+
+
+export const CreateSharedWorkspaceBillingPortalBody = zod.object({
+  "returnUrl": zod.string().max(createSharedWorkspaceBillingPortalBodyReturnUrlMax).optional().describe('Where Stripe sends the user back; defaults to the request origin.')
+})
+
+
+
+export const CreateSharedWorkspaceBillingPortalResponse = zod.object({
+  "url": zod.string().max(createSharedWorkspaceBillingPortalResponseUrlMax).describe('The Stripe-hosted page to open.')
+})
+
+
+/**
  * @summary Read the workspace's security settings (admins only)
  */
 
@@ -6204,6 +6471,143 @@ export const UpdateSharedWorkspaceSettingsBody = zod.object({
 export const UpdateSharedWorkspaceSettingsResponse = zod.object({
   "allowSensitiveExport": zod.boolean().describe('Export policy. True (the default) lets exports include items marked sensitive; false makes the server exclude them from every export and state how many were withheld.')
 })
+
+
+/**
+ * Spend caps and model locks bind only requests billed to this workspace's Organization plan. Admin-only — cap figures are workspace money, and members only ever learn lock/cap state through the billing context, never these numbers. Nothing here reads or touches anyone's personal space.
+ * @summary The workspace's AI spend caps and model lock (admins only)
+ */
+
+export const GetSharedWorkspaceAiControlsParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(getSharedWorkspaceAiControlsPathWorkspaceIdRegExp)
+})
+
+
+
+export const GetSharedWorkspaceAiControlsResponse = zod.object({
+  "defaultMemberCapUsd": zod.number().min(getSharedWorkspaceAiControlsResponseDefaultMemberCapUsdMin).max(getSharedWorkspaceAiControlsResponseDefaultMemberCapUsdMax).nullable().describe('Default monthly cap on each member\'s workspace-billed usage, in dollars. Null = no default cap. Zero deliberately blocks workspace AI for every member without an uncapped override.'),
+  "forcedSelectionPolicy": zod.union([zod.literal('auto-cheapest'),zod.literal('auto-max-power'),zod.literal(null)]).nullable().describe('Model policy forced on workspace-billed requests, beating each member\'s own policy. Null = members keep their own. \"manual\" is never forceable — it would just hand the choice back.'),
+  "allowedCostTiers": zod.array(zod.enum(['$', '$$', '$$$']).describe('Coarse relative running cost of a managed model, for comparing models against each other only. Deliberately never a price, currency amount, or provider SKU.')).min(1).max(getSharedWorkspaceAiControlsResponseAllowedCostTiersMax).nullable().describe('Cost tiers workspace-billed requests may use; null = all tiers. Saving an empty list is rejected — a lock can never allow nothing.'),
+  "memberOverrides": zod.array(zod.object({
+  "clerkUserId": zod.string().min(1).max(getSharedWorkspaceAiControlsResponseMemberOverridesItemClerkUserIdMax),
+  "name": zod.string().max(getSharedWorkspaceAiControlsResponseMemberOverridesItemNameMax).describe('Display name, best effort; falls back to the account id.'),
+  "capUsd": zod.number().min(getSharedWorkspaceAiControlsResponseMemberOverridesItemCapUsdMin).max(getSharedWorkspaceAiControlsResponseMemberOverridesItemCapUsdMax).nullable().describe('This member\'s own monthly cap; null = explicitly uncapped.')
+})).max(getSharedWorkspaceAiControlsResponseMemberOverridesMax).describe('Members whose cap replaces the workspace default.')
+}).describe('Admin view of a workspace\'s AI controls. Everything here binds only usage billed to this workspace — nobody\'s personal space is read, shown, or constrained.')
+
+
+/**
+ * @summary Set the workspace's default spend cap and model lock (admins only)
+ */
+
+export const UpdateSharedWorkspaceAiControlsParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(updateSharedWorkspaceAiControlsPathWorkspaceIdRegExp)
+})
+
+
+
+export const UpdateSharedWorkspaceAiControlsBody = zod.object({
+  "defaultMemberCapUsd": zod.number().min(updateSharedWorkspaceAiControlsBodyDefaultMemberCapUsdMin).max(updateSharedWorkspaceAiControlsBodyDefaultMemberCapUsdMax).nullable(),
+  "forcedSelectionPolicy": zod.union([zod.literal('auto-cheapest'),zod.literal('auto-max-power'),zod.literal(null)]).nullable(),
+  "allowedCostTiers": zod.array(zod.enum(['$', '$$', '$$$']).describe('Coarse relative running cost of a managed model, for comparing models against each other only. Deliberately never a price, currency amount, or provider SKU.')).min(1).max(updateSharedWorkspaceAiControlsBodyAllowedCostTiersMax).nullable()
+}).describe('Full-replace write of the workspace-level controls.')
+
+
+
+export const UpdateSharedWorkspaceAiControlsResponse = zod.object({
+  "defaultMemberCapUsd": zod.number().min(updateSharedWorkspaceAiControlsResponseDefaultMemberCapUsdMin).max(updateSharedWorkspaceAiControlsResponseDefaultMemberCapUsdMax).nullable().describe('Default monthly cap on each member\'s workspace-billed usage, in dollars. Null = no default cap. Zero deliberately blocks workspace AI for every member without an uncapped override.'),
+  "forcedSelectionPolicy": zod.union([zod.literal('auto-cheapest'),zod.literal('auto-max-power'),zod.literal(null)]).nullable().describe('Model policy forced on workspace-billed requests, beating each member\'s own policy. Null = members keep their own. \"manual\" is never forceable — it would just hand the choice back.'),
+  "allowedCostTiers": zod.array(zod.enum(['$', '$$', '$$$']).describe('Coarse relative running cost of a managed model, for comparing models against each other only. Deliberately never a price, currency amount, or provider SKU.')).min(1).max(updateSharedWorkspaceAiControlsResponseAllowedCostTiersMax).nullable().describe('Cost tiers workspace-billed requests may use; null = all tiers. Saving an empty list is rejected — a lock can never allow nothing.'),
+  "memberOverrides": zod.array(zod.object({
+  "clerkUserId": zod.string().min(1).max(updateSharedWorkspaceAiControlsResponseMemberOverridesItemClerkUserIdMax),
+  "name": zod.string().max(updateSharedWorkspaceAiControlsResponseMemberOverridesItemNameMax).describe('Display name, best effort; falls back to the account id.'),
+  "capUsd": zod.number().min(updateSharedWorkspaceAiControlsResponseMemberOverridesItemCapUsdMin).max(updateSharedWorkspaceAiControlsResponseMemberOverridesItemCapUsdMax).nullable().describe('This member\'s own monthly cap; null = explicitly uncapped.')
+})).max(updateSharedWorkspaceAiControlsResponseMemberOverridesMax).describe('Members whose cap replaces the workspace default.')
+}).describe('Admin view of a workspace\'s AI controls. Everything here binds only usage billed to this workspace — nobody\'s personal space is read, shown, or constrained.')
+
+
+/**
+ * Replaces the workspace default cap for this member. A numeric cap is their own monthly limit on workspace-billed usage; null means this member is explicitly uncapped.
+ * @summary Override one member's monthly workspace AI cap (admins only)
+ */
+
+
+export const SetSharedWorkspaceMemberAiCapParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(setSharedWorkspaceMemberAiCapPathWorkspaceIdRegExp),
+  "memberUserId": zod.coerce.string().min(1).max(setSharedWorkspaceMemberAiCapPathMemberUserIdMax)
+})
+
+
+
+export const SetSharedWorkspaceMemberAiCapBody = zod.object({
+  "capUsd": zod.number().min(setSharedWorkspaceMemberAiCapBodyCapUsdMin).max(setSharedWorkspaceMemberAiCapBodyCapUsdMax).nullable().describe('Monthly cap in dollars; null = explicitly uncapped.')
+})
+
+
+
+export const SetSharedWorkspaceMemberAiCapResponse = zod.object({
+  "defaultMemberCapUsd": zod.number().min(setSharedWorkspaceMemberAiCapResponseDefaultMemberCapUsdMin).max(setSharedWorkspaceMemberAiCapResponseDefaultMemberCapUsdMax).nullable().describe('Default monthly cap on each member\'s workspace-billed usage, in dollars. Null = no default cap. Zero deliberately blocks workspace AI for every member without an uncapped override.'),
+  "forcedSelectionPolicy": zod.union([zod.literal('auto-cheapest'),zod.literal('auto-max-power'),zod.literal(null)]).nullable().describe('Model policy forced on workspace-billed requests, beating each member\'s own policy. Null = members keep their own. \"manual\" is never forceable — it would just hand the choice back.'),
+  "allowedCostTiers": zod.array(zod.enum(['$', '$$', '$$$']).describe('Coarse relative running cost of a managed model, for comparing models against each other only. Deliberately never a price, currency amount, or provider SKU.')).min(1).max(setSharedWorkspaceMemberAiCapResponseAllowedCostTiersMax).nullable().describe('Cost tiers workspace-billed requests may use; null = all tiers. Saving an empty list is rejected — a lock can never allow nothing.'),
+  "memberOverrides": zod.array(zod.object({
+  "clerkUserId": zod.string().min(1).max(setSharedWorkspaceMemberAiCapResponseMemberOverridesItemClerkUserIdMax),
+  "name": zod.string().max(setSharedWorkspaceMemberAiCapResponseMemberOverridesItemNameMax).describe('Display name, best effort; falls back to the account id.'),
+  "capUsd": zod.number().min(setSharedWorkspaceMemberAiCapResponseMemberOverridesItemCapUsdMin).max(setSharedWorkspaceMemberAiCapResponseMemberOverridesItemCapUsdMax).nullable().describe('This member\'s own monthly cap; null = explicitly uncapped.')
+})).max(setSharedWorkspaceMemberAiCapResponseMemberOverridesMax).describe('Members whose cap replaces the workspace default.')
+}).describe('Admin view of a workspace\'s AI controls. Everything here binds only usage billed to this workspace — nobody\'s personal space is read, shown, or constrained.')
+
+
+/**
+ * @summary Return a member to the workspace's default cap (admins only)
+ */
+
+
+export const ClearSharedWorkspaceMemberAiCapParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(clearSharedWorkspaceMemberAiCapPathWorkspaceIdRegExp),
+  "memberUserId": zod.coerce.string().min(1).max(clearSharedWorkspaceMemberAiCapPathMemberUserIdMax)
+})
+
+
+
+export const ClearSharedWorkspaceMemberAiCapResponse = zod.object({
+  "defaultMemberCapUsd": zod.number().min(clearSharedWorkspaceMemberAiCapResponseDefaultMemberCapUsdMin).max(clearSharedWorkspaceMemberAiCapResponseDefaultMemberCapUsdMax).nullable().describe('Default monthly cap on each member\'s workspace-billed usage, in dollars. Null = no default cap. Zero deliberately blocks workspace AI for every member without an uncapped override.'),
+  "forcedSelectionPolicy": zod.union([zod.literal('auto-cheapest'),zod.literal('auto-max-power'),zod.literal(null)]).nullable().describe('Model policy forced on workspace-billed requests, beating each member\'s own policy. Null = members keep their own. \"manual\" is never forceable — it would just hand the choice back.'),
+  "allowedCostTiers": zod.array(zod.enum(['$', '$$', '$$$']).describe('Coarse relative running cost of a managed model, for comparing models against each other only. Deliberately never a price, currency amount, or provider SKU.')).min(1).max(clearSharedWorkspaceMemberAiCapResponseAllowedCostTiersMax).nullable().describe('Cost tiers workspace-billed requests may use; null = all tiers. Saving an empty list is rejected — a lock can never allow nothing.'),
+  "memberOverrides": zod.array(zod.object({
+  "clerkUserId": zod.string().min(1).max(clearSharedWorkspaceMemberAiCapResponseMemberOverridesItemClerkUserIdMax),
+  "name": zod.string().max(clearSharedWorkspaceMemberAiCapResponseMemberOverridesItemNameMax).describe('Display name, best effort; falls back to the account id.'),
+  "capUsd": zod.number().min(clearSharedWorkspaceMemberAiCapResponseMemberOverridesItemCapUsdMin).max(clearSharedWorkspaceMemberAiCapResponseMemberOverridesItemCapUsdMax).nullable().describe('This member\'s own monthly cap; null = explicitly uncapped.')
+})).max(clearSharedWorkspaceMemberAiCapResponseMemberOverridesMax).describe('Members whose cap replaces the workspace default.')
+}).describe('Admin view of a workspace\'s AI controls. Everything here binds only usage billed to this workspace — nobody\'s personal space is read, shown, or constrained.')
+
+
+/**
+ * Sums only usage billed to this workspace's Organization plan for the current period. Members' personal-space usage never appears here — a member's row counts what the workspace paid for, nothing else. The total covers every workspace-billed call this period, including ones by since-removed members, so it always matches the plan's spend.
+ * @summary Per-member workspace-billed AI usage this period (admins only)
+ */
+
+export const GetSharedWorkspaceUsageParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(getSharedWorkspaceUsagePathWorkspaceIdRegExp)
+})
+
+
+
+export const GetSharedWorkspaceUsageResponse = zod.object({
+  "covered": zod.boolean().describe('True while the Organization plan covers this workspace\'s AI.'),
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date(),
+  "totalUsd": zod.number().min(getSharedWorkspaceUsageResponseTotalUsdMin).describe('Everything billed to the workspace this period, including calls by since-removed members — it always matches the plan\'s spend.'),
+  "allowanceUsd": zod.number().min(getSharedWorkspaceUsageResponseAllowanceUsdMin).describe('The plan\'s included AI for the period, in dollars.'),
+  "members": zod.array(zod.object({
+  "clerkUserId": zod.string().min(1).max(getSharedWorkspaceUsageResponseMembersItemClerkUserIdMax),
+  "name": zod.string().max(getSharedWorkspaceUsageResponseMembersItemNameMax),
+  "role": zod.enum(['admin', 'member']),
+  "spentUsd": zod.number().min(getSharedWorkspaceUsageResponseMembersItemSpentUsdMin).describe('This member\'s workspace-billed spend this period.'),
+  "capUsd": zod.number().min(getSharedWorkspaceUsageResponseMembersItemCapUsdMin).nullable().describe('Effective monthly cap for this member; null = uncapped.'),
+  "capSource": zod.enum(['default', 'override']).optional().describe('Where the effective cap comes from. \"override\" also appears with a null capUsd — an explicitly uncapped member. Absent when no cap applies at all.'),
+  "capState": zod.enum(['ok', 'approaching', 'exhausted']).describe('Where the payer stands against its included AI this period. \"approaching\" has crossed the warning threshold; \"exhausted\" means new AI requests from this space are blocked while enforcement is on.')
+})).max(getSharedWorkspaceUsageResponseMembersMax)
+}).describe('Admin-only view of what the workspace paid for this period. Personal usage is structurally absent — rows sum the ledger\'s workspace-billed entries alone.')
 
 
 /**

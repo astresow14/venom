@@ -3,14 +3,20 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import {
   db,
+  venomAllowanceReservationsTable,
   venomBuildPackageRevisionsTable,
   venomBuildRunsTable,
   venomPortfolioAppsTable,
   venomPortfolioSourceVersionsTable,
+  venomUsageEvents,
 } from "@workspace/db";
 import { and, eq, inArray } from "drizzle-orm";
 import express from "express";
+import { requestBoundMicros } from "../lib/venom-billing-enforcement.js";
+import { planAllowanceMicros, venomPlan } from "../lib/venom-billing-plans.js";
+import { insertVenomUsage } from "../lib/venom-usage-store.js";
 import router, {
+  overrideVenomBuildRunGeneratorForTests,
   overrideVenomBuildRunSchedulerForTests,
   overrideVenomBuildRunUserIdResolverForTests,
   processVenomBuildRunForTests,
@@ -554,5 +560,190 @@ test("build run routes isolate accounts and keep approvals immutable", async () 
     await db
       .delete(venomPortfolioAppsTable)
       .where(inArray(venomPortfolioAppsTable.clerkUserId, [ownerA, ownerB]));
+  }
+});
+
+test("build-run admission holds outlive the response and settle or release in the worker", async () => {
+  process.env.VENOM_BILLING_ENFORCE = "1";
+  const suffix = randomUUID();
+  const owner = `build-billing-${suffix}`;
+  const restoreAuth = overrideVenomBuildRunUserIdResolverForTests(() => owner);
+  const scheduled: string[] = [];
+  const restoreScheduler = overrideVenomBuildRunSchedulerForTests(
+    (_userId, runId) => scheduled.push(runId),
+  );
+  const app = express();
+  app.use(express.json());
+  app.use((request, _response, next) => {
+    request.log = {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    } as unknown as typeof request.log;
+    next();
+  });
+  app.use(router);
+  const server = app.listen(0);
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  async function request(
+    path: string,
+    options: RequestInit = {},
+  ): Promise<TestResponse> {
+    const response = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers: {
+        "content-type": "application/json",
+        ...options.headers,
+      },
+    });
+    const rawBody = await response.text();
+    let body: unknown = null;
+    if (rawBody) {
+      try {
+        body = JSON.parse(rawBody);
+      } catch {
+        body = rawBody;
+      }
+    }
+    return { status: response.status, body };
+  }
+
+  const holds = () =>
+    db
+      .select({ id: venomAllowanceReservationsTable.id })
+      .from(venomAllowanceReservationsTable)
+      .where(eq(venomAllowanceReservationsTable.scopeId, owner));
+  const waitForHolds = async (expected: number, label: string) => {
+    const deadline = Date.now() + 4_000;
+    while ((await holds()).length !== expected && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal((await holds()).length, expected, label);
+  };
+  const createBody = (name: string) => ({
+    targetType: "website",
+    targetName: name,
+    requirements: `Billing hold coverage ${suffix}`,
+    constraints: "Do not deploy.",
+    brandDirection: "Quiet and direct.",
+    appId: null,
+    sourceVersionId: null,
+    projectId: null,
+    sopRevisionIds: [],
+    idempotencyKey: randomUUID().replaceAll("-", "_"),
+  });
+  // The generator override only installs under NODE_ENV=test; this suite
+  // runs in production mode, so flip the flag just around the install.
+  const installGenerator = (
+    generator: Parameters<typeof overrideVenomBuildRunGeneratorForTests>[0],
+  ) => {
+    const priorNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "test";
+    try {
+      return overrideVenomBuildRunGeneratorForTests(generator);
+    } finally {
+      if (priorNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = priorNodeEnv;
+    }
+  };
+
+  try {
+    // Leave room for exactly one worst-case admission: a leaked hold — or
+    // a queued run whose pending cost stopped counting — flips the
+    // assertions below.
+    await insertVenomUsage({
+      userId: owner,
+      modelAlias: "venom-gpt",
+      callKind: "chat",
+      promptTokens: 1,
+      outputTokens: 1,
+      estimated: false,
+      costMicros:
+        planAllowanceMicros(venomPlan("free")) - requestBoundMicros() - 50_000,
+    });
+
+    const created = await request("/venom/build-runs", {
+      method: "POST",
+      body: JSON.stringify(createBody("Billing hold run")),
+    });
+    assertStatus(created, 201);
+    assert.equal(
+      (await holds()).length,
+      1,
+      "the admission hold outlives the finished create response",
+    );
+
+    // While the queued run's cost is pending, a second worst-case run must
+    // not fit — exactly the over-admission a close-time release allowed.
+    const second = await request("/venom/build-runs", {
+      method: "POST",
+      body: JSON.stringify(createBody("Second run while pending")),
+    });
+    assertStatus(second, 402);
+    assert.equal(second.body.code, "personal_allowance_exhausted");
+
+    // The worker settles the hold into the run's first ledgered usage
+    // event even when generation fails afterwards.
+    let restoreGenerator = installGenerator(
+      async (_input, _signal, onUsage) => {
+        onUsage?.({ promptTokens: 10, outputTokens: 10, estimated: false });
+        throw new Error("halt after spending");
+      },
+    );
+    try {
+      await processVenomBuildRunForTests(owner, created.body.id);
+    } finally {
+      restoreGenerator();
+    }
+    await waitForHolds(0, "the first ledgered usage event settled the hold");
+    const settled = await db
+      .select({ id: venomUsageEvents.id })
+      .from(venomUsageEvents)
+      .where(
+        and(
+          eq(venomUsageEvents.userId, owner),
+          eq(venomUsageEvents.callKind, "build_package"),
+        ),
+      );
+    assert.equal(settled.length, 1);
+
+    // A run that ends without any ledgered usage releases its hold
+    // instead of stranding it against the allowance.
+    const third = await request("/venom/build-runs", {
+      method: "POST",
+      body: JSON.stringify(createBody("Release path run")),
+    });
+    assertStatus(third, 201);
+    assert.equal((await holds()).length, 1);
+    restoreGenerator = installGenerator(async () => {
+      throw new Error("failed before any spend");
+    });
+    try {
+      await processVenomBuildRunForTests(owner, third.body.id);
+    } finally {
+      restoreGenerator();
+    }
+    await waitForHolds(0, "a spend-free failure released the hold");
+    const failed = await request(`/venom/build-runs/${third.body.id}`);
+    assertStatus(failed, 200);
+    assert.equal(failed.body.status, "failed");
+  } finally {
+    delete process.env.VENOM_BILLING_ENFORCE;
+    server.close();
+    restoreAuth();
+    restoreScheduler();
+    await db
+      .delete(venomBuildRunsTable)
+      .where(eq(venomBuildRunsTable.clerkUserId, owner));
+    await db
+      .delete(venomUsageEvents)
+      .where(eq(venomUsageEvents.userId, owner));
+    await db
+      .delete(venomAllowanceReservationsTable)
+      .where(eq(venomAllowanceReservationsTable.scopeId, owner));
   }
 });

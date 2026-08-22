@@ -115,6 +115,44 @@ export function computeCostMicros(
   );
 }
 
+/**
+ * Hard per-call output ceiling every provider adapter enforces. Lives here
+ * (pure module) so admission pricing and dispatch share one number and can
+ * never drift apart.
+ */
+export const PROVIDER_MAX_OUTPUT_TOKENS = 8192;
+
+/**
+ * Hard per-call prompt ceiling — total text chars across messages — that
+ * dispatch enforces before any provider call. Far above any legitimately
+ * assembled Venom context, it exists so admission can price a true worst
+ * case: a reservation covers exactly what dispatch will let through.
+ */
+export const PROVIDER_MAX_PROMPT_CHARS = 300_000;
+
+/**
+ * Conservative chars-per-token divisor for pricing worst cases. Estimates
+ * of *observed* text use the 4-char industry heuristic above; bounds that
+ * admit spending must assume denser tokenization instead.
+ */
+export const BOUND_CHARS_PER_TOKEN = 3;
+
+/**
+ * The priciest possible cost of a call with the given token counts across
+ * the whole catalog — the number admission must reserve when the model is
+ * not yet known (auto policy picks after admission).
+ */
+export function maxCatalogCostMicros(
+  promptTokens: number,
+  outputTokens: number,
+): number {
+  let max = 0;
+  for (const alias of Object.keys(TOKEN_RATES)) {
+    max = Math.max(max, computeCostMicros(alias, promptTokens, outputTokens));
+  }
+  return max;
+}
+
 /** Micro-dollars → dollars for API payloads. Accepts bigint SQL sums. */
 export function microsToUsd(micros: number | bigint): number {
   return Number(micros) / 1_000_000;

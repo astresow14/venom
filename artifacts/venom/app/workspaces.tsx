@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import { useAuth } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import {
   exportSharedWorkspaceMarkdown,
+  getGetSharedWorkspaceBillingQueryKey,
   getGetSharedWorkspaceKnowledgeQueryKey,
   getGetSharedWorkspaceSettingsQueryKey,
   getListSharedWorkspaceMembersQueryKey,
@@ -23,6 +25,9 @@ import {
   getListSharedWorkspacesQueryKey,
   useAddSharedWorkspaceMember,
   useCreateSharedWorkspace,
+  useCreateSharedWorkspaceBillingCheckout,
+  useCreateSharedWorkspaceBillingPortal,
+  useGetSharedWorkspaceBilling,
   useGetSharedWorkspaceKnowledge,
   useGetSharedWorkspaceSettings,
   useListSharedWorkspaceMembers,
@@ -40,6 +45,7 @@ import {
 } from "@workspace/api-client-react";
 import { Header } from "@/components/Header";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { WorkspaceAiControls } from "@/components/WorkspaceAiControls";
 import { useColors } from "@/hooks/useColors";
 import { useSharedWorkspace } from "@/context/sharedWorkspace";
 import {
@@ -85,6 +91,75 @@ export default function WorkspacesScreen() {
   );
 
   const isAdmin = activeWorkspace?.role === "admin";
+
+  // Organization plan: admins can put the whole workspace on a workspace-
+  // level subscription; from then on AI used inside it draws on the
+  // workspace allowance instead of members' personal plans. Dollar figures
+  // and the buy/manage actions are admin-only — the server enforces that
+  // boundary too, this gate just avoids a pointless query.
+  const workspaceBillingQuery = useGetSharedWorkspaceBilling(
+    activeWorkspace?.id ?? "",
+    {
+      query: {
+        queryKey: getGetSharedWorkspaceBillingQueryKey(
+          activeWorkspace?.id ?? "",
+        ),
+        enabled: Boolean(activeWorkspace) && isAdmin,
+        staleTime: 60_000,
+        retry: 1,
+      },
+    },
+  );
+  const workspaceBilling = workspaceBillingQuery.data ?? null;
+  const workspaceCheckout = useCreateSharedWorkspaceBillingCheckout();
+  const workspacePortal = useCreateSharedWorkspaceBillingPortal();
+  const workspaceBillingBusy =
+    workspaceCheckout.isPending || workspacePortal.isPending;
+
+  // Purchase and management happen on Stripe-hosted pages; the app only
+  // opens the URL the server minted. Card details never pass through Venom.
+  const openWorkspaceBillingPage = (kind: "checkout" | "portal") => {
+    if (!activeWorkspace || workspaceBillingBusy) return;
+    const workspaceIdForBilling = activeWorkspace.id;
+    const mutation = kind === "checkout" ? workspaceCheckout : workspacePortal;
+    const returnUrl =
+      Platform.OS === "web" && typeof window !== "undefined"
+        ? window.location.href
+        : undefined;
+    mutation.mutate(
+      {
+        workspaceId: workspaceIdForBilling,
+        data: returnUrl ? { returnUrl } : {},
+      },
+      {
+        onSuccess: async ({ url }) => {
+          await Linking.openURL(url);
+          // Plan state may change while the Stripe page is open; refetch so
+          // this section catches up when the person comes back.
+          await queryClient.invalidateQueries({
+            queryKey: getGetSharedWorkspaceBillingQueryKey(
+              workspaceIdForBilling,
+            ),
+          });
+        },
+        onError: (error: unknown) => {
+          const status = (error as { status?: number })?.status;
+          Alert.alert(
+            kind === "checkout"
+              ? "Could not start checkout"
+              : "Could not open the billing portal",
+            status === 503
+              ? "Billing isn't set up on this server yet."
+              : status === 409
+                ? kind === "checkout"
+                  ? "This workspace is already on the Organization plan."
+                  : "There's no workspace subscription to manage yet."
+                : "Try again in a moment.",
+          );
+        },
+      },
+    );
+  };
   const workspaceId = activeWorkspace?.id ?? "";
 
   const membersQuery = useListSharedWorkspaceMembers(workspaceId, {
@@ -871,6 +946,268 @@ export default function WorkspacesScreen() {
               </View>
             )}
 
+            {/* Admin-only organization plan */}
+            {isAdmin && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+                  ORGANIZATION PLAN
+                </Text>
+                <View
+                  style={[
+                    styles.card,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                  ]}
+                  testID="section-workspace-billing"
+                >
+                  {workspaceBillingQuery.isLoading ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={colors.mutedForeground}
+                    />
+                  ) : workspaceBillingQuery.isError || !workspaceBilling ? (
+                    <Text
+                      style={[styles.rowMeta, { color: colors.destructive }]}
+                    >
+                      The workspace plan could not be loaded.
+                    </Text>
+                  ) : workspaceBilling.covered ? (
+                    <View>
+                      <Text
+                        style={[styles.rowTitle, { color: colors.foreground }]}
+                        testID="workspace-billing-plan"
+                      >
+                        {workspaceBilling.planName}
+                        {workspaceBilling.plan
+                          ? ` · $${workspaceBilling.plan.priceUsd}/mo`
+                          : ""}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.rowMeta,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        AI used inside this workspace draws on the workspace
+                        allowance — never on members&rsquo; personal plans.
+                      </Text>
+                      {workspaceBilling.plan &&
+                        typeof workspaceBilling.spentUsd === "number" &&
+                        workspaceBilling.plan.allowanceUsd > 0 && (
+                          <>
+                            <View
+                              style={[
+                                billingStyles.meterTrack,
+                                { backgroundColor: colors.accent },
+                              ]}
+                              accessibilityRole="progressbar"
+                              accessibilityValue={{
+                                min: 0,
+                                max: 100,
+                                now: Math.round(
+                                  Math.min(
+                                    workspaceBilling.spentUsd /
+                                      workspaceBilling.plan.allowanceUsd,
+                                    1,
+                                  ) * 100,
+                                ),
+                              }}
+                              accessibilityLabel="Share of the workspace's included AI used this period"
+                              testID="workspace-billing-meter"
+                            >
+                              <View
+                                style={[
+                                  billingStyles.meterFill,
+                                  {
+                                    backgroundColor:
+                                      workspaceBilling.state === "exhausted"
+                                        ? colors.destructive
+                                        : colors.foreground,
+                                    width: `${Math.max(
+                                      Math.min(
+                                        workspaceBilling.spentUsd /
+                                          workspaceBilling.plan.allowanceUsd,
+                                        1,
+                                      ) * 100,
+                                      2,
+                                    )}%`,
+                                  },
+                                ]}
+                              />
+                            </View>
+                            <View style={billingStyles.meterRow}>
+                              <Text
+                                style={[
+                                  billingStyles.label,
+                                  { color: colors.mutedForeground },
+                                ]}
+                              >
+                                Included AI this period
+                              </Text>
+                              <Text
+                                style={[
+                                  billingStyles.figures,
+                                  { color: colors.foreground },
+                                ]}
+                                testID="workspace-billing-figures"
+                              >
+                                {formatBillingUsd(workspaceBilling.spentUsd)} of
+                                ${workspaceBilling.plan.allowanceUsd}
+                              </Text>
+                            </View>
+                          </>
+                        )}
+                      {workspaceBilling.state === "exhausted" ? (
+                        <Text
+                          style={[
+                            billingStyles.stateText,
+                            { color: colors.destructive },
+                          ]}
+                          testID="workspace-billing-exhausted"
+                        >
+                          The workspace has used this period&rsquo;s included
+                          AI — chats here are paused until it resets or the
+                          plan changes.
+                        </Text>
+                      ) : workspaceBilling.state === "approaching" ? (
+                        <Text
+                          style={[
+                            billingStyles.stateText,
+                            { color: colors.foreground },
+                          ]}
+                          testID="workspace-billing-approaching"
+                        >
+                          The workspace is close to this period&rsquo;s
+                          included AI.
+                        </Text>
+                      ) : null}
+                      {workspaceBilling.manageable && (
+                        <TouchableOpacity
+                          onPress={() => openWorkspaceBillingPage("portal")}
+                          disabled={workspaceBillingBusy}
+                          accessibilityRole="button"
+                          accessibilityLabel="Manage the workspace plan"
+                          style={[
+                            billingStyles.actionButton,
+                            billingStyles.outlineButton,
+                            {
+                              borderColor: colors.border,
+                              opacity: workspaceBillingBusy ? 0.5 : 1,
+                            },
+                          ]}
+                          testID="button-workspace-billing-manage"
+                        >
+                          {workspacePortal.isPending ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={colors.foreground}
+                            />
+                          ) : (
+                            <Text
+                              style={[
+                                billingStyles.actionButtonText,
+                                { color: colors.foreground },
+                              ]}
+                            >
+                              Manage plan
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ) : (
+                    <View>
+                      <Text
+                        style={[styles.rowTitle, { color: colors.foreground }]}
+                      >
+                        Put this workspace on the {workspaceBilling.planName}{" "}
+                        plan
+                      </Text>
+                      <Text
+                        style={[
+                          styles.rowMeta,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        {workspaceBilling.plan
+                          ? `$${workspaceBilling.plan.priceUsd}/mo covers $${workspaceBilling.plan.allowanceUsd} of AI for everyone here — members' chats in this workspace stop drawing on their personal plans.`
+                          : "Cover everyone's AI in this workspace with one workspace-level plan."}
+                      </Text>
+                      {workspaceBilling.configured ? (
+                        <TouchableOpacity
+                          onPress={() => openWorkspaceBillingPage("checkout")}
+                          disabled={workspaceBillingBusy}
+                          accessibilityRole="button"
+                          accessibilityLabel="Put this workspace on the Organization plan"
+                          style={[
+                            billingStyles.actionButton,
+                            {
+                              backgroundColor: colors.foreground,
+                              opacity: workspaceBillingBusy ? 0.5 : 1,
+                            },
+                          ]}
+                          testID="button-workspace-billing-checkout"
+                        >
+                          {workspaceCheckout.isPending ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={colors.background}
+                            />
+                          ) : (
+                            <Text
+                              style={[
+                                billingStyles.actionButtonText,
+                                { color: colors.background },
+                              ]}
+                            >
+                              Get the plan
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      ) : (
+                        <View
+                          style={[
+                            billingStyles.badge,
+                            { borderColor: colors.border },
+                          ]}
+                          testID="workspace-billing-not-configured"
+                        >
+                          <Text
+                            style={[
+                              billingStyles.badgeText,
+                              { color: colors.mutedForeground },
+                            ]}
+                          >
+                            Billing not set up yet
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* Admin-only: workspace-billed usage and AI controls. Only
+                rendered on the Organization plan — without coverage there is
+                no workspace-billed usage to meter or control. Members never
+                see this section, and personal-space usage never appears. */}
+            {isAdmin && activeWorkspace && workspaceBilling?.covered === true && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text
+                    style={[styles.sectionTitle, { color: colors.primary }]}
+                  >
+                    AI USAGE & CONTROLS
+                  </Text>
+                </View>
+                <WorkspaceAiControls
+                  workspaceId={activeWorkspace.id}
+                  workspaceName={activeWorkspace.name}
+                  myUserId={myUserId ?? null}
+                />
+              </View>
+            )}
+
             {/* Shared knowledge */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -1282,6 +1619,12 @@ export default function WorkspacesScreen() {
   );
 }
 
+/** Dollar display for the workspace allowance meter. */
+function formatBillingUsd(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "$0.00";
+  if (value < 0.01) return "<$0.01";
+  return `$${value.toFixed(2)}`;
+}
 const styles = StyleSheet.create({
   content: {
     padding: 16,
@@ -1423,6 +1766,67 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   ownId: {
+    fontSize: 11,
+  },
+});
+
+const billingStyles = StyleSheet.create({
+  meterTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: "hidden",
+    marginTop: 12,
+  },
+  meterFill: {
+    height: "100%",
+    borderRadius: 999,
+  },
+  meterRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginTop: 6,
+  },
+  label: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+  },
+  figures: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12.5,
+    fontVariant: ["tabular-nums"],
+  },
+  stateText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  actionButton: {
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    alignSelf: "flex-start",
+    marginTop: 12,
+  },
+  actionButtonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+  },
+  outlineButton: {
+    borderWidth: 1,
+  },
+  badge: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignSelf: "flex-start",
+    marginTop: 10,
+  },
+  badgeText: {
+    fontFamily: "Inter_500Medium",
     fontSize: 11,
   },
 });

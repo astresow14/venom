@@ -14,4 +14,9 @@ export interface VenomVoiceSpeechRequest {
      */
   text: string;
   presetId: VenomVoicePresetId;
+  /**
+     * Shared workspace the voice conversation lives in, for billing attribution.
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  workspaceId?: string;
 }

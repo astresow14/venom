@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { mockStagedChatStream } from "./support/chat-stream";
 
 /**
  * Debate mode on the mobile chat: with three real models enabled, the blend
@@ -264,6 +265,13 @@ test("debates a round with named voices on the mobile chat", async ({
   await expect(speakerChips.first()).toContainText("Venom Claude");
   await expect(speakerChips.last()).toContainText("Venom GPT");
 
+  // Group-chat avatars: each voice's turn carries its model family's glyph
+  // beside the bubble — distinct speakers, distinct marks.
+  await expect(chatWorkspace.getByTestId("speaker-avatar-gpt")).toHaveCount(1);
+  await expect(chatWorkspace.getByTestId("speaker-avatar-claude")).toHaveCount(
+    1,
+  );
+
   // Citation markers resolve into labels, never raw tags.
   await expect(
     chatWorkspace.getByText("(archived source)", { exact: false }).first(),
@@ -499,6 +507,17 @@ test("one enabled model with a full server catalog debates as personas", async (
   await expect(speakerChips).toHaveCount(2);
   await expect(speakerChips.first()).toContainText("First take");
   await expect(speakerChips.last()).toContainText("Skeptic");
+
+  // Personas share one model, so identical model glyphs would say nothing:
+  // each voice gets its own monogram, and the shared model's glyph appears
+  // nowhere in the thread.
+  await expect(
+    chatWorkspace.getByTestId("speaker-avatar-monogram-s"),
+  ).toHaveCount(1);
+  await expect(
+    chatWorkspace.getByTestId("speaker-avatar-monogram-ft"),
+  ).toHaveCount(1);
+  await expect(chatWorkspace.getByTestId("speaker-avatar-gpt")).toHaveCount(0);
 
   // The settled round feeds the Brain exactly once: the closing take is
   // mined as the answer alongside the user's question, and the sparring
@@ -843,4 +862,144 @@ test("collapses the mixer — corner picker included — and debates on the comm
   ).toBeVisible();
   await expect(page.getByTestId("blend-pad")).toHaveCount(0);
   await expect(summaryChip).toBeVisible();
+});
+
+test("live debate shows the current speaker's avatar and groups back-to-back turns", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "desktop-chromium",
+    "The mobile debate journey is covered at the mobile viewport.",
+  );
+
+  // Staged streaming (not an atomic body) so the in-flight card stays on
+  // screen long enough to watch the avatar follow the speaker; Claude then
+  // takes two turns in a row so the settled thread has a real run to group.
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "@venom_state_v2:venom-ui-test",
+      JSON.stringify({
+        projects: [],
+        conversations: [],
+        clusters: [],
+        sources: [],
+        activeProjectId: null,
+        activeConversationId: null,
+        modelPreferences: {
+          enabledModelIds: ["venom-gpt", "venom-claude", "venom-gemini"],
+          defaultModelId: "venom-gpt",
+          activeModelId: "venom-gpt",
+          updatedAt: 1,
+        },
+      }),
+    );
+  });
+
+  await page.route("**/api/venom/models", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(catalog),
+    });
+  });
+  await page.route("**/api/venom/deliberation", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        available: true,
+        mode: "models",
+        voices: debateRoster.map(({ voiceId, name }) => ({
+          voiceId,
+          name,
+          tagline: "",
+        })),
+      }),
+    });
+  });
+  await page.route("**/api/venom/knowledge/extract", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ clusters: [] }),
+    });
+  });
+  const turn = (
+    index: number,
+    voice: (typeof debateRoster)[number],
+    text: string,
+  ): Array<[number, unknown]> => [
+    [
+      200,
+      {
+        debateTurn: {
+          index,
+          of: 3,
+          voiceId: voice.voiceId,
+          name: voice.name,
+          modelId: voice.modelId,
+          modelName: voice.modelName,
+        },
+      },
+    ],
+    [300, { turn: index, content: text }],
+    [600, { turn: index, turnStatus: "ok" }],
+  ];
+  await mockStagedChatStream(page, [
+    [
+      [
+        0,
+        {
+          modelId: "venom-gpt",
+          modelName: "Venom GPT",
+          debate: { voices: debateRoster, turns: 3 },
+        },
+      ],
+      ...turn(0, debateRoster[0], "Opening: ship it now."),
+      ...turn(1, debateRoster[1], "Counter: stage it first."),
+      ...turn(2, debateRoster[1], "And staging catches the cheap failures."),
+      [200, { done: true }],
+    ],
+  ]);
+
+  await page.goto("/");
+
+  await expect(page.getByTestId("mode-switch")).toBeVisible();
+  await page.getByTestId("mode-option-debate").click();
+  await expect(page.getByTestId("mode-option-debate")).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+
+  await page.getByTestId("chat-input").fill("Ship the migration now?");
+  await page.getByTestId("send-message-button").click();
+
+  // While GPT talks, the live card wears GPT's glyph…
+  const stream = page.getByTestId("debate-stream");
+  await expect(stream).toBeVisible();
+  await expect(stream.getByTestId("speaker-avatar-gpt")).toBeVisible();
+
+  // …and when Claude takes over, the avatar follows the speaker.
+  await expect(stream.getByTestId("speaker-avatar-claude")).toBeVisible();
+
+  // Round settled: Claude's back-to-back turns read as one group — one chip,
+  // one avatar — while every bubble keeps its own text.
+  await expect(stream).toHaveCount(0);
+  const chatWorkspace = page.getByTestId("workspace-chat");
+  await expect(
+    chatWorkspace.getByText("Opening: ship it now.", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    chatWorkspace.getByText("Counter: stage it first.", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    chatWorkspace.getByText("staging catches the cheap failures", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(chatWorkspace.getByTestId("chip-speaker")).toHaveCount(2);
+  await expect(chatWorkspace.getByTestId("speaker-avatar-gpt")).toHaveCount(1);
+  await expect(chatWorkspace.getByTestId("speaker-avatar-claude")).toHaveCount(
+    1,
+  );
 });

@@ -22,6 +22,7 @@ import {
   SymbioteAuthBackdrop,
   useSymbioteInteraction,
 } from '@/components/SymbioteAuthBackdrop';
+import { VENOM_WORDMARK_RATIO } from '@/components/VenomWordmark';
 import { VenomWordmarkReveal } from '@/components/VenomWordmarkReveal';
 import { useColors } from '@/hooks/useColors';
 
@@ -31,8 +32,14 @@ type AuthScreenShellProps = {
    * Changing it replays the staggered reveal for the new step's content.
    */
   stateKey: string;
-  /** Large decorative visual shown above the headline (welcome state). */
-  hero?: React.ReactNode;
+  /**
+   * Welcome treatment mirroring the web landing hero: the large scrawled
+   * VENOM wordmark tags itself on as the sole centerpiece over the living
+   * backdrop, and the small brand row is dropped on this step so the mark
+   * is never drawn twice. The headline still renders — screen-reader-only —
+   * because the tag itself becomes the visible headline.
+   */
+  heroWordmark?: boolean;
   headline: string;
   /** One quiet line under the headline. Keep it short. */
   supportText?: string;
@@ -72,13 +79,14 @@ function Reveal({ children, delay = 0, style }: RevealProps) {
 }
 
 /**
- * Open, card-free auth layout: small brand row up top, an optional hero and
- * display headline, then the caller's stacked actions sitting directly on the
- * living backdrop.
+ * Open, card-free auth layout on the living backdrop. Two arrangements:
+ * the wordmark-hero welcome (large VENOM tag reveal, actions rising just
+ * after — the mobile mirror of the web landing) and the standard form step
+ * (small brand row up top, section headline, then the caller's stack).
  */
 export function AuthScreenShell({
   stateKey,
-  hero,
+  heroWordmark = false,
   headline,
   supportText,
   children,
@@ -86,15 +94,22 @@ export function AuthScreenShell({
 }: AuthScreenShellProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const { onPointerMove, onTouchEnd, onTouchMove, pointerX, pointerY } =
     useSymbioteInteraction();
   const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
   const bottomInset =
     Platform.OS === 'web' ? Math.max(insets.bottom, 34) : insets.bottom;
 
-  const displaySize = Math.round(
-    Math.min(Math.max(Math.min(width, 480) * 0.125, 40), 56),
+  // Hero tag sized like the web landing's (h-24/md:h-28): as wide as the
+  // content column allows, capped so short viewports keep room for the
+  // actions rising in underneath.
+  const heroWordmarkHeight = Math.round(
+    Math.min(
+      Math.max((Math.min(width, 480) - 48) / VENOM_WORDMARK_RATIO, 56),
+      height * 0.17,
+      116,
+    ),
   );
 
   return (
@@ -117,34 +132,29 @@ export function AuthScreenShell({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* The brand row tags itself on (one-time wipe) instead of fading. */}
-        <View style={styles.brand}>
-          <VenomWordmarkReveal color={colors.symbioteHighlight} height={32} />
-        </View>
+        {/* The brand row tags itself on (one-time wipe) instead of fading.
+            The wordmark-hero step drops it — the hero IS the brand moment. */}
+        {!heroWordmark ? (
+          <View style={styles.brand}>
+            <VenomWordmarkReveal color={colors.symbioteHighlight} height={32} />
+          </View>
+        ) : null}
 
         <View key={stateKey} style={styles.body}>
-          {hero ? (
+          {heroWordmark ? (
             <>
               <View style={styles.spacerAboveHero} />
-              <Reveal delay={70} style={styles.heroWrap}>
-                {hero}
-              </Reveal>
-              <Reveal delay={150}>
-                <Text
-                  accessibilityRole="header"
-                  style={[
-                    styles.display,
-                    {
-                      color: colors.symbioteHighlight,
-                      fontSize: displaySize,
-                      lineHeight: Math.round(displaySize * 1.04),
-                      letterSpacing: -displaySize * 0.03,
-                    },
-                  ]}
-                >
+              {/* The tag throws itself on first (the wipe is its entrance —
+                  no extra fade), then the actions rise in just after. */}
+              <View style={styles.heroWrap}>
+                <Text accessibilityRole="header" style={styles.srOnlyHeading}>
                   {headline}
                 </Text>
-              </Reveal>
+                <VenomWordmarkReveal
+                  color={colors.symbioteHighlight}
+                  height={heroWordmarkHeight}
+                />
+              </View>
               {supportText ? (
                 <Reveal delay={200}>
                   <Text
@@ -154,7 +164,7 @@ export function AuthScreenShell({
                   </Text>
                 </Reveal>
               ) : null}
-              <View style={styles.spacerBelowHeadline} />
+              <View style={styles.spacerBelowHero} />
             </>
           ) : (
             <>
@@ -180,12 +190,12 @@ export function AuthScreenShell({
             </>
           )}
 
-          <Reveal delay={hero ? 240 : 190}>{children}</Reveal>
+          <Reveal delay={heroWordmark ? 260 : 190}>{children}</Reveal>
 
-          {!hero ? <View style={styles.spacerGrow} /> : null}
+          {!heroWordmark ? <View style={styles.spacerGrow} /> : null}
 
           {footer ? (
-            <Reveal delay={hero ? 300 : 250} style={styles.footer}>
+            <Reveal delay={heroWordmark ? 340 : 250} style={styles.footer}>
               {footer}
             </Reveal>
           ) : null}
@@ -218,10 +228,17 @@ const styles = StyleSheet.create({
   heroWrap: {
     alignItems: 'center',
   },
-  display: {
-    fontFamily: 'Inter_700Bold',
-    textAlign: 'center',
-    marginTop: 22,
+  /**
+   * Visually hidden, screen-reader-accessible heading: 1x1 clipped box,
+   * transparent glyphs. Keeps a real heading in the a11y tree while the
+   * scrawled tag carries the visible hero.
+   */
+  srOnlyHeading: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    overflow: 'hidden',
+    color: 'transparent',
   },
   section: {
     fontFamily: 'Inter_700Bold',
@@ -244,7 +261,7 @@ const styles = StyleSheet.create({
     flexGrow: 0.8,
     minHeight: 10,
   },
-  spacerBelowHeadline: {
+  spacerBelowHero: {
     flexGrow: 1.2,
     minHeight: 24,
   },

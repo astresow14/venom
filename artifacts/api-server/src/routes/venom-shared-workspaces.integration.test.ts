@@ -685,12 +685,25 @@ test("venom chat and extraction routes gate workspace requests by current member
     });
     assert.equal(noteShaped.status, 400);
 
-    // Scope steering is gone from the wire: chat and extraction requests
-    // carry no workspace choice anymore. Non-member boundaries now live
-    // where scope is decided — context assembly and classified filing —
-    // covered by their own suites; the manual move endpoint keeps the
-    // route-level 403 contract here.
+    // A caller-selected workspace controls chat/extraction billing, so an
+    // outsider (including a removed former member) must be rejected before a
+    // request can spend that workspace's Organization allowance.
     actingUserId = outsiderId;
+    const deniedExtraction = await fetch(`${baseUrl}/venom/knowledge/extract`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: workspace.id,
+        conversation: { id: "former-member-chat", title: "No access" },
+        messages: [{ id: "m1", role: "user", content: "Do not bill this room." }],
+      }),
+    });
+    assert.equal(deniedExtraction.status, 403);
+    const deniedExtractionBody = (await deniedExtraction.json()) as {
+      code?: string;
+    };
+    assert.equal(deniedExtractionBody.code, "workspace_access_denied");
+
     const deniedMove = await fetch(
       `${baseUrl}/venom/knowledge/unsorted/concept-x/move`,
       {

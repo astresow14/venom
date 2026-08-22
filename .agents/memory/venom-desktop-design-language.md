@@ -45,3 +45,13 @@ string is not.
 Sweep subagents tend to write throwaway codemod scripts (`fix_*.js`,
 `update_styles.py`) at the repo root and not clean them up. Check `git status`
 for untracked junk at the root after any parallel sweep.
+
+## Empty chat contract
+The empty chat state is the full VENOM wordmark (shared `VenomWordmark`, not the V mark) and the composer, nothing else — no greeting heading, no subtitle, no starter-prompt chips (removed deliberately Aug 2026; the host wants that space reserved for future *algorithmic* recommendations, not canned prompts).
+**Why:** the host asked for "venom logo and just a chat window" and later upgraded the mark to the full wordmark to match the Claude-style minimal composer; the old gradient greeting also violated the monochrome language.
+**How to apply:** do not reintroduce starter chips or greeting copy in chat.tsx's empty state. The page heading is sr-only (`<h1>Chat</h1>`, pinned by a chat-shell spec assertion) because the visible page is deliberately chrome-light — same pattern as the auth welcome heading.
+
+## Composer footer contract (Aug 2026)
+The composer footer carries exactly two controls: one Select-model pill (opens the combined models & voices dialog) and a Debate switch. Verify is not a composer control — it lives inside the model dialog as a switch, gated on deliberation availability. No settings gear, no separate Voices button.
+**Why:** the host wants a Claude-style minimal composer; three-way Talk/Verify/Debate chips read as clutter, and Verify is model configuration, not a per-message choice.
+**How to apply:** mode stays the tri-state `ResponseMode` on the conversation (wire format untouched); the composer switch toggles debate↔talk, the dialog switch toggles verify↔talk, and both switches rest while a reply is in flight (the running turn already captured its mode). The old three-way mode chips and the separate Voices/gear entry points are retired.

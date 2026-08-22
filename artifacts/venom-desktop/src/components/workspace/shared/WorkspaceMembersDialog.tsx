@@ -2,10 +2,15 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
 import {
+  getGetSharedWorkspaceBillingQueryKey,
   getGetSharedWorkspaceSettingsQueryKey,
+  getGetVenomBillingContextQueryKey,
   getListSharedWorkspaceMembersQueryKey,
   getListSharedWorkspacesQueryKey,
   useAddSharedWorkspaceMember,
+  useCreateSharedWorkspaceBillingCheckout,
+  useCreateSharedWorkspaceBillingPortal,
+  useGetSharedWorkspaceBilling,
   useGetSharedWorkspaceSettings,
   useListSharedWorkspaceMembers,
   useRemoveSharedWorkspaceMember,
@@ -38,12 +43,15 @@ import { cn } from "@/lib/utils";
 import {
   Check,
   Copy,
+  CreditCard,
   Loader2,
   Lock,
   ShieldCheck,
   UserPlus,
   X,
 } from "lucide-react";
+import { formatUsd } from "@/components/workspace/UsageDialog";
+import WorkspaceAiControlsSection from "@/components/workspace/shared/WorkspaceAiControlsSection";
 
 /**
  * Member management for a shared workspace. Everyone can see who is in and
@@ -178,6 +186,65 @@ export default function WorkspaceMembersDialog({
           toast({
             title: "Could not update the policy",
             description: "Try again in a moment.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  // Organization plan: whether this workspace's AI is covered by a
+  // workspace-level subscription. Admins see spend against the workspace
+  // allowance and can buy/manage the plan on Stripe-hosted pages; members
+  // never see workspace dollar figures anywhere.
+  const billingQuery = useGetSharedWorkspaceBilling(workspace.id, {
+    query: {
+      queryKey: getGetSharedWorkspaceBillingQueryKey(workspace.id),
+      enabled: open && isAdmin,
+    },
+  });
+  const billing = billingQuery.data ?? null;
+  const workspaceCheckout = useCreateSharedWorkspaceBillingCheckout();
+  const workspacePortal = useCreateSharedWorkspaceBillingPortal();
+  const billingBusy = workspaceCheckout.isPending || workspacePortal.isPending;
+
+  const openWorkspaceStripePage = (kind: "checkout" | "portal") => {
+    if (billingBusy) return;
+    const mutation = kind === "checkout" ? workspaceCheckout : workspacePortal;
+    mutation.mutate(
+      {
+        workspaceId: workspace.id,
+        data: { returnUrl: window.location.href },
+      },
+      {
+        onSuccess: async ({ url }) => {
+          window.open(url, "_blank", "noopener");
+          // Plan state may change while the Stripe tab is open; refetch on
+          // return so the section and every composer hint catch up.
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: getGetSharedWorkspaceBillingQueryKey(workspace.id),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: getGetVenomBillingContextQueryKey(),
+            }),
+          ]);
+        },
+        onError: (error: unknown) => {
+          const status = (error as { status?: number })?.status;
+          toast({
+            title:
+              kind === "checkout"
+                ? "Could not start checkout"
+                : "Could not open the billing portal",
+            description:
+              status === 503
+                ? "Billing isn't set up on this server yet."
+                : status === 409
+                  ? kind === "checkout"
+                    ? "This workspace is already on the Organization plan."
+                    : "There's no workspace subscription to manage yet."
+                  : "Try again in a moment.",
             variant: "destructive",
           });
         },
@@ -502,6 +569,182 @@ export default function WorkspaceMembersDialog({
                 )}
               </div>
             </div>
+          )}
+
+          {isAdmin && (
+            <div
+              className="mt-5 border-t border-border/60 pt-5"
+              data-testid="section-workspace-billing"
+            >
+              <div className="flex items-center gap-2 text-[10px] font-medium text-muted-foreground">
+                <CreditCard className="h-3 w-3" aria-hidden="true" />
+                Organization plan
+              </div>
+              <div className="mt-3 rounded-lg border border-border/60 bg-foreground/[0.03] px-3 py-3">
+                {billingQuery.isLoading ? (
+                  <Skeleton className="h-12 w-full rounded-lg" />
+                ) : billingQuery.isError || !billing ? (
+                  <p className="text-xs text-destructive">
+                    The workspace plan could not be loaded.
+                  </p>
+                ) : billing.covered ? (
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div
+                          className="text-sm font-medium"
+                          data-testid="workspace-billing-plan"
+                        >
+                          {billing.planName}
+                          {billing.plan && (
+                            <span className="ml-2 text-xs font-normal text-muted-foreground">
+                              ${billing.plan.priceUsd}/mo
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          AI used inside this workspace draws on the workspace
+                          allowance — never on members&rsquo; personal plans.
+                          {billing.cancelAtPeriodEnd && billing.periodEnd
+                            ? ` Ends ${new Date(billing.periodEnd).toLocaleDateString(undefined, { month: "long", day: "numeric", timeZone: "UTC" })}.`
+                            : ""}
+                        </p>
+                      </div>
+                      {billing.manageable && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 rounded-full text-xs"
+                          onClick={() => openWorkspaceStripePage("portal")}
+                          disabled={billingBusy}
+                          data-testid="button-workspace-billing-manage"
+                        >
+                          {workspacePortal.isPending ? (
+                            <Loader2
+                              className="h-3.5 w-3.5 animate-spin"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            "Manage"
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                    {billing.plan &&
+                      typeof billing.spentUsd === "number" &&
+                      billing.plan.allowanceUsd > 0 && (
+                        <div>
+                          <div className="flex items-baseline justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              Included AI this period
+                            </span>
+                            <span
+                              className="font-medium tabular-nums"
+                              data-testid="workspace-billing-figures"
+                            >
+                              {formatUsd(billing.spentUsd)} of $
+                              {billing.plan.allowanceUsd}
+                            </span>
+                          </div>
+                          <div
+                            className="mt-1.5 h-2 overflow-hidden rounded-full bg-foreground/10"
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={Math.round(
+                              Math.min(
+                                billing.spentUsd / billing.plan.allowanceUsd,
+                                1,
+                              ) * 100,
+                            )}
+                            aria-label="Share of the workspace's included AI used this period"
+                            data-testid="workspace-billing-meter"
+                          >
+                            <div
+                              className={cn(
+                                "h-full rounded-full bg-foreground/80",
+                                billing.state === "exhausted" &&
+                                  "bg-destructive",
+                              )}
+                              style={{
+                                width: `${Math.max(Math.min(billing.spentUsd / billing.plan.allowanceUsd, 1) * 100, 2)}%`,
+                              }}
+                            />
+                          </div>
+                          {billing.state === "exhausted" ? (
+                            <p
+                              className="mt-1.5 text-xs font-medium text-destructive"
+                              role="status"
+                              data-testid="workspace-billing-exhausted"
+                            >
+                              The workspace has used this period&rsquo;s
+                              included AI — chats here are paused until it
+                              resets or the plan changes.
+                            </p>
+                          ) : billing.state === "approaching" ? (
+                            <p
+                              className="mt-1.5 text-xs font-medium text-foreground/80"
+                              role="status"
+                              data-testid="workspace-billing-approaching"
+                            >
+                              The workspace is close to this period&rsquo;s
+                              included AI.
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">
+                        Put this workspace on the {billing.planName} plan
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {billing.plan
+                          ? `$${billing.plan.priceUsd}/mo covers $${billing.plan.allowanceUsd} of AI for everyone here — members' chats in this workspace stop drawing on their personal plans.`
+                          : "Cover everyone's AI in this workspace with one workspace-level plan."}
+                      </p>
+                    </div>
+                    {billing.configured ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="shrink-0 rounded-full text-xs"
+                        onClick={() => openWorkspaceStripePage("checkout")}
+                        disabled={billingBusy}
+                        data-testid="button-workspace-billing-checkout"
+                      >
+                        {workspaceCheckout.isPending ? (
+                          <Loader2
+                            className="h-3.5 w-3.5 animate-spin"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          "Get the plan"
+                        )}
+                      </Button>
+                    ) : (
+                      <span
+                        className="shrink-0 rounded-full border border-dashed border-border/60 px-3 py-1 text-xs text-muted-foreground"
+                        data-testid="workspace-billing-not-configured"
+                      >
+                        Billing not set up yet
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {isAdmin && billing?.covered === true && (
+            <WorkspaceAiControlsSection
+              workspace={workspace}
+              enabled={open}
+              myUserId={myUserId}
+            />
           )}
 
           {myUserId && (

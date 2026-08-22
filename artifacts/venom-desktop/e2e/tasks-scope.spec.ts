@@ -137,6 +137,6 @@ test('without an active project every project contributes — company-shared inc
     'Client Ops ·',
   );
 
-  // No scope switcher anywhere on the board.
-  await expect(page.getByTestId('select-shared-space-desktop')).toHaveCount(0);
+  // The chat-space selector does not filter the cross-project board.
+  await expect(page.getByTestId('select-shared-space-desktop')).toBeVisible();
 });

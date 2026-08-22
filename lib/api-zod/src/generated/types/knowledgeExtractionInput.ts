@@ -17,4 +17,9 @@ export interface KnowledgeExtractionInput {
   messages: KnowledgeMessage[];
   /** When true, the server files the extracted insights into the signed-in user's ontology store and returns the touched concepts in `filed`. The server decides scope per cluster (personal, a workspace the caller belongs to, or the private Unsorted holding area); clients no longer pick a destination. Clients that omit this keep filing locally. */
   file?: boolean;
+  /**
+     * The shared workspace the conversation lives in. It controls billing and is re-checked against the caller's membership.
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  workspaceId?: string;
 }

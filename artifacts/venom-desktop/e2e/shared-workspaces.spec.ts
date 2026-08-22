@@ -44,9 +44,9 @@ test('the workspace manager lists memberships and opens the member list', async 
 }) => {
   await page.goto('/workspace/chat');
 
-  // No chat-scope switcher anywhere — workspaces are reached through the
-  // management dialog only.
-  await expect(page.getByTestId('select-shared-space-desktop')).toHaveCount(0);
+  // Chats can explicitly name their space; management remains available from
+  // the same sidebar.
+  await expect(page.getByTestId('select-shared-space-desktop')).toBeVisible();
 
   await page.getByTestId('button-workspace-manager-desktop').click();
   const manager = page.getByTestId('workspace-manager');

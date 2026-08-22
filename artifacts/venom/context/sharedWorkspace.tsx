@@ -4,8 +4,10 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/expo";
 import {
@@ -29,6 +31,9 @@ import { registerWorkspaceAccessLostHandler } from "@/lib/workspaceAccess";
 type SharedWorkspaceContextValue = {
   workspaces: SharedWorkspace[];
   isLoading: boolean;
+  /** Null means the personal tier. */
+  activeWorkspace: SharedWorkspace | null;
+  selectWorkspace: (workspaceId: string | null) => void;
   /** Set when a workspace-scoped read was refused because access ended. */
   accessLostNotice: string | null;
   dismissAccessLostNotice: () => void;
@@ -36,6 +41,9 @@ type SharedWorkspaceContextValue = {
 
 const SharedWorkspaceContext =
   createContext<SharedWorkspaceContextValue | null>(null);
+
+const storageKeyFor = (userId: string | null) =>
+  `@venom_shared_space:${userId ?? "anon"}`;
 
 export function SharedWorkspaceProvider({
   children,
@@ -47,7 +55,28 @@ export function SharedWorkspaceProvider({
   // stays disabled there and screens see an empty membership list.
   const userId = IS_UI_TEST ? UI_TEST_USER_ID : (authUserId ?? null);
   const queryClient = useQueryClient();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hydratedFor, setHydratedFor] = useState<string | null>(null);
   const [accessLostNotice, setAccessLostNotice] = useState<string | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSelectedId(null);
+    setHydratedFor(null);
+    if (!userId) return;
+    void AsyncStorage.getItem(storageKeyFor(userId)).then((stored) => {
+      if (cancelled) return;
+      setSelectedId(stored || null);
+      setHydratedFor(userId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const listQuery = useListSharedWorkspaces({
     query: {
@@ -67,6 +96,33 @@ export function SharedWorkspaceProvider({
     () => (Array.isArray(listQuery.data) ? listQuery.data : []),
     [listQuery.data],
   );
+  const selectWorkspace = useCallback(
+    (workspaceId: string | null) => {
+      setSelectedId(workspaceId);
+      setAccessLostNotice(null);
+      if (!userId) return;
+      if (workspaceId) {
+        void AsyncStorage.setItem(storageKeyFor(userId), workspaceId);
+      } else {
+        void AsyncStorage.removeItem(storageKeyFor(userId));
+      }
+    },
+    [userId],
+  );
+
+  useEffect(() => {
+    if (!listQuery.isSuccess || hydratedFor !== userId) return;
+    if (selectedId && !workspaces.some((workspace) => workspace.id === selectedId)) {
+      selectWorkspace(null);
+    }
+  }, [
+    hydratedFor,
+    listQuery.isSuccess,
+    selectedId,
+    selectWorkspace,
+    userId,
+    workspaces,
+  ]);
 
   // Central revocation routine: any workspace-scoped request answered with
   // `workspace_access_denied` lands here. Evict every cached workspace read
@@ -86,12 +142,17 @@ export function SharedWorkspaceProvider({
       void queryClient.invalidateQueries({
         queryKey: getListSharedWorkspacesQueryKey(),
       });
+      if (selectedIdRef.current) selectWorkspace(null);
       setAccessLostNotice(
-        "You no longer have access to that shared workspace.",
+        "You no longer have access to that shared workspace. Back in your personal space.",
       );
     });
-  }, [queryClient]);
+  }, [queryClient, selectWorkspace]);
 
+  const activeWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === selectedId) ?? null,
+    [selectedId, workspaces],
+  );
   const dismissAccessLostNotice = useCallback(
     () => setAccessLostNotice(null),
     [],
@@ -101,12 +162,16 @@ export function SharedWorkspaceProvider({
     () => ({
       workspaces,
       isLoading: listQuery.isLoading,
+      activeWorkspace,
+      selectWorkspace,
       accessLostNotice,
       dismissAccessLostNotice,
     }),
     [
       workspaces,
       listQuery.isLoading,
+      activeWorkspace,
+      selectWorkspace,
       accessLostNotice,
       dismissAccessLostNotice,
     ],

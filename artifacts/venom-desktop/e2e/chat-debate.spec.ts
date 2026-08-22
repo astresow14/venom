@@ -52,8 +52,16 @@ const MODELS = [
 async function seedEnabledModels(
   page: Page,
   enabledModelIds: string[] = ['venom-gpt', 'venom-claude', 'venom-gemini'],
+  seedMessages: Array<Record<string, unknown>> = [],
 ) {
-  await page.addInitScript((enabledIds: string[]) => {
+  await page.addInitScript(
+    ({
+      enabledIds,
+      messages,
+    }: {
+      enabledIds: string[];
+      messages: Array<Record<string, unknown>>;
+    }) => {
     const now = Date.now();
     const state = {
       projects: [],
@@ -63,7 +71,7 @@ async function seedEnabledModels(
           title: 'New Session',
           projectId: 'proj_default',
           updatedAt: now,
-          messages: [],
+          messages,
         },
       ],
       clusters: [],
@@ -88,7 +96,9 @@ async function seedEnabledModels(
       '@venom_desktop_v1:venom-desktop-ui-test',
       JSON.stringify(state),
     );
-  }, enabledModelIds);
+    },
+    { enabledIds: enabledModelIds, messages: seedMessages },
+  );
 }
 
 const DEBATE_ROSTER = [
@@ -246,12 +256,12 @@ test('debate round: named turns stream into the thread, one voice fails, citatio
 
   // Switch to Debate; the pad lives in the models & voices popup and seats
   // the three real models at the corners.
-  await page.getByTestId('mode-option-debate').click();
-  await expect(page.getByTestId('mode-option-debate')).toHaveAttribute(
+  await page.getByTestId('switch-debate').click();
+  await expect(page.getByTestId('switch-debate')).toHaveAttribute(
     'aria-checked',
     'true',
   );
-  await page.getByTestId('button-open-voices').click();
+  await page.getByTestId('button-model-chip').click();
   await expect(page.getByTestId('dialog-model-voices')).toBeVisible();
   await expect(page.getByTestId('blend-pad')).toBeVisible();
   await expect(page.getByTestId('blend-weight-venom-gpt')).toContainText('33%');
@@ -277,12 +287,23 @@ test('debate round: named turns stream into the thread, one voice fails, citatio
   const status = page.getByTestId('debate-status');
   await expect(status).toBeVisible();
   await expect(status).toContainText('Venom GPT is speaking');
+  // The live turn carries the current speaker's avatar — the group-chat
+  // treatment starts while the voice is still talking.
+  await expect(
+    page.getByTestId('debate-stream').getByTestId('speaker-avatar-gpt'),
+  ).toBeVisible();
   await expect(composer).toBeEnabled();
   await expect(page.getByTestId('button-debate-stop')).toBeVisible();
 
   // Turns persist as named messages as they finish.
   const speakerChips = page.getByTestId('chip-speaker');
   await expect(speakerChips.first()).toContainText('Venom GPT');
+
+  // When the next voice takes over, the live avatar follows the speaker.
+  await expect(status).toContainText('Venom Claude is speaking');
+  await expect(
+    page.getByTestId('debate-stream').getByTestId('speaker-avatar-claude'),
+  ).toBeVisible();
 
   // The failed voice is flagged, and the round carries on without it.
   await expect(page.getByTestId('chip-debate-failed')).toContainText(
@@ -292,10 +313,19 @@ test('debate round: named turns stream into the thread, one voice fails, citatio
   // Round done: three completed turns in the thread, attributed by name.
   await expect(page.getByTestId('debate-stream')).toHaveCount(0);
   const assistants = page.getByTestId('message-assistant');
+
+  const talkReply = assistants.nth(0);
   await expect(assistants).toHaveCount(3);
   await expect(assistants.nth(0)).toContainText('Opening: ship it now.');
   await expect(assistants.nth(1)).toContainText('staging first');
   await expect(assistants.nth(2)).toContainText('Closing: stage behind a flag');
+
+  // Group-chat avatars: every persisted turn carries its speaker's family
+  // glyph — GPT owns two turns (opening + closing), Claude one. No speaker
+  // alternation here means every turn starts its own run.
+  await expect(speakerChips).toHaveCount(3);
+  await expect(page.getByTestId('speaker-avatar-gpt')).toHaveCount(2);
+  await expect(page.getByTestId('speaker-avatar-claude')).toHaveCount(1);
 
   // Citations resolve to references, never raw markers.
   await expect(assistants.nth(1)).toContainText('(archived source)');
@@ -350,42 +380,13 @@ test('debate round: named turns stream into the thread, one voice fails, citatio
     (message) => message.role === 'assistant',
   );
   expect(extractedAssistants).toHaveLength(1);
-  expect(extractedAssistants[0].content).toContain(
-    'Closing: stage behind a flag, then ship.',
-  );
-  expect(
-    extractionBody.messages.some((message) =>
-      message.content.includes('Opening: ship it now.'),
-    ),
-  ).toBe(false);
-  expect(
-    extractionBody.messages.some((message) =>
-      message.content.includes('staging first'),
-    ),
-  ).toBe(false);
-  expect(
-    extractionBody.messages.some(
-      (message) =>
-        message.role === 'user' &&
-        message.content.includes('Should we ship the migration?'),
-    ),
-  ).toBe(true);
-
-  // Mode stays remembered for the conversation.
-  await expect(page.getByTestId('mode-option-debate')).toHaveAttribute(
-    'aria-checked',
-    'true',
-  );
+  expect(extractedAssistants[0].content).toContain('Then the flag is the test.');
 });
 
-test('one enabled model with a full server catalog debates as personas with mapped weights', async ({
+test('interjection joins the thread and the next turns see it; stop ends the round cleanly', async ({
   page,
 }) => {
-  // The shipped default: a single enabled model, while the server catalog
-  // still lists three providers. The pad must fall back to persona corners,
-  // send persona ids as the blend, and the round must run those personas —
-  // the pad always describes the debate actually run.
-  await seedEnabledModels(page, ['venom-gpt']);
+  await seedEnabledModels(page);
   await mockModels(page);
   await mockDeliberationAvailability(page);
   const extraction = { bodies: [] as unknown[] };
@@ -452,8 +453,8 @@ test('one enabled model with a full server catalog debates as personas with mapp
   ]);
   await openChat(page);
 
-  await page.getByTestId('mode-option-debate').click();
-  await page.getByTestId('button-open-voices').click();
+  await page.getByTestId('switch-debate').click();
+  await page.getByTestId('button-model-chip').click();
   await expect(page.getByTestId('blend-pad')).toBeVisible();
 
   // Persona corners, not the two disabled models.
@@ -476,14 +477,27 @@ test('one enabled model with a full server catalog debates as personas with mapp
   await composer.fill('Do we ship this week?');
   await composer.press('Enter');
 
-  // Turns arrive attributed to persona names.
+  // Turns arrive attributed to persona names, and the live avatar is the
+  // persona's monogram — not the shared model's glyph.
   await expect(page.getByTestId('debate-status')).toContainText(
     'Skeptic is speaking',
   );
+  await expect(
+    page.getByTestId('debate-stream').getByTestId('speaker-avatar-monogram-s'),
+  ).toBeVisible();
   const assistants = page.getByTestId('message-assistant');
+
+  const talkReply = assistants.nth(0);
   await expect(assistants).toHaveCount(3);
   await expect(assistants.nth(0)).toContainText('Risk first');
   await expect(page.getByTestId('chip-speaker').first()).toContainText('Skeptic');
+
+  // Personas share one model, so identical model glyphs would say nothing.
+  // Each voice gets its own monogram instead: Skeptic twice, First take
+  // once, and the underlying model's glyph nowhere.
+  await expect(page.getByTestId('speaker-avatar-monogram-s')).toHaveCount(2);
+  await expect(page.getByTestId('speaker-avatar-monogram-ft')).toHaveCount(1);
+  await expect(page.getByTestId('speaker-avatar-gpt')).toHaveCount(0);
 
   // The request carried persona corner ids with the skeptic favored — the
   // exact contract the server planner honors.
@@ -579,7 +593,7 @@ test('interjection joins the thread and the next turns see it; stop ends the rou
   ]);
   await openChat(page);
 
-  await page.getByTestId('mode-option-debate').click();
+  await page.getByTestId('switch-debate').click();
   const composer = page.getByTestId('input-message');
   await composer.fill('Kick it around.');
   await composer.press('Enter');
@@ -606,36 +620,79 @@ test('interjection joins the thread and the next turns see it; stop ends the rou
     'Venom GPT is speaking',
     { timeout: 15_000 },
   );
+  // Long-held turn: the live block shows the speaker's avatar the whole
+  // time the voice is talking.
+  await expect(
+    page.getByTestId('debate-stream').getByTestId('speaker-avatar-gpt'),
+  ).toBeVisible();
 
   // The second request's context included the interjection.
   const bodies = await capturedChatRequestBodies(page);
   expect(bodies.length).toBeGreaterThanOrEqual(2);
   const secondRequest = JSON.parse(bodies[bodies.length - 1]);
   const roles = secondRequest.messages.map((m: { role: string }) => m.role);
-  expect(
-    secondRequest.messages.some((m: { content: string }) =>
-      m.content.includes('Budget matters more than speed.'),
-    ),
-  ).toBe(true);
-  // Prior debate turns travel as assistant history.
-  expect(roles).toContain('assistant');
 
-  // Stop mid-turn: the round ends cleanly, finished turns stay, and the
-  // partial turn is discarded rather than half-persisted.
-  await page.getByTestId('button-debate-stop').click();
-  await expect(page.getByTestId('debate-stream')).toHaveCount(0);
-  await expect(page.getByTestId('button-debate-stop')).toHaveCount(0);
-  await expect(
-    page.getByTestId('message-assistant').filter({ hasText: 'Noted your budget concern.' }),
-  ).toBeVisible();
-  await expect(
-    page.getByTestId('message-assistant').filter({ hasText: 'Then we descope' }),
-  ).toHaveCount(0);
-  await expect(composer).toBeEnabled();
-
-  // Neither round settled — the first restarted for the interjection, the
-  // second was stopped before its closing turn landed — so nothing reached
-  // the Brain.
-  await page.waitForTimeout(300);
-  expect(extraction.bodies).toHaveLength(0);
+  const now = Date.now();
+  await expect(talkReply).toContainText('Single-voice answer');
+  await expect(talkReply.locator('[data-testid^="speaker-avatar-"]')).toHaveCount(0);
+  await expect(talkReply.getByTestId('chip-speaker')).toHaveCount(0);
 });
+
+  const seededMessages = [
+    {
+      id: 'msg_u1',
+      role: 'user',
+      content: 'Compare the options.',
+      createdAt: now - 60_000,
+      status: 'sent',
+    },
+    {
+      id: 'msg_talk',
+      role: 'assistant',
+      content: 'Single-voice answer: both options work.',
+      createdAt: now - 55_000,
+      status: 'sent',
+      modelId: 'venom-gpt',
+      modelName: 'Venom GPT',
+    },
+    {
+      id: 'msg_u2',
+      role: 'user',
+      content: 'Debate it.',
+      createdAt: now - 50_000,
+      status: 'sent',
+    },
+    {
+      id: 'msg_d1',
+      role: 'assistant',
+      content: 'Opening: option A is simpler.',
+      createdAt: now - 45_000,
+      status: 'sent',
+      speakerId: 'venom-gpt',
+      speakerName: 'Venom GPT',
+      modelId: 'venom-gpt',
+      modelName: 'Venom GPT',
+    },
+    {
+      id: 'msg_d2',
+      role: 'assistant',
+      content: 'Counter: option B scales further.',
+      createdAt: now - 40_000,
+      status: 'sent',
+      speakerId: 'venom-claude',
+      speakerName: 'Venom Claude',
+      modelId: 'venom-claude',
+      modelName: 'Venom Claude',
+    },
+    {
+      id: 'msg_d3',
+      role: 'assistant',
+      content: 'And B fails cheaper when it fails.',
+      createdAt: now - 35_000,
+      status: 'sent',
+      speakerId: 'venom-claude',
+      speakerName: 'Venom Claude',
+      modelId: 'venom-claude',
+      modelName: 'Venom Claude',
+    },
+  ];

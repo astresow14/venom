@@ -159,9 +159,13 @@ async function preparePage(page: Page) {
   await bypassBotProtection(page);
 }
 
-/** The signed-out entry: the Strike-first welcome state of /sign-in. */
+/**
+ * The signed-out entry: the wordmark-hero welcome state of /sign-in. Its
+ * heading is screen-reader-only (the scrawled VENOM tag is the visible
+ * headline), but it stays the arrival signal for every signed-out return.
+ */
 const welcomeHeading = (page: Page) =>
-  page.getByRole("heading", { name: "Strike first" });
+  page.getByRole("heading", { name: "Sign in to Venom" });
 
 /** The chat screen's composer — proof the workspace rendered. */
 const chatInput = (page: Page) => page.getByTestId("chat-input");

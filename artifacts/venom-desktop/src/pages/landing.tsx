@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { VenomMark } from "@/components/venom-mark";
@@ -21,6 +21,14 @@ import { cn } from "@/lib/utils";
 import { stashPendingPrompt } from "@/lib/pending-prompt";
 import { motion } from "framer-motion";
 
+/**
+ * The living symbiote backdrop carries the whole GL stack, so it stays off
+ * the first-paint critical path: the hero renders immediately on plain
+ * near-black, the chunk loads on idle, and the canvas fades in once it has
+ * drawn. Devices without WebGL simply keep the plain background.
+ */
+const LandingSlime = lazy(() => import("@/components/landing-slime"));
+
 const sidebarItems = [
   { label: "Search", icon: Search },
   { label: "New chat", icon: SquarePen, active: true },
@@ -33,7 +41,29 @@ export default function LandingPage() {
   const [, setLocation] = useLocation();
   const [value, setValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+  const [liveBackdrop, setLiveBackdrop] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    // Mount the backdrop only after the browser has painted and gone idle:
+    // the effect is an enhancement, never a first-paint cost.
+    let cancelled = false;
+    const arm = () => {
+      if (!cancelled) setLiveBackdrop(true);
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const idle = window.requestIdleCallback(arm, { timeout: 1200 });
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback(idle);
+      };
+    }
+    const timer = window.setTimeout(arm, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   const start = (prompt: string) => {
     if (!prompt.trim()) return;
@@ -110,7 +140,15 @@ export default function LandingPage() {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative isolate flex min-w-0 flex-1 flex-col">
+        {/* Living backdrop: pointer-inert, behind the pane's own content
+            (negative z within the isolated pane), fading in after first
+            draw. Without WebGL it stays an empty transparent canvas. */}
+        {liveBackdrop && (
+          <Suspense fallback={null}>
+            <LandingSlime />
+          </Suspense>
+        )}
         <header className="flex h-12 items-center justify-between border-b border-white/[0.06] px-4 md:px-5">
           <VenomWordmark className="h-6 md:hidden" />
           <span className="hidden md:block" />

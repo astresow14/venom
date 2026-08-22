@@ -306,6 +306,14 @@ test("holds the chamber open on the phone: voices stream, one fails, synthesis d
   const directCard = page.getByTestId("deliberation-voice-direct");
   await expect(directCard).toContainText("First take");
   await expect(directCard).toContainText("Ship the migration");
+  // Each live voice card carries its own monogram avatar — the voices stay
+  // visually distinct even when they share one underlying model.
+  await expect(
+    directCard.getByTestId("speaker-avatar-monogram-ft"),
+  ).toBeVisible();
+  await expect(
+    skepticCard.getByTestId("speaker-avatar-monogram-s"),
+  ).toBeVisible();
   const evidenceCard = page.getByTestId("deliberation-voice-evidence");
   await expect(evidenceCard).toContainText("Evidence");
   await expect(evidenceCard).toContainText("(archived source)");
@@ -580,14 +588,25 @@ test("verifies a turn end to end on the mobile chat", async ({
     page.getByTestId("deliberation-disagreements"),
   ).toContainText(DISAGREEMENT);
 
-  // Individual takes stay readable behind the collapsible section.
+  // Individual takes stay readable behind the collapsible section, each
+  // attributed with its voice's monogram avatar.
   await page.getByTestId("toggle-deliberation-takes").click();
   await expect(page.getByTestId("deliberation-take-direct")).toContainText(
     "Ship the migration",
   );
+  await expect(
+    page
+      .getByTestId("deliberation-take-direct")
+      .getByTestId("speaker-avatar-monogram-ft"),
+  ).toBeVisible();
   await expect(page.getByTestId("deliberation-take-skeptic")).toContainText(
     "This voice didn't finish its take.",
   );
+  await expect(
+    page
+      .getByTestId("deliberation-take-skeptic")
+      .getByTestId("speaker-avatar-monogram-s"),
+  ).toBeVisible();
   const evidenceTake = page.getByTestId("deliberation-take-evidence");
   await expect(evidenceTake).toContainText("(archived source)");
   await expect(evidenceTake).not.toContainText("[source:");

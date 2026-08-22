@@ -1,16 +1,26 @@
 /**
- * ModelSelector – compact active-model chip in the chat composer.
+ * ModelSelector – the single Select-model pill in the chat composer.
  *
- * Shows the active model's name. Both the chip and the settings icon open
- * the combined models & voices dialog (ModelVoicesDialog, owned by the chat
- * page); this component no longer carries a popup of its own.
+ * Shows the current selection (a model name, or the auto-policy handover)
+ * and opens the combined models & voices dialog (ModelVoicesDialog, owned
+ * by the chat page). It is the composer's one entry point for model
+ * configuration — the old settings-gear sibling is gone on purpose to keep
+ * the composer minimal.
+ *
+ * When the active space is a shared workspace whose admins lock model
+ * settings, the pill says so: it stays visible and clickable, but announces
+ * the workspace's policy instead of pretending the user's pick still drives
+ * replies billed to the workspace.
  */
 
 import React, { useMemo } from 'react';
-import { ChevronDown, Settings2 } from 'lucide-react';
+import { ChevronDown, Lock } from 'lucide-react';
 import { useVenomWorkspace } from '@/context/venom-workspace';
+import { useSharedWorkspace } from '@/context/shared-workspace';
 import {
+  getGetVenomBillingContextQueryKey,
   getGetVenomModelsQueryKey,
+  useGetVenomBillingContext,
   useGetVenomModels,
   type VenomManagedModel,
 } from '@workspace/api-client-react';
@@ -18,6 +28,7 @@ import { normalizeModelPreferences } from '@/lib/workspaceState';
 
 export function ModelSelector({ onOpen }: { onOpen: () => void }) {
   const { state } = useVenomWorkspace();
+  const { activeWorkspace } = useSharedWorkspace();
 
   const prefs = useMemo(
     () => normalizeModelPreferences(state.modelPreferences),
@@ -29,6 +40,25 @@ export function ModelSelector({ onOpen }: { onOpen: () => void }) {
     query: { staleTime: 60_000, queryKey: getGetVenomModelsQueryKey() },
   });
 
+  // Admin model locks ride the billing context of the active space. Display
+  // only — the server clamps every workspace-billed request regardless, so a
+  // failed read just shows the user's own label while enforcement holds.
+  const billingContextParams = activeWorkspace
+    ? { workspaceId: activeWorkspace.id }
+    : undefined;
+  const billingContextQuery = useGetVenomBillingContext(billingContextParams, {
+    query: {
+      queryKey: getGetVenomBillingContextQueryKey(billingContextParams),
+      enabled: Boolean(activeWorkspace),
+      staleTime: 60_000,
+      retry: 1,
+    },
+  });
+  const modelLock = activeWorkspace
+    ? (billingContextQuery.data?.modelLock ?? null)
+    : null;
+  const forcedPolicy = modelLock?.forcedSelectionPolicy ?? null;
+
   const modelMap = useMemo<Map<string, VenomManagedModel>>(() => {
     // Guard against a non-array payload (e.g. an HTML error page) so a bad
     // response degrades the picker instead of taking down the chat page.
@@ -36,63 +66,73 @@ export function ModelSelector({ onOpen }: { onOpen: () => void }) {
     return new Map(modelsQuery.data.map((m) => [m.id, m]));
   }, [modelsQuery.data]);
 
-  const enabledModels = useMemo<VenomManagedModel[]>(() => {
-    return prefs.enabledModelIds
-      .map((id) => modelMap.get(id))
-      .filter((m): m is VenomManagedModel => Boolean(m));
-  }, [prefs.enabledModelIds, modelMap]);
-
   // Active model metadata (may be null if models haven't loaded yet)
   const activeModel = modelMap.get(prefs.activeModelId);
-  // In auto policies the chip announces the handover instead of a model
+  // In auto policies the pill announces the handover instead of a model
   // name — the server picks per reply, so no single name would be honest.
   const selectionPolicy = prefs.selectionPolicy ?? 'manual';
+  // A manual pick the workspace's tier lock excludes is re-chosen by the
+  // server, so the pill must not name a model that will not answer.
+  const tierBlockedActive =
+    !forcedPolicy &&
+    selectionPolicy === 'manual' &&
+    Boolean(
+      modelLock?.allowedCostTiers &&
+        activeModel &&
+        !(
+          activeModel.costTier &&
+          modelLock.allowedCostTiers.includes(activeModel.costTier)
+        ),
+    );
+  const managed = Boolean(forcedPolicy) || tierBlockedActive;
+  const effectivePolicy = forcedPolicy ?? selectionPolicy;
   const activeLabel =
-    selectionPolicy === 'auto-cheapest'
+    effectivePolicy === 'auto-cheapest'
       ? 'Auto — cheapest'
-      : selectionPolicy === 'auto-max-power'
+      : effectivePolicy === 'auto-max-power'
         ? 'Auto — max power'
-        : (activeModel?.name ?? prefs.activeModelId);
+        : tierBlockedActive
+          ? 'Auto — allowed models'
+          : (activeModel?.name ?? prefs.activeModelId);
+  const managedTitle = managed
+    ? `Managed by ${activeWorkspace?.name ?? 'the workspace'} — its admins set the model policy for chats billed to the workspace. Your personal space keeps your own settings.`
+    : undefined;
 
-  // Only render if there are enabled models with metadata, else show nothing
-  // (avoids UI flash before first fetch)
-  const hasData = modelsQuery.isSuccess && enabledModels.length > 0;
-
-  if (!hasData && modelsQuery.isPending) {
+  if (modelsQuery.isPending) {
     // Subtle skeleton – keep composer height stable
     return (
       <div
-        className="h-5 w-20 rounded-md bg-foreground/10 motion-safe:animate-pulse"
+        className="h-6 w-24 rounded-full bg-foreground/10 motion-safe:animate-pulse"
         aria-hidden="true"
       />
     );
   }
 
   return (
-    <div className="flex items-center gap-1">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="-ml-1 flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={`Active model: ${activeLabel}. Open models and voices.`}
-        aria-haspopup="dialog"
-        data-testid="button-model-chip"
-      >
-        <span data-testid="text-active-model">{activeLabel}</span>
-        <ChevronDown className="h-3 w-3" aria-hidden="true" />
-      </button>
-
-      <button
-        type="button"
-        onClick={onOpen}
-        className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label="Manage models and voices"
-        title="Manage models and voices"
-        aria-haspopup="dialog"
-        data-testid="button-manage-models"
-      >
-        <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex min-w-0 items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label={
+        managed
+          ? `Select model — currently ${activeLabel}. ${managedTitle}`
+          : `Select model — currently ${activeLabel}`
+      }
+      title={managedTitle ?? 'Select model'}
+      aria-haspopup="dialog"
+      data-testid="button-model-chip"
+    >
+      {managed && (
+        <Lock
+          className="h-3 w-3 shrink-0"
+          aria-hidden="true"
+          data-testid="model-chip-lock"
+        />
+      )}
+      <span className="truncate" data-testid="text-active-model">
+        {activeLabel}
+      </span>
+      <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
+    </button>
   );
 }

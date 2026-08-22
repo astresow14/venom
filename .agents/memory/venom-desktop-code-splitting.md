@@ -135,4 +135,3 @@ panel's own code leaves, but its generated hooks stay behind.
 **How to apply:** still lazy-load big owner-only panels (it removes their UI
 code), but treat residual overage from generated-client growth as deliberate
 and refresh the baseline with update:bundle-budget on the merged tree.
-

@@ -56,6 +56,11 @@ import {
   type TemplateGuidanceEntry,
 } from "../lib/venom-template-learning";
 import { recordVenomUsage } from "../lib/venom-usage-store";
+import {
+  allowanceBlockedBody,
+  checkVenomAllowance,
+  releaseVenomAllowanceReservation,
+} from "../lib/venom-billing-enforcement";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -556,6 +561,19 @@ async function processRun(userId: string, runId: string): Promise<void> {
     .returning();
   if (!run) return;
 
+  // The run row carries the allowance hold that admitted it. The first
+  // ledgered usage event settles the hold (spend row in, hold out, under
+  // the payer lock); every other outcome — generator failure, timeout,
+  // cancel mid-flight, commit conflict — releases it in the finally
+  // below. A cancel that wins the queued→cancelled race means no
+  // processor ever claims the run, and the age reaper frees its hold.
+  let pendingReservationId = run.reservationId ?? null;
+  const claimReservation = (): string | null => {
+    const reservationId = pendingReservationId;
+    pendingReservationId = null;
+    return reservationId;
+  };
+
   await addEvent(
     run,
     "preparing",
@@ -740,7 +758,8 @@ async function processRun(userId: string, runId: string): Promise<void> {
       },
       controller.signal,
       // Package generation is a user-initiated AI call: charge the account
-      // that owns the run (SKU billed under the venom-gpt alias).
+      // that owns the run (SKU billed under the venom-gpt alias). The
+      // first event also settles the run's admission hold atomically.
       (usage) =>
         recordVenomUsage({
           userId,
@@ -749,6 +768,7 @@ async function processRun(userId: string, runId: string): Promise<void> {
           promptTokens: usage.promptTokens,
           outputTokens: usage.outputTokens,
           estimated: usage.estimated,
+          reservationId: claimReservation(),
         }),
     );
     const checksumSha256 = buildPackageChecksum(generated);
@@ -901,6 +921,10 @@ async function processRun(userId: string, runId: string): Promise<void> {
     if (activeGenerationControllers.get(run.id) === controller) {
       activeGenerationControllers.delete(run.id);
     }
+    // Whatever ended this run, an unsettled admission hold must not
+    // linger against the payer's allowance.
+    const unsettled = claimReservation();
+    if (unsettled) void releaseVenomAllowanceReservation(unsettled);
   }
 }
 
@@ -1007,6 +1031,8 @@ type CreateVenomBuildRunExtras = {
   baselineIterationId: string | null;
   baselineRevisionId: string | null;
   changesSummary: string | null;
+  /** Allowance hold the created run will own (null = nothing held). */
+  reservationId: string | null;
 };
 
 export type CreateVenomBuildRunOutcome =
@@ -1032,6 +1058,7 @@ export async function createVenomBuildRunForUser(
     baselineIterationId: null,
     baselineRevisionId: null,
     changesSummary: null,
+    reservationId: null,
     ...extras,
   };
   const [existing] = await db
@@ -1128,6 +1155,7 @@ export async function createVenomBuildRunForUser(
       .values({
         clerkUserId: userId,
         idempotencyKey: input.idempotencyKey,
+        reservationId: resolvedExtras.reservationId,
         appId: references.app?.id ?? null,
         sourceVersionId: references.sourceVersion?.id ?? null,
         projectId: input.projectId,
@@ -1207,8 +1235,29 @@ router.post("/venom/build-runs", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid build generation request" });
     return;
   }
+  const allowance = await checkVenomAllowance({ userId, reserve: true });
+  if (!allowance.allowed) {
+    res.status(402).json(allowanceBlockedBody(allowance));
+    return;
+  }
+  // The queued generation spends long after this response ends, so the
+  // admission hold must outlive the request: a successful creation stores
+  // it on the run row, where the processor settles it into the first
+  // ledgered usage event or releases it at a terminal state (crash leaks
+  // reap by age). Until that handoff this route owns the hold, and the
+  // close hook — which fires on every exit path — frees it.
+  let routeOwnsReservation = allowance.reservationId != null;
+  if (routeOwnsReservation) {
+    res.once("close", () => {
+      if (routeOwnsReservation && allowance.reservationId) {
+        void releaseVenomAllowanceReservation(allowance.reservationId);
+      }
+    });
+  }
 
-  const creation = await createVenomBuildRunForUser(userId, parsed.data);
+  const creation = await createVenomBuildRunForUser(userId, parsed.data, {
+    reservationId: allowance.reservationId ?? null,
+  });
   if (creation.kind === "iteration_required") {
     res.status(409).json({
       error:
@@ -1233,6 +1282,11 @@ router.post("/venom/build-runs", async (req, res): Promise<void> => {
     return;
   }
   const run = creation.run;
+  if (creation.kind === "created") {
+    // The run row carries the hold from here. An idempotent replay
+    // ("existing") stored nothing, so its fresh hold frees at close.
+    routeOwnsReservation = false;
+  }
   req.log.info(
     {
       operation: "venom_build_create",
@@ -1339,6 +1393,23 @@ router.post(
       res.status(404).json({ error: "Build run not found" });
       return;
     }
+    const allowance = await checkVenomAllowance({ userId, reserve: true });
+    if (!allowance.allowed) {
+      res.status(402).json(allowanceBlockedBody(allowance));
+      return;
+    }
+    // The retried run spends after this response ends, so a successful
+    // re-queue hands the hold to the run row (the processor settles or
+    // releases it; crash leaks reap by age). Until then this route owns
+    // it, and the close hook frees it on every exit path.
+    let routeOwnsReservation = allowance.reservationId != null;
+    if (routeOwnsReservation) {
+      res.once("close", () => {
+        if (routeOwnsReservation && allowance.reservationId) {
+          void releaseVenomAllowanceReservation(allowance.reservationId);
+        }
+      });
+    }
     const retryResult = await db.transaction(async (transaction) => {
       await transaction.execute(
         sql`select pg_advisory_xact_lock(hashtext(${"venom-build:" + userId}))`,
@@ -1378,6 +1449,7 @@ router.post(
           status: "queued",
           progress: 0,
           attempt: current.attempt + 1,
+          reservationId: allowance.reservationId ?? null,
           failureCode: null,
           failureMessage: null,
           cancelledReason: null,
@@ -1418,6 +1490,7 @@ router.post(
       return;
     }
     const run = retryResult.run;
+    routeOwnsReservation = false; // the re-queued run row carries the hold
     scheduleRunEffect(userId, run.id);
     res
       .status(202)
@@ -1438,6 +1511,23 @@ router.post(
     if (!params.success || !parsed.success) {
       res.status(400).json({ error: "Invalid revision request" });
       return;
+    }
+    const allowance = await checkVenomAllowance({ userId, reserve: true });
+    if (!allowance.allowed) {
+      res.status(402).json(allowanceBlockedBody(allowance));
+      return;
+    }
+    // The revision run spends after this response ends, so a successful
+    // re-queue hands the hold to the run row (the processor settles or
+    // releases it; crash leaks reap by age). Until then this route owns
+    // it, and the close hook frees it on every exit path.
+    let routeOwnsReservation = allowance.reservationId != null;
+    if (routeOwnsReservation) {
+      res.once("close", () => {
+        if (routeOwnsReservation && allowance.reservationId) {
+          void releaseVenomAllowanceReservation(allowance.reservationId);
+        }
+      });
     }
     const revisionResult = await db.transaction(async (transaction) => {
       await transaction.execute(
@@ -1477,6 +1567,7 @@ router.post(
         .set({
           status: "queued",
           progress: 0,
+          reservationId: allowance.reservationId ?? null,
           pendingRevisionInstruction: parsed.data.instruction.trim(),
           failureCode: null,
           failureMessage: null,
@@ -1518,6 +1609,7 @@ router.post(
       return;
     }
     const run = revisionResult.run;
+    routeOwnsReservation = false; // the re-queued run row carries the hold
     scheduleRunEffect(userId, run.id);
     res
       .status(202)

@@ -159,18 +159,20 @@ test('deliberates a turn: voices stream, one fails, the collective answer flags 
   ]);
   await openChat(page);
 
-  // Switch this conversation to Verify.
-  const talkOption = page.getByTestId('mode-option-talk');
-  await expect(talkOption).toBeVisible();
-  await expect(talkOption).toHaveAttribute('aria-checked', 'true');
-  const verifyOption = page.getByTestId('mode-option-verify');
-  await verifyOption.click();
-  await expect(verifyOption).toHaveAttribute('aria-checked', 'true');
-
-  // The blend pad lives in the combined models & voices popup; in Verify the
-  // corners are the three voices themselves.
-  await page.getByTestId('button-open-voices').click();
+  // Verify lives in the model configuration: open the Select-model popup
+  // and switch it on. The composer itself only carries the Debate switch.
+  const debateSwitch = page.getByTestId('switch-debate');
+  await expect(debateSwitch).toBeVisible();
+  await expect(debateSwitch).toHaveAttribute('aria-checked', 'false');
+  await page.getByTestId('button-model-chip').click();
   await expect(page.getByTestId('dialog-model-voices')).toBeVisible();
+  const verifySwitch = page.getByTestId('switch-verify');
+  await expect(verifySwitch).toHaveAttribute('aria-checked', 'false');
+  await verifySwitch.click();
+  await expect(verifySwitch).toHaveAttribute('aria-checked', 'true');
+
+  // The blend pad appears in the same popup once Verify is on; in Verify
+  // the corners are the three voices themselves.
   await expect(page.getByTestId('blend-pad')).toBeVisible();
   await expect(page.getByTestId('blend-weight-direct')).toContainText('33%');
   // A single usable model: voice choice is limited, and the popup says why
@@ -183,6 +185,14 @@ test('deliberates a turn: voices stream, one fails, the collective answer flags 
   const composer = page.getByTestId('input-message');
   await composer.fill('Should we ship the migration?');
   await composer.press('Enter');
+
+  // While the turn streams, the conversation's mode is locked: the dialog's
+  // Verify switch rests until the reply lands, like the Debate switch.
+  await page.getByTestId('button-model-chip').click();
+  await expect(page.getByTestId('dialog-model-voices')).toBeVisible();
+  await expect(page.getByTestId('switch-verify')).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   // The chamber: named voices surface their takes while streaming.
   const panel = page.getByTestId('deliberation-panel');
@@ -198,6 +208,18 @@ test('deliberates a turn: voices stream, one fails, the collective answer flags 
   await expect(page.getByTestId('deliberation-voice-skeptic')).toContainText(
     "Didn't finish — the others carry on.",
   );
+  // Voices are personas over the model catalog, so each live card carries
+  // its own monogram avatar — visually distinct even when models repeat.
+  await expect(
+    page
+      .getByTestId('deliberation-voice-direct')
+      .getByTestId('speaker-avatar-monogram-ft'),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByTestId('deliberation-voice-evidence')
+      .getByTestId('speaker-avatar-monogram-e'),
+  ).toBeVisible();
 
   // The turn ends as one collective answer with the disagreement flagged.
   const answer = page.getByTestId('message-assistant');
@@ -224,13 +246,30 @@ test('deliberates a turn: voices stream, one fails, the collective answer flags 
   await expect(page.getByTestId('deliberation-take-skeptic')).toContainText(
     "This voice didn't finish its take.",
   );
+  // Persisted take rows keep the voice monograms.
+  await expect(
+    page
+      .getByTestId('deliberation-take-direct')
+      .getByTestId('speaker-avatar-monogram-ft'),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByTestId('deliberation-take-skeptic')
+      .getByTestId('speaker-avatar-monogram-s'),
+  ).toBeVisible();
   const evidenceTake = page.getByTestId('deliberation-take-evidence');
   await expect(evidenceTake).toContainText('(archived source)');
   await expect(evidenceTake).not.toContainText('[source:');
   await expect(result).not.toContainText('[source:');
 
   // The mode is remembered for the conversation, not rearmed per message.
-  await expect(verifyOption).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('button-model-chip').click();
+  await expect(page.getByTestId('switch-verify')).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 test('persona mode converges without model attribution and reports agreement', async ({
@@ -277,7 +316,10 @@ test('persona mode converges without model attribution and reports agreement', a
   });
   await openChat(page);
 
-  await page.getByTestId('mode-option-verify').click();
+  await page.getByTestId('button-model-chip').click();
+  await page.getByTestId('switch-verify').click();
+  await page.getByTestId('button-model-voices-done').click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   const composer = page.getByTestId('input-message');
   await composer.fill('Same model everywhere?');
   await composer.press('Enter');
@@ -311,9 +353,14 @@ test('hides the control when the server has no deliberation endpoint', async ({
   await mockChatStream(page, ['Ordinary reply.']);
   await openChat(page);
 
-  await expect(page.getByTestId('mode-switch')).toHaveCount(0);
+  await expect(page.getByTestId('switch-debate')).toHaveCount(0);
   await expect(page.getByTestId('blend-pad')).toHaveCount(0);
-  await expect(page.getByTestId('button-open-voices')).toHaveCount(0);
+  // The model popup hides Verify too — no deliberation, no verify toggle.
+  await page.getByTestId('button-model-chip').click();
+  await expect(page.getByTestId('dialog-model-voices')).toBeVisible();
+  await expect(page.getByTestId('switch-verify')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   // Ordinary messages behave exactly as before.
   const composer = page.getByTestId('input-message');

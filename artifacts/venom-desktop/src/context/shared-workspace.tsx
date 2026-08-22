@@ -1,8 +1,11 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
+  useState,
   type ReactNode,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -30,10 +33,36 @@ import { useToast } from "@/hooks/use-toast";
 type SharedWorkspaceContextValue = {
   workspaces: SharedWorkspace[];
   isLoading: boolean;
+  /** Null means the personal tier. */
+  activeWorkspace: SharedWorkspace | null;
+  selectWorkspace: (workspaceId: string | null) => void;
 };
 
 const SharedWorkspaceContext =
   createContext<SharedWorkspaceContextValue | null>(null);
+
+const storageKeyFor = (userId: string | null) =>
+  `venom_shared_space:${userId ?? "anon"}`;
+
+function readStoredSelection(userId: string | null): string | null {
+  try {
+    return window.localStorage.getItem(storageKeyFor(userId));
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredSelection(userId: string | null, workspaceId: string | null) {
+  try {
+    if (workspaceId) {
+      window.localStorage.setItem(storageKeyFor(userId), workspaceId);
+    } else {
+      window.localStorage.removeItem(storageKeyFor(userId));
+    }
+  } catch {
+    // Storage is optional; in-memory selection still works.
+  }
+}
 
 export function SharedWorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useUser();
@@ -42,6 +71,13 @@ export function SharedWorkspaceProvider({ children }: { children: ReactNode }) {
   const userId = user?.id ?? (IS_UI_TEST ? UI_TEST_USER_ID : null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    readStoredSelection(userId),
+  );
+  const selectedIdRef = useRef(selectedId);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   const listQuery = useListSharedWorkspaces({
     query: {
@@ -58,6 +94,20 @@ export function SharedWorkspaceProvider({ children }: { children: ReactNode }) {
   });
 
   const workspaces = useMemo(() => asList(listQuery.data), [listQuery.data]);
+  const selectWorkspace = useCallback(
+    (workspaceId: string | null) => {
+      setSelectedId(workspaceId);
+      writeStoredSelection(userId, workspaceId);
+    },
+    [userId],
+  );
+
+  useEffect(() => {
+    if (!listQuery.isSuccess) return;
+    if (selectedId && !workspaces.some((workspace) => workspace.id === selectedId)) {
+      selectWorkspace(null);
+    }
+  }, [listQuery.isSuccess, selectedId, selectWorkspace, workspaces]);
 
   // Central revocation routine: any workspace-scoped request answered with
   // `workspace_access_denied` lands here (via the QueryClient error hooks or
@@ -77,19 +127,26 @@ export function SharedWorkspaceProvider({ children }: { children: ReactNode }) {
       void queryClient.invalidateQueries({
         queryKey: getListSharedWorkspacesQueryKey(),
       });
+      if (selectedIdRef.current) selectWorkspace(null);
       toast({
         title: "Shared workspace unavailable",
-        description: "You no longer have access to that workspace.",
+        description: "You no longer have access to that workspace. Back in your personal space.",
       });
     });
-  }, [queryClient, toast]);
+  }, [queryClient, selectWorkspace, toast]);
 
+  const activeWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === selectedId) ?? null,
+    [selectedId, workspaces],
+  );
   const value = useMemo<SharedWorkspaceContextValue>(
     () => ({
       workspaces,
       isLoading: listQuery.isLoading,
+      activeWorkspace,
+      selectWorkspace,
     }),
-    [workspaces, listQuery.isLoading],
+    [workspaces, listQuery.isLoading, activeWorkspace, selectWorkspace],
   );
 
   return (
