@@ -54,6 +54,11 @@ import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { Router, type IRouter, type Request } from "express";
 import { logger } from "../lib/logger";
 import {
+  allowanceBlockedBody,
+  checkVenomAllowance,
+  releaseVenomAllowanceReservation,
+} from "../lib/venom-billing-enforcement";
+import {
   createArchiveUploadUrl,
   createUploadObjectPath,
   deletePrivateObject,
@@ -1424,6 +1429,30 @@ router.post(
       res.status(404).json({ error: "App not found" });
       return;
     }
+    // Iterations spawn AI build work in the personal space; the caller's
+    // personal allowance decides whether the run may start at all.
+    const iterationAllowance = await checkVenomAllowance({
+      userId,
+      reserve: true,
+    });
+    if (!iterationAllowance.allowed) {
+      res.status(402).json(allowanceBlockedBody(iterationAllowance));
+      return;
+    }
+    // The iteration run spends after this response ends, so a successful
+    // creation hands the hold to the run row (the processor settles or
+    // releases it; crash leaks reap by age). Until then this route owns
+    // it, and the close hook frees it on every exit path.
+    let routeOwnsReservation = iterationAllowance.reservationId != null;
+    if (routeOwnsReservation) {
+      res.once("close", () => {
+        if (routeOwnsReservation && iterationAllowance.reservationId) {
+          void releaseVenomAllowanceReservation(
+            iterationAllowance.reservationId,
+          );
+        }
+      });
+    }
     const latestIteration = await latestAppIteration(userId, app.id);
     if (!latestIteration) {
       res.status(409).json({
@@ -1514,6 +1543,7 @@ router.post(
         baselineIterationId: baselineIteration.id,
         baselineRevisionId: baselineIteration.revisionId,
         changesSummary,
+        reservationId: iterationAllowance.reservationId ?? null,
       },
     );
     if (creation.kind === "invalid_reference") {
@@ -1541,6 +1571,11 @@ router.post(
         error: "This app must be improved through an iteration run.",
       });
       return;
+    }
+    if (creation.kind === "created") {
+      // The run row carries the hold from here. An idempotent replay
+      // ("existing") stored nothing, so its fresh hold frees at close.
+      routeOwnsReservation = false;
     }
     req.log.info(
       {

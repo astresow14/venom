@@ -33,6 +33,7 @@ import {
   type PendingChatFile,
 } from "@/components/ChatFileCards";
 import { type BlendWeights } from "@/context/responsePrefs";
+import { useSharedWorkspace } from "@/context/sharedWorkspace";
 import { buildChatProjectContextBundle } from "@/context/sourceContext";
 import {
   IS_UI_TEST,
@@ -109,6 +110,11 @@ export function useChatSend({
 }) {
   const router = useRouter();
   const { getToken, userId: authenticatedUserId } = useAuth();
+  // Chat sends bill the space the user is working in: the active shared
+  // workspace rides the respond request so its plan pays and its admin
+  // caps and model locks bind — exactly what the composer's "Billed to"
+  // hint promises.
+  const { activeWorkspace } = useSharedWorkspace();
   const userId = IS_UI_TEST
     ? UI_TEST_USER_ID
     : (authenticatedUserId ?? null);
@@ -445,6 +451,9 @@ export function useChatSend({
     const initiatingUserId = userId ?? null;
     if (!initiatingUserId) return;
     const initiatingProjectId = preset ? preset.projectId : onScreenProjectId;
+    // Captured once per send: every round of a debate (and the settle pass)
+    // bills the space that started it, even if the user switches mid-turn.
+    const initiatingWorkspaceId = activeWorkspace?.id ?? null;
     let abortController = new AbortController();
     activeRequestAbortRef.current = abortController;
     // Capture the model being used at send time
@@ -628,6 +637,9 @@ export function useChatSend({
         body: JSON.stringify({
           messages: debateHistory.slice(-24),
           projectId: initiatingProjectId,
+          ...(initiatingWorkspaceId
+            ? { workspaceId: initiatingWorkspaceId }
+            : {}),
           modelId: sendingModelId,
           projectContext,
           sourceCitationIds,
@@ -650,6 +662,23 @@ export function useChatSend({
         let errMsg = "The request failed. Please try again.";
         if (isRateLimit) errMsg = "Rate limit reached. Please wait a moment before sending again.";
         if (isProviderError) errMsg = "The selected model provider is temporarily unavailable. Try a different model or retry shortly.";
+        if (response.status === 402) {
+          // An allowance ran out. The server's copy says whose — the sender's
+          // personal plan or this workspace's Organization plan — so surface
+          // it verbatim. Retrying can't help until the plan changes or the
+          // period resets.
+          let blockedMsg = "This period's included AI is used up.";
+          try {
+            const body = (await response.json()) as { error?: string };
+            if (body?.error) blockedMsg = body.error;
+          } catch {
+            // not JSON – keep the generic copy
+          }
+          throw Object.assign(new Error(blockedMsg), {
+            retryable: false,
+            httpStatus: 402,
+          });
+        }
         if (response.status === 403) {
           try {
             const body = (await response.json()) as { code?: string; error?: string };

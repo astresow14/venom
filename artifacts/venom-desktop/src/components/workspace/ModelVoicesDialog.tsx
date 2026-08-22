@@ -23,11 +23,13 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, Check, Plus, Trash2, Zap } from 'lucide-react';
+import { AlertTriangle, Check, Lock, Plus, Trash2, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { asList } from '@/lib/as-list';
 import {
+  getGetVenomBillingContextQueryKey,
   getGetVenomModelsQueryKey,
+  useGetVenomBillingContext,
   useGetVenomModels,
   type VenomDeliberationVoice,
   type VenomManagedModel,
@@ -36,8 +38,10 @@ import {
   type VenomVoiceModelPick,
 } from '@workspace/api-client-react';
 import { useVenomWorkspace } from '@/context/venom-workspace';
+import { useSharedWorkspace } from '@/context/shared-workspace';
 import { normalizeModelPreferences } from '@/lib/workspaceState';
 import { BlendPad, type BlendPadCorner } from './BlendPad';
+import { PillSwitch } from './PillSwitch';
 import type { BlendWeights, ResponseMode } from '@/lib/blend';
 
 // Provider badge label mapping
@@ -85,6 +89,7 @@ function ModelCard({
   isDefault,
   enabledCount,
   actionsDisabled,
+  tierLockNote,
   onEnable,
   onRemove,
   onSetDefault,
@@ -97,15 +102,20 @@ function ModelCard({
   enabledCount: number;
   /** True while an auto policy owns the picks — actions hand over to Venom. */
   actionsDisabled?: boolean;
+  /** Set when the active workspace's tier lock excludes this model. */
+  tierLockNote?: string;
   onEnable: () => void;
   onRemove: () => void;
   onSetDefault: () => void;
   onUse: () => void;
 }) {
+  const tierLocked = Boolean(tierLockNote);
+  // Removal stays allowed even under a tier lock: the library is the user's
+  // own, and dropping a model the workspace forbids can never cost money.
   const canRemove = isEnabled && enabledCount > 1 && !actionsDisabled;
   const policyTitle = actionsDisabled
     ? 'Venom is choosing models automatically — switch back to Manual to change this'
-    : undefined;
+    : tierLockNote;
 
   return (
     <div
@@ -143,6 +153,16 @@ function ModelCard({
                 data-testid={`cost-badge-${model.id}`}
               >
                 {model.costTier}
+              </span>
+            )}
+            {tierLockNote && (
+              <span
+                className="flex items-center gap-1 text-xs font-medium border border-border/60 rounded-full px-2 py-0.5 shrink-0 text-muted-foreground"
+                title={tierLockNote}
+                data-testid={`tier-locked-${model.id}`}
+              >
+                <Lock className="h-3 w-3" aria-hidden="true" />
+                Managed
               </span>
             )}
           </div>
@@ -203,7 +223,7 @@ function ModelCard({
             variant="outline"
             className="h-8 rounded-md text-xs font-medium border-border/60 hover:bg-foreground hover:text-background transition-colors shadow-soft"
             onClick={onEnable}
-            disabled={!model.available || actionsDisabled}
+            disabled={!model.available || actionsDisabled || tierLocked}
             aria-label={`Enable ${model.name}`}
             title={policyTitle}
           >
@@ -218,7 +238,7 @@ function ModelCard({
                 variant="outline"
                 className="h-8 rounded-md text-xs font-medium border-border/60 hover:bg-foreground hover:text-background transition-colors shadow-soft"
                 onClick={onUse}
-                disabled={actionsDisabled}
+                disabled={actionsDisabled || tierLocked}
                 aria-label={`Use ${model.name} as the active model`}
                 title={policyTitle}
                 data-testid={`button-use-${model.id}`}
@@ -232,7 +252,7 @@ function ModelCard({
                 variant="outline"
                 className="h-8 rounded-md text-xs font-medium border-border/60 hover:bg-foreground hover:text-background transition-colors shadow-soft"
                 onClick={onSetDefault}
-                disabled={actionsDisabled}
+                disabled={actionsDisabled || tierLocked}
                 aria-label={`Set ${model.name} as default`}
                 title={policyTitle}
               >
@@ -274,7 +294,9 @@ export function ModelVoicesDialog({
   onOpenChange,
   openerRef,
   responseMode,
+  onModeChange,
   deliberationAvailable,
+  modeLocked,
   distinctModels,
   personaVoices,
   voicePicks,
@@ -298,7 +320,16 @@ export function ModelVoicesDialog({
    */
   openerRef?: React.RefObject<HTMLElement | null>;
   responseMode: ResponseMode;
+  /** Switch this conversation's response mode (drives the Verify toggle). */
+  onModeChange: (mode: ResponseMode) => void;
   deliberationAvailable: boolean;
+  /**
+   * True while a reply is in flight. The in-flight turn already captured its
+   * mode, so flipping Verify mid-stream would make the conversation's visible
+   * mode disagree with the running turn — the switch rests instead, matching
+   * the composer's Debate switch.
+   */
+  modeLocked?: boolean;
   /** False when fewer than two models are usable — voice choice is limited. */
   distinctModels: boolean;
   /** Deliberation roster (names + taglines) for the verify voice rows. */
@@ -333,11 +364,56 @@ export function ModelVoicesDialog({
     [state.modelPreferences],
   );
 
+  // Admin model locks ride the billing context of the active shared
+  // workspace. Display only — the server clamps every workspace-billed
+  // request regardless — so a failed read simply shows the user's own
+  // settings while enforcement still holds.
+  const { activeWorkspace } = useSharedWorkspace();
+  const billingContextParams = activeWorkspace
+    ? { workspaceId: activeWorkspace.id }
+    : undefined;
+  const billingContextQuery = useGetVenomBillingContext(billingContextParams, {
+    query: {
+      queryKey: getGetVenomBillingContextQueryKey(billingContextParams),
+      enabled: open && Boolean(activeWorkspace),
+      staleTime: 60_000,
+      retry: 1,
+    },
+  });
+  const modelLock = activeWorkspace
+    ? (billingContextQuery.data?.modelLock ?? null)
+    : null;
+  const managedByName = activeWorkspace?.name ?? 'this workspace';
+  const forcedPolicy = modelLock?.forcedSelectionPolicy ?? null;
+  const policyLocked = Boolean(forcedPolicy);
+
   // Account-level selection policy. In the auto modes the server owns every
   // model choice, so the manual surfaces below visibly hand over instead of
-  // pretending their picks still drive anything.
+  // pretending their picks still drive anything. A workspace-forced policy
+  // takes precedence over the user's own while work is billed there.
   const selectionPolicy = prefs.selectionPolicy ?? 'manual';
-  const autoPolicyActive = selectionPolicy !== 'manual';
+  const effectivePolicy = forcedPolicy ?? selectionPolicy;
+  const autoPolicyActive = effectivePolicy !== 'manual';
+
+  // Tier locks bind only when at least one catalog model sits in an allowed
+  // tier — mirroring the server, which fails open rather than serving
+  // nothing when a lock would empty the catalog.
+  const lockedTiers = useMemo(() => {
+    const allowed = modelLock?.allowedCostTiers ?? null;
+    if (!allowed || allowed.length === 0) return null;
+    const live = asList(modelsQuery.data).some(
+      (model) => model.costTier && allowed.includes(model.costTier),
+    );
+    return live ? allowed : null;
+  }, [modelLock, modelsQuery.data]);
+  const tierLockActive = Boolean(lockedTiers);
+  // Explicit voice/corner picks are suppressed server-side whenever an auto
+  // policy or a tier lock owns the choice.
+  const picksSuppressed = autoPolicyActive || tierLockActive;
+  const tierLockNoteFor = (model: VenomManagedModel): string | undefined =>
+    lockedTiers && !(model.costTier && lockedTiers.includes(model.costTier))
+      ? `Not allowed in ${managedByName} — its admins restrict which model tiers run on the workspace's plan.`
+      : undefined;
 
   const enabledSet = useMemo(
     () => new Set(prefs.enabledModelIds),
@@ -501,13 +577,14 @@ export function ModelVoicesDialog({
               data-testid="model-policy-control"
             >
               {POLICY_OPTIONS.map((option) => {
-                const selected = selectionPolicy === option.id;
+                const selected = effectivePolicy === option.id;
                 return (
                   <button
                     key={option.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
+                    disabled={policyLocked}
                     onClick={() =>
                       setModelPreferences({ selectionPolicy: option.id })
                     }
@@ -516,6 +593,8 @@ export function ModelVoicesDialog({
                       selected
                         ? 'border-foreground bg-foreground text-background'
                         : 'border-border/60 text-muted-foreground hover:text-foreground',
+                      policyLocked &&
+                        'cursor-not-allowed opacity-60 hover:text-muted-foreground',
                     )}
                     data-testid={`policy-${option.id}`}
                   >
@@ -534,7 +613,22 @@ export function ModelVoicesDialog({
                 );
               })}
             </div>
-            {autoPolicyActive && (
+            {policyLocked ? (
+              <div
+                className="flex items-start gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5"
+                data-testid="model-policy-managed"
+              >
+                <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+                <p className="text-xs text-muted-foreground">
+                  Managed by {managedByName} — its admins{' '}
+                  {forcedPolicy === 'auto-cheapest'
+                    ? 'route every reply billed to the workspace to the cheapest healthy models.'
+                    : 'route every reply billed to the workspace to the most capable models.'}{' '}
+                  Your own settings are kept and still apply in your personal
+                  space.
+                </p>
+              </div>
+            ) : autoPolicyActive ? (
               <div
                 className="flex items-start gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5"
                 data-testid="model-policy-takeover"
@@ -542,14 +636,52 @@ export function ModelVoicesDialog({
                 <Zap className="h-3.5 w-3.5 mt-0.5 shrink-0" aria-hidden="true" />
                 <p className="text-xs text-muted-foreground">
                   Venom is choosing —{' '}
-                  {selectionPolicy === 'auto-cheapest'
+                  {effectivePolicy === 'auto-cheapest'
                     ? 'the cheapest healthy models carry every reply, and the account switches automatically when availability or account health changes.'
                     : 'the most capable models carry every reply, and the account switches automatically when availability changes.'}{' '}
                   Your manual picks are kept for when you switch back.
                 </p>
               </div>
-            )}
+            ) : null}
           </section>
+
+          {/* ── Verify ─────────────────────────────────────────────────── */}
+          {deliberationAvailable && (
+            <section aria-label="Verify" className="flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold tracking-tight">
+                    Verify
+                  </h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Voices check the answer in the background before it
+                    lands. Applies to this conversation.
+                  </p>
+                </div>
+                <PillSwitch
+                  checked={responseMode === 'verify'}
+                  onChange={(on) => onModeChange(on ? 'verify' : 'talk')}
+                  disabled={modeLocked}
+                  title={
+                    modeLocked
+                      ? 'Wait for the current reply to finish'
+                      : undefined
+                  }
+                  ariaLabel="Verify: voices check the answer in the background"
+                  testId="switch-verify"
+                  className="mt-0.5"
+                />
+              </div>
+              {debateSection && (
+                <p
+                  className="text-[11px] text-muted-foreground"
+                  data-testid="text-verify-replaces-debate"
+                >
+                  Turning Verify on takes this conversation out of Debate.
+                </p>
+              )}
+            </section>
+          )}
 
           {/* ── Voices ─────────────────────────────────────────────────── */}
           {showVoices && blendCorners && (
@@ -578,27 +710,38 @@ export function ModelVoicesDialog({
                   // server seats its own corners — weighting ghosts would be
                   // dishonest. Verify weights ride the stable voice roles
                   // (First take / Skeptic / Evidence), so the pad stays live.
-                  disabled={padDisabled || (debateSection && autoPolicyActive)}
+                  disabled={padDisabled || (debateSection && picksSuppressed)}
                 />
               </div>
 
-              {/* Auto policies own voice-model assignment: the pickers hand
-                  over rather than pretending explicit picks still apply. */}
-              {autoPolicyActive && (
+              {/* Auto policies and workspace locks own voice-model
+                  assignment: the pickers hand over rather than pretending
+                  explicit picks still apply. */}
+              {picksSuppressed && (
                 <p
                   className="text-xs text-muted-foreground text-center"
                   data-testid="voices-policy-takeover"
                 >
-                  Venom is choosing which models{' '}
-                  {verifySection ? 'play the voices' : 'take the corners'} —{' '}
-                  {selectionPolicy === 'auto-cheapest'
-                    ? 'the cheapest healthy models serve this conversation.'
-                    : 'the most capable models serve this conversation.'}
+                  {policyLocked || tierLockActive ? (
+                    <>
+                      Managed by {managedByName} — Venom picks which models{' '}
+                      {verifySection ? 'play the voices' : 'take the corners'}{' '}
+                      from the models its admins allow.
+                    </>
+                  ) : (
+                    <>
+                      Venom is choosing which models{' '}
+                      {verifySection ? 'play the voices' : 'take the corners'} —{' '}
+                      {effectivePolicy === 'auto-cheapest'
+                        ? 'the cheapest healthy models serve this conversation.'
+                        : 'the most capable models serve this conversation.'}
+                    </>
+                  )}
                 </p>
               )}
 
               {/* Verify: one picker row per voice */}
-              {!autoPolicyActive && verifySection && distinctModels && (
+              {!picksSuppressed && verifySection && distinctModels && (
                 <div className="flex flex-col gap-3">
                   {VERIFY_VOICES.map(({ id, fallbackName }) => {
                     const persona = personaByVoice.get(id);
@@ -685,7 +828,7 @@ export function ModelVoicesDialog({
               )}
 
               {/* Verify with a single usable model: explain, don't offer */}
-              {!autoPolicyActive && verifySection && !distinctModels && (
+              {!picksSuppressed && verifySection && !distinctModels && (
                 <p
                   className="text-xs text-muted-foreground"
                   data-testid="text-voices-limited"
@@ -697,7 +840,7 @@ export function ModelVoicesDialog({
               )}
 
               {/* Debate: corner roster picker */}
-              {!autoPolicyActive && debateSection && cornersPickable && (
+              {!picksSuppressed && debateSection && cornersPickable && (
                 <div
                   className="flex flex-wrap items-center justify-center gap-1.5"
                   role="group"
@@ -741,7 +884,7 @@ export function ModelVoicesDialog({
               )}
 
               {/* Debate without three usable models: personas hold the corners */}
-              {!autoPolicyActive && debateSection && !cornersPickable && usableModels.length < 3 && (
+              {!picksSuppressed && debateSection && !cornersPickable && usableModels.length < 3 && (
                 <p
                   className="text-xs text-muted-foreground"
                   data-testid="text-voices-limited"
@@ -800,6 +943,7 @@ export function ModelVoicesDialog({
                     isDefault={prefs.defaultModelId === model.id}
                     enabledCount={enabledSet.size}
                     actionsDisabled={autoPolicyActive}
+                    tierLockNote={tierLockNoteFor(model)}
                     onEnable={() => handleEnable(model.id)}
                     onRemove={() => handleRemove(model.id)}
                     onSetDefault={() => handleSetDefault(model.id)}

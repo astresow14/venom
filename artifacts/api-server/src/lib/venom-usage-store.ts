@@ -14,8 +14,13 @@
 
 import { randomUUID } from "node:crypto";
 
-import { db, venomUsageEvents } from "@workspace/db";
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import {
+  db,
+  venomAllowanceReservationsTable,
+  venomSharedWorkspacesTable,
+  venomUsageEvents,
+} from "@workspace/db";
+import { and, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 
 import { buildVenomCatalog } from "./venom-models";
 import {
@@ -54,8 +59,33 @@ export type RecordVenomUsageInput = {
    */
   costMicros?: number;
   workspaceId?: string | null;
+  /**
+   * Which workspace's Organization plan paid, from the request's allowance
+   * decision. Null/omitted = the caller's personal plan paid.
+   */
+  billedWorkspaceId?: string | null;
+  /**
+   * The admission's allowance reservation, settled atomically with this
+   * insert: the durable spend row replaces the pending hold in one
+   * transaction, so no admission can count both — or neither.
+   */
+  reservationId?: string | null;
   occurredAt?: Date;
 };
+
+/**
+ * One advisory lock per payer serializes allowance admission with
+ * reservation settlement. Admission sums durable spend and open holds in
+ * separate statements; a settlement (spend insert + hold delete) committing
+ * between those two reads would make the request's cost vanish from both
+ * sums and over-admit past the cap, so both sides take this lock.
+ */
+export function venomAllowanceLockSql(
+  scopeType: "user" | "workspace",
+  scopeId: string,
+) {
+  return sql`select pg_advisory_xact_lock(hashtext(${`venom-allowance:${scopeType}:${scopeId}`}))`;
+}
 
 /** Test seam: awaitable insert. Production paths use recordVenomUsage. */
 export async function insertVenomUsage(
@@ -63,7 +93,7 @@ export async function insertVenomUsage(
 ): Promise<void> {
   const promptTokens = Math.max(0, Math.round(input.promptTokens));
   const outputTokens = Math.max(0, Math.round(input.outputTokens));
-  await db.insert(venomUsageEvents).values({
+  const values = {
     id: randomUUID(),
     userId: input.userId,
     occurredAt: input.occurredAt ?? new Date(),
@@ -76,7 +106,25 @@ export async function insertVenomUsage(
       computeCostMicros(input.modelAlias, promptTokens, outputTokens),
     estimated: input.estimated,
     workspaceId: input.workspaceId ?? null,
-  });
+    billedWorkspaceId: input.billedWorkspaceId ?? null,
+  };
+  const reservationId = input.reservationId ?? null;
+  if (reservationId) {
+    // Settling under the payer's advisory lock makes the swap — spend row
+    // in, hold out — a single event to any concurrently admitting request;
+    // see venomAllowanceLockSql for why the lock must be shared.
+    const scopeType = values.billedWorkspaceId ? "workspace" : "user";
+    const scopeId = values.billedWorkspaceId ?? values.userId;
+    await db.transaction(async (tx) => {
+      await tx.execute(venomAllowanceLockSql(scopeType, scopeId));
+      await tx.insert(venomUsageEvents).values(values);
+      await tx
+        .delete(venomAllowanceReservationsTable)
+        .where(eq(venomAllowanceReservationsTable.id, reservationId));
+    });
+    return;
+  }
+  await db.insert(venomUsageEvents).values(values);
 }
 
 /**
@@ -115,6 +163,12 @@ export type VenomUsageSummaryData = {
     outputTokens: number;
     hasEstimates: boolean;
   }>;
+  /**
+   * Workspaces whose Organization plan covered some of this member's AI
+   * calls during the period. Names only — workspace-billed spend belongs
+   * to the workspace, so no dollar figures ever appear here.
+   */
+  coveredByWorkspaces: Array<{ id: string; name: string }>;
 };
 
 function utcDateString(date: Date): string {
@@ -140,15 +194,19 @@ export async function loadVenomUsageSummary(
   const periodEnd = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
   );
+  // Personal view = personally billed only. Workspace-billed calls belong
+  // to the workspace's ledger; the member sees them solely as a
+  // "covered by <workspace>" note below, never as spend figures.
   const scope = and(
     eq(venomUsageEvents.userId, userId),
+    isNull(venomUsageEvents.billedWorkspaceId),
     gte(venomUsageEvents.occurredAt, periodStart),
     lt(venomUsageEvents.occurredAt, periodEnd),
   );
 
   const dayExpr = sql<string>`to_char(${venomUsageEvents.occurredAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
 
-  const [modelRows, dailyRows] = await Promise.all([
+  const [modelRows, dailyRows, coveredRows] = await Promise.all([
     db
       .select({
         modelAlias: venomUsageEvents.modelAlias,
@@ -171,6 +229,28 @@ export async function loadVenomUsageSummary(
       .where(scope)
       .groupBy(dayExpr)
       .orderBy(dayExpr),
+    db
+      .select({
+        id: venomUsageEvents.billedWorkspaceId,
+        name: venomSharedWorkspacesTable.name,
+      })
+      .from(venomUsageEvents)
+      .leftJoin(
+        venomSharedWorkspacesTable,
+        eq(
+          venomSharedWorkspacesTable.id,
+          sql`${venomUsageEvents.billedWorkspaceId}::uuid`,
+        ),
+      )
+      .where(
+        and(
+          eq(venomUsageEvents.userId, userId),
+          isNotNull(venomUsageEvents.billedWorkspaceId),
+          gte(venomUsageEvents.occurredAt, periodStart),
+          lt(venomUsageEvents.occurredAt, periodEnd),
+        ),
+      )
+      .groupBy(venomUsageEvents.billedWorkspaceId, venomSharedWorkspacesTable.name),
   ]);
 
   const models = modelRows
@@ -199,6 +279,16 @@ export async function loadVenomUsageSummary(
   // micro precision so float noise from adding parsed floats stays invisible.
   totals.costUsd = Math.round(totals.costUsd * 1_000_000) / 1_000_000;
 
+  const coveredByWorkspaces = coveredRows
+    .filter((row): row is { id: string; name: string | null } => Boolean(row.id))
+    .map((row) => ({
+      // A billed workspace that has since been deleted still covered the
+      // calls; keep the note honest with a neutral label.
+      id: row.id as string,
+      name: row.name ?? "A shared workspace",
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   return {
     periodStart: utcDateString(periodStart),
     periodEnd: utcDateString(periodEnd),
@@ -210,5 +300,6 @@ export async function loadVenomUsageSummary(
       requests: row.requests,
     })),
     models,
+    coveredByWorkspaces,
   };
 }

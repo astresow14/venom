@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Building2,
   Check,
+  ChevronDown,
   CornerDownRight,
   Download,
   Edit2,
@@ -36,7 +37,13 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { useVenomWorkspace } from "@/context/venom-workspace";
 import { useSharedWorkspace } from "@/context/shared-workspace";
 import {
@@ -310,6 +317,16 @@ export default function BrainPage() {
   const conceptRestriction = useSetSharedWorkspaceConceptRestriction();
   const isWorkspaceAdmin = activeWorkspace?.role === "admin";
   const [exporting, setExporting] = useState(false);
+
+  // Below the md breakpoint the floating header card would bury the map
+  // under five-plus stacked rows, so its contents collapse into a single
+  // pill bar that opens a menu instead. Rendered conditionally (not CSS-
+  // hidden) so each control exists exactly once in the DOM at any width.
+  const isMobile = useIsMobile();
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!isMobile) setHeaderMenuOpen(false);
+  }, [isMobile]);
 
   const applyUpdatedCluster = (updated: KnowledgeCluster) => {
     setSelectedCluster((current) =>
@@ -1662,17 +1679,32 @@ export default function BrainPage() {
 
   const resetView = () => setCamera(DEFAULT_CAMERA);
 
-  const layerSwitcher = (
+  /**
+   * The layer filter, shared between the md+ header card and the phone
+   * menu. `afterSelect` lets the menu close itself once a layer is picked;
+   * `containerClassName` relaxes the stadium chrome where the pills wrap
+   * over several rows inside the menu.
+   */
+  const renderLayerSwitcher = (
+    afterSelect?: () => void,
+    containerClassName?: string,
+  ) => (
     <div
       data-testid="brain-layer-switcher"
-      className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-full border border-border/60 bg-background/80 p-1 shadow-soft backdrop-blur-xl"
+      className={cn(
+        "pointer-events-auto flex flex-wrap items-center gap-1 rounded-full border border-border/60 bg-background/80 p-1 shadow-soft backdrop-blur-xl",
+        containerClassName,
+      )}
       role="group"
       aria-label="Brain layer"
     >
       <button
         type="button"
         data-testid="brain-layer-personal"
-        onClick={() => switchLayer(null)}
+        onClick={() => {
+          switchLayer(null);
+          afterSelect?.();
+        }}
         aria-pressed={
           !isWorkspaceView &&
           !isCompanyLayer &&
@@ -1694,7 +1726,10 @@ export default function BrainPage() {
       <button
         type="button"
         data-testid="brain-layer-unsorted"
-        onClick={switchToUnsortedLayer}
+        onClick={() => {
+          switchToUnsortedLayer();
+          afterSelect?.();
+        }}
         aria-pressed={isUnsortedLayer}
         className={cn(
           "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
@@ -1724,7 +1759,10 @@ export default function BrainPage() {
           key={workspace.id}
           type="button"
           data-testid={`brain-layer-workspace-${workspace.id}`}
-          onClick={() => switchToWorkspaceLayer(workspace.id)}
+          onClick={() => {
+            switchToWorkspaceLayer(workspace.id);
+            afterSelect?.();
+          }}
           aria-pressed={layerWorkspaceId === workspace.id}
           className={cn(
             "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
@@ -1742,7 +1780,10 @@ export default function BrainPage() {
           key={org.id}
           type="button"
           data-testid={`brain-layer-org-${org.id}`}
-          onClick={() => switchLayer(org.id)}
+          onClick={() => {
+            switchLayer(org.id);
+            afterSelect?.();
+          }}
           aria-pressed={layerOrgId === org.id}
           className={cn(
             "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
@@ -1758,7 +1799,10 @@ export default function BrainPage() {
       <button
         type="button"
         data-testid="brain-layer-network"
-        onClick={switchToNetworkLayer}
+        onClick={() => {
+          switchToNetworkLayer();
+          afterSelect?.();
+        }}
         aria-pressed={isNetworkLayer}
         className={cn(
           "rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
@@ -1771,6 +1815,7 @@ export default function BrainPage() {
       </button>
     </div>
   );
+  const layerSwitcher = renderLayerSwitcher();
 
   // Auto-sorting activity: automatic filings (with undo) and pending sharing
   // suggestions. Renders on the personal and Unsorted layers only — it is
@@ -1910,8 +1955,9 @@ export default function BrainPage() {
 
   // Map ⇄ sources toggle. Personal tier only: connected sources belong to
   // the reader's projects, so company, network, and shared-workspace layers
-  // have no evidence list to show.
-  const viewToggle =
+  // have no evidence list to show. `afterSelect` closes the phone menu once
+  // a view is picked.
+  const renderViewToggle = (afterSelect?: () => void) =>
     !isWorkspaceView &&
     !isCompanyLayer &&
     !isNetworkLayer &&
@@ -1949,6 +1995,7 @@ export default function BrainPage() {
                 }
                 if (option.key !== "sources") retireJumpMarkers();
                 setView(option.key);
+                afterSelect?.();
               }}
               className={cn(
                 "rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
@@ -1963,6 +2010,158 @@ export default function BrainPage() {
         })}
       </div>
     ) : null;
+  const viewToggle = renderViewToggle();
+
+  /** What the collapsed phone bar names: the layer the map is showing. */
+  const activeLayerLabel = isUnsortedLayer
+    ? "Unsorted"
+    : isNetworkLayer
+      ? "Venom network"
+      : isWorkspaceView && activeWorkspace
+        ? activeWorkspace.name
+        : isCompanyLayer && activeOrg
+          ? activeOrg.name
+          : "My Brain";
+
+  /**
+   * Everything the floating header card holds below its title: counts and
+   * export, the view toggle, the layer switcher, and the layer-scoped extras
+   * (auto-sort notices, company/network notes, network suggestions). Shared
+   * verbatim between the md+ card and the phone menu so both carry identical
+   * test ids and accessible names. `afterSelect` closes the phone menu when
+   * a layer or view is picked; `inMenu` relaxes the pill chrome that only
+   * makes sense floating over the map.
+   */
+  const renderHeaderControls = ({
+    afterSelect,
+    inMenu = false,
+  }: {
+    afterSelect?: () => void;
+    inMenu?: boolean;
+  } = {}) => {
+    const toggle = renderViewToggle(afterSelect);
+    return (
+      <>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium">
+          {isWorkspaceView && activeWorkspace && (
+            <span
+              className="max-w-[180px] truncate rounded-full border border-foreground/60 px-3 py-1 text-foreground"
+              data-testid="badge-workspace-brain"
+              title={`Shared knowledge from ${activeWorkspace.name}`}
+            >
+              Shared · {activeWorkspace.name}
+            </span>
+          )}
+          <span className="rounded-full bg-foreground px-3 py-1 text-background">
+            {clusters.length} nodes
+          </span>
+          <span className="rounded-full border border-border/60 px-3 py-1 text-muted-foreground">
+            {links.length} connections
+          </span>
+          {/* The network map has no export surface: aggregates stay in
+              the app, where the privacy framing travels with them. */}
+          {!isNetworkLayer && (
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1 text-muted-foreground transition-colors hover:border-foreground/50 hover:text-foreground disabled:opacity-60"
+              data-testid="button-export-brain"
+              aria-label={
+                isWorkspaceView
+                  ? "Download this workspace's knowledge as Markdown"
+                  : "Download your knowledge as Markdown"
+              }
+            >
+              {exporting ? (
+                <Loader2
+                  className="h-3 w-3 animate-spin"
+                  aria-hidden="true"
+                />
+              ) : (
+                <Download className="h-3 w-3" aria-hidden="true" />
+              )}
+              Export .md
+            </button>
+          )}
+        </div>
+        {toggle && <div className="mt-3">{toggle}</div>}
+        <div className="mt-3">
+          {renderLayerSwitcher(
+            afterSelect,
+            inMenu ? "rounded-2xl border-0 bg-transparent p-0 shadow-none backdrop-blur-none" : undefined,
+          )}
+        </div>
+        {movesPanel && <div className="mt-3">{movesPanel}</div>}
+        {isCompanyLayer && (
+          <p
+            className="mt-3 max-w-[17rem] text-[11px] leading-snug text-muted-foreground"
+            data-testid="brain-org-note"
+          >
+            Shared company layer — every member of {activeOrg?.name} sees
+            this same map.
+          </p>
+        )}
+        {isNetworkLayer && (
+          <p
+            className="mt-3 max-w-[17rem] text-[11px] leading-snug text-muted-foreground"
+            data-testid="brain-network-note"
+          >
+            Venom's shared map — anonymous, aggregate patterns from
+            accounts that chose to contribute. No names, no words, no
+            traces.
+          </p>
+        )}
+        {!isNetworkLayer && !isWorkspaceView && networkSuggestions.length > 0 && (
+          <div
+            className="mt-3 max-w-xs"
+            data-testid="brain-network-suggestions"
+          >
+            <p className="mb-2 text-[11px] font-medium text-muted-foreground">
+              Related in the Venom network
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {networkSuggestions.map((suggestion) => (
+                <span
+                  key={suggestion.label}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border border-border/60 bg-background/80 py-1 pl-3 pr-1 text-[11px] font-medium",
+                    suggestionBusyLabel === suggestion.label &&
+                      "opacity-60",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => void handleApplySuggestion(suggestion)}
+                    disabled={suggestionBusyLabel !== null}
+                    className="text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default"
+                    data-testid={`suggestion-apply-${suggestion.label}`}
+                    title={
+                      suggestion.relatedToLabels.length > 0
+                        ? `Often connected to ${suggestion.relatedToLabels.join(", ")}`
+                        : "From Venom's shared knowledge network"
+                    }
+                  >
+                    + {suggestion.label}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDismissSuggestion(suggestion)}
+                    disabled={suggestionBusyLabel !== null}
+                    className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+                    aria-label={`Dismiss ${suggestion.label}`}
+                    data-testid={`suggestion-dismiss-${suggestion.label}`}
+                  >
+                    <X className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
 
   if (!state || (isWorkspaceView && workspaceKnowledgeQuery.isLoading)) {
     return (
@@ -2375,124 +2574,71 @@ export default function BrainPage() {
 
   return (
     <div className="flex flex-col h-full bg-background relative overflow-hidden">
-      <header className="absolute top-0 left-0 right-0 p-4 md:p-8 flex flex-col md:flex-row md:items-start justify-between z-20 pointer-events-none gap-6">
-        <div className="pointer-events-auto rounded-2xl border border-border/60 bg-background/80 p-4 shadow-lift backdrop-blur-xl md:p-5 sheen">
-          <h1 className="mb-3 text-2xl font-semibold leading-none tracking-tight">
-            Brain
-          </h1>
-          <div className="flex items-center gap-2 text-[11px] font-medium">
-            {isWorkspaceView && activeWorkspace && (
-              <span
-                className="max-w-[180px] truncate rounded-full border border-foreground/60 px-3 py-1 text-foreground"
-                data-testid="badge-workspace-brain"
-                title={`Shared knowledge from ${activeWorkspace.name}`}
-              >
-                Shared · {activeWorkspace.name}
-              </span>
-            )}
-            <span className="rounded-full bg-foreground px-3 py-1 text-background">
-              {clusters.length} nodes
-            </span>
-            <span className="rounded-full border border-border/60 px-3 py-1 text-muted-foreground">
-              {links.length} connections
-            </span>
-            {/* The network map has no export surface: aggregates stay in
-                the app, where the privacy framing travels with them. */}
-            {!isNetworkLayer && (
-              <button
-                type="button"
-                onClick={handleExport}
-                disabled={exporting}
-                className="flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1 text-muted-foreground transition-colors hover:border-foreground/50 hover:text-foreground disabled:opacity-60"
-                data-testid="button-export-brain"
-                aria-label={
-                  isWorkspaceView
-                    ? "Download this workspace's knowledge as Markdown"
-                    : "Download your knowledge as Markdown"
-                }
-              >
-                {exporting ? (
-                  <Loader2
-                    className="h-3 w-3 animate-spin"
+      <header
+        data-testid="brain-map-header"
+        className="absolute top-0 left-0 right-0 p-4 md:p-8 flex flex-col md:flex-row md:items-start justify-between z-20 pointer-events-none gap-3 md:gap-6"
+      >
+        {isMobile ? (
+          // Phone: the card collapses into a single pill bar so the map
+          // stays visible; everything the card held lives in the menu.
+          <div className="pointer-events-auto">
+            <h1 className="sr-only">Brain</h1>
+            <Popover open={headerMenuOpen} onOpenChange={setHeaderMenuOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="brain-menu-trigger"
+                  className="sheen flex h-11 w-full items-center gap-2 rounded-full border border-border/60 bg-background/80 pl-4 pr-3 shadow-lift backdrop-blur-xl transition-colors hover:border-foreground/40 focus-visible:border-foreground/60 focus-visible:outline-none"
+                >
+                  <span className="sr-only">Brain map menu:</span>
+                  <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">
+                    {activeLayerLabel}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-foreground px-2.5 py-1 text-[11px] font-medium leading-none text-background">
+                    {clusters.length} {clusters.length === 1 ? "node" : "nodes"}
+                  </span>
+                  {unsortedCount > 0 && (
+                    <span
+                      data-testid="badge-unsorted-count-collapsed"
+                      title={`${unsortedCount} waiting in Unsorted`}
+                      className="flex shrink-0 items-center gap-1 rounded-full border border-border/60 px-2 py-1 text-[11px] font-medium leading-none tabular-nums text-muted-foreground"
+                    >
+                      <Inbox className="h-3 w-3" aria-hidden="true" />
+                      {unsortedCount}
+                      <span className="sr-only">waiting in Unsorted</span>
+                    </span>
+                  )}
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300",
+                      headerMenuOpen && "rotate-180",
+                    )}
                     aria-hidden="true"
                   />
-                ) : (
-                  <Download className="h-3 w-3" aria-hidden="true" />
-                )}
-                Export .md
-              </button>
-            )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                sideOffset={8}
+                aria-label="Brain map menu"
+                data-testid="brain-menu"
+                className="max-h-[min(var(--radix-popover-content-available-height),70vh)] w-[var(--radix-popover-trigger-width)] overflow-y-auto rounded-2xl border-border/60 bg-background/95 p-4 shadow-lift backdrop-blur-xl"
+              >
+                {renderHeaderControls({
+                  afterSelect: () => setHeaderMenuOpen(false),
+                  inMenu: true,
+                })}
+              </PopoverContent>
+            </Popover>
           </div>
-          {viewToggle && <div className="mt-3">{viewToggle}</div>}
-          <div className="mt-3">{layerSwitcher}</div>
-          {movesPanel && <div className="mt-3">{movesPanel}</div>}
-          {isCompanyLayer && (
-            <p
-              className="mt-3 max-w-[17rem] text-[11px] leading-snug text-muted-foreground"
-              data-testid="brain-org-note"
-            >
-              Shared company layer — every member of {activeOrg?.name} sees
-              this same map.
-            </p>
-          )}
-          {isNetworkLayer && (
-            <p
-              className="mt-3 max-w-[17rem] text-[11px] leading-snug text-muted-foreground"
-              data-testid="brain-network-note"
-            >
-              Venom's shared map — anonymous, aggregate patterns from
-              accounts that chose to contribute. No names, no words, no
-              traces.
-            </p>
-          )}
-          {!isNetworkLayer && !isWorkspaceView && networkSuggestions.length > 0 && (
-            <div
-              className="mt-3 max-w-xs"
-              data-testid="brain-network-suggestions"
-            >
-              <p className="mb-2 text-[11px] font-medium text-muted-foreground">
-                Related in the Venom network
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {networkSuggestions.map((suggestion) => (
-                  <span
-                    key={suggestion.label}
-                    className={cn(
-                      "flex items-center gap-1 rounded-full border border-border/60 bg-background/80 py-1 pl-3 pr-1 text-[11px] font-medium",
-                      suggestionBusyLabel === suggestion.label &&
-                        "opacity-60",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => void handleApplySuggestion(suggestion)}
-                      disabled={suggestionBusyLabel !== null}
-                      className="text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default"
-                      data-testid={`suggestion-apply-${suggestion.label}`}
-                      title={
-                        suggestion.relatedToLabels.length > 0
-                          ? `Often connected to ${suggestion.relatedToLabels.join(", ")}`
-                          : "From Venom's shared knowledge network"
-                      }
-                    >
-                      + {suggestion.label}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDismissSuggestion(suggestion)}
-                      disabled={suggestionBusyLabel !== null}
-                      className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
-                      aria-label={`Dismiss ${suggestion.label}`}
-                      data-testid={`suggestion-dismiss-${suggestion.label}`}
-                    >
-                      <X className="h-3 w-3" aria-hidden="true" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="pointer-events-auto rounded-2xl border border-border/60 bg-background/80 p-4 shadow-lift backdrop-blur-xl md:p-5 sheen">
+            <h1 className="mb-3 text-2xl font-semibold leading-none tracking-tight">
+              Brain
+            </h1>
+            {renderHeaderControls()}
+          </div>
+        )}
 
         <div className="pointer-events-auto w-full md:w-80">
           <label htmlFor="search-brain" className="sr-only">

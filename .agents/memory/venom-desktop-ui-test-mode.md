@@ -22,6 +22,17 @@ Treat unexpected response shapes defensively in components that map over a respo
 HTML error page reaching code that expects an array takes down the whole page through the
 error boundary.
 
+**Unstubbed JSON GETs come back 200 as garbage, not as errors.** The dev webServer's SPA
+fallback answers unknown paths with index.html + 200, so a generated-client query
+*succeeds* with truthy non-object data: `data && <Card data={data} />` renders and the
+first nested read (`data.plan.x`) crashes the surface through the error boundary. This is
+how adding a new query to an existing dialog silently breaks that dialog's *older* specs,
+which stub only the endpoints that existed when they were written.
+
+**How to apply:** gate rendering on the shape (`data?.plan &&`), never on truthiness, for
+every new query added to an already-tested surface; expect older sibling specs of that
+surface to be the first casualties and re-run them after wiring a new endpoint.
+
 **Sync-dependent UI has its own opt-in.** Regular UI-test mode pins the workspace to
 `synced` and never touches cloud endpoints, which makes failed-save UI (device-only
 notices, retry affordances) untestable. `?venomWorkspaceSyncTest=true` (same param as
@@ -51,9 +62,10 @@ loading gate before the ready state; it caught exactly this when UI-test specs w
 `if (!isReady) return`; when an auth-suite failure shows "element not found" on a
 workspace testid, read the error-context YAML — an error-boundary heading there means a
 render crash, not a slow page.
-
 ## Toast assertions double-match
 
 Shadcn toasts render the title twice: the visible ToastTitle plus an
 aria-live "Notification <title>" echo. `getByText('<toast title>')` hits a
 strict-mode violation — assert with `.first()` or scope to the toast region.
+
+- Model popup spec gotcha: the ACTIVE model renders no Use/Set-default buttons — assert lock/disabled states on a non-active model. The space select's personal option value is a private constant; select it by label ("Personal space").

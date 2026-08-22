@@ -59,11 +59,14 @@ import {
   voiceDecisionExportJsonl,
 } from "../lib/venom-voice-decision-report";
 import {
+  BOUND_CHARS_PER_TOKEN,
+  computeCostMicros,
   usageFromCompletion,
   VOICE_FLAT_COST_MICROS,
   VOICE_USAGE_ALIAS,
 } from "../lib/venom-usage-pricing";
 import type { RecordVenomUsageInput } from "../lib/venom-usage-store";
+import type { VenomAllowanceDecision } from "../lib/venom-billing-enforcement";
 
 /** Subset of the audio module the routes rely on (injectable for tests). */
 export type VenomVoiceAudioModule = {
@@ -99,6 +102,26 @@ export type VenomVoiceRouterOptions = {
   decisionStore?: VoiceDecisionStore;
   /** Usage-ledger sink; overridden in tests. Must never throw. */
   recordUsage?: (input: RecordVenomUsageInput) => void;
+  /**
+   * Workspace membership probe for voice turns that carry a workspaceId;
+   * overridden in tests. Resolving null denies the request.
+   */
+  getMembership?: (
+    workspaceId: string,
+    userId: string,
+  ) => Promise<unknown | null>;
+  /** Plan-allowance gate; overridden in tests. Fails open on error. */
+  checkAllowance?: (input: {
+    userId: string;
+    workspaceId?: string | null;
+    /** Priced worst case of the leg being admitted (VOICE_LEG_BOUND_MICROS). */
+    boundMicros?: number;
+  }) => Promise<VenomAllowanceDecision>;
+  /**
+   * Frees an admission's allowance reservation when the response closes;
+   * overridden in tests. Must never throw.
+   */
+  releaseAllowance?: (reservationId: string) => void;
 };
 
 const TRANSCRIBE_RATE_LIMIT_WINDOW_MS = 60_000;
@@ -114,6 +137,36 @@ const REPORT_RATE_LIMIT_MAX = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Hard cap on decoded utterance audio (bytes). ~4 MB ≈ >60s of opus. */
 const MAX_DECODED_AUDIO_BYTES = 4 * 1024 * 1024;
+
+/** Output ceiling forwarded to the voice judge's completion call. */
+const JUDGE_MAX_OUTPUT_TOKENS = 500;
+
+/**
+ * Worst-case prompt chars a judge call can send: its own truncation caps —
+ * six recent turns × 400 chars, a 600-char transcript window — plus the
+ * system prompt and generous template overhead.
+ */
+const JUDGE_PROMPT_CHAR_BOUND =
+  6 * 400 + 600 + VOICE_JUDGE_SYSTEM_PROMPT.length + 400;
+
+/**
+ * Priced worst case of each voice leg, derived from the leg's own enforced
+ * inputs instead of the generic dispatch bound: the audio legs are
+ * flat-priced per request by design (inputs capped by
+ * MAX_DECODED_AUDIO_BYTES and the speak schema), and a decide leg is at
+ * most one judge completion over a prompt the judge itself truncates.
+ * Admission reserves exactly these, so voice can neither over-admit nor
+ * starve concurrency by holding the full chat-sized bound.
+ */
+export const VOICE_LEG_BOUND_MICROS = {
+  transcribe: VOICE_FLAT_COST_MICROS.voice_transcribe,
+  speak: VOICE_FLAT_COST_MICROS.voice_speak,
+  decide: computeCostMicros(
+    "venom-gpt",
+    Math.ceil(JUDGE_PROMPT_CHAR_BOUND / BOUND_CHARS_PER_TOKEN) + 32,
+    JUDGE_MAX_OUTPUT_TOKENS,
+  ),
+} as const;
 const SPEAK_TIMEOUT_MS = 60_000;
 const TRANSCRIBE_TIMEOUT_MS = 45_000;
 /** The judge is an optimization, never a bottleneck: short leash. */
@@ -261,6 +314,104 @@ export function createVenomVoiceRouter(
         });
     });
 
+  // Membership and allowance checks share the lazy-import rule above: both
+  // pull the database client in, which db-less voice tests must never load.
+  const getMembership =
+    options.getMembership ??
+    (async (workspaceId: string, uid: string): Promise<unknown | null> => {
+      try {
+        const mod = await import("../lib/workspace-membership");
+        return await mod.getSharedWorkspaceMembership(workspaceId, uid);
+      } catch {
+        // An unverifiable membership is a denied membership.
+        return null;
+      }
+    });
+  const checkAllowance =
+    options.checkAllowance ??
+    (async (input: {
+      userId: string;
+      workspaceId?: string | null;
+    }): Promise<VenomAllowanceDecision> => {
+      try {
+        const mod = await import("../lib/venom-billing-enforcement");
+        return await mod.checkVenomAllowance({ ...input, reserve: true });
+      } catch {
+        // Billing trouble must never take voice down with it: fail open,
+        // personally billed — the same rule checkVenomAllowance itself uses.
+        return {
+          payer: { kind: "personal", userId: input.userId },
+          billedWorkspaceId: null,
+          allowed: true,
+          approaching: false,
+        };
+      }
+    });
+  const releaseAllowance =
+    options.releaseAllowance ??
+    ((reservationId: string): void => {
+      import("../lib/venom-billing-enforcement")
+        .then((mod) => mod.releaseVenomAllowanceReservation(reservationId))
+        .catch(() => {
+          // Cleanup must never break voice; leaked holds are reaped by age.
+        });
+    });
+
+  /**
+   * Shared gate for every paid voice leg: verifies workspace membership
+   * when the turn lives in one, then applies the payer's allowance. Writes
+   * the refusal itself and returns null when the request must stop.
+   */
+  const gateVoiceBilling = async (
+    res: Response,
+    userId: string,
+    workspaceId: string | null,
+    boundMicros: number,
+  ): Promise<
+    | (VenomAllowanceDecision & { claimReservation: () => string | null })
+    | null
+  > => {
+    if (workspaceId) {
+      const membership = await getMembership(workspaceId, userId);
+      if (!membership) {
+        res.status(403).json({
+          error: "You no longer have access to this workspace.",
+          code: "workspace_access_denied",
+        });
+        return null;
+      }
+    }
+    const decision = await checkAllowance({ userId, workspaceId, boundMicros });
+    if (!decision.allowed) {
+      res.status(402).json({
+        error:
+          decision.blockedMessage ??
+          "This request would exceed the current plan's included AI.",
+        code: decision.blockedCode ?? "personal_allowance_exhausted",
+      });
+      return null;
+    }
+    // The leg's first ledgered usage event claims this hold and settles it
+    // atomically (the spend row replaces it under the payer lock — see
+    // insertVenomUsage). The close hook frees only what was never claimed —
+    // refusals, provider failures, disconnects — so a release can never
+    // race an in-flight settle into a moment where the cost is visible on
+    // neither side of an admission read.
+    let pendingReservationId = decision.reservationId ?? null;
+    const claimReservation = (): string | null => {
+      const reservationId = pendingReservationId;
+      pendingReservationId = null;
+      return reservationId;
+    };
+    if (pendingReservationId) {
+      res.once("close", () => {
+        const unclaimed = claimReservation();
+        if (unclaimed) releaseAllowance(unclaimed);
+      });
+    }
+    return { ...decision, claimReservation };
+  };
+
   // Default judge: one cheap JSON completion with a short leash. Anything
   // that isn't a clean verdict — env missing, timeout, malformed reply —
   // resolves to null and the caller falls back toward responding.
@@ -277,7 +428,7 @@ export function createVenomVoiceRouter(
         .join("\n");
       const completion = await openai.chat.completions.create({
         model: "gpt-5.6-terra",
-        max_completion_tokens: 500,
+        max_completion_tokens: JUDGE_MAX_OUTPUT_TOKENS,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: VOICE_JUDGE_SYSTEM_PROMPT },
@@ -355,6 +506,17 @@ export function createVenomVoiceRouter(
         return;
       }
 
+      // Voice legs bill the space the conversation lives in, exactly like
+      // typed chat: membership first, then the payer's allowance.
+      const workspaceId = parsed.data.workspaceId ?? null;
+      const billing = await gateVoiceBilling(
+        res,
+        userId,
+        workspaceId,
+        VOICE_LEG_BOUND_MICROS.transcribe,
+      );
+      if (!billing) return;
+
       if (!isAvailable()) {
         res.status(503).json(voiceUnavailableBody());
         return;
@@ -412,6 +574,9 @@ export function createVenomVoiceRouter(
           outputTokens: 0,
           estimated: true,
           costMicros: VOICE_FLAT_COST_MICROS.voice_transcribe,
+          workspaceId,
+          billedWorkspaceId: billing.billedWorkspaceId,
+          reservationId: billing.claimReservation(),
         });
         res.json({ text: (text ?? "").slice(0, 8000) });
       } catch (error) {
@@ -450,6 +615,15 @@ export function createVenomVoiceRouter(
       res.status(400).json({ error: "Invalid speech request" });
       return;
     }
+
+    const workspaceId = parsed.data.workspaceId ?? null;
+    const billing = await gateVoiceBilling(
+      res,
+      userId,
+      workspaceId,
+      VOICE_LEG_BOUND_MICROS.speak,
+    );
+    if (!billing) return;
 
     let providerVoice: ReturnType<typeof resolveProviderVoice>;
     try {
@@ -518,6 +692,9 @@ export function createVenomVoiceRouter(
           outputTokens: 0,
           estimated: true,
           costMicros: VOICE_FLAT_COST_MICROS.voice_speak,
+          workspaceId,
+          billedWorkspaceId: billing.billedWorkspaceId,
+          reservationId: billing.claimReservation(),
         });
       }
       if (!disconnected && !res.writableEnded) {
@@ -574,6 +751,15 @@ export function createVenomVoiceRouter(
       return;
     }
 
+    const workspaceId = parsed.data.workspaceId ?? null;
+    const billing = await gateVoiceBilling(
+      res,
+      userId,
+      workspaceId,
+      VOICE_LEG_BOUND_MICROS.decide,
+    );
+    if (!billing) return;
+
     const transcript = parsed.data.transcript;
     const recentTurns = parsed.data.recentTurns ?? [];
     const talkativeness = normalizeTalkativeness(parsed.data.talkativeness);
@@ -606,6 +792,9 @@ export function createVenomVoiceRouter(
                 promptTokens: usage.promptTokens,
                 outputTokens: usage.outputTokens,
                 estimated: usage.estimated,
+                workspaceId,
+                billedWorkspaceId: billing.billedWorkspaceId,
+                reservationId: billing.claimReservation(),
               }),
           }),
           JUDGE_TIMEOUT_MS,

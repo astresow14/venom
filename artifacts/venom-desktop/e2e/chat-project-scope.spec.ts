@@ -127,7 +127,7 @@ test('switching projects never adopts a project-less session and files the messa
   // Beacon Ops has never been chatted in: switching there starts empty
   // instead of adopting the newer project-less session.
   await select.selectOption('proj_beta');
-  await expect(page.getByTestId('text-chat-greeting')).toBeVisible();
+  await expect(page.getByTestId('img-chat-empty-mark')).toBeVisible();
   await expect(page.getByTestId('message-user')).toHaveCount(0);
   await expect(sidebar.getByTestId('list-conversations-desktop')).toContainText(
     'No chats yet',

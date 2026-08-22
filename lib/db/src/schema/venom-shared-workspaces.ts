@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   index,
   pgTable,
@@ -73,5 +74,76 @@ export const venomSharedWorkspaceMembersTable = pgTable(
   (table) => [
     primaryKey({ columns: [table.workspaceId, table.clerkUserId] }),
     index("venom_shared_workspace_members_user_idx").on(table.clerkUserId),
+  ],
+);
+
+/**
+ * Admin-set AI controls for a workspace, binding only requests billed to
+ * this workspace's Organization plan. One row per workspace; no row means
+ * no controls. Money is integer micro-dollars like the usage ledger, and
+ * the values here are admin-only reads — members learn lock/cap *state*
+ * through the billing context, never these figures.
+ */
+export const venomWorkspaceAiControlsTable = pgTable(
+  "venom_workspace_ai_controls",
+  {
+    workspaceId: uuid("workspace_id")
+      .primaryKey()
+      .references(() => venomSharedWorkspacesTable.id, { onDelete: "cascade" }),
+    /**
+     * Default monthly cap on each member's workspace-billed spend, in
+     * micro-dollars. Null = no default cap. Zero is a valid, deliberate
+     * "no workspace AI for members without an override" setting.
+     */
+    defaultMemberCapMicros: bigint("default_member_cap_micros", {
+      mode: "number",
+    }),
+    /**
+     * Model selection policy forced on workspace-billed requests, beating
+     * the member's own policy. Null = members keep their own policy.
+     * "manual" is never forceable — it would just hand the choice back.
+     */
+    forcedSelectionPolicy: text("forced_selection_policy").$type<
+      "auto-cheapest" | "auto-max-power"
+    >(),
+    /**
+     * Cost tiers ("$" | "$$" | "$$$") a workspace-billed request may use.
+     * Null = all tiers allowed. Writes validate a non-empty subset so a
+     * lock can never be saved that allows nothing.
+     */
+    allowedCostTiers: text("allowed_cost_tiers").array(),
+    updatedByClerkUserId: text("updated_by_clerk_user_id").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+);
+
+/**
+ * Per-member cap overrides. A row's existence replaces the workspace
+ * default for that member: a numeric value is their own cap, and null is
+ * an explicit "no cap for this member". Deleting the row returns the
+ * member to the workspace default. Rows survive membership loss harmlessly
+ * (enforcement only consults them for current members) and are removed in
+ * cascade with the workspace.
+ */
+export const venomWorkspaceMemberAiControlsTable = pgTable(
+  "venom_workspace_member_ai_controls",
+  {
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => venomSharedWorkspacesTable.id, { onDelete: "cascade" }),
+    clerkUserId: text("clerk_user_id").notNull(),
+    /** Micro-dollar cap for this member; null = explicitly uncapped. */
+    capMicros: bigint("cap_micros", { mode: "number" }),
+    updatedByClerkUserId: text("updated_by_clerk_user_id").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    primaryKey({ columns: [table.workspaceId, table.clerkUserId] }),
   ],
 );

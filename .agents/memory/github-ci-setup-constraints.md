@@ -158,3 +158,7 @@ changes indefinitely held back even though the app and its key appear to exist.
 **How to apply:** validate the inputs before diagnosing repository permissions:
 reject fingerprint-shaped values, confirm the App ID is numeric, then mint a
 token and inspect its `permissions.workflows` value before attempting a sync.
+
+## A fine-grained PAT with Workflows R/W unblocks `.github/workflows` pushes
+
+When the GitHub App route stalls (users often paste the key's SHA256 fingerprint instead of the `.pem` contents), a fine-grained PAT is the fastest workflow-capable credential: repository access to the mirror plus Contents R/W, Pull requests R/W, Workflows R/W, saved as `GITHUB_TOKEN`. **Why:** the token is copy-paste from the browser — no file download to mishandle — and the sync resolver accepts it for workflow writes. **How to apply:** if a broken app credential still sits in env (e.g. a fingerprint-shaped key), the resolver stops on it by name rather than falling through — blank both app vars inline for the run (`GITHUB_APP_ID= GITHUB_APP_PRIVATE_KEY= pnpm run sync:github`) to force the token path.

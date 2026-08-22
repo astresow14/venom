@@ -14,4 +14,9 @@ export interface VenomVoiceTranscriptionRequest {
      */
   audioBase64: string;
   format?: VenomVoiceTranscriptionRequestFormat;
+  /**
+     * Shared workspace the voice conversation lives in, when it does. Billing follows this space: an Organization-plan workspace pays for its own turns; otherwise the caller's personal plan does.
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  workspaceId?: string;
 }

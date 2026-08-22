@@ -17,4 +17,9 @@ export interface VenomVoiceTurnDecisionRequest {
   /** @maxItems 12 */
   recentTurns?: VenomVoiceTurnDecisionRequestRecentTurnsItem[];
   talkativeness?: VenomVoiceTalkativeness;
+  /**
+     * Shared workspace the voice conversation lives in, for billing attribution.
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  workspaceId?: string;
 }

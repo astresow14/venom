@@ -249,34 +249,32 @@ test('one popup: every entry point opens it, voices get models, a self-argument 
   );
   await openChat(page);
 
-  await page.getByTestId('mode-option-verify').click();
-  await expect(page.getByTestId('mode-option-verify')).toHaveAttribute(
-    'aria-checked',
-    'true',
-  );
-
-  // Entry point 1: the active-model chip opens the combined popup, and focus
-  // moves into the dialog.
+  // Verify lives inside the popup now: open it from the Select-model chip —
+  // the composer's only model entry point — and switch Verify on there.
   await page.getByTestId('button-model-chip').click();
   const dialog = page.getByTestId('dialog-model-voices');
   await expect(dialog).toBeVisible();
   expect(await focusInsideDialog(page)).toBe(true);
   // Model management lives in the same popup.
   await expect(page.getByTestId('model-card-venom-gpt')).toBeVisible();
+  await page.getByTestId('switch-verify').click();
+  await expect(page.getByTestId('switch-verify')).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
   // Closing hands focus back to the chip that opened it.
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByTestId('button-model-chip')).toBeFocused();
 
-  // Entry point 2: the manage-models gear.
-  await page.getByTestId('button-manage-models').click();
+  // Reopen: Verify stuck to the conversation, and the blend pad shows the
+  // voice corners in the same popup.
+  await page.getByTestId('button-model-chip').click();
   await expect(dialog).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-
-  // Entry point 3: the Voices button.
-  await page.getByTestId('button-open-voices').click();
-  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId('switch-verify')).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
   await expect(page.getByTestId('blend-pad')).toBeVisible();
 
   // Assign the Skeptic to another provider.
@@ -393,9 +391,9 @@ test('with one usable model the popup explains why voice choice is limited', asy
   await mockKnowledgeExtraction(page);
   await openChat(page);
 
-  await page.getByTestId('mode-option-verify').click();
-  await page.getByTestId('button-open-voices').click();
+  await page.getByTestId('button-model-chip').click();
   await expect(page.getByTestId('dialog-model-voices')).toBeVisible();
+  await page.getByTestId('switch-verify').click();
 
   // The pad still balances the voices, but there is nothing to pick between:
   // the popup says so instead of rendering pickers.
@@ -416,9 +414,9 @@ test('an auto policy hands the popup to Venom, badges rank cost, and the choice 
   await mockKnowledgeExtraction(page);
   await openChat(page);
 
-  await page.getByTestId('mode-option-verify').click();
   await page.getByTestId('button-model-chip').click();
   await expect(page.getByTestId('dialog-model-voices')).toBeVisible();
+  await page.getByTestId('switch-verify').click();
 
   // Coarse cost badges rank the catalog — tiers only, never prices.
   await expect(page.getByTestId('cost-badge-venom-gpt')).toHaveText('$$$');
@@ -466,8 +464,8 @@ test('an auto policy hands the popup to Venom, badges rank cost, and the choice 
     'Auto — cheapest',
   );
 
-  // Manual hands control straight back.
-  await page.getByTestId('mode-option-verify').click();
+  // Manual hands control straight back. (Verify persisted with the
+  // conversation across the reload, so the voices section is still live.)
   await page.getByTestId('button-model-chip').click();
   await expect(page.getByTestId('policy-auto-cheapest')).toHaveAttribute(
     'aria-checked',

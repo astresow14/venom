@@ -1,15 +1,14 @@
 ---
 name: CI PR-gate budget
-description: The mirror's required PR checks run under fixed 15-minute job budgets that cannot change without a workflow credential; the venom suite is CPU-bound, so CI runs the mobile project only.
+description: The mirror's Kanban gate runs both viewport projects under a 45-minute budget; the suite is CPU-bound (2 workers max useful); phone-only specs skip desktop by design.
 ---
 
-The mirror's two required checks ("Kanban browser regression", "Desktop workspace browser regression") run in GitHub jobs with `timeout-minutes: 15`. Until a workflow-capable credential exists, `.github/workflows/` cannot be edited from this workspace, so that budget is **fixed** — but the package scripts and Playwright configs the jobs invoke ship in every sync, and that is the lever.
+The mirror's two required checks ("Kanban browser regression", "Desktop workspace browser regression") are named in the repo ruleset — never rename the jobs or the ruleset stops matching. The Kanban job runs the venom Playwright suite at **both** viewport sizes under `timeout-minutes: 45` in `.github/workflows/venom-kanban-e2e.yml`; workflow files are editable from this workspace as long as a workflow-capable credential (currently a fine-grained PAT in `GITHUB_TOKEN`) stays valid.
 
-**Why the venom suite cannot brute-force it:** the specs are CPU-bound on hosted runners (SwiftShader GL rendering; Metro shares the vCPUs). Adding workers does not create capacity when the resource is CPU — measured gains were marginal and flaked timing-sensitive specs into retries. Running every spec across both viewport projects simply does not fit the budget.
+**Measured (Aug 2026, 4-vCPU hosted runner, 2 workers):** warmup + mobile (138 executed) + desktop (39 executed, 99 skipped) took 12.4 min for the E2E step, 13.4 min for the whole job. Doubling the projects did **not** double wall time because most specs declare themselves phone-only.
 
-**Current shape:**
-- On CI (`process.env.CI`), the venom Playwright config runs **warmup + mobile-chromium only** with 2 workers, traces on-first-retry, `list` reporter so an overrun names the slow tests.
-- The desktop-viewport pass of the same specs is **not lost**: the package `test` script (run by Replit task validation on every merge) executes both projects locally, plus the venom-desktop suite.
-- Once a workflow credential lands, prefer raising the job budget or sharding jobs in the yml and restoring the desktop project on CI.
+**Why desktop executes far fewer tests than it lists:** many specs open with a per-spec guard (`test.skip(testInfo.project.name === "desktop-chromium", "…covered at the mobile viewport")`). These skips are project-name-based, never CI-based, so local full runs and CI behave identically. This is the intended lever for keeping the desktop pass lean — a spec whose flow adds no desktop-specific coverage should declare itself phone-only rather than shrinking the job budget's headroom.
 
-**How to apply:** when a mirror check times out (`conclusion: cancelled` at ~15m), do not iterate blind — pull the job log via the API, and remember only config/scripts are editable from here. When adding heavy specs, remember every CI-visible spec runs inside this fixed budget. Durable startup levers that keep the suite inside it: UI-test mode must not gate first render on `ClerkLoaded`; expensive GL layers mount lazily on first use, never at app boot; specs that don't assert GL content should pin the cheapest tier or disable it.
+**Why the suite cannot brute-force speed:** the specs are CPU-bound on hosted runners (SwiftShader GL rendering; Metro shares the vCPUs). A third worker measurably slowed individual tests and flaked the timing-sensitive swipe/keyboard specs into retries. Two workers on CI, one locally.
+
+**How to apply:** when a mirror check nears or trips its budget, pull the job log via the API — the `list` reporter names each test's duration, so an overrun identifies its cause. Durable startup levers that keep the suite fast: UI-test mode must not gate first render on `ClerkLoaded`; expensive GL layers mount lazily on first use, never at app boot; specs that don't assert GL content should pin the cheapest tier or disable it.

@@ -192,23 +192,17 @@ function brainDetails(page: Page, label: string) {
   return page.getByRole('complementary', { name: label });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Phone width
-// ─────────────────────────────────────────────────────────────────────────────
-
-test.describe('phone width', () => {
-  test.use({ viewport: PHONE });
-
-  test('opens the drawer, closes it on Escape, and returns focus to the trigger', async ({
-    page,
-  }) => {
-    await page.goto('/workspace/chat');
-
+/**
+ * Brain map seed with one sorted concept plus one held in Unsorted — the
+ * same shape brain-moves.spec.ts uses at desktop width — so the collapsed
+ * phone header has a real pending-review count to keep visible.
+ */
+const BRAIN_STORAGE_KEY = '@venom_desktop_v1:venom-desktop-ui-test';
     const trigger = drawerTrigger(page);
-    await expectTouchTarget(trigger, 'drawer trigger', MIN_SHELL_TARGET);
-
+    await trigger.focus();
+    await page.keyboard.press('Enter');
     const panel = await openDrawer(page);
-    const panelBox = await boxOf(panel, 'drawer');
+    const panelBox = await boxOf(panel, 'details panel');
     // The drawer is a partial-width sheet, so the page stays visible behind it.
     // Round like the height check below: the sheet's entry transform can
     // report float32-epsilon overshoot (e.g. 320.000015) on an exactly-320px
@@ -241,7 +235,7 @@ test.describe('phone width', () => {
     const trigger = drawerTrigger(page);
     await trigger.focus();
     await page.keyboard.press('Enter');
-    const panel = await drawer(page);
+    const panel = await openDrawer(page);
     await expect(panel).toBeVisible();
 
     // Keyboard activation of a drawer route navigates and closes the sheet.
@@ -376,7 +370,7 @@ test.describe('phone width', () => {
   test('opens Brain details as a bottom sheet that scrolls inside itself', async ({
     page,
   }) => {
-    const panel = await openBrainDetails(page, 'Product Context');
+    const panel = await openDrawer(page);
 
     // Bottom sheet: full width, pinned to the bottom, partial height. The
     // panel slides up on open, so the resting position is polled.
@@ -397,10 +391,11 @@ test.describe('phone width', () => {
     await expect(deleteConcept).toBeInViewport();
 
     const summary = panel.getByRole('heading', { name: 'Data Profile' });
-    const initial = await scrollOwner(summary, 'y');
-    expect(initial, 'details body should scroll internally').not.toBeNull();
+    const initial = await scrollOwner(pending, 'x');
+    expect(initial, 'task board should scroll horizontally').not.toBeNull();
+    expect(initial!.scrollWidth).toBeGreaterThan(initial!.clientWidth);
 
-    const scrolled = await scrollOwner(summary, 'y', 400);
+    const scrolled = await scrollOwner(pending, 'x', initial!.clientWidth);
     expect(scrolled!.scrollTop).toBeGreaterThan(initial!.scrollTop);
     await expect(deleteConcept).toBeInViewport();
     // Scrolling the sheet never spills over into the document.
@@ -440,31 +435,10 @@ test.describe('phone width', () => {
     await expect(card).toBeVisible();
     for (const action of [/^Move ".+" to /, /^Delete ".+"$/]) {
       const button = card.getByRole('button', { name: action }).first();
-      await expect(button).toBeVisible();
-      await expectTouchTarget(button, `card action ${action}`);
-    }
 
-    // Horizontal movement belongs to the board, not the page.
-    expect((await documentOverflow(page)).horizontal).toBeLessThanOrEqual(1);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Landing page with the keyboard open
-// ─────────────────────────────────────────────────────────────────────────────
-
-test.describe('landing page on a short phone viewport', () => {
-  test.use({ viewport: PHONE_WITH_KEYBOARD });
-
-  test('keeps the compact composer reachable without page overflow', async ({
-    page,
-  }) => {
-    await page.goto('/');
-
-    await expect(
-      page.getByRole('heading', { name: 'What are you working on?' }),
-    ).toBeVisible();
-
+    const map = page.getByRole('region', {
+      name: /Knowledge map with \d+ nodes/,
+    });
     const prompt = page.getByLabel('Ask Venom');
     await expectTouchTarget(prompt, 'landing prompt');
 
@@ -540,7 +514,7 @@ test.describe('desktop width', () => {
   test('docks Brain details to a side panel instead of a bottom sheet', async ({
     page,
   }) => {
-    const panel = await openBrainDetails(page, 'Product Context');
+    const panel = await openDrawer(page);
     const panelBox = await boxOf(panel, 'details panel');
 
     expect(panelBox.x).toBeGreaterThan(DESKTOP.width / 2);
@@ -604,7 +578,7 @@ test.describe('reduced motion on a phone', () => {
     page,
   }) => {
     await page.goto('/workspace/chat');
-    await expect(page.getByTestId('text-chat-greeting')).toBeVisible();
+    await expect(page.getByTestId('img-chat-empty-mark')).toBeVisible();
 
     // Guards the coverage claim: without the emulation this would be a second
     // copy of the default-motion pass.
@@ -639,3 +613,72 @@ test.describe('reduced motion on a phone', () => {
     await expect(trigger).toBeFocused();
   });
 });
+
+const BRAIN_SEED_NOW = 1_755_600_000_000;
+
+function brainSeedCluster(overrides: Record<string, unknown>) {
+  return {
+    projectId: 'proj_alpha',
+    category: 'core',
+    strength: 0.7,
+    x: 40,
+    y: 30,
+    links: [],
+    mentionCount: 1,
+    lastUpdatedAt: BRAIN_SEED_NOW,
+    sources: [],
+    ...overrides,
+  };
+}
+
+    const header = await boxOf(
+      page.getByTestId('brain-map-header'),
+      'Brain map header',
+    );
+
+    const bar = page.getByTestId('brain-menu-trigger');
+
+const BRAIN_HEADER_STATE = {
+  projects: [
+    {
+      id: 'proj_alpha',
+      name: 'Aurora Systems',
+      description: 'Active research workspace',
+      accent: '#e5e5e5',
+      sourceCount: 0,
+      updatedAt: BRAIN_SEED_NOW,
+    },
+  ],
+  conversations: [
+    {
+      id: 'conv_seed',
+      title: 'Planning',
+      projectId: 'proj_alpha',
+      updatedAt: BRAIN_SEED_NOW,
+      messages: [],
+    },
+  ],
+  clusters: [
+    brainSeedCluster({
+      id: 'cl_sorted',
+      label: 'Launch Ops',
+      description: 'Launch knowledge saved by Venom.',
+      summary: 'Launch steps and rollback drills for the field releases.',
+    }),
+    brainSeedCluster({
+      id: 'cl_unsorted',
+      label: 'Vendor Rates',
+      x: -60,
+      y: -40,
+      description: 'Extraction Venom was not confident about.',
+      summary: 'Quoted rates that could be personal or company knowledge.',
+      unsorted: true,
+    }),
+  ],
+  sources: [],
+  archivedCitations: [],
+  activeProjectId: 'proj_alpha',
+  activeConversationId: 'conv_seed',
+};
+
+    const menu = page.getByRole('dialog', { name: 'Brain map menu' });

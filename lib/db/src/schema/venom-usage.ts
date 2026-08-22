@@ -43,12 +43,26 @@ export const venomUsageEvents = pgTable(
     estimated: boolean("estimated").notNull().default(false),
     /** Shared-workspace context the call ran under, when there was one. */
     workspaceId: text("workspace_id"),
+    /**
+     * Which workspace's Organization plan paid for this call, resolved at
+     * request time from the space the conversation lives in. Null means the
+     * caller's personal plan paid (legacy rows predate workspace billing and
+     * are correctly personal). Distinct from `workspaceId`: a chat can run
+     * inside a workspace (workspaceId set) whose org plan has lapsed, in
+     * which case it bills personally (billedWorkspaceId null).
+     */
+    billedWorkspaceId: text("billed_workspace_id"),
   },
   (table) => [
     // The Usage view reads one account's current month; this composite
     // index keeps that scan tight for a month of history.
     index("venom_usage_events_user_time_idx").on(
       table.userId,
+      table.occurredAt,
+    ),
+    // Workspace allowance checks sum one workspace's current period.
+    index("venom_usage_events_billed_workspace_time_idx").on(
+      table.billedWorkspaceId,
       table.occurredAt,
     ),
   ],

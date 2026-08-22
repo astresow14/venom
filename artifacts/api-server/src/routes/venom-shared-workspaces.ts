@@ -20,6 +20,18 @@ import {
   AddSharedWorkspaceMemberBody,
   AddSharedWorkspaceMemberParams,
   AddSharedWorkspaceMemberResponse,
+  ClearSharedWorkspaceMemberAiCapParams,
+  ClearSharedWorkspaceMemberAiCapResponse,
+  GetSharedWorkspaceAiControlsParams,
+  GetSharedWorkspaceAiControlsResponse,
+  GetSharedWorkspaceUsageParams,
+  GetSharedWorkspaceUsageResponse,
+  SetSharedWorkspaceMemberAiCapBody,
+  SetSharedWorkspaceMemberAiCapParams,
+  SetSharedWorkspaceMemberAiCapResponse,
+  UpdateSharedWorkspaceAiControlsBody,
+  UpdateSharedWorkspaceAiControlsParams,
+  UpdateSharedWorkspaceAiControlsResponse,
   CreateSharedWorkspaceBody,
   CreateSharedWorkspaceResponse,
   CreateSharedWorkspaceSopBody,
@@ -94,6 +106,27 @@ import {
   knowledgeMarkdown,
   sopsMarkdown,
 } from "../lib/venom-markdown-export";
+import {
+  approachingWarnRatio,
+  planAllowanceMicros,
+  venomPlan,
+} from "../lib/venom-billing-plans";
+import {
+  billingPeriodFor,
+  getBillingAccount,
+  workspaceOrgPlanActive,
+} from "../lib/venom-billing-store";
+import {
+  aiControlMicrosToUsd,
+  aiControlUsdToMicros,
+  clearMemberAiCapOverride,
+  listMemberAiCapOverrides,
+  loadWorkspaceAiControls,
+  normalizeAllowedCostTiers,
+  saveWorkspaceAiControls,
+  setMemberAiCapOverride,
+  sumWorkspaceBilledMicrosByMember,
+} from "../lib/venom-workspace-ai-controls";
 
 const router: IRouter = Router();
 
@@ -1191,6 +1224,341 @@ router.put(
         allowSensitiveExport: updated.allowSensitiveExport,
       }),
     );
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Workspace AI spend & model controls (admins only)
+//
+// Everything below concerns ONLY usage billed to this workspace's
+// Organization plan. Members' personal-space usage and settings are
+// structurally out of reach: usage reads filter on the ledger's payer
+// stamp, and the controls bind at admission/dispatch time only when the
+// workspace is the resolved payer. Members learn cap and lock *state*
+// through the billing context; the dollar figures below are admin-only.
+// ---------------------------------------------------------------------------
+
+/** The admin controls payload the GET and every controls write return. */
+async function aiControlsPayload(workspaceId: string): Promise<{
+  defaultMemberCapUsd: number | null;
+  forcedSelectionPolicy: "auto-cheapest" | "auto-max-power" | null;
+  allowedCostTiers: ("$" | "$$" | "$$$")[] | null;
+  memberOverrides: Array<{
+    clerkUserId: string;
+    name: string;
+    capUsd: number | null;
+  }>;
+}> {
+  const [controls, overrides] = await Promise.all([
+    loadWorkspaceAiControls(workspaceId),
+    listMemberAiCapOverrides(workspaceId),
+  ]);
+  // Names are cosmetic; controls must not depend on the directory being up.
+  let names = new Map<string, string | null>();
+  try {
+    names = await userDirectory.getUsers(
+      overrides.map((override) => override.clerkUserId),
+    );
+  } catch {
+    // Ids still identify the rows.
+  }
+  return {
+    defaultMemberCapUsd:
+      controls.defaultMemberCapMicros === null
+        ? null
+        : aiControlMicrosToUsd(controls.defaultMemberCapMicros),
+    forcedSelectionPolicy: controls.forcedSelectionPolicy,
+    allowedCostTiers: controls.allowedCostTiers
+      ? [...controls.allowedCostTiers]
+      : null,
+    memberOverrides: overrides
+      .map((override) => ({
+        clerkUserId: override.clerkUserId,
+        name: names.get(override.clerkUserId) ?? override.clerkUserId,
+        capUsd:
+          override.capMicros === null
+            ? null
+            : aiControlMicrosToUsd(override.capMicros),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
+router.get(
+  "/venom/workspaces/:workspaceId/ai-controls",
+  async (req, res): Promise<void> => {
+    const params = GetSharedWorkspaceAiControlsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireAdminMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+    res.json(
+      GetSharedWorkspaceAiControlsResponse.parse(
+        await aiControlsPayload(membership.workspaceId),
+      ),
+    );
+  },
+);
+
+router.put(
+  "/venom/workspaces/:workspaceId/ai-controls",
+  async (req, res): Promise<void> => {
+    const params = UpdateSharedWorkspaceAiControlsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireAdminMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+    const userId = userIdFor(req);
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const parsed = UpdateSharedWorkspaceAiControlsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid controls payload" });
+      return;
+    }
+    // Full-replace semantics: what arrives is exactly what stands. The
+    // schema already rejects "manual" as a forced policy and empty tier
+    // lists; normalization additionally collapses "every tier" to null so
+    // an all-checked lock isn't stored as a restriction.
+    await saveWorkspaceAiControls(
+      membership.workspaceId,
+      {
+        defaultMemberCapMicros:
+          parsed.data.defaultMemberCapUsd === null
+            ? null
+            : aiControlUsdToMicros(parsed.data.defaultMemberCapUsd),
+        forcedSelectionPolicy: parsed.data.forcedSelectionPolicy,
+        allowedCostTiers: normalizeAllowedCostTiers(
+          parsed.data.allowedCostTiers,
+        ),
+      },
+      userId,
+    );
+
+    req.log.info(
+      { sharedWorkspaceId: membership.workspaceId },
+      "Workspace AI controls updated",
+    );
+    res.json(
+      UpdateSharedWorkspaceAiControlsResponse.parse(
+        await aiControlsPayload(membership.workspaceId),
+      ),
+    );
+  },
+);
+
+router.put(
+  "/venom/workspaces/:workspaceId/ai-controls/members/:memberUserId",
+  async (req, res): Promise<void> => {
+    const params = SetSharedWorkspaceMemberAiCapParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireAdminMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+    const userId = userIdFor(req);
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const parsed = SetSharedWorkspaceMemberAiCapBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid cap payload" });
+      return;
+    }
+    // Overrides are for people currently in the workspace; a removed
+    // member's stale row is harmless but must not be creatable.
+    const target = await getSharedWorkspaceMembership(
+      membership.workspaceId,
+      params.data.memberUserId,
+    );
+    if (!target) {
+      res
+        .status(404)
+        .json({ error: "That account is not a member of this workspace" });
+      return;
+    }
+
+    await setMemberAiCapOverride(
+      membership.workspaceId,
+      params.data.memberUserId,
+      parsed.data.capUsd === null
+        ? null
+        : aiControlUsdToMicros(parsed.data.capUsd),
+      userId,
+    );
+    req.log.info(
+      { sharedWorkspaceId: membership.workspaceId },
+      "Workspace member AI cap set",
+    );
+    res.json(
+      SetSharedWorkspaceMemberAiCapResponse.parse(
+        await aiControlsPayload(membership.workspaceId),
+      ),
+    );
+  },
+);
+
+router.delete(
+  "/venom/workspaces/:workspaceId/ai-controls/members/:memberUserId",
+  async (req, res): Promise<void> => {
+    const params = ClearSharedWorkspaceMemberAiCapParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireAdminMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+
+    // Idempotent: clearing an absent override (or one left by a removed
+    // member) simply lands on "workspace default".
+    await clearMemberAiCapOverride(
+      membership.workspaceId,
+      params.data.memberUserId,
+    );
+    req.log.info(
+      { sharedWorkspaceId: membership.workspaceId },
+      "Workspace member AI cap cleared",
+    );
+    res.json(
+      ClearSharedWorkspaceMemberAiCapResponse.parse(
+        await aiControlsPayload(membership.workspaceId),
+      ),
+    );
+  },
+);
+
+router.get(
+  "/venom/workspaces/:workspaceId/usage",
+  async (req, res): Promise<void> => {
+    const params = GetSharedWorkspaceUsageParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireAdminMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+
+    try {
+      const account = await getBillingAccount(
+        "workspace",
+        membership.workspaceId,
+      );
+      const plan = venomPlan("org");
+      const period = billingPeriodFor(account, new Date());
+      const [byMember, memberRows, controls, overrides] = await Promise.all([
+        sumWorkspaceBilledMicrosByMember(membership.workspaceId, period),
+        db
+          .select({
+            clerkUserId: venomSharedWorkspaceMembersTable.clerkUserId,
+            role: venomSharedWorkspaceMembersTable.role,
+          })
+          .from(venomSharedWorkspaceMembersTable)
+          .where(
+            eq(
+              venomSharedWorkspaceMembersTable.workspaceId,
+              membership.workspaceId,
+            ),
+          ),
+        loadWorkspaceAiControls(membership.workspaceId),
+        listMemberAiCapOverrides(membership.workspaceId),
+      ]);
+      // Names are cosmetic; the summary must not depend on the directory.
+      let names = new Map<string, string | null>();
+      try {
+        names = await userDirectory.getUsers(
+          memberRows.map((row) => row.clerkUserId),
+        );
+      } catch {
+        // Ids still identify the rows.
+      }
+      const overrideByMember = new Map(
+        overrides.map((override) => [override.clerkUserId, override]),
+      );
+      const warnRatio = approachingWarnRatio();
+      const members = memberRows
+        .map((row) => {
+          const spentMicros = byMember.get(row.clerkUserId) ?? 0;
+          const override = overrideByMember.get(row.clerkUserId) ?? null;
+          const capMicros = override
+            ? override.capMicros
+            : controls.defaultMemberCapMicros;
+          const capSource: "default" | "override" | null = override
+            ? "override"
+            : controls.defaultMemberCapMicros !== null
+              ? "default"
+              : null;
+          const capState =
+            capMicros === null
+              ? ("ok" as const)
+              : spentMicros >= capMicros
+                ? ("exhausted" as const)
+                : spentMicros >= capMicros * warnRatio
+                  ? ("approaching" as const)
+                  : ("ok" as const);
+          return {
+            clerkUserId: row.clerkUserId,
+            name: names.get(row.clerkUserId) ?? row.clerkUserId,
+            role: row.role,
+            spentUsd: aiControlMicrosToUsd(spentMicros),
+            capUsd: capMicros === null ? null : aiControlMicrosToUsd(capMicros),
+            ...(capSource ? { capSource } : {}),
+            capState,
+            spentMicros,
+          };
+        })
+        .sort(
+          (a, b) =>
+            b.spentMicros - a.spentMicros || a.name.localeCompare(b.name),
+        )
+        .map(({ spentMicros: _spentMicros, ...member }) => member);
+      // The total sums every billed row this period — including ones from
+      // since-removed members — so it always matches what the plan spent.
+      let totalMicros = 0;
+      for (const micros of byMember.values()) totalMicros += micros;
+      res.json(
+        GetSharedWorkspaceUsageResponse.parse({
+          covered: workspaceOrgPlanActive(account),
+          periodStart: period.start.toISOString(),
+          periodEnd: period.end.toISOString(),
+          totalUsd: aiControlMicrosToUsd(totalMicros),
+          allowanceUsd: aiControlMicrosToUsd(planAllowanceMicros(plan)),
+          members,
+        }),
+      );
+    } catch (error) {
+      req.log.error({ err: error }, "Workspace usage summary failed");
+      res.status(500).json({ error: "Usage is unavailable right now" });
+    }
   },
 );
 

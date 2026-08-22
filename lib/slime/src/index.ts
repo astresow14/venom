@@ -60,6 +60,21 @@ export {
 } from "./bloom";
 
 export {
+  SLIME_POINTER_DROPLET_PULL,
+  SLIME_POINTER_LEAN,
+  SLIME_POINTER_PRESSED_WEIGHT,
+  SLIME_POINTER_RADIUS,
+  SLIME_POINTER_SWELL,
+  SLIME_POINTER_TENDRIL_DROPS,
+  SLIME_POINTER_TENDRIL_REACH,
+  createSlimePointer,
+  type SlimePointer,
+  type SlimePointerSnapshot,
+  type SlimePointerStepOptions,
+  type SlimePointerTarget,
+} from "./pointer";
+
+export {
   SLIME_MOMENTUM_DAMPING,
   SLIME_MOMENTUM_MAX_LAG,
   SLIME_MOMENTUM_STIFFNESS,

@@ -14,6 +14,19 @@ const ownStyles = StyleSheet.create({
     marginBottom: 24,
     flexDirection: "row",
   },
+  // A run-continuation row (same debate speaker as the message before it)
+  // sits tight against its predecessor so the run reads as one group. The
+  // list is inverted, so marginBottom is the on-screen gap ABOVE this row.
+  messageRowGrouped: {
+    marginBottom: 6,
+  },
+  // Fixed-width lane beside every speaker-attributed bubble; only the first
+  // row of a run carries the avatar, the rest stay empty so bubbles align.
+  speakerGutter: {
+    width: 24,
+    marginRight: 8,
+    alignItems: "center",
+  },
   messageUser: {
     justifyContent: "flex-end",
   },
@@ -445,11 +458,6 @@ const ownStyles = StyleSheet.create({
     gap: 6,
     marginBottom: 4,
     paddingHorizontal: 2,
-  },
-  speakerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
   },
   speakerName: {
     fontSize: 12,

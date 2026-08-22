@@ -7,6 +7,7 @@
  */
 import type { VenomUsageDay } from './venomUsageDay';
 import type { VenomUsageModelBreakdown } from './venomUsageModelBreakdown';
+import type { VenomUsageSummaryCoveredByWorkspacesItem } from './venomUsageSummaryCoveredByWorkspacesItem';
 import type { VenomUsageTotals } from './venomUsageTotals';
 
 export interface VenomUsageSummary {
@@ -27,4 +28,9 @@ export interface VenomUsageSummary {
      * @maxItems 40
      */
   models: VenomUsageModelBreakdown[];
+  /**
+     * Workspaces whose Organization plan covered some of this member's AI calls during the period. Names only — workspace-billed spend belongs to the workspace and never appears in personal figures.
+     * @maxItems 100
+     */
+  coveredByWorkspaces: VenomUsageSummaryCoveredByWorkspacesItem[];
 }

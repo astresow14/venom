@@ -72,3 +72,5 @@ the process never exits (fail-closed gates/pools), so the run dies only at
 the ~30-min poll budget with SIGTERM. If validation stalls in api-server
 after a rebase, check for 42P01 in its log and run the lib/db push before
 anything else.
+
+**Fresh-environment corollary:** the same staleness bites without any rebase — an environment's dev database can predate schema merged on main. The tell is an *unrelated* server integration suite failing on missing tables/columns (500s or "column does not exist") on routes the local diff never touched. The remedy is the schema push from lib/db, not debugging the local diff.

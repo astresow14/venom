@@ -64,13 +64,14 @@
 - [Headless Clerk credential e2e](clerk-headless-credential-e2e.md) — testing token + captchaBypass pin (custom flows too); ≥15-char passwords; merge-gating step with fingerprint sweep; screen-one password ≠ password step.
 - [expo-gl web GLView crash](expo-gl-web-glview-crash.md) — probe WebGL before mounting GLView on web or the whole app blanks; prove GL fallbacks with lost-aware draw/link counters.
 - [Slime adaptive quality](slime-adaptive-quality.md) — rAF pacing needs trimmed means; captures pin slimeScale; never baseline a pre-shed telemetry snapshot — assert bufferFraction end-state.
-- [Slime display-time modules](venom-slime-display-modules.md) — pipeline order momentum→emphasis→life; modules infer motion from the node stream, pass through at rest, drop absent ids, frozen = rigid/instant.
+- [Slime display-time modules](venom-slime-display-modules.md) — pipeline momentum→emphasis→pointer→life; pointer tendrils need reserved drop capacity; pass-through at rest; frozen = rigid/instant.
+- [Venom landing backdrop](venom-landing-backdrop.md) — the stage is the pane, not the viewport; the hero clearing is a sweep-tested contract; isolate + -z-10 stacking; buffer coverage ≠ compositing.
 - [Playwright suite filtering](playwright-suite-filtering.md) — `pnpm run test:web -- <files>` silently runs the whole suite; filter with `pnpm exec playwright test <files>` from the package dir.
 - [Venom desktop first paint](venom-desktop-first-paint.md) — fonts self-hosted, FCP is Clerk-gated (judge by first-paint); every scanner-visible file ships CSS, so dead components weigh the sheet.
 - [RN nested scroll targets](rn-nested-scroll-targets.md) — onLayout y is parent-relative; sum per-level offsets to land on a nested row, and fall back to the card when the deep id is stale.
 - [Sync failure indicators](sync-failure-indicators.md) — status cycles error→syncing→error during retries; arm unsaved-work UI on failure only, sustain through syncing, clear on synced.
 - [Mirror snapshot sync](venom-mirror-snapshot-sync.md) — GitHub gets tree snapshots, never repl history; workflow paths pin to base sans credential; token-shaped fixtures must be assembled at runtime.
-- [CI PR-gate budget](venom-ci-pr-gate-budget.md) — the mirror's 15-min required jobs are fixed until a workflow credential; the suite is CPU-bound, so CI runs the mobile project only.
+- [CI PR-gate budget](venom-ci-pr-gate-budget.md) — Kanban gate runs both viewports in 45 min (~13 measured); CPU-bound, 2 workers max; phone-only specs skip desktop by design.
 - [CI paths-filter dep coverage](ci-paths-filter-dep-coverage.md) — skip-filters must list every workspace lib an app depends on; a dep added without a filter entry merges untested.
 - [Typecheck validation gap](typecheck-validation-gap.md) — no validation workflow runs tsc and type-stripped tests pass anyway; run package typechecks yourself; re-export blocks don't import.
 - [Venom signed-out auth e2e](venom-signed-out-auth-e2e.md) — auth screens need the venomUiTest=false opt-out; CI=1 Metro doesn't watch files, so prove mutations reached the served bundle.
@@ -110,3 +111,8 @@
 - [Venom knowledge auto-sort](venom-knowledge-auto-sort.md) — server classifies at extraction; only visibility-narrowing moves are automatic, every personal-store exit is accept-gated suggestion.
 - [Venom mobile Brain surfaces](venom-mobile-brain-surfaces.md) — the Brain tab (KnowledgeWorkspace) and the /knowledge route are separate surfaces; cluster-visibility rules must hold on both.
 - [Metro image-size security compatibility](metro-image-size-security.md) — Metro requires a callable path-or-buffer image reader; keep its bounded local shim until a safe compatible upstream release exists.
+- [Venom auth welcome heading](venom-auth-welcome-heading.md) — welcome's heading is sr-only (the wordmark is the visible hero); both auth suites anchor on it, and Playwright sees 1x1 clipped text as visible.
+- [Venom billing model](venom-billing-model.md) — payer follows the space; reservation-based admission, never read-then-act; members never see workspace dollars; keyless = enforcement stands down.
+- [Venom speaker avatars](venom-speaker-avatars.md) — model voice iff speakerId===modelId (else monogram); glyph paths duplicated per app must stay byte-identical; runs group on the chronological first turn.
+- [Venom desktop responsive collapse](venom-desktop-responsive-collapse.md) — collapse desktop chrome via useIsMobile conditional render + one shared fragment; CSS-hiding duplicates testids and breaks strict-mode specs.
+- [Venom workspace AI controls](venom-workspace-ai-controls.md) — allowance-block beats member cap, lock beats user policy, cap/lock state rides the billing context only when the workspace pays.

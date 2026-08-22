@@ -53,7 +53,11 @@ test.describe('wide screens', () => {
     await expect(sidebar.getByTestId('select-project-desktop')).toHaveValue(
       'proj_default',
     );
-    await expect(page.getByTestId('text-chat-greeting')).toBeVisible();
+    await expect(page.getByTestId('img-chat-empty-mark')).toBeVisible();
+    // The visual page is logo-only; the document must still expose a heading.
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Chat' }),
+    ).toBeVisible();
 
     const conversations = sidebar.getByTestId(/^button-conversation-/);
     const initialCount = await conversations.count();
@@ -206,20 +210,6 @@ test.describe('wide screens', () => {
     await expect(replies).toContainText('Recovered after the stall.');
     await expect(replies).not.toContainText('Half an answer');
     await expect(composer).toBeEnabled();
-  });
-
-  test('starter prompts fill the composer and mention the project', async ({
-    page,
-  }) => {
-    await openChat(page);
-
-    const prompts = page.getByTestId('button-starter-prompt');
-    await expect(prompts.first()).toBeVisible();
-    await prompts.first().click();
-
-    const composer = page.getByTestId('input-message');
-    await expect(composer).not.toHaveValue('');
-    await expect(composer).toBeFocused();
   });
 });
 

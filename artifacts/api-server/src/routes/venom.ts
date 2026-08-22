@@ -41,6 +41,16 @@ import {
   resolveVenomModelId,
 } from "../lib/venom-models";
 import { loadVenomModelSelectionPolicy } from "../lib/venom-model-policy";
+import {
+  allowanceBlockedBody,
+  checkVenomAllowance,
+  releaseVenomAllowanceReservation,
+} from "../lib/venom-billing-enforcement";
+import {
+  filterCatalogByCostTiers,
+  loadWorkspaceAiControls,
+  NO_WORKSPACE_AI_CONTROLS,
+} from "../lib/venom-workspace-ai-controls";
 import { normalizeExtractedClusters } from "../lib/venom-knowledge";
 import {
   canonicalizeExtractedClusters,
@@ -62,7 +72,9 @@ import { performClassifiedFiling } from "../lib/venom-knowledge-filing";
 import { runKnowledgeRefilingPass } from "../lib/venom-knowledge-refiling";
 import { resolveVenomIdentity } from "../lib/venom-identity";
 import {
+  getSharedWorkspaceMembership,
   listSharedWorkspaceMemberships,
+  workspaceAccessDeniedBody,
   type SharedWorkspaceMembership,
 } from "../lib/workspace-membership";
 import {
@@ -232,6 +244,56 @@ router.post("/venom/respond", async (req, res): Promise<void> => {
     );
     res.status(400).json({ error: "Invalid chat request" });
     return;
+  }
+
+  // A workspace id controls filing and billing, not what the wider
+  // user-centric knowledge prompt may read. Verify membership for this
+  // request before allowing it to draw on a workspace allowance.
+  if (parsed.data.workspaceId) {
+    const membership = await getSharedWorkspaceMembership(
+      parsed.data.workspaceId,
+      auth.userId,
+    );
+    if (!membership) {
+      req.log.info(
+        { operation: "venom_respond", workspaceAccessDenied: true },
+        "Venom respond denied shared-workspace access",
+      );
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+  }
+
+  // Billing follows the selected space. An Organization-plan workspace
+  // pays for its own context; everything else uses the caller's plan.
+  const allowance = await checkVenomAllowance({
+    userId: auth.userId,
+    workspaceId: parsed.data.workspaceId ?? null,
+    reserve: true,
+  });
+  if (!allowance.allowed) {
+    req.log.info(
+      { operation: "venom_respond", blocked: allowance.blockedCode },
+      "Venom respond blocked by plan allowance",
+    );
+    res.status(402).json(allowanceBlockedBody(allowance));
+    return;
+  }
+
+  // The first ledgered usage event settles the admission hold atomically
+  // (the spend row replaces it under the payer lock — see insertVenomUsage).
+  // Every other outcome must free it promptly — and early returns before
+  // the streaming section (context assembly, snapshot validation) exit long
+  // before any finally there — so the release rides the response's close
+  // event, which fires on every exit path. Once the meter claims the id,
+  // this hook stands down.
+  let meterReservationId = allowance.reservationId ?? null;
+  if (meterReservationId) {
+    res.once("close", () => {
+      const reservationId = meterReservationId;
+      meterReservationId = null;
+      if (reservationId) void releaseVenomAllowanceReservation(reservationId);
+    });
   }
 
   // User-centric knowledge context: every turn draws on the caller's
@@ -495,30 +557,105 @@ router.post("/venom/respond", async (req, res): Promise<void> => {
 
   const catalog = buildVenomCatalog();
 
+  // Workspace model lock: when this request bills a workspace, its admins'
+  // controls clamp everything below — a forced policy beats the member's
+  // own, and tier restrictions shrink the catalog every planner draws
+  // from. Keyed off the resolved payer, so personal-space requests (and
+  // workspaces without a live org plan) are never touched. A failed
+  // controls load fails open to the member's own settings: a broken lookup
+  // must not take chat down.
+  let workspaceLock = NO_WORKSPACE_AI_CONTROLS;
+  if (allowance.billedWorkspaceId) {
+    try {
+      workspaceLock = await loadWorkspaceAiControls(
+        allowance.billedWorkspaceId,
+      );
+    } catch (error) {
+      req.log.warn(
+        { err: error },
+        "Venom workspace model lock load failed open",
+      );
+    }
+  }
+  const forcedPolicy =
+    allowance.billedWorkspaceId !== null
+      ? workspaceLock.forcedSelectionPolicy
+      : null;
+  const selectionPolicyInEffect = forcedPolicy ?? selectionPolicy;
+  const tierFilter =
+    allowance.billedWorkspaceId !== null
+      ? filterCatalogByCostTiers(catalog, workspaceLock.allowedCostTiers)
+      : { catalog, emptied: false };
+  if (tierFilter.emptied) {
+    req.log.warn(
+      {
+        billedWorkspaceId: allowance.billedWorkspaceId,
+        status: "lock-emptied-catalog",
+      },
+      "Venom workspace tier lock matched no models; serving full catalog",
+    );
+  }
+  const eligibleCatalog = tierFilter.catalog;
+  const tierLockActive =
+    allowance.billedWorkspaceId !== null &&
+    workspaceLock.allowedCostTiers !== null &&
+    !tierFilter.emptied;
+
   // Auto policies hand the model choice to the server against the live
   // catalog on every request, so a health or availability flip switches the
   // very next reply. When nothing is usable at all, fall back to the
   // request's own model and let the existing availability error speak
-  // honestly. Manual keeps the request-selected model untouched.
-  const autoSelection = planAutoModelSelection(catalog, selectionPolicy);
-  if (selectionPolicy !== "manual" && !autoSelection) {
+  // honestly. Manual keeps the request-selected model untouched — unless a
+  // tier lock excludes it, which clamps to the cheapest allowed model so a
+  // workspace-billed request can never serve a tier the admins shut off.
+  const autoSelection = planAutoModelSelection(
+    eligibleCatalog,
+    selectionPolicyInEffect,
+  );
+  if (selectionPolicyInEffect !== "manual" && !autoSelection) {
     req.log.warn(
-      { policy: selectionPolicy, status: "no-usable-model" },
+      { policy: selectionPolicyInEffect, status: "no-usable-model" },
       "Venom auto model selection found no usable model",
     );
   }
-  const modelId = autoSelection?.modelId ?? requestedModelId;
+  let modelId = autoSelection?.modelId ?? requestedModelId;
+  let clampedByLock = false;
+  if (
+    !autoSelection &&
+    tierLockActive &&
+    !eligibleCatalog.some((model) => model.id === modelId)
+  ) {
+    const clamp = planAutoModelSelection(eligibleCatalog, "auto-cheapest");
+    if (!clamp) {
+      req.log.warn(
+        { modelAlias: modelId, status: "lock-no-usable-model" },
+        "Venom workspace tier lock left no usable model",
+      );
+      res.status(502).json({
+        error:
+          "No model allowed by this workspace's settings is available right now.",
+        code: "provider_unavailable",
+        retryable: true,
+      });
+      return;
+    }
+    modelId = clamp.modelId;
+    clampedByLock = true;
+  }
 
   // Usage metering: every provider call this request makes — the talk
   // stream, each verify voice and the synthesis, every debate turn, and the
   // file-intent classifier — is ledgered against the asking account,
   // fire-and-forget. Streams report through onUsage with flagged estimates
-  // when a provider omits its usage frame (e.g. budget-cut turns). With no
-  // picked workspace in the request anymore, usage stays account-scoped.
+  // when a provider omits its usage frame (e.g. budget-cut turns).
   const meterUserId = auth.userId;
+  const meterWorkspaceId = parsed.data.workspaceId ?? null;
+  const meterBilledWorkspaceId = allowance.billedWorkspaceId;
   const meterUsage =
     (callKind: VenomUsageCallKind, modelAlias: string) =>
-    (usage: VenomStreamUsage): void =>
+    (usage: VenomStreamUsage): void => {
+      const reservationId = meterReservationId;
+      meterReservationId = null;
       recordVenomUsage({
         userId: meterUserId,
         modelAlias,
@@ -526,14 +663,24 @@ router.post("/venom/respond", async (req, res): Promise<void> => {
         promptTokens: usage.promptTokens,
         outputTokens: usage.outputTokens,
         estimated: usage.estimated,
+        workspaceId: meterWorkspaceId,
+        billedWorkspaceId: meterBilledWorkspaceId,
+        reservationId,
       });
+    };
   // In auto modes the voice planners read the catalog in policy-rank order,
   // so alternates and debate corners follow the same preference as the
   // anchor — while the planners keep enforcing availability, funding, and
-  // provider-distinctness exactly as before.
+  // provider-distinctness exactly as before. Under a workspace tier lock
+  // they draw from the restricted catalog, so every deliberation voice and
+  // debate corner obeys the lock too.
   const planningCatalog = autoSelection
-    ? rankVenomCatalogForPolicy(catalog, selectionPolicy)
-    : catalog;
+    ? rankVenomCatalogForPolicy(eligibleCatalog, selectionPolicyInEffect)
+    : eligibleCatalog;
+  // Explicit per-voice picks are manual-mode instructions; auto policies
+  // set them aside, and so does a tier lock — picks made before (or
+  // against) the lock must not smuggle excluded tiers back in.
+  const suppressExplicitPicks = Boolean(autoSelection) || tierLockActive;
 
   const modelMeta = catalog.find((model) => model.id === modelId);
   if (!modelMeta?.available) {
@@ -612,7 +759,7 @@ router.post("/venom/respond", async (req, res): Promise<void> => {
       plannedVoices = planDeliberationVoices(
         modelId,
         planningCatalog,
-        autoSelection ? undefined : parsed.data.voiceModels,
+        suppressExplicitPicks ? undefined : parsed.data.voiceModels,
       );
     } catch (error) {
       if (error instanceof InvalidVoiceAssignment) {
@@ -644,7 +791,9 @@ router.post("/venom/respond", async (req, res): Promise<void> => {
       plannedDebate = planDebateVoices(
         modelId,
         planningCatalog,
-        autoSelection ? undefined : blendWeights?.map((entry) => entry.id),
+        suppressExplicitPicks
+          ? undefined
+          : blendWeights?.map((entry) => entry.id),
       );
     } catch (error) {
       if (error instanceof InvalidDebateParticipants) {
@@ -672,7 +821,18 @@ router.post("/venom/respond", async (req, res): Promise<void> => {
       // Auto policies announce themselves so clients can attribute the reply
       // to "Venom chose" honestly; the chosen model already rides modelId /
       // modelName above. Absent for manual — that path stays byte-identical.
-      ...(autoSelection ? { selection: { policy: selectionPolicy } } : {}),
+      // When a workspace lock forced the policy or clamped a manual pick,
+      // `managed` rides along so clients can say who chose.
+      ...(autoSelection
+        ? {
+            selection: {
+              policy: selectionPolicyInEffect,
+              ...(forcedPolicy !== null ? { managed: true } : {}),
+            },
+          }
+        : clampedByLock
+          ? { selection: { policy: "manual" as const, managed: true } }
+          : {}),
       ...(filePlan
         ? {
             filePlan: {
@@ -1125,6 +1285,8 @@ router.post("/venom/respond", async (req, res): Promise<void> => {
     clearTimeout(timeout);
     req.off("aborted", abortForDisconnect);
     res.off("close", abortForDisconnect);
+    // The admission hold is settled by the meter or freed by the close
+    // hook registered at admission; nothing is left to release here.
   }
 });
 
@@ -1148,6 +1310,25 @@ router.post("/venom/knowledge/extract", async (req, res): Promise<void> => {
     );
     res.status(400).json({ error: "Invalid knowledge extraction request" });
     return;
+  }
+
+  // workspaceId is a client-selected conversation space. It may determine
+  // the payer, so check the live membership table before it can draw from a
+  // workspace Organization allowance. This is deliberately the same opaque
+  // 403 as chat, including for former members and unknown ids.
+  if (parsed.data.workspaceId) {
+    const membership = await getSharedWorkspaceMembership(
+      parsed.data.workspaceId,
+      auth.userId,
+    );
+    if (!membership) {
+      req.log.info(
+        { operation: "venom_knowledge_extract", workspaceAccessDenied: true },
+        "Venom knowledge extraction denied shared-workspace access",
+      );
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
   }
 
   const now = Date.now();
@@ -1174,6 +1355,31 @@ router.post("/venom/knowledge/extract", async (req, res): Promise<void> => {
       if (limit.resetAt <= now) knowledgeRateLimits.delete(key);
     }
   }
+
+  // Knowledge extraction is an AI path too, so it follows the
+  // conversation's space and hard-stops when that space is out of allowance.
+  const extractAllowance = await checkVenomAllowance({
+    userId: auth.userId,
+    workspaceId: parsed.data.workspaceId ?? null,
+    reserve: true,
+  });
+  if (!extractAllowance.allowed) {
+    res.status(402).json(allowanceBlockedBody(extractAllowance));
+    return;
+  }
+  // The usage insert claims this hold and settles it atomically (the spend
+  // row replaces it under the payer lock). The close hook frees only what
+  // was never claimed — model failure, validation bail, a dropped
+  // connection — so a release can never race an in-flight settle.
+  let extractReservationId = extractAllowance.reservationId ?? null;
+  const claimExtractReservation = (): string | null => {
+    const reservationId = extractReservationId;
+    extractReservationId = null;
+    return reservationId;
+  };
+  res.once("close", () => {
+    void releaseVenomAllowanceReservation(claimExtractReservation());
+  });
 
   const conversationText = parsed.data.messages
     .map((message) => `[${message.id}] ${message.role}: ${message.content}`)
@@ -1302,6 +1508,9 @@ router.post("/venom/knowledge/extract", async (req, res): Promise<void> => {
         promptTokens: usage.promptTokens,
         outputTokens: usage.outputTokens,
         estimated: usage.estimated,
+        workspaceId: parsed.data.workspaceId ?? null,
+        billedWorkspaceId: extractAllowance.billedWorkspaceId,
+        reservationId: claimExtractReservation(),
       });
     }
 
@@ -1535,6 +1744,28 @@ router.post("/venom/notes/improve", async (req, res): Promise<void> => {
     }
   }
 
+  // Note improvement has no workspace context, so it always uses the
+  // caller's personal allowance.
+  const noteAllowance = await checkVenomAllowance({
+    userId: auth.userId,
+    reserve: true,
+  });
+  if (!noteAllowance.allowed) {
+    res.status(402).json(allowanceBlockedBody(noteAllowance));
+    return;
+  }
+  // Same claim rule as every admission: the usage insert settles the hold
+  // it claims; the close hook frees only an unclaimed one.
+  let noteReservationId = noteAllowance.reservationId ?? null;
+  const claimNoteReservation = (): string | null => {
+    const reservationId = noteReservationId;
+    noteReservationId = null;
+    return reservationId;
+  };
+  res.once("close", () => {
+    void releaseVenomAllowanceReservation(claimNoteReservation());
+  });
+
   const startedAt = Date.now();
   try {
     const completion = await openai.chat.completions.create({
@@ -1567,6 +1798,7 @@ router.post("/venom/notes/improve", async (req, res): Promise<void> => {
         promptTokens: usage.promptTokens,
         outputTokens: usage.outputTokens,
         estimated: usage.estimated,
+        reservationId: claimNoteReservation(),
       });
     }
 

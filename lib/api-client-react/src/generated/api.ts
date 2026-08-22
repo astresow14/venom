@@ -50,6 +50,7 @@ import type {
   GetCommunityFeedParams,
   GetCommunityThreadParams,
   GetVenomAppTimelineParams,
+  GetVenomBillingContextParams,
   GetVenomMasterSuggestionsParams,
   GetVenomOntologyConceptParams,
   GetVenomVoiceDecisionSummaryParams,
@@ -105,6 +106,11 @@ import type {
   VenomAppSharingUpdate,
   VenomAppTimelinePage,
   VenomAppUpdate,
+  VenomBillingCheckoutRequest,
+  VenomBillingContext,
+  VenomBillingPortalRequest,
+  VenomBillingRedirect,
+  VenomBillingSummary,
   VenomBuildApprovalInput,
   VenomBuildCancellationInput,
   VenomBuildPackage,
@@ -179,8 +185,13 @@ import type {
   VenomVoiceTranscriptionRequest,
   VenomVoiceTurnDecision,
   VenomVoiceTurnDecisionRequest,
+  VenomWorkspaceAiControls,
+  VenomWorkspaceAiControlsInput,
+  VenomWorkspaceBilling,
+  VenomWorkspaceMemberAiCapInput,
   VenomWorkspaceSaveInput,
   VenomWorkspaceSnapshot,
+  VenomWorkspaceUsageSummary,
   WebsiteSourceInput
 } from './api.schemas';
 
@@ -1344,6 +1355,313 @@ export function useGetVenomUsageSummary<TData = Awaited<ReturnType<typeof getVen
 
 
 
+
+export const getGetVenomBillingSummaryUrl = () => {
+
+
+
+
+  return `/api/venom/billing/summary`
+}
+
+/**
+ * The signed-in account's personal billing surface: current plan, subscription status, period window, and spend against the plan's included AI — counting personally-billed calls only. Workspace-billed usage never appears here. When Stripe is not configured the payload says so via `configured: false` and checkout/portal are unavailable, but the plan card still renders.
+ * @summary Your personal plan, renewal, and allowance for this period
+ */
+export const getVenomBillingSummary = async ( options?: Parameters<typeof customFetch>[1]): Promise<VenomBillingSummary> => {
+
+  return customFetch<VenomBillingSummary>(getGetVenomBillingSummaryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomBillingSummaryQueryKey = () => {
+    return [
+    `/api/venom/billing/summary`
+    ] as const;
+    }
+
+
+export const getGetVenomBillingSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getVenomBillingSummary>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomBillingSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomBillingSummaryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomBillingSummary>>> = ({ signal }) => getVenomBillingSummary({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomBillingSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomBillingSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomBillingSummary>>>
+export type GetVenomBillingSummaryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Your personal plan, renewal, and allowance for this period
+ */
+
+export function useGetVenomBillingSummary<TData = Awaited<ReturnType<typeof getVenomBillingSummary>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomBillingSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomBillingSummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetVenomBillingContextUrl = (params?: GetVenomBillingContextParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/venom/billing/context?${stringifiedParams}` : `/api/venom/billing/context`
+}
+
+/**
+ * Resolves the payer the composer should hint at: pass the shared workspace the conversation lives in (or nothing for the personal space). An Organization-plan workspace answers as the workspace payer with its plan name and allowance state — never dollar figures; anything else answers as the caller's personal plan.
+ * @summary Who pays for AI sent from a given space right now
+ */
+export const getVenomBillingContext = async (params?: GetVenomBillingContextParams, options?: Parameters<typeof customFetch>[1]): Promise<VenomBillingContext> => {
+
+  return customFetch<VenomBillingContext>(getGetVenomBillingContextUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVenomBillingContextQueryKey = (params?: GetVenomBillingContextParams,) => {
+    return [
+    `/api/venom/billing/context`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetVenomBillingContextQueryOptions = <TData = Awaited<ReturnType<typeof getVenomBillingContext>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(params?: GetVenomBillingContextParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomBillingContext>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVenomBillingContextQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVenomBillingContext>>> = ({ signal }) => getVenomBillingContext(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVenomBillingContext>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVenomBillingContextQueryResult = NonNullable<Awaited<ReturnType<typeof getVenomBillingContext>>>
+export type GetVenomBillingContextQueryError = ErrorType<void | SharedWorkspaceAccessError>
+
+
+/**
+ * @summary Who pays for AI sent from a given space right now
+ */
+
+export function useGetVenomBillingContext<TData = Awaited<ReturnType<typeof getVenomBillingContext>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(
+ params?: GetVenomBillingContextParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVenomBillingContext>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVenomBillingContextQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVenomBillingCheckoutUrl = () => {
+
+
+
+
+  return `/api/venom/billing/checkout`
+}
+
+/**
+ * Creates a Stripe-hosted checkout session for the paid personal tier and returns its URL. Answers 503 with code `billing_not_configured` when Stripe keys are absent, and 409 when the account is already on the plan.
+ * @summary Start Stripe checkout for the paid personal plan
+ */
+export const createVenomBillingCheckout = async (venomBillingCheckoutRequest?: VenomBillingCheckoutRequest, options?: Parameters<typeof customFetch>[1]): Promise<VenomBillingRedirect> => {
+
+  return customFetch<VenomBillingRedirect>(getCreateVenomBillingCheckoutUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomBillingCheckoutRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateVenomBillingCheckoutMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomBillingCheckout>>, TError,{data?: BodyType<VenomBillingCheckoutRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVenomBillingCheckout>>, TError,{data?: BodyType<VenomBillingCheckoutRequest>}, TContext> => {
+
+const mutationKey = ['createVenomBillingCheckout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVenomBillingCheckout>>, {data?: BodyType<VenomBillingCheckoutRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createVenomBillingCheckout(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVenomBillingCheckoutMutationResult = NonNullable<Awaited<ReturnType<typeof createVenomBillingCheckout>>>
+    export type CreateVenomBillingCheckoutMutationBody = BodyType<VenomBillingCheckoutRequest> | undefined
+    export type CreateVenomBillingCheckoutMutationError = ErrorType<void>
+
+    /**
+ * @summary Start Stripe checkout for the paid personal plan
+ */
+export const useCreateVenomBillingCheckout = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomBillingCheckout>>, TError,{data?: BodyType<VenomBillingCheckoutRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVenomBillingCheckout>>,
+        TError,
+        {data?: BodyType<VenomBillingCheckoutRequest>},
+        TContext
+      > => {
+      return useMutation(getCreateVenomBillingCheckoutMutationOptions(options));
+    }
+
+export const getCreateVenomBillingPortalUrl = () => {
+
+
+
+
+  return `/api/venom/billing/portal`
+}
+
+/**
+ * Creates a Stripe-hosted billing-portal session for the signed-in account's existing subscription (upgrade, cancel, update payment method). 409 when there is nothing to manage yet; 503 with code `billing_not_configured` when Stripe keys are absent.
+ * @summary Open the Stripe billing portal for your subscription
+ */
+export const createVenomBillingPortal = async (venomBillingPortalRequest?: VenomBillingPortalRequest, options?: Parameters<typeof customFetch>[1]): Promise<VenomBillingRedirect> => {
+
+  return customFetch<VenomBillingRedirect>(getCreateVenomBillingPortalUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomBillingPortalRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateVenomBillingPortalMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomBillingPortal>>, TError,{data?: BodyType<VenomBillingPortalRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVenomBillingPortal>>, TError,{data?: BodyType<VenomBillingPortalRequest>}, TContext> => {
+
+const mutationKey = ['createVenomBillingPortal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVenomBillingPortal>>, {data?: BodyType<VenomBillingPortalRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createVenomBillingPortal(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVenomBillingPortalMutationResult = NonNullable<Awaited<ReturnType<typeof createVenomBillingPortal>>>
+    export type CreateVenomBillingPortalMutationBody = BodyType<VenomBillingPortalRequest> | undefined
+    export type CreateVenomBillingPortalMutationError = ErrorType<void>
+
+    /**
+ * @summary Open the Stripe billing portal for your subscription
+ */
+export const useCreateVenomBillingPortal = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVenomBillingPortal>>, TError,{data?: BodyType<VenomBillingPortalRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVenomBillingPortal>>,
+        TError,
+        {data?: BodyType<VenomBillingPortalRequest>},
+        TContext
+      > => {
+      return useMutation(getCreateVenomBillingPortalMutationOptions(options));
+    }
 
 export const getExtractVenomKnowledgeUrl = () => {
 
@@ -5735,6 +6053,228 @@ export const usePublishSharedWorkspaceSop = <TError = ErrorType<void | SharedWor
       return useMutation(getPublishSharedWorkspaceSopMutationOptions(options));
     }
 
+export const getGetSharedWorkspaceBillingUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/billing`
+}
+
+/**
+ * Members learn whether the workspace is covered by an Organization plan and its allowance state — enough to explain a blocked chat. Dollar figures (spend, remaining, price) are returned to admins alone; per-member breakdowns do not exist on this surface.
+ * @summary A workspace's Organization plan state (spend for admins only)
+ */
+export const getSharedWorkspaceBilling = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomWorkspaceBilling> => {
+
+  return customFetch<VenomWorkspaceBilling>(getGetSharedWorkspaceBillingUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSharedWorkspaceBillingQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/venom/workspaces/${workspaceId}/billing`
+    ] as const;
+    }
+
+
+export const getGetSharedWorkspaceBillingQueryOptions = <TData = Awaited<ReturnType<typeof getSharedWorkspaceBilling>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceBilling>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSharedWorkspaceBillingQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSharedWorkspaceBilling>>> = ({ signal }) => getSharedWorkspaceBilling(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceBilling>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSharedWorkspaceBillingQueryResult = NonNullable<Awaited<ReturnType<typeof getSharedWorkspaceBilling>>>
+export type GetSharedWorkspaceBillingQueryError = ErrorType<void | SharedWorkspaceAccessError>
+
+
+/**
+ * @summary A workspace's Organization plan state (spend for admins only)
+ */
+
+export function useGetSharedWorkspaceBilling<TData = Awaited<ReturnType<typeof getSharedWorkspaceBilling>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(
+ workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceBilling>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSharedWorkspaceBillingQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateSharedWorkspaceBillingCheckoutUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/billing/checkout`
+}
+
+/**
+ * @summary Start Stripe checkout for the Organization plan (admins only)
+ */
+export const createSharedWorkspaceBillingCheckout = async (workspaceId: string,
+    venomBillingPortalRequest?: VenomBillingPortalRequest, options?: Parameters<typeof customFetch>[1]): Promise<VenomBillingRedirect> => {
+
+  return customFetch<VenomBillingRedirect>(getCreateSharedWorkspaceBillingCheckoutUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomBillingPortalRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateSharedWorkspaceBillingCheckoutMutationOptions = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspaceBillingCheckout>>, TError,{workspaceId: string;data?: BodyType<VenomBillingPortalRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspaceBillingCheckout>>, TError,{workspaceId: string;data?: BodyType<VenomBillingPortalRequest>}, TContext> => {
+
+const mutationKey = ['createSharedWorkspaceBillingCheckout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSharedWorkspaceBillingCheckout>>, {workspaceId: string;data?: BodyType<VenomBillingPortalRequest>}> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  createSharedWorkspaceBillingCheckout(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSharedWorkspaceBillingCheckoutMutationResult = NonNullable<Awaited<ReturnType<typeof createSharedWorkspaceBillingCheckout>>>
+    export type CreateSharedWorkspaceBillingCheckoutMutationBody = BodyType<VenomBillingPortalRequest> | undefined
+    export type CreateSharedWorkspaceBillingCheckoutMutationError = ErrorType<void | SharedWorkspaceAccessError>
+
+    /**
+ * @summary Start Stripe checkout for the Organization plan (admins only)
+ */
+export const useCreateSharedWorkspaceBillingCheckout = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspaceBillingCheckout>>, TError,{workspaceId: string;data?: BodyType<VenomBillingPortalRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createSharedWorkspaceBillingCheckout>>,
+        TError,
+        {workspaceId: string;data?: BodyType<VenomBillingPortalRequest>},
+        TContext
+      > => {
+      return useMutation(getCreateSharedWorkspaceBillingCheckoutMutationOptions(options));
+    }
+
+export const getCreateSharedWorkspaceBillingPortalUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/billing/portal`
+}
+
+/**
+ * @summary Open the Stripe portal for the workspace plan (admins only)
+ */
+export const createSharedWorkspaceBillingPortal = async (workspaceId: string,
+    venomBillingPortalRequest?: VenomBillingPortalRequest, options?: Parameters<typeof customFetch>[1]): Promise<VenomBillingRedirect> => {
+
+  return customFetch<VenomBillingRedirect>(getCreateSharedWorkspaceBillingPortalUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomBillingPortalRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateSharedWorkspaceBillingPortalMutationOptions = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspaceBillingPortal>>, TError,{workspaceId: string;data?: BodyType<VenomBillingPortalRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspaceBillingPortal>>, TError,{workspaceId: string;data?: BodyType<VenomBillingPortalRequest>}, TContext> => {
+
+const mutationKey = ['createSharedWorkspaceBillingPortal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSharedWorkspaceBillingPortal>>, {workspaceId: string;data?: BodyType<VenomBillingPortalRequest>}> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  createSharedWorkspaceBillingPortal(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSharedWorkspaceBillingPortalMutationResult = NonNullable<Awaited<ReturnType<typeof createSharedWorkspaceBillingPortal>>>
+    export type CreateSharedWorkspaceBillingPortalMutationBody = BodyType<VenomBillingPortalRequest> | undefined
+    export type CreateSharedWorkspaceBillingPortalMutationError = ErrorType<void | SharedWorkspaceAccessError>
+
+    /**
+ * @summary Open the Stripe portal for the workspace plan (admins only)
+ */
+export const useCreateSharedWorkspaceBillingPortal = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSharedWorkspaceBillingPortal>>, TError,{workspaceId: string;data?: BodyType<VenomBillingPortalRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createSharedWorkspaceBillingPortal>>,
+        TError,
+        {workspaceId: string;data?: BodyType<VenomBillingPortalRequest>},
+        TContext
+      > => {
+      return useMutation(getCreateSharedWorkspaceBillingPortalMutationOptions(options));
+    }
+
 export const getGetSharedWorkspaceSettingsUrl = (workspaceId: string,) => {
 
 
@@ -5883,6 +6423,382 @@ export const useUpdateSharedWorkspaceSettings = <TError = ErrorType<void | Share
       > => {
       return useMutation(getUpdateSharedWorkspaceSettingsMutationOptions(options));
     }
+
+export const getGetSharedWorkspaceAiControlsUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/ai-controls`
+}
+
+/**
+ * Spend caps and model locks bind only requests billed to this workspace's Organization plan. Admin-only — cap figures are workspace money, and members only ever learn lock/cap state through the billing context, never these numbers. Nothing here reads or touches anyone's personal space.
+ * @summary The workspace's AI spend caps and model lock (admins only)
+ */
+export const getSharedWorkspaceAiControls = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomWorkspaceAiControls> => {
+
+  return customFetch<VenomWorkspaceAiControls>(getGetSharedWorkspaceAiControlsUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSharedWorkspaceAiControlsQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/venom/workspaces/${workspaceId}/ai-controls`
+    ] as const;
+    }
+
+
+export const getGetSharedWorkspaceAiControlsQueryOptions = <TData = Awaited<ReturnType<typeof getSharedWorkspaceAiControls>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceAiControls>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSharedWorkspaceAiControlsQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSharedWorkspaceAiControls>>> = ({ signal }) => getSharedWorkspaceAiControls(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceAiControls>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSharedWorkspaceAiControlsQueryResult = NonNullable<Awaited<ReturnType<typeof getSharedWorkspaceAiControls>>>
+export type GetSharedWorkspaceAiControlsQueryError = ErrorType<void | SharedWorkspaceAccessError>
+
+
+/**
+ * @summary The workspace's AI spend caps and model lock (admins only)
+ */
+
+export function useGetSharedWorkspaceAiControls<TData = Awaited<ReturnType<typeof getSharedWorkspaceAiControls>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(
+ workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceAiControls>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSharedWorkspaceAiControlsQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateSharedWorkspaceAiControlsUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/ai-controls`
+}
+
+/**
+ * @summary Set the workspace's default spend cap and model lock (admins only)
+ */
+export const updateSharedWorkspaceAiControls = async (workspaceId: string,
+    venomWorkspaceAiControlsInput: VenomWorkspaceAiControlsInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomWorkspaceAiControls> => {
+
+  return customFetch<VenomWorkspaceAiControls>(getUpdateSharedWorkspaceAiControlsUrl(workspaceId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomWorkspaceAiControlsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateSharedWorkspaceAiControlsMutationOptions = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSharedWorkspaceAiControls>>, TError,{workspaceId: string;data: BodyType<VenomWorkspaceAiControlsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSharedWorkspaceAiControls>>, TError,{workspaceId: string;data: BodyType<VenomWorkspaceAiControlsInput>}, TContext> => {
+
+const mutationKey = ['updateSharedWorkspaceAiControls'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSharedWorkspaceAiControls>>, {workspaceId: string;data: BodyType<VenomWorkspaceAiControlsInput>}> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  updateSharedWorkspaceAiControls(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSharedWorkspaceAiControlsMutationResult = NonNullable<Awaited<ReturnType<typeof updateSharedWorkspaceAiControls>>>
+    export type UpdateSharedWorkspaceAiControlsMutationBody = BodyType<VenomWorkspaceAiControlsInput>
+    export type UpdateSharedWorkspaceAiControlsMutationError = ErrorType<void | SharedWorkspaceAccessError>
+
+    /**
+ * @summary Set the workspace's default spend cap and model lock (admins only)
+ */
+export const useUpdateSharedWorkspaceAiControls = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSharedWorkspaceAiControls>>, TError,{workspaceId: string;data: BodyType<VenomWorkspaceAiControlsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSharedWorkspaceAiControls>>,
+        TError,
+        {workspaceId: string;data: BodyType<VenomWorkspaceAiControlsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateSharedWorkspaceAiControlsMutationOptions(options));
+    }
+
+export const getSetSharedWorkspaceMemberAiCapUrl = (workspaceId: string,
+    memberUserId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/ai-controls/members/${memberUserId}`
+}
+
+/**
+ * Replaces the workspace default cap for this member. A numeric cap is their own monthly limit on workspace-billed usage; null means this member is explicitly uncapped.
+ * @summary Override one member's monthly workspace AI cap (admins only)
+ */
+export const setSharedWorkspaceMemberAiCap = async (workspaceId: string,
+    memberUserId: string,
+    venomWorkspaceMemberAiCapInput: VenomWorkspaceMemberAiCapInput, options?: Parameters<typeof customFetch>[1]): Promise<VenomWorkspaceAiControls> => {
+
+  return customFetch<VenomWorkspaceAiControls>(getSetSharedWorkspaceMemberAiCapUrl(workspaceId,memberUserId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(venomWorkspaceMemberAiCapInput)
+  }
+);}
+
+
+
+
+
+export const getSetSharedWorkspaceMemberAiCapMutationOptions = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setSharedWorkspaceMemberAiCap>>, TError,{workspaceId: string;memberUserId: string;data: BodyType<VenomWorkspaceMemberAiCapInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setSharedWorkspaceMemberAiCap>>, TError,{workspaceId: string;memberUserId: string;data: BodyType<VenomWorkspaceMemberAiCapInput>}, TContext> => {
+
+const mutationKey = ['setSharedWorkspaceMemberAiCap'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setSharedWorkspaceMemberAiCap>>, {workspaceId: string;memberUserId: string;data: BodyType<VenomWorkspaceMemberAiCapInput>}> = (props) => {
+          const {workspaceId,memberUserId,data} = props ?? {};
+
+          return  setSharedWorkspaceMemberAiCap(workspaceId,memberUserId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetSharedWorkspaceMemberAiCapMutationResult = NonNullable<Awaited<ReturnType<typeof setSharedWorkspaceMemberAiCap>>>
+    export type SetSharedWorkspaceMemberAiCapMutationBody = BodyType<VenomWorkspaceMemberAiCapInput>
+    export type SetSharedWorkspaceMemberAiCapMutationError = ErrorType<void | SharedWorkspaceAccessError>
+
+    /**
+ * @summary Override one member's monthly workspace AI cap (admins only)
+ */
+export const useSetSharedWorkspaceMemberAiCap = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setSharedWorkspaceMemberAiCap>>, TError,{workspaceId: string;memberUserId: string;data: BodyType<VenomWorkspaceMemberAiCapInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setSharedWorkspaceMemberAiCap>>,
+        TError,
+        {workspaceId: string;memberUserId: string;data: BodyType<VenomWorkspaceMemberAiCapInput>},
+        TContext
+      > => {
+      return useMutation(getSetSharedWorkspaceMemberAiCapMutationOptions(options));
+    }
+
+export const getClearSharedWorkspaceMemberAiCapUrl = (workspaceId: string,
+    memberUserId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/ai-controls/members/${memberUserId}`
+}
+
+/**
+ * @summary Return a member to the workspace's default cap (admins only)
+ */
+export const clearSharedWorkspaceMemberAiCap = async (workspaceId: string,
+    memberUserId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomWorkspaceAiControls> => {
+
+  return customFetch<VenomWorkspaceAiControls>(getClearSharedWorkspaceMemberAiCapUrl(workspaceId,memberUserId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getClearSharedWorkspaceMemberAiCapMutationOptions = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSharedWorkspaceMemberAiCap>>, TError,{workspaceId: string;memberUserId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearSharedWorkspaceMemberAiCap>>, TError,{workspaceId: string;memberUserId: string}, TContext> => {
+
+const mutationKey = ['clearSharedWorkspaceMemberAiCap'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearSharedWorkspaceMemberAiCap>>, {workspaceId: string;memberUserId: string}> = (props) => {
+          const {workspaceId,memberUserId} = props ?? {};
+
+          return  clearSharedWorkspaceMemberAiCap(workspaceId,memberUserId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearSharedWorkspaceMemberAiCapMutationResult = NonNullable<Awaited<ReturnType<typeof clearSharedWorkspaceMemberAiCap>>>
+
+    export type ClearSharedWorkspaceMemberAiCapMutationError = ErrorType<void | SharedWorkspaceAccessError>
+
+    /**
+ * @summary Return a member to the workspace's default cap (admins only)
+ */
+export const useClearSharedWorkspaceMemberAiCap = <TError = ErrorType<void | SharedWorkspaceAccessError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSharedWorkspaceMemberAiCap>>, TError,{workspaceId: string;memberUserId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearSharedWorkspaceMemberAiCap>>,
+        TError,
+        {workspaceId: string;memberUserId: string},
+        TContext
+      > => {
+      return useMutation(getClearSharedWorkspaceMemberAiCapMutationOptions(options));
+    }
+
+export const getGetSharedWorkspaceUsageUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/venom/workspaces/${workspaceId}/usage`
+}
+
+/**
+ * Sums only usage billed to this workspace's Organization plan for the current period. Members' personal-space usage never appears here — a member's row counts what the workspace paid for, nothing else. The total covers every workspace-billed call this period, including ones by since-removed members, so it always matches the plan's spend.
+ * @summary Per-member workspace-billed AI usage this period (admins only)
+ */
+export const getSharedWorkspaceUsage = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<VenomWorkspaceUsageSummary> => {
+
+  return customFetch<VenomWorkspaceUsageSummary>(getGetSharedWorkspaceUsageUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSharedWorkspaceUsageQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/venom/workspaces/${workspaceId}/usage`
+    ] as const;
+    }
+
+
+export const getGetSharedWorkspaceUsageQueryOptions = <TData = Awaited<ReturnType<typeof getSharedWorkspaceUsage>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceUsage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSharedWorkspaceUsageQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSharedWorkspaceUsage>>> = ({ signal }) => getSharedWorkspaceUsage(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceUsage>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSharedWorkspaceUsageQueryResult = NonNullable<Awaited<ReturnType<typeof getSharedWorkspaceUsage>>>
+export type GetSharedWorkspaceUsageQueryError = ErrorType<void | SharedWorkspaceAccessError>
+
+
+/**
+ * @summary Per-member workspace-billed AI usage this period (admins only)
+ */
+
+export function useGetSharedWorkspaceUsage<TData = Awaited<ReturnType<typeof getSharedWorkspaceUsage>>, TError = ErrorType<void | SharedWorkspaceAccessError>>(
+ workspaceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSharedWorkspaceUsage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSharedWorkspaceUsageQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getSetSharedWorkspaceConceptSensitivityUrl = (workspaceId: string,
     conceptId: string,) => {

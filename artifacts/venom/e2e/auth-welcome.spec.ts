@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
  * Signed-out welcome / sign-in coverage.
  *
  * Every other spec runs in UI-test mode, which bypasses auth entirely, so
- * this is the one place the Strike-first welcome screen is exercised. It
+ * this is the one place the wordmark-hero welcome screen is exercised. It
  * opts back into the real Clerk-gated flow with `?venomUiTest=false`
  * (see context/VenomContext.tsx) and needs no credentials: sign-in attempts
  * never reach Clerk because POST /v1/client/sign_ins is stubbed with the
@@ -13,10 +13,12 @@ import { expect, test, type Page } from "@playwright/test";
  * the entire suite already depends on them on every page load.
  */
 
-// Copy from the retired card design. If either string reappears on the
-// welcome state, the Strike-first redesign has regressed.
+// Copy from retired designs. If any string reappears on the welcome state,
+// a redesign has regressed: the card era's eyebrow/title, or the emblem
+// era's "Strike first" tagline (replaced by the wordmark hero).
 const LEGACY_EYEBROW_COPY = "Welcome back";
 const LEGACY_TITLE_COPY = "Resume your workspace";
+const LEGACY_TAGLINE_COPY = "Strike first";
 
 async function installSignedOutStubs(page: Page) {
   const state = { signInAttempts: 0 };
@@ -70,23 +72,34 @@ test("signed-out welcome survives the email round trip and links to sign-up", as
   // redirect to the welcome state. First paint waits on live Clerk init,
   // so give it headroom beyond the 10s expect default.
   await page.goto("/?venomUiTest=false");
-  await expect(
-    page.getByRole("heading", { name: "Strike first" }),
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("google-sign-in")).toBeVisible({
+    timeout: 30_000,
+  });
 
-  // Welcome state: the two pills, no credentials, no card-era copy.
-  await expect(page.getByTestId("google-sign-in")).toBeVisible();
+  // Wordmark-hero welcome, mirroring the web landing: the scrawled VENOM
+  // tag is the sole brand moment (the small brand row is dropped on this
+  // step, so the mark appears exactly once), with a screen-reader heading
+  // standing in for the retired visible tagline.
+  await expect(
+    page.getByRole("heading", { name: "Sign in to Venom" }),
+  ).toBeVisible();
+  await expect(page.getByRole("img", { name: "Venom" })).toHaveCount(1);
+
+  // Welcome state: the two pills, no credentials, no retired-design copy.
   await expect(page.getByTestId("continue-with-email")).toBeVisible();
   await expect(page.getByText(LEGACY_EYEBROW_COPY)).toHaveCount(0);
   await expect(page.getByText(LEGACY_TITLE_COPY)).toHaveCount(0);
+  await expect(page.getByText(LEGACY_TAGLINE_COPY)).toHaveCount(0);
   await expect(page.getByTestId("sign-in-email")).toHaveCount(0);
   await expect(page.getByTestId("sign-in-error")).toHaveCount(0);
 
-  // "Continue with email" reveals the credentials step.
+  // "Continue with email" reveals the credentials step; the hero hands off
+  // to the small brand row, so there is still exactly one wordmark.
   await page.getByTestId("continue-with-email").click();
   await expect(page.getByTestId("sign-in-email")).toBeVisible();
   await expect(page.getByTestId("sign-in-password")).toBeVisible();
   await expect(page.getByTestId("submit-sign-in")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Venom" })).toHaveCount(1);
 
   // A failed attempt surfaces its error on the credentials step…
   await page.getByTestId("sign-in-email").fill("venom@example.com");

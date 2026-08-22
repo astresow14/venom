@@ -14,6 +14,11 @@ import {
   FileWritingCard,
   MessageAttachmentList,
 } from "@/components/ChatFileCards";
+import {
+  type FamilyForModel,
+  SpeakerAvatar,
+  speakerGlyph,
+} from "@/components/chat/SpeakerAvatar";
 import { messageCitationSegments } from "@/context/messageCitations";
 import { Message, type ProjectSource } from "@/context/VenomContext";
 import { useColors } from "@/hooks/useColors";
@@ -42,6 +47,7 @@ export function MessageList({
   localDeliberation,
   localFileActivity,
   showTyping,
+  familyForModel,
 }: {
   /** Display messages, newest first (the list renders inverted). */
   messages: Message[];
@@ -57,6 +63,8 @@ export function MessageList({
   localDeliberation: LocalDeliberation | null;
   localFileActivity: FileActivity | null;
   showTyping: boolean;
+  /** Resolves a model id to its family via the already-fetched catalog. */
+  familyForModel: FamilyForModel;
 }) {
   const router = useRouter();
   const [expandedTakeMessageIds, setExpandedTakeMessageIds] = useState<
@@ -134,7 +142,7 @@ export function MessageList({
     });
   };
 
-  const renderMessage = ({ item }: { item: Message }) => {
+  const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isUser = item.role === "user";
     const isError = item.status === "error";
     const segments = isUser
@@ -193,22 +201,47 @@ export function MessageList({
         ? item.modelId
         : null;
 
+    // Group-chat runs: consecutive turns from the same speaker read as one
+    // visual group, so the avatar and name chip sit only on the run's first
+    // message. The list is newest-first, so the chronological predecessor is
+    // the NEXT array entry.
+    const chronologicalPrev = messages[index + 1];
+    const runStart =
+      Boolean(speakerName) &&
+      !(
+        chronologicalPrev &&
+        chronologicalPrev.role === "assistant" &&
+        chronologicalPrev.speakerName === speakerName
+      );
+    const avatarGlyph = speakerName
+      ? speakerGlyph({
+          speakerId: item.speakerId,
+          modelId: item.modelId,
+          name: speakerName,
+          familyForModel,
+        })
+      : null;
+
     return (
       <View
         style={[
           styles.messageRow,
           isUser ? styles.messageUser : styles.messageAssistant,
+          speakerName && !runStart ? styles.messageRowGrouped : null,
         ]}
       >
+        {speakerName ? (
+          // Fixed-width gutter keeps every bubble in a run left-aligned; only
+          // the run's first row actually carries the avatar.
+          <View style={styles.speakerGutter}>
+            {runStart && avatarGlyph ? (
+              <SpeakerAvatar glyph={avatarGlyph} colors={colors} />
+            ) : null}
+          </View>
+        ) : null}
         <View style={styles.messageWrap}>
-          {speakerName && (
+          {speakerName && runStart && (
             <View style={styles.speakerChip} testID="chip-speaker">
-              <View
-                style={[
-                  styles.speakerDot,
-                  { backgroundColor: colors.foreground },
-                ]}
-              />
               <Text
                 style={[styles.speakerName, { color: colors.foreground }]}
                 numberOfLines={1}
@@ -359,6 +392,16 @@ export function MessageList({
                     testID={`deliberation-take-${take.voiceId}`}
                   >
                     <View style={styles.deliberationVoiceHeader}>
+                      <SpeakerAvatar
+                        glyph={speakerGlyph({
+                          speakerId: take.voiceId,
+                          modelId: take.modelId,
+                          name: take.name,
+                          familyForModel,
+                        })}
+                        colors={colors}
+                        size={20}
+                      />
                       <Text
                         style={[
                           styles.deliberationVoiceName,
@@ -502,12 +545,14 @@ export function MessageList({
             debate={localDebate}
             colors={colors}
             renderContent={renderCitationText}
+            familyForModel={familyForModel}
           />
         ) : localDeliberation ? (
           <DeliberationStreamCard
             deliberation={localDeliberation}
             colors={colors}
             renderContent={renderCitationText}
+            familyForModel={familyForModel}
           />
         ) : localFileActivity ? (
           <FileWritingCard activity={localFileActivity} colors={colors} />

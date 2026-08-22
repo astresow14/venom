@@ -91,6 +91,14 @@ export const venomBuildRunsTable = pgTable(
     templateId: uuid("template_id"),
     /** Bounded plain-language summary of data changes since the baseline. */
     changesSummary: text("changes_summary"),
+    /**
+     * The allowance hold (venom_allowance_reservations id) admitted with
+     * this run's queue/retry/revise transition. The processor settles it
+     * into the run's first ledgered usage event or releases it at a
+     * terminal state; a stale id is harmless — settle and release both
+     * no-op once the reservation row is gone.
+     */
+    reservationId: uuid("reservation_id"),
     status: text("status").notNull().default("queued"),
     progress: integer("progress").notNull().default(0),
     attempt: integer("attempt").notNull().default(1),

@@ -22,6 +22,11 @@ import type {
   VenomModelId,
 } from "@workspace/api-client-react";
 import { messageCitationSegments } from "@/lib/messageCitations";
+import {
+  type FamilyForModel,
+  SpeakerAvatar,
+  speakerGlyph,
+} from "./SpeakerAvatar";
 
 // ─── Shared shapes ───────────────────────────────────────────────────────────
 
@@ -176,11 +181,13 @@ function VoiceStreamCard({
   showModel,
   citationsById,
   archivedById,
+  familyForModel,
 }: {
   voice: DeliberationRosterVoice;
   take: StreamingTake;
   dimmed: boolean;
   showModel: boolean;
+  familyForModel: FamilyForModel;
 } & CitationMaps) {
   const reduceMotion = useReducedMotion();
   const streamingDot =
@@ -221,6 +228,15 @@ function VoiceStreamCard({
     >
       <div className="flex min-w-0 items-center gap-1.5">
         {streamingDot}
+        <SpeakerAvatar
+          size="sm"
+          glyph={speakerGlyph({
+            speakerId: voice.voiceId,
+            modelId: voice.modelId,
+            name: voice.name,
+            familyForModel,
+          })}
+        />
         <span className="truncate text-xs font-medium text-foreground">
           {voice.name}
         </span>
@@ -256,7 +272,11 @@ export function DeliberationStreamPanel({
   deliberation,
   citationsById,
   archivedById,
-}: { deliberation: StreamingDeliberation } & CitationMaps) {
+  familyForModel,
+}: {
+  deliberation: StreamingDeliberation;
+  familyForModel: FamilyForModel;
+} & CitationMaps) {
   const { roster, takes, stage } = deliberation;
   const converging = stage === "synthesis";
   const showModels =
@@ -288,6 +308,7 @@ export function DeliberationStreamPanel({
             showModel={showModels}
             citationsById={citationsById}
             archivedById={archivedById}
+            familyForModel={familyForModel}
           />
         ))}
       </div>
@@ -305,7 +326,11 @@ export function DeliberationResult({
   deliberation,
   citationsById,
   archivedById,
-}: { deliberation: VenomMessageDeliberation } & CitationMaps) {
+  familyForModel,
+}: {
+  deliberation: VenomMessageDeliberation;
+  familyForModel: FamilyForModel;
+} & CitationMaps) {
   const [expanded, setExpanded] = useState(false);
   const reduceMotion = useReducedMotion();
   const okTakes = deliberation.voices.filter((take) => take.status === "ok");
@@ -390,7 +415,16 @@ export function DeliberationResult({
                 className="rounded-xl border border-border/60 p-3"
                 data-testid={`deliberation-take-${take.voiceId}`}
               >
-                <div className="flex items-baseline gap-2">
+                <div className="flex items-center gap-2">
+                  <SpeakerAvatar
+                    size="sm"
+                    glyph={speakerGlyph({
+                      speakerId: take.voiceId,
+                      modelId: take.modelId,
+                      name: take.name,
+                      familyForModel,
+                    })}
+                  />
                   <span className="text-xs font-medium text-foreground">
                     {take.name}
                   </span>

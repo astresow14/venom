@@ -2,6 +2,11 @@ import React from "react";
 import { Text, View } from "react-native";
 import { BreathingDot } from "@/components/chat/BreathingDot";
 import { type LocalDebate } from "@/components/chat/chatTypes";
+import {
+  type FamilyForModel,
+  SpeakerAvatar,
+  speakerGlyph,
+} from "@/components/chat/SpeakerAvatar";
 import { useColors } from "@/hooks/useColors";
 import { styles } from "./styles";
 
@@ -14,10 +19,12 @@ export function DebateStreamCard({
   debate,
   colors,
   renderContent,
+  familyForModel,
 }: {
   debate: LocalDebate;
   colors: ReturnType<typeof useColors>;
   renderContent: (content: string, keyPrefix: string) => React.ReactNode;
+  familyForModel: FamilyForModel;
 }) {
   const current = debate.current;
   const showModels =
@@ -80,6 +87,16 @@ export function DebateStreamCard({
             <BreathingDot
               color={colors.foreground}
               phase={currentIndexInRoster / 3}
+            />
+            <SpeakerAvatar
+              glyph={speakerGlyph({
+                speakerId: current.voiceId,
+                modelId: current.modelId,
+                name: current.name,
+                familyForModel,
+              })}
+              colors={colors}
+              size={20}
             />
             <Text
               style={[

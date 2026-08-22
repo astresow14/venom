@@ -25,11 +25,13 @@ import venomAppSharingRouter from "./venom-app-sharing";
 import venomBuildTemplatesRouter from "./venom-build-templates";
 import venomAppAiRouter from "./venom-app-ai";
 import venomKnowledgeMovesRouter from "./venom-knowledge-moves-router";
+import venomBillingRouter from "./venom-billing-router";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(venomRouter);
+router.use(venomBillingRouter);
 router.use(venomVoiceRouter);
 router.use(venomWorkspaceRouter);
 router.use(venomOntologyRouter);

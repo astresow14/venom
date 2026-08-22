@@ -25,6 +25,11 @@ export interface VenomChatRequest {
      * @maxLength 160
      */
   projectId: string;
+  /**
+     * The shared workspace this chat lives in. It controls filing and billing only; context still spans the caller's permitted spaces.
+     * @pattern ^[0-9a-fA-F-]{36}$
+     */
+  workspaceId?: string;
   modelId?: VenomModelId;
   /**
      * @maxItems 200
