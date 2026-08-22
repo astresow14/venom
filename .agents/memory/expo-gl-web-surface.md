@@ -24,6 +24,17 @@ tune constants that were never the problem.
 native and web. Native reports the correct size immediately, so this stays
 invisible until the web path is exercised.
 
+**Lifecycle rule:** after a GL context becomes live (including resume), do one
+real draw before deferring later work through animation frames.
+
+**Why:** on the Expo web bridge, an extra first-frame delay can leave a context
+attached to its pre-layout buffer while a responsive surface changes size. The
+quality controller then adapts correctly, but the buffer does not follow.
+
+**How to apply:** reset cadence on resume, make one immediate draw, then use
+the normal frame scheduler for subsequent work. Keep pause responsible for
+stopping the scheduled work.
+
 When a GL layer renders nothing, force the output colour to something garish
 before tuning anything else. It separates "not rendering at all" from
 "rendering too subtly" in one pass.

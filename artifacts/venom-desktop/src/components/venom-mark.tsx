@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { markSizeClasses } from "@/lib/mark-size";
 
 /**
  * Hand-scrawled Venom "V" — original marker-tag artwork drawn for the
@@ -18,11 +18,14 @@ type VenomMarkProps = {
   title?: string;
 };
 
+// Default sizing lives in @/lib/mark-size: this module is entry-reachable
+// (the route fallback renders it), so it must not use the tailwind-merge
+// cn() — the base h-8/w-8 is withheld when the caller sizes the mark.
 export function VenomMark({ className, title }: VenomMarkProps) {
   return (
     <svg
       viewBox="0 0 1024 1024"
-      className={cn("h-8 w-8", className)}
+      className={markSizeClasses(className)}
       role={title ? "img" : undefined}
       aria-label={title}
       aria-hidden={title ? undefined : true}

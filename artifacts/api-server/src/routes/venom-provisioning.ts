@@ -17,6 +17,11 @@
 
 import { getAuth } from "@clerk/express";
 import {
+  deliverAppAiCredentialSerialized,
+  prepareAppAiCredentialForHandoff,
+  type RuntimeCredentialPreparation,
+} from "../lib/venom-app-ai-store";
+import {
   CancelProvisioningRunBody,
   CancelProvisioningRunParams,
   CancelProvisioningRunResponse,
@@ -42,6 +47,7 @@ import {
   venomBuildPackageRevisionsTable,
   venomBuildRunsTable,
   venomCandidateReleasesTable,
+  venomPortfolioAppIterationsTable,
   venomPortfolioAppsTable,
   venomPortfolioDeploymentLinksTable,
   venomPortfolioSourceVersionsTable,
@@ -84,6 +90,12 @@ const STAGE_TIMEOUT_MS = 60_000;
 const BUILD_POLL_DEADLINE_MS = 20 * 60_000; // 20 minutes
 const STALE_HEARTBEAT_AFTER_MS = 5 * 60_000;
 const WORKER_RECONCILE_INTERVAL_MS = 15_000;
+// Reconciliation exists to rescue orphaned queued work (e.g. after a server
+// restart), not to double-schedule runs that were just created: fresh runs are
+// already scheduled in-process at creation time. The grace period also keeps a
+// worker in one process (the dev server) from claiming rows another process
+// (an integration test sharing the same database) created moments ago.
+const QUEUE_RESCUE_MIN_AGE_MS = 2 * 60_000;
 
 // Active worker controllers keyed by provisioningRunId
 const activeProvisioningControllers = new Map<string, AbortController>();
@@ -743,6 +755,24 @@ async function processProvisioningRun(
       handoffSourceRef = { ...sourceRef, downloadUrl };
     }
 
+    // Whitelabeled AI: decide whether this handoff needs a fresh gateway
+    // credential for the app. Only possible when the run already knows its
+    // app (an iteration); first-time provisioning delivers right after the
+    // app record is created at candidate stage. The secret never rides the
+    // package itself — delivery happens AFTER the handoff, serialized with
+    // the credential lifecycle, so a rotation racing this run cannot end up
+    // with its fresh key overwritten by this run's stale one. The env map
+    // carries the live secret — transient, never stored or logged. A re-run
+    // whose credential already reached THIS project prepares nothing.
+    let runtimeCredentialPrep: RuntimeCredentialPreparation | null = null;
+    if (run.appId) {
+      runtimeCredentialPrep = await prepareAppAiCredentialForHandoff(
+        userId,
+        run.appId,
+        projectResult.providerProjectId,
+      );
+    }
+
     await withProviderTimeout(
       "source_handoff",
       STAGE_TIMEOUT_MS,
@@ -761,11 +791,46 @@ async function processProvisioningRun(
             targetName: run.targetName,
             // Transient signed download URL + exact source pins. No objectPath.
             sourceRef: handoffSourceRef,
+            // Never carries the gateway secret: credentials are delivered
+            // separately below, serialized with the credential lifecycle.
+            runtimeCredentials: null,
           },
           signal,
         }),
       controller.signal,
     );
+    if (runtimeCredentialPrep && run.appId) {
+      // Deliver the freshly minted gateway credential now that the package
+      // handoff succeeded. The provider write runs under the per-app
+      // credential lock and is skipped when a concurrent rotation superseded
+      // this credential (the rotation's own delivery then owns the provider
+      // secret). Failure is non-fatal: the credential stays undelivered, so
+      // the next handoff re-mints and ships a fresh one.
+      try {
+        await deliverAppAiCredentialSerialized(
+          run.appId,
+          runtimeCredentialPrep.credentialId,
+          projectResult.providerProjectId,
+          async () => {
+            await provider.deliverRuntimeCredentials({
+              providerProjectId: projectResult.providerProjectId,
+              credentials: { envVars: runtimeCredentialPrep.envVars },
+              signal: controller.signal,
+            });
+          },
+        );
+      } catch {
+        // Never log the caught error: this path handles a live secret.
+        logger.warn(
+          {
+            operation: "venom_provisioning_ai_credential_deferred",
+            runId: run.id,
+            appId: run.appId,
+          },
+          "App AI credential delivery deferred to next provisioning handoff",
+        );
+      }
+    }
     await heartbeat(run.id, userId);
 
     await addProvEvent(
@@ -1025,6 +1090,42 @@ async function processProvisioningRun(
         },
         "Portfolio app created for provisioning run",
       );
+      // First provisioning of a brand-new app: the package handoff ran
+      // before this app record existed, so mint its AI gateway credential
+      // now and deliver it straight into the project's secret storage.
+      // Failure is non-fatal — the app is fine without AI for the moment,
+      // the credential stays undelivered, and the next handoff ships it.
+      try {
+        const credentialPrep = await prepareAppAiCredentialForHandoff(
+          userId,
+          resolvedAppId,
+          projectResult.providerProjectId,
+        );
+        if (credentialPrep) {
+          await deliverAppAiCredentialSerialized(
+            resolvedAppId,
+            credentialPrep.credentialId,
+            projectResult.providerProjectId,
+            async () => {
+              await provider.deliverRuntimeCredentials({
+                providerProjectId: projectResult.providerProjectId,
+                credentials: { envVars: credentialPrep.envVars },
+                signal: controller.signal,
+              });
+            },
+          );
+        }
+      } catch {
+        // Never log the caught error: this path handles a live secret.
+        logger.warn(
+          {
+            operation: "venom_provisioning_ai_credential_deferred",
+            runId: run.id,
+            appId: resolvedAppId,
+          },
+          "App AI credential delivery deferred to next provisioning handoff",
+        );
+      }
     } else {
       // Verify existing app is owned by this user
       const [existingApp] = await db
@@ -1379,15 +1480,23 @@ async function failStaleProvisioningRuns(): Promise<void> {
   );
 }
 
-async function reconcileProvisioningQueue(): Promise<void> {
+async function reconcileProvisioningQueue(
+  now: number = Date.now(),
+): Promise<void> {
   await failStaleProvisioningRuns();
+  const rescueCutoff = new Date(now - QUEUE_RESCUE_MIN_AGE_MS);
   const queued = await db
     .select({
       id: venomProvisioningRunsTable.id,
       clerkUserId: venomProvisioningRunsTable.clerkUserId,
     })
     .from(venomProvisioningRunsTable)
-    .where(eq(venomProvisioningRunsTable.status, "queued"))
+    .where(
+      and(
+        eq(venomProvisioningRunsTable.status, "queued"),
+        lt(venomProvisioningRunsTable.createdAt, rescueCutoff),
+      ),
+    )
     .orderBy(venomProvisioningRunsTable.createdAt)
     .limit(100);
   queued.forEach((run) =>
@@ -1426,8 +1535,16 @@ export async function processProvisioningRunForTests(
   await processProvisioningRun(userId, runId);
 }
 
-export async function reconcileProvisioningQueueForTests(): Promise<void> {
-  await reconcileProvisioningQueue();
+/**
+ * `now` lets a suite prove the rescue path with a *fresh* fixture: a future
+ * clock makes the row qualify as aged inside this invocation only, so the
+ * fixture is never backdated into the claim window of the dev server's own
+ * reconcile loop (both processes share one database).
+ */
+export async function reconcileProvisioningQueueForTests(
+  now?: number,
+): Promise<void> {
+  await reconcileProvisioningQueue(now);
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -2416,6 +2533,32 @@ router.post(
             url: healthyLaunchUrl,
             isPrimary: true,
           });
+
+          // Anchor the live pointer on the app record, and stamp the approved
+          // package iteration with the release it just shipped as. Both live
+          // in this transaction so the pointer can never disagree with the
+          // release lifecycle rows.
+          await tx
+            .update(venomPortfolioAppsTable)
+            .set({ liveReleaseId: release.id, updatedAt: now })
+            .where(
+              and(
+                eq(venomPortfolioAppsTable.id, appId),
+                eq(venomPortfolioAppsTable.clerkUserId, userId),
+              ),
+            );
+          await tx
+            .update(venomPortfolioAppIterationsTable)
+            .set({ releaseId: release.id })
+            .where(
+              and(
+                eq(venomPortfolioAppIterationsTable.clerkUserId, userId),
+                eq(
+                  venomPortfolioAppIterationsTable.buildRunId,
+                  release.buildRunId,
+                ),
+              ),
+            );
         }
       });
 
@@ -2815,6 +2958,32 @@ router.post(
             url: healthyLaunchUrl,
             isPrimary: true,
           });
+
+          // The rollback visibly resets the app's live pointer to the
+          // restored release, and (re)stamps the matching package iteration —
+          // a no-op for releases stamped at publish time, but it also repairs
+          // rows that predate release stamping.
+          await tx
+            .update(venomPortfolioAppsTable)
+            .set({ liveReleaseId: release.id, updatedAt: now })
+            .where(
+              and(
+                eq(venomPortfolioAppsTable.id, appId),
+                eq(venomPortfolioAppsTable.clerkUserId, userId),
+              ),
+            );
+          await tx
+            .update(venomPortfolioAppIterationsTable)
+            .set({ releaseId: release.id })
+            .where(
+              and(
+                eq(venomPortfolioAppIterationsTable.clerkUserId, userId),
+                eq(
+                  venomPortfolioAppIterationsTable.buildRunId,
+                  release.buildRunId,
+                ),
+              ),
+            );
         }
       });
 

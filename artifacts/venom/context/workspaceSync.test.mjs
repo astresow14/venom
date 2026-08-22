@@ -9,6 +9,7 @@ import {
   DEFAULT_VOICE_TALKATIVENESS,
   dropRestoredArchivedCitations,
   dropUncitedArchivedCitations,
+  fileConversationToProjectInState,
   flushWorkspaceState,
   mergeArchivedCitations,
   mergeVoicePreferences,
@@ -668,6 +669,86 @@ test("mergeWorkspaceStates cloud modelPreferences wins when cloud updatedAt is h
   const merged = mergeWorkspaceStates(cloudState, deviceState);
   assert.equal(merged.modelPreferences.activeModelId, "venom-gemini");
   assert.equal(merged.modelPreferences.updatedAt, 500);
+});
+
+// ---- selectionPolicy (account-level auto model choice) ----
+
+test("normalizeModelPreferences keeps valid selection policies verbatim", () => {
+  for (const policy of ["manual", "auto-cheapest", "auto-max-power"]) {
+    const prefs = normalizeModelPreferences({
+      enabledModelIds: ["venom-gpt"],
+      defaultModelId: "venom-gpt",
+      activeModelId: "venom-gpt",
+      selectionPolicy: policy,
+      updatedAt: 5,
+    });
+    assert.equal(prefs.selectionPolicy, policy);
+  }
+});
+
+test("normalizeModelPreferences drops unknown selection policies", () => {
+  for (const bad of ["cheapest", "AUTO-CHEAPEST", 42, {}, null]) {
+    const prefs = normalizeModelPreferences({
+      enabledModelIds: ["venom-gpt"],
+      defaultModelId: "venom-gpt",
+      activeModelId: "venom-gpt",
+      selectionPolicy: bad,
+      updatedAt: 5,
+    });
+    assert.equal("selectionPolicy" in prefs, false);
+  }
+  // Absent stays absent — legacy snapshots are untouched.
+  const legacy = normalizeModelPreferences({
+    enabledModelIds: ["venom-gpt"],
+    defaultModelId: "venom-gpt",
+    activeModelId: "venom-gpt",
+    updatedAt: 5,
+  });
+  assert.equal("selectionPolicy" in legacy, false);
+});
+
+test("mergeWorkspaceStates round-trips the selection policy with the winning block", () => {
+  const base = state({
+    projects: [project("proj", 10)],
+    conversations: [],
+    clusters: [],
+    activeProjectId: "proj",
+    activeConversationId: null,
+  });
+  const cloudState = {
+    ...base,
+    modelPreferences: {
+      enabledModelIds: ["venom-gpt"],
+      defaultModelId: "venom-gpt",
+      activeModelId: "venom-gpt",
+      selectionPolicy: "auto-cheapest",
+      updatedAt: 300,
+    },
+  };
+  const deviceState = {
+    ...base,
+    modelPreferences: {
+      enabledModelIds: ["venom-claude"],
+      defaultModelId: "venom-claude",
+      activeModelId: "venom-claude",
+      updatedAt: 100,
+    },
+  };
+  // Cloud wins: the policy set on another device arrives with its block.
+  const merged = mergeWorkspaceStates(cloudState, deviceState);
+  assert.equal(merged.modelPreferences.selectionPolicy, "auto-cheapest");
+
+  // A newer manual write on this device beats the older auto policy.
+  const deviceManual = {
+    ...deviceState,
+    modelPreferences: {
+      ...deviceState.modelPreferences,
+      selectionPolicy: "manual",
+      updatedAt: 400,
+    },
+  };
+  const backToManual = mergeWorkspaceStates(cloudState, deviceManual);
+  assert.equal(backToManual.modelPreferences.selectionPolicy, "manual");
 });
 
 test("mergeWorkspaceStates normalizes modelPreferences with removed model id on device", () => {
@@ -1377,6 +1458,7 @@ function archivedCitation(id, retiredAt) {
 
 test("mergeArchivedCitations keeps the newest retirement per citation id", () => {
   const merged = mergeArchivedCitations(
+    () => false,
     [archivedCitation("cite_a", 100), archivedCitation("cite_b", 300)],
     [{ ...archivedCitation("cite_a", 500), title: "Newer title" }],
   );
@@ -1396,15 +1478,70 @@ test("mergeArchivedCitations bounds the archive, evicting the oldest entries", (
     (_, index) => archivedCitation(`cite_${index}`, index),
   );
 
-  const merged = mergeArchivedCitations(overflowing);
+  const merged = mergeArchivedCitations(() => false, overflowing);
 
   assert.equal(merged.length, ARCHIVED_CITATION_LIMIT);
   assert.equal(merged[0].retiredAt, ARCHIVED_CITATION_LIMIT + 24);
   assert.equal(merged[merged.length - 1].retiredAt, 25);
 });
 
+test("a cited entry outlives newer uncited entries once the cap is exceeded", () => {
+  // The two oldest entries in the whole archive are the ones saved answers
+  // still cite; everything newer is the uncited pile a refresh archives
+  // wholesale. Pure age eviction would push the cited pair out first.
+  const cited = [
+    archivedCitation("cite_named_by_answer", 1),
+    archivedCitation("cite_also_named", 0),
+  ];
+  const uncited = Array.from(
+    { length: ARCHIVED_CITATION_LIMIT + 10 },
+    (_, index) => archivedCitation(`cite_uncited_${index}`, 100 + index),
+  );
+  const citedIds = new Set(cited.map((entry) => entry.id));
+
+  const merged = mergeArchivedCitations(
+    (citationId) => citedIds.has(citationId),
+    uncited,
+    cited,
+  );
+
+  assert.equal(merged.length, ARCHIVED_CITATION_LIMIT);
+  // Both cited entries survive even though every evicted entry was newer.
+  assert.ok(merged.some((entry) => entry.id === "cite_named_by_answer"));
+  assert.ok(merged.some((entry) => entry.id === "cite_also_named"));
+  // Eviction stays oldest-first within the uncited group: the twelve oldest
+  // uncited entries go, the next-oldest survives.
+  for (let index = 0; index < 12; index += 1) {
+    assert.ok(!merged.some((entry) => entry.id === `cite_uncited_${index}`));
+  }
+  assert.ok(merged.some((entry) => entry.id === "cite_uncited_12"));
+  // The archive stays newest-first overall; citedness steers eviction only.
+  const retiredTimes = merged.map((entry) => entry.retiredAt);
+  assert.deepEqual(
+    retiredTimes,
+    [...retiredTimes].sort((left, right) => right - left),
+  );
+  assert.deepEqual(
+    merged.slice(-2).map((entry) => entry.id),
+    ["cite_named_by_answer", "cite_also_named"],
+  );
+});
+
+test("even cited evidence evicts newest-first when it alone exceeds the cap", () => {
+  const overflowing = Array.from(
+    { length: ARCHIVED_CITATION_LIMIT + 5 },
+    (_, index) => archivedCitation(`cite_${index}`, index),
+  );
+
+  const merged = mergeArchivedCitations(() => true, overflowing);
+
+  assert.equal(merged.length, ARCHIVED_CITATION_LIMIT);
+  assert.equal(merged[0].retiredAt, ARCHIVED_CITATION_LIMIT + 4);
+  assert.equal(merged[merged.length - 1].retiredAt, 5);
+});
+
 test("mergeArchivedCitations drops malformed entries from older payloads", () => {
-  const merged = mergeArchivedCitations([
+  const merged = mergeArchivedCitations(() => false, [
     archivedCitation("cite_ok", 10),
     { id: "cite_untitled", title: "", url: "https://example.com", retiredAt: 5 },
     { id: "", title: "No id", url: "https://example.com", retiredAt: 5 },
@@ -1451,6 +1588,33 @@ test("dropRestoredArchivedCitations drops entries restored under a new id", () =
       (id) => id === "cite_old_id",
     ).map((entry) => entry.id),
     ["cite_old_id"],
+  );
+});
+
+test("dropRestoredArchivedCitations drops entries a title match restored at a new address", () => {
+  // The restore remap reconnected the archived id onto a citation at a new
+  // URL, so neither the id nor the url set covers the entry — the remap does.
+  const archive = [archivedCitation("cite_moved", 300)];
+  const refreshed = [
+    { id: "cite_new_id", url: "https://example.com/moved-elsewhere" },
+  ];
+  const remappedIds = new Set(["cite_moved"]);
+
+  assert.deepEqual(
+    dropRestoredArchivedCitations(archive, refreshed, undefined, remappedIds),
+    [],
+  );
+
+  // An answer that still points at the archived id (another project's
+  // conversations are not remapped) keeps its titled reference.
+  assert.deepEqual(
+    dropRestoredArchivedCitations(
+      archive,
+      refreshed,
+      (id) => id === "cite_moved",
+      remappedIds,
+    ).map((entry) => entry.id),
+    ["cite_moved"],
   );
 });
 
@@ -1509,7 +1673,7 @@ test("a refresh that restores an item shrinks the archive and renders live", () 
     excerpt: "Drawer stays open on mobile.",
     reference: "acme/venom#12",
   };
-  const archive = mergeArchivedCitations([
+  const archive = mergeArchivedCitations(() => false, [
     {
       id: "cite_retired",
       title: "Fix the drawer",
@@ -1992,4 +2156,268 @@ test("legacy states without voicePreferences normalize to the default", () => {
     talkativeness: DEFAULT_VOICE_TALKATIVENESS,
     updatedAt: 0,
   });
+});
+
+test("message attachments survive the cross-device merge from either side", () => {
+  const uploadStamp = {
+    id: "file-upload",
+    name: "pixel.png",
+    contentType: "image/png",
+    size: 68,
+    kind: "upload",
+    // Image stamps carry a tiny data-URL thumbnail; it must ride the sync.
+    thumbnail: "data:image/jpeg;base64,dGh1bWI=",
+  };
+  const generatedStamp = {
+    id: "file-generated",
+    name: "venom-brief.pdf",
+    contentType: "application/pdf",
+    size: 900,
+    kind: "generated",
+  };
+  const cloudState = state({
+    projects: [project("shared", 10)],
+    conversations: [
+      conversation("shared-chat", "shared", 20, [
+        { ...message("cloud-message", 20), attachments: [uploadStamp] },
+      ]),
+    ],
+    clusters: [],
+  });
+  const deviceState = state({
+    projects: [project("shared", 10)],
+    conversations: [
+      conversation("shared-chat", "shared", 30, [
+        {
+          ...message("device-message", 30),
+          role: "assistant",
+          attachments: [generatedStamp],
+        },
+      ]),
+    ],
+    clusters: [],
+  });
+
+  const merged = mergeWorkspaceStates(cloudState, deviceState);
+  const chat = merged.conversations.find((item) => item.id === "shared-chat");
+  assert.deepEqual(
+    chat.messages.find((item) => item.id === "cloud-message").attachments,
+    [uploadStamp],
+  );
+  assert.deepEqual(
+    chat.messages.find((item) => item.id === "device-message").attachments,
+    [generatedStamp],
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Stacked chat dots: normalize and merge must separate buried positions
+// ---------------------------------------------------------------------------
+
+const clusterGap = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+test("normalize separates chat clusters stored on top of each other", () => {
+  const stacked = state({
+    projects: [project("shared", 10)],
+    conversations: [conversation("shared-chat", "shared", 10)],
+    clusters: [
+      { ...cluster("cluster-a", "shared", 20), x: 100, y: 100 },
+      { ...cluster("cluster-b", "shared", 30), x: 100, y: 100 },
+    ],
+    activeProjectId: "shared",
+    activeConversationId: "shared-chat",
+  });
+
+  const normalized = normalizeWorkspaceState(stacked);
+  const a = normalized.clusters.find((entry) => entry.id === "cluster-a");
+  const b = normalized.clusters.find((entry) => entry.id === "cluster-b");
+  // Ascending-id priority keeps the first dot exactly where it was stored.
+  assert.deepEqual({ x: a.x, y: a.y }, { x: 100, y: 100 });
+  // The buried dot is re-placed deterministically (shared rule pins 82,118).
+  assert.deepEqual({ x: b.x, y: b.y }, { x: 82, y: 118 });
+  // Never touch recency: repaired coords must converge on every device
+  // instead of winning cross-device merges.
+  assert.equal(a.lastUpdatedAt, 20);
+  assert.equal(b.lastUpdatedAt, 30);
+  assert.ok(clusterGap(a, b) >= 12);
+});
+
+test("merging two devices separates dots that would bury each other", () => {
+  const cloudState = state({
+    projects: [project("shared", 10)],
+    conversations: [conversation("shared-chat", "shared", 10)],
+    clusters: [{ ...cluster("cluster-a", "shared", 20), x: 30, y: 30 }],
+    activeProjectId: "shared",
+    activeConversationId: "shared-chat",
+  });
+  const deviceState = state({
+    projects: [project("shared", 10)],
+    conversations: [conversation("shared-chat", "shared", 10)],
+    clusters: [{ ...cluster("cluster-b", "shared", 30), x: 31, y: 31 }],
+    activeProjectId: "shared",
+    activeConversationId: "shared-chat",
+  });
+
+  const merged = mergeWorkspaceStates(cloudState, deviceState);
+  assert.equal(merged.clusters.length, 2);
+  const a = merged.clusters.find((entry) => entry.id === "cluster-a");
+  const b = merged.clusters.find((entry) => entry.id === "cluster-b");
+  assert.deepEqual({ x: a.x, y: a.y }, { x: 30, y: 30 });
+  assert.ok(clusterGap(a, b) >= 12);
+  assert.equal(a.lastUpdatedAt, 20);
+  assert.equal(b.lastUpdatedAt, 30);
+
+  // Determinism across merge directions' cluster geometry: replaying the
+  // same union computes identical coordinates, so devices converge instead
+  // of ping-ponging positions through sync.
+  const replay = mergeWorkspaceStates(cloudState, deviceState);
+  assert.deepEqual(
+    replay.clusters.map((entry) => ({ id: entry.id, x: entry.x, y: entry.y })),
+    merged.clusters.map((entry) => ({ id: entry.id, x: entry.x, y: entry.y })),
+  );
+});
+
+test("filing a stranded session survives the cross-device merge in both directions", () => {
+  // Filing (the real mutation, not a hand-built copy) rewrites projectId and
+  // stamps updatedAt through the normal synced write path; the
+  // newest-copy-wins conversation merge must therefore carry the new home
+  // instead of reviving the stranded project-less copy another device still
+  // holds.
+  const stranded = conversation("stranded-chat", null, 20, [
+    message("stranded-note", 20),
+  ]);
+  const base = {
+    projects: [project("home", 10)],
+    clusters: [],
+    activeProjectId: null,
+    activeConversationId: "stranded-chat",
+  };
+  const filedState = fileConversationToProjectInState(
+    state({ ...base, conversations: [stranded] }),
+    "stranded-chat",
+    "home",
+    30,
+  );
+  const filed = filedState.conversations.find(
+    (item) => item.id === "stranded-chat",
+  );
+  assert.equal(filed?.projectId, "home");
+  assert.equal(filed?.updatedAt, 30);
+  // Filing lands the workspace on the session in its new home.
+  assert.equal(filedState.activeProjectId, "home");
+  assert.equal(filedState.activeConversationId, "stranded-chat");
+
+  // This device filed the session; the cloud still holds the stranded copy.
+  const deviceFiled = mergeWorkspaceStates(
+    state({ ...base, conversations: [stranded] }),
+    filedState,
+  );
+  assert.equal(
+    deviceFiled.conversations.find((item) => item.id === "stranded-chat")
+      ?.projectId,
+    "home",
+  );
+
+  // The filing arrives from the cloud; this device's copy is stale.
+  const cloudFiled = mergeWorkspaceStates(
+    filedState,
+    state({ ...base, conversations: [stranded] }),
+  );
+  const carried = cloudFiled.conversations.find(
+    (item) => item.id === "stranded-chat",
+  );
+  assert.equal(carried?.projectId, "home");
+  // The words the filing was rescuing ride along untouched.
+  assert.deepEqual(
+    carried?.messages.map((item) => item.id),
+    ["stranded-note"],
+  );
+});
+
+test("filing outruns a stranded copy stamped by a fast clock", () => {
+  // A stranded copy can arrive from a device whose clock ran ahead, so its
+  // updatedAt exceeds this device's Date.now(). The filing stamp must be
+  // strictly newer than the copy being filed — not merely the local time —
+  // or the newest-copy-wins merge resurrects projectId: null and strands
+  // the chat again.
+  const stranded = conversation("stranded-chat", null, 5_000, [
+    message("stranded-note", 20),
+  ]);
+  const base = {
+    projects: [project("home", 10)],
+    clusters: [],
+    activeProjectId: null,
+    activeConversationId: "stranded-chat",
+  };
+  const filedState = fileConversationToProjectInState(
+    state({ ...base, conversations: [stranded] }),
+    "stranded-chat",
+    "home",
+    1_000, // local clock is behind the stranded copy's stamp
+  );
+  const filed = filedState.conversations.find(
+    (item) => item.id === "stranded-chat",
+  );
+  assert.equal(filed?.projectId, "home");
+  assert.equal(filed?.updatedAt, 5_001);
+
+  for (const merged of [
+    mergeWorkspaceStates(
+      state({ ...base, conversations: [stranded] }),
+      filedState,
+    ),
+    mergeWorkspaceStates(
+      filedState,
+      state({ ...base, conversations: [stranded] }),
+    ),
+  ]) {
+    assert.equal(
+      merged.conversations.find((item) => item.id === "stranded-chat")
+        ?.projectId,
+      "home",
+    );
+  }
+});
+
+test("filing refuses sessions that already have a home and projects that do not exist", () => {
+  // Filing is a recovery path for stranded sessions only; it must never
+  // re-home an already-filed conversation or point one at a missing project.
+  const filedAlready = conversation("kept-chat", "home", 20, [
+    message("kept-note", 20),
+  ]);
+  const stranded = conversation("stranded-chat", null, 20, [
+    message("stranded-note", 20),
+  ]);
+  const base = {
+    projects: [project("home", 10)],
+    clusters: [],
+    activeProjectId: null,
+    activeConversationId: null,
+  };
+
+  const refusedRefile = fileConversationToProjectInState(
+    state({ ...base, conversations: [filedAlready] }),
+    "kept-chat",
+    "home",
+    2_000,
+  );
+  assert.equal(
+    refusedRefile.conversations.find((item) => item.id === "kept-chat")
+      ?.updatedAt,
+    20,
+  );
+  assert.equal(refusedRefile.activeProjectId, null);
+
+  const refusedMissing = fileConversationToProjectInState(
+    state({ ...base, conversations: [stranded] }),
+    "stranded-chat",
+    "gone",
+    2_000,
+  );
+  assert.equal(
+    refusedMissing.conversations.find((item) => item.id === "stranded-chat")
+      ?.projectId,
+    null,
+  );
+  assert.equal(refusedMissing.activeProjectId, null);
 });

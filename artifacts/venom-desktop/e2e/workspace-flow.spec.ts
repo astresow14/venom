@@ -41,6 +41,124 @@ const PORTFOLIO_APP = {
   updatedAt: '2026-01-02T00:00:00.000Z',
 };
 
+const SOP_CONTENT = {
+  purpose: 'Standardize the rollback path.',
+  prerequisites: ['Deploy dashboard access'],
+  inputs: [],
+  guidance: ['Revert to the previous release.'],
+  requiredApprovals: [],
+  acceptanceChecks: ['Health checks pass'],
+};
+
+/** A single readable SOP, used to prove both SOP pages recover in place. */
+const LIBRARY_SOP = {
+  id: '9b8f6c2e-4d3a-4f1b-8a6d-2e5c7b9d0f13',
+  title: 'Rollback a bad deploy',
+  lifecycle: 'active',
+  category: 'operations',
+  tags: ['deploys'],
+  provenance: 'manual',
+  content: SOP_CONTENT,
+  activeRevisionId: 'c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f',
+  activeRevisionNumber: 1,
+  appIds: [],
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
+  archivedAt: null,
+};
+
+const LIBRARY_SOP_REVISION = {
+  id: 'c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f',
+  versionNumber: 1,
+  provenance: 'manual',
+  checksumSha256: 'f'.repeat(64),
+  title: LIBRARY_SOP.title,
+  category: 'operations',
+  tags: ['deploys'],
+  content: SOP_CONTENT,
+  publishedAt: '2026-01-02T00:00:00.000Z',
+};
+
+/** A full detail record for the app above, used to prove recovery. */
+const PORTFOLIO_APP_DETAIL = {
+  app: PORTFOLIO_APP,
+  versions: [],
+  importJobs: [],
+  deploymentLinks: [],
+  iterations: [],
+  provisioningReleases: [],
+  timeline: [],
+  timelineTotal: 0,
+  timelineTruncated: false,
+};
+
+/** A reviewable build run, used to prove the Build run page recovers. */
+const BUILD_RUN = {
+  id: '7a2b9c4d-1e5f-4a8b-9c3d-6e7f8a9b0c1d',
+  correlationId: '0f9e8d7c-6b5a-4f3e-8d1c-0b9a8f7e6d5c',
+  appId: null,
+  runKind: 'standalone',
+  targetType: 'app',
+  targetName: 'Symbiote Portal',
+  status: 'review_required',
+  progress: 100,
+  attempt: 1,
+  currentRevisionNumber: 1,
+  approvedRevisionId: null,
+  failureCode: null,
+  failureMessage: null,
+  cancelledReason: null,
+  request: {
+    targetType: 'app',
+    targetName: 'Symbiote Portal',
+    requirements: 'Build a portal that tracks symbiote activity.',
+    constraints: null,
+    brandDirection: null,
+    appId: null,
+    sourceVersionId: null,
+    projectId: null,
+    sopRevisionIds: [],
+    changesSummary: null,
+  },
+  revisions: [
+    {
+      id: 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e',
+      buildRunId: '7a2b9c4d-1e5f-4a8b-9c3d-6e7f8a9b0c1d',
+      revisionNumber: 1,
+      reason: 'initial_compile',
+      package: {
+        formatVersion: 1,
+        targetType: 'app',
+        targetName: 'Symbiote Portal',
+        productBrief: {
+          summary: 'A portal for tracking symbiote activity.',
+          audience: ['Operations'],
+          outcomes: ['Faster triage'],
+        },
+        functionalScope: ['Sign-in'],
+        brandDirection: ['Monochrome'],
+        contentRequirements: [],
+        serviceFlowRequirements: [],
+        dataNeeds: [],
+        integrationNeeds: [],
+        acceptanceChecks: ['Loads without errors'],
+        launchConstraints: [],
+        sourceReferences: [],
+        sopReferences: [],
+        permissionRequests: [],
+      },
+      checksumSha256: 'e'.repeat(64),
+      approvedAt: null,
+      createdAt: '2026-01-03T00:04:00.000Z',
+    },
+  ],
+  events: [],
+  startedAt: '2026-01-03T00:00:00.000Z',
+  completedAt: null,
+  createdAt: '2026-01-03T00:00:00.000Z',
+  updatedAt: '2026-01-03T00:05:00.000Z',
+};
+
 const PHONE = { width: 390, height: 740 };
 async function openDrawer(page: Page) {
   await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -132,7 +250,7 @@ test('moves between sections from the drawer on a phone', async ({ page }) => {
 
   const header = page.getByRole('banner');
   await expect(header.getByTestId('text-active-project')).toHaveText(
-    'Global Workspace',
+    'General',
   );
 
   for (const section of sections) {
@@ -182,6 +300,183 @@ test('keeps the Apps page readable when the portfolio comes back malformed', asy
   await page.getByTestId('button-retry-apps').click();
 
   await expect(page.getByTestId(`card-app-${PORTFOLIO_APP.id}`)).toBeVisible();
+  await expect(failure).toHaveCount(0);
+});
+
+test('keeps the SOP library readable when the list comes back malformed', async ({
+  page,
+}) => {
+  // Same failure class as the Apps page: the list endpoint answers with
+  // something that is not a list, which used to crash the workspace route.
+  let payload: unknown = { error: 'unauthorized' };
+  await page.route('**/venom/sops', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(payload),
+    });
+  });
+
+  await page.goto('/workspace/sops');
+
+  const failure = page.getByTestId('status-sops-error');
+  await expect(failure).toBeVisible();
+  await expect(failure).toContainText('Library unavailable');
+  // The route survives: the page header keeps rendering and the error
+  // boundary's crash screen never takes over.
+  await expect(
+    page.getByRole('heading', { name: 'SOP Library' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Something went wrong' }),
+  ).toHaveCount(0);
+
+  // Recovery happens in place, without reloading the workspace.
+  payload = [LIBRARY_SOP];
+  await page.getByTestId('button-retry-sops').click();
+
+  await expect(page.getByTestId(`card-sop-${LIBRARY_SOP.id}`)).toBeVisible();
+  await expect(failure).toHaveCount(0);
+});
+
+test('keeps the SOP detail page readable when the record comes back malformed', async ({
+  page,
+}) => {
+  let payload: unknown = { error: 'unauthorized' };
+  await page.route(`**/venom/sops/${LIBRARY_SOP.id}`, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(payload),
+    });
+  });
+
+  await page.goto(`/workspace/sops/${LIBRARY_SOP.id}`);
+
+  const failure = page.getByTestId('status-sop-detail-error');
+  await expect(failure).toBeVisible();
+  await expect(failure).toContainText('SOP unavailable');
+  // The shell around the route survives; the crash screen never takes over.
+  await expect(page.getByTestId('sidebar-desktop')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Something went wrong' }),
+  ).toHaveCount(0);
+
+  // Recovery happens in place: the editor seeds itself from the retried
+  // response without a reload.
+  payload = {
+    sop: LIBRARY_SOP,
+    revisions: [LIBRARY_SOP_REVISION],
+    assignments: [],
+  };
+  await page.getByTestId('button-retry-sop-detail').click();
+
+  await expect(page.getByLabel('SOP title')).toHaveValue(LIBRARY_SOP.title);
+  await expect(failure).toHaveCount(0);
+});
+
+test('keeps the App detail page readable when the record comes back malformed', async ({
+  page,
+}) => {
+  let payload: unknown = { error: 'unauthorized' };
+  await page.route(`**/venom/apps/${PORTFOLIO_APP.id}`, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(payload),
+    });
+  });
+
+  await page.goto(`/workspace/apps/${PORTFOLIO_APP.id}`);
+
+  const failure = page.getByTestId('status-app-detail-error');
+  await expect(failure).toBeVisible();
+  await expect(failure).toContainText('App unavailable');
+  // The shell around the route survives; the crash screen never takes over.
+  await expect(page.getByTestId('sidebar-desktop')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Something went wrong' }),
+  ).toHaveCount(0);
+
+  // Recovery happens in place, without reloading the workspace.
+  payload = PORTFOLIO_APP_DETAIL;
+  await page.getByTestId('button-retry-app-detail').click();
+
+  await expect(
+    page.getByRole('heading', { name: PORTFOLIO_APP.name }),
+  ).toBeVisible();
+  await expect(failure).toHaveCount(0);
+});
+
+test('keeps the Build run page readable when the run comes back malformed', async ({
+  page,
+}) => {
+  let payload: unknown = { error: 'unauthorized' };
+  await page.route(`**/venom/build-runs/${BUILD_RUN.id}`, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(payload),
+    });
+  });
+  // The page also reads provisioning state for the run; those stay healthy
+  // so the failure under test is the run record itself.
+  await page.route('**/venom/provisioning/runs**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '[]',
+    });
+  });
+  await page.route('**/venom/provisioning/capability', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        health: 'healthy',
+        summary: 'Provider ready.',
+        supportedTargetTypes: ['app', 'website'],
+        publishSupported: true,
+        rollbackSupported: true,
+        recoveryGuidance: null,
+      }),
+    });
+  });
+
+  await page.goto(`/workspace/builds/${BUILD_RUN.id}`);
+
+  const failure = page.getByTestId('status-build-run-error');
+  await expect(failure).toBeVisible();
+  await expect(failure).toContainText('Build run unavailable');
+  // The shell around the route survives; the crash screen never takes over.
+  await expect(page.getByTestId('sidebar-desktop')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Something went wrong' }),
+  ).toHaveCount(0);
+
+  // Recovery happens in place, without reloading the workspace.
+  payload = BUILD_RUN;
+  await page.getByTestId('button-retry-build-run').click();
+
+  await expect(
+    page.getByRole('heading', { name: BUILD_RUN.targetName }),
+  ).toBeVisible();
   await expect(failure).toHaveCount(0);
 });
 

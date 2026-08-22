@@ -210,8 +210,11 @@ test.describe('phone width', () => {
     const panel = await openDrawer(page);
     const panelBox = await boxOf(panel, 'drawer');
     // The drawer is a partial-width sheet, so the page stays visible behind it.
-    expect(panelBox.width).toBeLessThanOrEqual(320);
-    expect(panelBox.width).toBeLessThan(PHONE.width);
+    // Round like the height check below: the sheet's entry transform can
+    // report float32-epsilon overshoot (e.g. 320.000015) on an exactly-320px
+    // panel, which is measurement noise, not layout drift.
+    expect(Math.round(panelBox.width)).toBeLessThanOrEqual(320);
+    expect(Math.round(panelBox.width)).toBeLessThan(PHONE.width);
     expect(Math.round(panelBox.height)).toBe(PHONE.height);
 
     // Every drawer route is a comfortable touch target.
@@ -272,8 +275,16 @@ test.describe('phone width', () => {
      * measurements use that viewport.
      */
     await page.setViewportSize(NOTCHED_PHONE);
+    // The shell honors prefers-reduced-motion, so this pins mount animations
+    // off — a one-shot box read must not race an easing curve under suite
+    // load, where a mid-flight measurement skews the shift by a few pixels.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
 
     const measure = async () => {
+      // Late font swaps also nudge layout; wait for them before reading boxes.
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+      });
       const header = await boxOf(page.getByRole('banner'), 'header');
       const trigger = await boxOf(drawerTrigger(page), 'drawer trigger');
       const send = await boxOf(

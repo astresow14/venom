@@ -1,4 +1,3 @@
-import { Skeleton } from "@/components/ui/skeleton";
 import { VenomMark } from "@/components/venom-mark";
 
 /**
@@ -34,6 +33,11 @@ export function PageFallback() {
  * Placeholder for workspace pages. The shell (sidebar, header, drawer) is
  * already painted around it, so this only stands in for the content column and
  * mirrors the skeletons the pages themselves use while their data hydrates.
+ *
+ * Plain divs instead of <Skeleton>: this module is entry-reachable (App's
+ * route boundary imports PageFallback), and Skeleton keeps the
+ * tailwind-merge-based cn() for its many override-heavy call sites —
+ * importing it here would drag tailwind-merge back onto the critical path.
  */
 export function WorkspaceRouteFallback() {
   return (
@@ -42,9 +46,12 @@ export function WorkspaceRouteFallback() {
       role="status"
       aria-label="Loading page"
     >
-      <Skeleton className="h-12 w-64 rounded-xl" />
-      <Skeleton className="h-32 w-full rounded-2xl" />
-      <Skeleton className="hidden h-32 w-full rounded-2xl md:block" />
+      <div aria-hidden className="h-12 w-64 animate-pulse rounded-xl bg-muted" />
+      <div aria-hidden className="h-32 w-full animate-pulse rounded-2xl bg-muted" />
+      <div
+        aria-hidden
+        className="hidden h-32 w-full animate-pulse rounded-2xl bg-muted md:block"
+      />
     </div>
   );
 }

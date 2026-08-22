@@ -5,6 +5,8 @@ import type {
   VenomKnowledgeCluster,
   VenomModelId,
   VenomModelPreferences,
+  VenomOrg,
+  VenomOrgSharedProject,
   VenomProject,
   VenomVoicePreferences,
   VenomVoicePresetId,
@@ -13,13 +15,17 @@ import type {
   VenomWorkspaceTombstones,
 } from '@workspace/api-client-react';
 import {
+  createDefaultBoardStages,
   mergeProjectBoardSnapshots,
   normalizeProjectBoard,
 } from './boardState.ts';
 import {
+  createEmptyTombstones,
   mergeProjectSources,
-  mergeSourceDeletionMarkers,
-} from './sourceState.ts';
+  mergeTombstones,
+  normalizeTombstones,
+  separateStackedClusters,
+} from '@workspace/venom-workspace-merge';
 import {
   citationUrlIdentity,
   citedCitationIds,
@@ -29,25 +35,39 @@ import {
   normalizeConversationResponsePrefs,
 } from './responsePrefs.ts';
 
-type WorkspaceTombstones = VenomWorkspaceTombstones;
-type TombstoneCollection = keyof WorkspaceTombstones;
+// Deletion-marker and tombstone rules live in @workspace/venom-workspace-merge,
+// shared with the desktop app so the two can never drift apart. Re-exported so
+// existing call sites and tests keep their import path;
+// workspaceMergeRules.test.mjs asserts the bindings stay shared.
+export {
+  createDeletionMarkers,
+  createEmptyTombstones,
+  mergeTombstones,
+  normalizeTombstones,
+  CLUSTER_PLACEMENT_CLEARANCE,
+  CLUSTER_SPACING_FLOOR,
+  hashPositionForLabel,
+  placeClusterPosition,
+  positionForNewCluster,
+  separateStackedClusters,
+  type ClusterMapPoint,
+  // Undo for project deletion: the capture/restore pair is shared with the
+  // desktop app so both platforms rebuild a deleted project under fresh ids
+  // by exactly the same rules (the delete's tombstones stay authoritative).
+  captureProjectRestoreSnapshot,
+  restoreProjectFromSnapshot,
+  PROJECT_RESTORE_WINDOW_MS,
+  type ProjectRestoreSnapshot,
+} from '@workspace/venom-workspace-merge';
 
-const TOMBSTONE_LIMITS: Record<TombstoneCollection, number> = {
-  projects: 1000,
-  tasks: 5000,
-  conversations: 1000,
-  messages: 10000,
-  clusters: 2000,
-  stages: 15000,
-  fields: 20000,
-  sources: 2000,
-};
+type WorkspaceTombstones = VenomWorkspaceTombstones;
 
 /**
  * Bounds the retired-citation archive so it cannot grow without limit or push
  * the workspace payload over the server's size limit. Matches the maxItems of
- * VenomWorkspaceState.archivedCitations in the API schema; the oldest entries
- * are evicted first.
+ * VenomWorkspaceState.archivedCitations in the API schema; when the cap is
+ * exceeded, entries no saved answer cites are evicted before entries answers
+ * still name, oldest first within each group.
  */
 export const ARCHIVED_CITATION_LIMIT = 500;
 
@@ -115,132 +135,22 @@ type FlushWorkspaceStateOptions = {
   onRetryableFailure?: () => void;
 };
 
-export function createEmptyTombstones(): WorkspaceTombstones {
-  return {
-    projects: [],
-    tasks: [],
-    conversations: [],
-    messages: [],
-    clusters: [],
-    stages: [],
-    fields: [],
-    sources: [],
-  };
-}
-
-function mergeDeletionMarkers(
-  limit: number,
-  ...markerLists: VenomDeletionMarker[][]
-) {
-  const merged = new Map<string, VenomDeletionMarker>();
-  for (const marker of markerLists.flat()) {
-    const existing = merged.get(marker.id);
-    if (!existing || marker.deletedAt > existing.deletedAt) {
-      merged.set(marker.id, marker);
-    }
-  }
-  return [...merged.values()]
-    .sort((left, right) => right.deletedAt - left.deletedAt)
-    .slice(0, limit);
-}
-
-export function normalizeTombstones(
-  tombstones: VenomWorkspaceState['tombstones'],
-): WorkspaceTombstones {
-  const empty = createEmptyTombstones();
-  if (!tombstones) return empty;
-
-  return {
-    projects: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.projects,
-      tombstones.projects ?? [],
-    ),
-    tasks: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.tasks,
-      tombstones.tasks ?? [],
-    ),
-    conversations: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.conversations,
-      tombstones.conversations ?? [],
-    ),
-    messages: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.messages,
-      tombstones.messages ?? [],
-    ),
-    clusters: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.clusters,
-      tombstones.clusters ?? [],
-    ),
-    stages: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.stages,
-      tombstones.stages ?? [],
-    ),
-    fields: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.fields,
-      tombstones.fields ?? [],
-    ),
-    sources: mergeSourceDeletionMarkers(
-      TOMBSTONE_LIMITS.sources,
-      tombstones.sources ?? [],
-    ),
-  };
-}
-
-export function mergeTombstones(
-  current: VenomWorkspaceState['tombstones'],
-  additions: Partial<WorkspaceTombstones>,
-): WorkspaceTombstones {
-  const normalized = normalizeTombstones(current);
-  return {
-    projects: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.projects,
-      normalized.projects,
-      additions.projects ?? [],
-    ),
-    tasks: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.tasks,
-      normalized.tasks,
-      additions.tasks ?? [],
-    ),
-    conversations: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.conversations,
-      normalized.conversations,
-      additions.conversations ?? [],
-    ),
-    messages: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.messages,
-      normalized.messages,
-      additions.messages ?? [],
-    ),
-    clusters: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.clusters,
-      normalized.clusters,
-      additions.clusters ?? [],
-    ),
-    stages: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.stages,
-      normalized.stages,
-      additions.stages ?? [],
-    ),
-    fields: mergeDeletionMarkers(
-      TOMBSTONE_LIMITS.fields,
-      normalized.fields,
-      additions.fields ?? [],
-    ),
-    sources: mergeSourceDeletionMarkers(
-      TOMBSTONE_LIMITS.sources,
-      normalized.sources,
-      additions.sources ?? [],
-    ),
-  };
-}
-
 /**
  * Merges retired-citation archives from any number of snapshots. Entries are
- * deduplicated by citation id (newest retirement wins), sorted newest first,
- * and capped so the archive stays bounded.
+ * deduplicated by citation id (newest retirement wins) and sorted newest
+ * first. When the merged archive exceeds the cap, entries a saved answer
+ * still cites survive eviction ahead of uncited ones — a refresh archives
+ * every retired page, and that uncited pile must never push out evidence an
+ * answer still names — with eviction staying oldest-first within each group.
+ * Uncited entries are only deprioritized, never dropped while there is room:
+ * another device's unsynced answers may cite ids this device considers
+ * uncited, so eviction priority — not immediate dropping — is the merge-safe
+ * lever. Mirrors artifacts/venom-desktop/src/lib/workspaceState.ts, which
+ * must apply the same eviction order or the two apps' syncs would flip-flop
+ * over which entries survive the cap.
  */
 export function mergeArchivedCitations(
+  isStillCited: (citationId: string) => boolean,
   ...archiveLists: (VenomArchivedCitation[] | undefined)[]
 ): VenomArchivedCitation[] {
   const merged = new Map<string, VenomArchivedCitation>();
@@ -261,9 +171,24 @@ export function mergeArchivedCitations(
       merged.set(entry.id, entry);
     }
   }
-  return [...merged.values()]
-    .sort((left, right) => right.retiredAt - left.retiredAt)
-    .slice(0, ARCHIVED_CITATION_LIMIT);
+  const newestFirst = [...merged.values()].sort(
+    (left, right) => right.retiredAt - left.retiredAt,
+  );
+  if (newestFirst.length <= ARCHIVED_CITATION_LIMIT) return newestFirst;
+
+  const cited: VenomArchivedCitation[] = [];
+  const uncited: VenomArchivedCitation[] = [];
+  for (const entry of newestFirst) {
+    (isStillCited(entry.id) ? cited : uncited).push(entry);
+  }
+  if (cited.length >= ARCHIVED_CITATION_LIMIT) {
+    return cited.slice(0, ARCHIVED_CITATION_LIMIT);
+  }
+  const kept = new Set<VenomArchivedCitation>([
+    ...cited,
+    ...uncited.slice(0, ARCHIVED_CITATION_LIMIT - cited.length),
+  ]);
+  return newestFirst.filter((entry) => kept.has(entry));
 }
 
 /**
@@ -271,14 +196,16 @@ export function mergeArchivedCitations(
  * back stops consuming the bounded archive and the workspace payload. An entry
  * whose id is live once more is pure dead weight: the renderer always prefers
  * the live citation for that id. An entry the refresh only covers under a new
- * id is dropped once nothing cites the archived id any more (a refresh remaps
- * those markers onto the live citation first), so no answer loses the title it
- * was rendering.
+ * id — same url, or a restore remap's title match at a new address (passed in
+ * as `remappedIds`) — is dropped once nothing cites the archived id any more
+ * (a refresh remaps those markers onto the live citation first), so no answer
+ * loses the title it was rendering.
  */
 export function dropRestoredArchivedCitations(
   archivedCitations: VenomArchivedCitation[] | undefined,
   refreshedCitations: readonly { id: string; url: string }[],
   isStillCited: (citationId: string) => boolean = () => false,
+  remappedIds: ReadonlySet<string> = new Set(),
 ): VenomArchivedCitation[] {
   const restoredIds = new Set(
     refreshedCitations.map((citation) => citation.id),
@@ -293,7 +220,9 @@ export function dropRestoredArchivedCitations(
     if (!entry?.id) return false;
     if (restoredIds.has(entry.id)) return false;
     const identity = citationUrlIdentity(entry.url);
-    if (identity && restoredUrls.has(identity) && !isStillCited(entry.id)) {
+    const covered =
+      (identity && restoredUrls.has(identity)) || remappedIds.has(entry.id);
+    if (covered && !isStillCited(entry.id)) {
       return false;
     }
     return true;
@@ -312,20 +241,6 @@ export function dropUncitedArchivedCitations(
   return (archivedCitations ?? []).filter(
     (entry) => Boolean(entry?.id) && isStillCited(entry.id),
   );
-}
-
-export function createDeletionMarkers(
-  ids: string[],
-  deletedAt: number,
-  options: { replaced?: boolean } = {},
-): VenomDeletionMarker[] {
-  // `replaced` marks an entity a newer snapshot took the place of (a refreshed
-  // source), which is a permanent retirement rather than a plain deletion.
-  return [...new Set(ids)].map((id) => ({
-    id,
-    deletedAt,
-    ...(options.replaced ? { replaced: true as const } : {}),
-  }));
 }
 
 function deletionTime(markers: VenomDeletionMarker[]) {
@@ -391,10 +306,21 @@ export function normalizeModelPreferences(
     ? activeModelId
     : resolvedDefault;
 
+  // Selection policy is optional and additive: valid values are kept
+  // verbatim (so cross-device merges never drop them), anything unknown is
+  // dropped, and absence means manual — exactly today's behavior.
+  const selectionPolicy =
+    candidate.selectionPolicy === 'manual' ||
+    candidate.selectionPolicy === 'auto-cheapest' ||
+    candidate.selectionPolicy === 'auto-max-power'
+      ? candidate.selectionPolicy
+      : undefined;
+
   return {
     enabledModelIds,
     defaultModelId: resolvedDefault,
     activeModelId: resolvedActive,
+    ...(selectionPolicy ? { selectionPolicy } : {}),
     updatedAt: typeof candidate.updatedAt === 'number' && candidate.updatedAt >= 0
       ? Math.floor(candidate.updatedAt)
       : 0,
@@ -516,44 +442,277 @@ export function isWorkspaceState(
 export function normalizeWorkspaceState(
   value: VenomWorkspaceState,
 ): VenomWorkspaceState {
+  const rawArchive = Array.isArray(value.archivedCitations)
+    ? value.archivedCitations
+    : [];
+  // Cap eviction only consults citedness once the archive overflows, which a
+  // payload written by any current path never does — so the conversation scan
+  // is deferred until the one case that needs it, and every path that can cap
+  // (normalize, merge, refresh, removal) applies the same eviction order.
+  const stillCited =
+    rawArchive.length > ARCHIVED_CITATION_LIMIT
+      ? citedCitationIds(
+          value.conversations.filter((conversation) =>
+            Array.isArray(conversation?.messages),
+          ),
+        )
+      : null;
   return {
     ...value,
-    projects: value.projects.map((project) => normalizeProjectBoard(project)),
+    projects: value.projects.map((project) =>
+      normalizeDefaultProjectName(
+        normalizeProjectOrgFields(normalizeProjectBoard(project)),
+      ),
+    ),
     conversations: value.conversations.map((conversation) =>
       normalizeConversationResponsePrefs(conversation),
     ),
     sources: Array.isArray(value.sources) ? value.sources : [],
-    clusters: value.clusters.map((cluster) => {
-      const legacyDescription =
-        typeof cluster.description === 'string'
-          ? cluster.description
-          : `${cluster.label} knowledge saved by Venom.`;
-      return {
-        ...cluster,
-        projectId:
-          typeof cluster.projectId === 'string' || cluster.projectId === null
-            ? cluster.projectId
-            : value.activeProjectId,
-        description: legacyDescription,
-        summary:
-          typeof cluster.summary === 'string'
-            ? cluster.summary
-            : legacyDescription,
-        mentionCount:
-          typeof cluster.mentionCount === 'number' ? cluster.mentionCount : 1,
-        lastUpdatedAt:
-          typeof cluster.lastUpdatedAt === 'number'
-            ? cluster.lastUpdatedAt
-            : 0,
-        sources: Array.isArray(cluster.sources) ? cluster.sources : [],
-      };
-    }),
+    // Stored positions that bury each other are separated on every load path
+    // (same rule on desktop), so a stack persisted by an older build heals
+    // identically on both apps instead of surviving forever.
+    clusters: separateStackedClusters(
+      value.clusters.map((cluster) => {
+        const legacyDescription =
+          typeof cluster.description === 'string'
+            ? cluster.description
+            : `${cluster.label} knowledge saved by Venom.`;
+        return {
+          ...cluster,
+          projectId:
+            typeof cluster.projectId === 'string' || cluster.projectId === null
+              ? cluster.projectId
+              : value.activeProjectId,
+          description: legacyDescription,
+          summary:
+            typeof cluster.summary === 'string'
+              ? cluster.summary
+              : legacyDescription,
+          mentionCount:
+            typeof cluster.mentionCount === 'number' ? cluster.mentionCount : 1,
+          lastUpdatedAt:
+            typeof cluster.lastUpdatedAt === 'number'
+              ? cluster.lastUpdatedAt
+              : 0,
+          sources: Array.isArray(cluster.sources) ? cluster.sources : [],
+        };
+      }),
+    ),
     tombstones: normalizeTombstones(value.tombstones),
     modelPreferences: normalizeModelPreferences(value.modelPreferences),
     voicePreferences: normalizeVoicePreferences(value.voicePreferences),
     archivedCitations: mergeArchivedCitations(
-      Array.isArray(value.archivedCitations) ? value.archivedCitations : [],
+      (citationId) => stillCited?.has(citationId) ?? false,
+      rawArchive,
     ),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Company (organization) project fields + shared-project mirroring
+// ---------------------------------------------------------------------------
+
+const ORG_ID_MAX_LENGTH = 64;
+
+/**
+ * The starter project used to be called "Global Workspace", which read like
+ * a scope choice next to the shared-workspace switcher. Heal exactly that
+ * stock pairing on load — same rule as desktop, and only for the untouched
+ * default (a rename the user made is theirs). No lastUpdatedAt bump: the
+ * healed name must not win merges against a genuine user edit.
+ */
+function normalizeDefaultProjectName(project: VenomProject): VenomProject {
+  if (project.id === 'proj_default' && project.name === 'Global Workspace') {
+    return { ...project, name: 'General' };
+  }
+  return project;
+}
+/**
+ * Company fields ride along on synced projects, so every load path must
+ * normalize them — otherwise a device running an older build could strip
+ * them from the whole account on its next save.
+ */
+function normalizeProjectOrgFields(project: VenomProject): VenomProject {
+  const raw = project as unknown as Record<string, unknown>;
+  const orgId =
+    typeof raw.orgId === 'string' &&
+    raw.orgId.trim().length > 0 &&
+    raw.orgId.length <= ORG_ID_MAX_LENGTH
+      ? raw.orgId
+      : undefined;
+  const orgMirror = orgId !== undefined && raw.orgMirror === true;
+  const next: VenomProject = { ...project };
+  if (orgId !== undefined) next.orgId = orgId;
+  else delete next.orgId;
+  if (orgMirror) next.orgMirror = true;
+  else delete next.orgMirror;
+  return next;
+}
+
+/**
+ * Reconcile local projects with the company shared-project registry.
+ *
+ * - Registered shared projects get their `orgId` stamped; teammates' shared
+ *   projects appear as read-mostly mirror projects (`orgMirror`).
+ * - When a company confirms a project is no longer shared — or membership
+ *   itself ended — mirrors are dropped (their conversations survive,
+ *   unfiled), and own projects lose their `orgId`.
+ * - Orgs whose fetch failed this round (`fetchedOrgIds` misses them while
+ *   membership persists) are left untouched, so a flaky request can never
+ *   wipe mirrors.
+ */
+export function applyOrgProjectSync(
+  state: VenomWorkspaceState,
+  memberships: Pick<VenomOrg, 'id'>[],
+  sharedByOrg: Map<string, VenomOrgSharedProject[]>,
+  fetchedOrgIds: Set<string>,
+): VenomWorkspaceState {
+  const memberOrgIds = new Set(memberships.map((org) => org.id));
+  const sharedById = new Map<string, VenomOrgSharedProject>();
+  for (const records of sharedByOrg.values()) {
+    for (const record of records) sharedById.set(record.projectId, record);
+  }
+
+  let changed = false;
+  const droppedProjectIds = new Set<string>();
+  const projects: VenomProject[] = [];
+
+  for (const project of state.projects) {
+    const shared = sharedById.get(project.id);
+    if (shared) {
+      if (project.orgMirror) {
+        if (
+          project.orgId !== shared.orgId ||
+          project.name !== shared.name ||
+          project.description !== shared.description ||
+          (shared.accent !== '' && project.accent !== shared.accent)
+        ) {
+          changed = true;
+          projects.push({
+            ...project,
+            orgId: shared.orgId,
+            orgMirror: true,
+            name: shared.name,
+            description: shared.description,
+            accent: shared.accent !== '' ? shared.accent : project.accent,
+            updatedAt: Math.max(project.updatedAt, shared.updatedAt),
+          });
+        } else {
+          projects.push(project);
+        }
+      } else if (project.orgId !== shared.orgId) {
+        changed = true;
+        projects.push({
+          ...project,
+          orgId: shared.orgId,
+          updatedAt: Date.now(),
+        });
+      } else {
+        projects.push(project);
+      }
+      continue;
+    }
+
+    const orgId = project.orgId;
+    const orgGone = orgId !== undefined && !memberOrgIds.has(orgId);
+    const confirmedUnshared = orgId !== undefined && fetchedOrgIds.has(orgId);
+
+    if (project.orgMirror) {
+      if (orgId === undefined || orgGone || confirmedUnshared) {
+        changed = true;
+        droppedProjectIds.add(project.id);
+      } else {
+        projects.push(project);
+      }
+      continue;
+    }
+
+    if (orgId !== undefined && (orgGone || confirmedUnshared)) {
+      changed = true;
+      const next: VenomProject = { ...project, updatedAt: Date.now() };
+      delete next.orgId;
+      delete next.orgMirror;
+      projects.push(next);
+      continue;
+    }
+
+    projects.push(project);
+  }
+
+  // Mirror shared projects this device does not have yet.
+  const knownIds = new Set(projects.map((project) => project.id));
+  const deletionTimes = new Map(
+    (state.tombstones ?? createEmptyTombstones()).projects.map(
+      (marker) => [marker.id, marker.deletedAt] as const,
+    ),
+  );
+  for (const record of sharedById.values()) {
+    if (
+      knownIds.has(record.projectId) ||
+      droppedProjectIds.has(record.projectId)
+    ) {
+      continue;
+    }
+    if ((deletionTimes.get(record.projectId) ?? -1) >= record.updatedAt) {
+      continue;
+    }
+    changed = true;
+    projects.push(
+      normalizeProjectBoard({
+        id: record.projectId,
+        name: record.name,
+        description: record.description,
+        accent: record.accent !== '' ? record.accent : '#e5e5e5',
+        sourceCount: 0,
+        updatedAt: record.updatedAt,
+        tasks: [],
+        boardStages: createDefaultBoardStages(record.projectId, record.updatedAt),
+        fieldDefinitions: [],
+        orgId: record.orgId,
+        orgMirror: true,
+      }),
+    );
+  }
+
+  if (!changed) return state;
+
+  const conversations =
+    droppedProjectIds.size === 0
+      ? state.conversations
+      : state.conversations.map((conversation) =>
+          conversation.projectId !== null &&
+          droppedProjectIds.has(conversation.projectId)
+            ? { ...conversation, projectId: null }
+            : conversation,
+        );
+  const clusters =
+    droppedProjectIds.size === 0
+      ? state.clusters
+      : reconcileKnowledgeLinks(
+          state.clusters.filter(
+            (cluster) =>
+              cluster.projectId === null ||
+              !droppedProjectIds.has(cluster.projectId),
+          ),
+        );
+  const sources =
+    droppedProjectIds.size === 0
+      ? state.sources
+      : state.sources.filter(
+          (source) => !droppedProjectIds.has(source.projectId),
+        );
+
+  return {
+    ...state,
+    projects,
+    conversations,
+    clusters,
+    sources,
+    activeProjectId:
+      state.activeProjectId !== null &&
+      droppedProjectIds.has(state.activeProjectId)
+        ? null
+        : state.activeProjectId,
   };
 }
 
@@ -691,6 +850,45 @@ export function reconcileKnowledgeLinks(clusters: VenomKnowledgeCluster[]) {
   }));
 }
 
+/**
+ * Files a project-less conversation into an existing project.
+ *
+ * The one deliberate way a stranded session gains a home — reopening never
+ * adopts. The new stamp is monotonic: strictly newer than the copy being
+ * filed, even when that copy carries a future timestamp written by a
+ * fast-clock device, because the newest-copy-wins conversation merge would
+ * otherwise resurrect the stranded `projectId: null` copy and lose the
+ * filing. The workspace also lands on the filed session (project first,
+ * then conversation) so the filing is immediately visible. Returns the
+ * input state unchanged when the conversation is missing, already filed,
+ * or the target project does not exist. Mirrored in the desktop app's
+ * workspaceState module — keep the two in lockstep.
+ */
+export function fileConversationToProjectInState(
+  state: VenomWorkspaceState,
+  conversationId: string,
+  projectId: string,
+  now: number = Date.now(),
+): VenomWorkspaceState {
+  const conversation = state.conversations.find(
+    (item) => item.id === conversationId,
+  );
+  if (!conversation || conversation.projectId !== null) return state;
+  if (!state.projects.some((project) => project.id === projectId)) {
+    return state;
+  }
+  const filedAt = Math.max(now, conversation.updatedAt + 1);
+  return {
+    ...state,
+    conversations: state.conversations.map((item) =>
+      item.id === conversationId
+        ? { ...item, projectId, updatedAt: filedAt }
+        : item,
+    ),
+    activeProjectId: projectId,
+    activeConversationId: conversationId,
+  };
+}
 export function mergeWorkspaceStates(
   cloudState: VenomWorkspaceState,
   deviceState: VenomWorkspaceState,
@@ -728,12 +926,18 @@ export function mergeWorkspaceStates(
   const conversationIds = new Set(
     liveConversations.map((conversation) => conversation.id),
   );
-  const liveClusters = reconcileKnowledgeLinks(
-    [...clusters.values()].filter(
-      (cluster) =>
-        (cluster.projectId === null || projectIds.has(cluster.projectId)) &&
-        (clusterDeletionTimes.get(cluster.id) ?? -1) <
-          cluster.lastUpdatedAt,
+  // The merged set can pair clusters that never coexisted on one device, so
+  // the union is re-checked for buried positions. The repair never touches
+  // lastUpdatedAt, and both apps compute identical coordinates, so a sync
+  // cannot ping-pong a separation.
+  const liveClusters = separateStackedClusters(
+    reconcileKnowledgeLinks(
+      [...clusters.values()].filter(
+        (cluster) =>
+          (cluster.projectId === null || projectIds.has(cluster.projectId)) &&
+          (clusterDeletionTimes.get(cluster.id) ?? -1) <
+            cluster.lastUpdatedAt,
+      ),
     ),
   );
   const liveSources = mergeProjectSources(
@@ -754,6 +958,7 @@ export function mergeWorkspaceStates(
   const stillCitedIds = citedCitationIds(liveConversations);
   const isStillCited = (citationId: string) => stillCitedIds.has(citationId);
   const archivedCitations = mergeArchivedCitations(
+    isStillCited,
     dropUncitedArchivedCitations(
       dropRestoredArchivedCitations(
         [

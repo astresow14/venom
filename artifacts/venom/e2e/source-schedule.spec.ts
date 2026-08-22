@@ -53,7 +53,10 @@ function websiteSourcePayload({
  * confuse later tests. Every test hands the workspace back empty.
  */
 async function disconnectSource(page: Page) {
+  // Removal is destructive, so the control stages a confirmation dialog
+  // rather than acting on one tap.
   await page.getByTestId(`remove-source-${SOURCE_ID}`).click();
+  await page.getByTestId("confirm-remove-source").click();
   await expect(page.getByTestId(`remove-source-${SOURCE_ID}`)).toHaveCount(0);
 }
 
@@ -187,6 +190,55 @@ test("schedule state written by the server renders on the card as-is", async ({
   // Neither the failure nor the due retry tempts the app into syncing.
   await page.waitForTimeout(1_500);
   expect(connectCount).toBe(0);
+
+  await disconnectSource(page);
+});
+
+test("a server check that changed nothing reads as checked, not stalled", async ({
+  page,
+}) => {
+  await page.goto("/?venomUiTest=true");
+  await expect(page.getByTestId("chat-input")).toBeVisible();
+
+  // A workspace after a skipped write: the server stamped its check two
+  // hours ago (schedule.lastAttemptAt) but deliberately kept the three-day-
+  // old snapshot because the site's content had not changed.
+  await page.evaluate(
+    ({ key, source }) => {
+      window.localStorage.setItem(key, JSON.stringify([source]));
+    },
+    {
+      key: SOURCES_STORAGE_KEY,
+      source: {
+        ...websiteSourcePayload({
+          syncedAt: new Date(
+            Date.now() - (3 * 86_400_000 + 10 * 60_000),
+          ).toISOString(),
+          citationCount: 1,
+          excerpt: "Snapshot the unchanged check kept",
+        }),
+        schedule: {
+          cadence: "daily",
+          updatedAt: Date.now() - 86_400_000,
+          lastAttemptAt: Date.now() - 2 * 3_600_000,
+        },
+      },
+    },
+  );
+  await page.reload();
+  await expect(page.getByTestId("chat-input")).toBeVisible();
+  await openSettings(page);
+
+  await expect(
+    page.getByTestId(`source-schedule-status-${SOURCE_ID}`),
+  ).toHaveText("Daily updates · checked 2h ago · next in 22h");
+  // The snapshot itself is untouched — old date, and no failure to report.
+  await expect(page.getByTestId(`source-sync-status-${SOURCE_ID}`)).toHaveText(
+    "1 citations · Last synced 3d ago",
+  );
+  await expect(
+    page.getByTestId(`source-refresh-error-${SOURCE_ID}`),
+  ).toHaveCount(0);
 
   await disconnectSource(page);
 });

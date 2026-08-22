@@ -5,8 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VenomManagedModelAccountHealth } from './venomManagedModelAccountHealth';
 import type { VenomManagedModelFamily } from './venomManagedModelFamily';
 import type { VenomManagedModelProvider } from './venomManagedModelProvider';
+import type { VenomModelCostTier } from './venomModelCostTier';
 import type { VenomModelId } from './venomModelId';
 
 export interface VenomManagedModel {
@@ -29,4 +31,7 @@ export interface VenomManagedModel {
      * @maxLength 160
      */
   availabilityText: string;
+  /** Account-level health observed on live provider calls. "unfunded" means the credential is configured but the account behind it cannot pay for replies (billing-class failures), so the model is available yet not plainly Ready. Absent means no such evidence. */
+  accountHealth?: VenomManagedModelAccountHealth;
+  costTier?: VenomModelCostTier;
 }

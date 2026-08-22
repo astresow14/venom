@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Link, useRoute } from "wouter";
 import {
  useGetVenomBuildRun,
@@ -32,7 +32,6 @@ import {
  AlertTriangle,
  FileCode2,
  Download,
- Terminal,
  Activity,
  MessageSquareText,
  Ban,
@@ -43,6 +42,7 @@ import {
  Globe,
  GitCommit,
  History,
+ Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -60,6 +60,12 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { resolveAppDetailState } from "@/lib/appPortfolio";
+import {
+ resolveBuildRunDetailState,
+ resolveProvisioningRunsState,
+ resolveProvisioningRunDetailState,
+} from "@/lib/buildRuns";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function BuildsDetailPage() {
@@ -95,7 +101,7 @@ export default function BuildsDetailPage() {
  const [cancelProvReason, setCancelProvReason] = useState("");
  const [isCancelProvOpen, setIsCancelProvOpen] = useState(false);
 
- const { data: run, isLoading, isError } = useGetVenomBuildRun(buildId!, {
+ const runQuery = useGetVenomBuildRun(buildId!, {
  query: {
  enabled: !!buildId,
  queryKey: getGetVenomBuildRunQueryKey(buildId!),
@@ -107,6 +113,19 @@ export default function BuildsDetailPage() {
  },
  },
  });
+ // The generated client resolves failed requests (401/5xx) to the JSON
+ // error body as data, so the run is validated before anything reads it —
+ // the same contract as the SOP detail and App detail pages.
+ const runState = useMemo(
+ () =>
+ resolveBuildRunDetailState({
+ data: runQuery.data,
+ isLoading: runQuery.isLoading,
+ isError: runQuery.isError,
+ }),
+ [runQuery.data, runQuery.isLoading, runQuery.isError],
+ );
+ const run = runState.status === "ready" ? runState.run : null;
 
  const cancelRun = useCancelVenomBuildRun();
  const retryRun = useRetryVenomBuildRun();
@@ -121,35 +140,88 @@ export default function BuildsDetailPage() {
  // Provisioning Hooks
  const { data: capability } = useGetProvisioningCapability();
 
- const { data: provRuns } = useListProvisioningRuns({ buildRunId: buildId! }, {
+ const provRunsQuery = useListProvisioningRuns({ buildRunId: buildId! }, {
  query: {
  enabled: !!buildId,
  queryKey: getListProvisioningRunsQueryKey({ buildRunId: buildId! }),
  }
  });
+ const provRunsState = useMemo(
+ () =>
+ resolveProvisioningRunsState({
+ data: provRunsQuery.data,
+ isLoading: provRunsQuery.isLoading,
+ isError: provRunsQuery.isError,
+ }),
+ [provRunsQuery.data, provRunsQuery.isLoading, provRunsQuery.isError],
+ );
 
- const latestProvRunId = provRuns?.[0]?.id;
+ const latestProvRunId =
+ provRunsState.status === "ready" ? provRunsState.runs[0]?.id : undefined;
 
- const { data: provRun } = useGetProvisioningRun(latestProvRunId!, {
+ const provRunQuery = useGetProvisioningRun(latestProvRunId!, {
  query: {
  enabled: !!latestProvRunId,
  queryKey: getGetProvisioningRunQueryKey(latestProvRunId!),
  refetchInterval: (query) => {
+ // The callback sees the raw payload before the resolver runs, so a
+ // non-string status (an error body) must stop the poll, not sustain it.
  const status = query.state.data?.status;
- if (status && !["candidate_ready", "published", "cancelled", "failed", "blocked"].includes(status)) {
+ if (typeof status === "string" && !["candidate_ready", "published", "cancelled", "failed", "blocked"].includes(status)) {
  return 2000;
  }
  return false;
  },
  }
  });
+ const provRunState = useMemo(
+ () =>
+ resolveProvisioningRunDetailState({
+ data: provRunQuery.data,
+ isLoading: provRunQuery.isLoading,
+ isError: provRunQuery.isError,
+ enabled: !!latestProvRunId,
+ }),
+ [provRunQuery.data, provRunQuery.isLoading, provRunQuery.isError, latestProvRunId],
+ );
+ const provRun = provRunState.status === "ready" ? provRunState.run : null;
 
- const { data: appDetail } = useGetVenomApp(provRun?.appId ?? '', {
+ const appDetailQuery = useGetVenomApp(provRun?.appId ?? '', {
  query: {
  enabled: !!provRun?.appId,
  queryKey: getGetVenomAppQueryKey(provRun?.appId ?? ''),
  }
  });
+ const appDetailState = useMemo(
+ () =>
+ resolveAppDetailState({
+ data: appDetailQuery.data,
+ isLoading: appDetailQuery.isLoading,
+ isError: appDetailQuery.isError,
+ }),
+ [appDetailQuery.data, appDetailQuery.isLoading, appDetailQuery.isError],
+ );
+ const appDetail =
+ appDetailState.status === "ready" ? appDetailState.detail : null;
+
+ // A provisioning read that failed or came back unreadable must not render
+ // as "never provisioned": pretending the section is pristine invites a
+ // duplicate provision. The section shows an inline alert instead.
+ const provisioningBroken =
+ provRunsState.status === "error" ||
+ provRunState.status === "error" ||
+ (!!provRun?.appId && appDetailState.status === "error");
+ const provisioningFetching =
+ provRunsQuery.isFetching || provRunQuery.isFetching || appDetailQuery.isFetching;
+ const retryProvisioning = () => {
+ void provRunsQuery.refetch();
+ if (latestProvRunId) {
+ void provRunQuery.refetch();
+ }
+ if (provRun?.appId) {
+ void appDetailQuery.refetch();
+ }
+ };
 
  const provisionRun = useProvisionBuildRun();
  const cancelProvRun = useCancelProvisioningRun();
@@ -379,7 +451,7 @@ export default function BuildsDetailPage() {
  }
  };
 
- if (isLoading) {
+ if (runState.status === "loading") {
  return (
  <div className="p-8 max-w-5xl mx-auto w-full space-y-8">
  <Skeleton className="h-12 w-64 rounded-xl bg-muted/20 surface" />
@@ -388,17 +460,50 @@ export default function BuildsDetailPage() {
  );
  }
 
- if (isError || !run) {
+ if (runState.status === "error" || !run) {
  return (
- <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+ <div
+ className="flex flex-col items-center justify-center h-full p-8 text-center"
+ role="alert"
+ data-testid="status-build-run-error"
+ >
  <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
- <h2 className="text-xl font-semibold tracking-tight">Run Not Found</h2>
+ <h2 className="text-xl font-semibold tracking-tight">Build run unavailable</h2>
+ <p className="text-muted-foreground text-sm mt-2 mb-6 max-w-md">
+ {runState.status === "error" && runState.reason === "malformed-response"
+ ? "This run came back in an unexpected shape. It may have been removed, it may belong to another account, or the build service may be answering incorrectly."
+ : "We could not load this build run. Try again in a moment."}
+ </p>
+ <div className="flex items-center gap-3">
+ <Button
+ variant="outline"
+ onClick={() => {
+ void runQuery.refetch();
+ }}
+ disabled={runQuery.isFetching}
+ className="rounded-md font-medium border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
+ data-testid="button-retry-build-run"
+ >
+ {runQuery.isFetching ? "Retrying" : "Try again"}
+ </Button>
+ <Link
+ href="/workspace/apps"
+ className="inline-flex items-center justify-center whitespace-nowrap text-sm h-10 px-4 py-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-md font-medium"
+ >
+ Back to workspace
+ </Link>
+ </div>
  </div>
  );
  }
 
  const isPreparing = run.status === "queued" || run.status === "preparing";
  const needsReview = run.status === "review_required";
+ // Present when this run's generation included above-threshold lessons from
+ // the template's anonymous builder network (event recorded server-side).
+ const networkGuidanceApplied = run.events.some(
+  (event) => event.eventType === "network_guidance",
+ );
  const isTerminal = ["approved", "cancelled", "failed", "ready_for_provisioning"].includes(run.status);
 
  const comparisonRevision = comparisonRevisionId
@@ -444,7 +549,7 @@ export default function BuildsDetailPage() {
  <StatusBadge status={run.status} progress={run.progress} />
  </div>
  <p className="text-xs text-muted-foreground mt-2">
- Target: {run.targetType.replace(/_/g, ' ')} {run.appId ? `• App: ${run.appId.substring(0,8)}` : ""}
+ Target: {run.targetType.replace(/_/g, ' ')}{run.appId ? <> • App: <span className="font-mono">{run.appId.substring(0,8)}</span></> : null}
  </p>
  </div>
 
@@ -458,7 +563,7 @@ export default function BuildsDetailPage() {
  </DialogTrigger>
  <DialogContent className="rounded-2xl border-border/60 surface p-0 sm:max-w-[420px] shadow-lift">
  <DialogHeader>
- <DialogTitle className="text-xl font-semibold tracking-tight">Cancel Build Run</DialogTitle>
+ <DialogTitle className="text-xl font-semibold tracking-tight">Cancel build run</DialogTitle>
  <DialogDescription className="text-sm mt-2">
  Why are you cancelling this request?
  </DialogDescription>
@@ -471,7 +576,7 @@ export default function BuildsDetailPage() {
  />
  <DialogFooter className="mt-8">
  <Button onClick={handleCancel} disabled={!cancelReason.trim() || cancelRun.isPending} className="rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 font-medium shadow-soft">
- Confirm Cancellation
+ Confirm cancellation
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -490,7 +595,7 @@ export default function BuildsDetailPage() {
  <FileCode2 className="h-3 w-3 mr-2" /> JSON
  </Button>
  <Button onClick={() => handleExport("markdown")} variant="outline" className="rounded-md border-border/60 font-medium text-xs h-9 shadow-soft hover:bg-accent hover:text-accent-foreground transition-colors">
- <Download className="h-3 w-3 mr-2" /> MD
+ <Download className="h-3 w-3 mr-2" /> Markdown
  </Button>
  </>
  )}
@@ -508,11 +613,17 @@ export default function BuildsDetailPage() {
  <div className="border border-foreground/30 bg-foreground/[0.02] p-6 rounded-xl shadow-soft animate-in fade-in slide-in-from-bottom-4">
  <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2 mb-2">
  <AlertTriangle className="h-5 w-5 text-foreground animate-pulse" />
- Review Required
+ Review required
  </h2>
  <p className="text-sm mb-6 max-w-lg leading-relaxed text-muted-foreground">
  Review the compiled build package below. You must approve it before it can be provisioned, request revisions, or reject it entirely.
  </p>
+ {networkGuidanceApplied && (
+ <p className="text-xs mb-6 -mt-4 max-w-lg leading-relaxed text-muted-foreground flex items-center gap-1.5" data-testid="text-network-guidance-note">
+ <Sparkles className="h-3.5 w-3.5 shrink-0" />
+ Network guidance applied: this draft used anonymous lessons from other builders of this template. Details are in the activity log.
+ </p>
+ )}
  <div className="flex flex-wrap gap-3">
  <Dialog>
  <DialogTrigger asChild>
@@ -520,12 +631,12 @@ export default function BuildsDetailPage() {
  disabled={approveRun.isPending}
  className="rounded-md bg-foreground text-background hover:bg-foreground/90 font-medium shadow-soft transition-transform hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
  >
- <ThumbsUp className="h-4 w-4 mr-2" /> Approve Package
+ <ThumbsUp className="h-4 w-4 mr-2" /> Approve package
  </Button>
  </DialogTrigger>
  <DialogContent className="rounded-2xl border-border/60 surface p-0 sm:max-w-[420px] shadow-lift">
  <DialogHeader>
- <DialogTitle className="text-xl font-semibold tracking-tight">Final Approval</DialogTitle>
+ <DialogTitle className="text-xl font-semibold tracking-tight">Final approval</DialogTitle>
  <DialogDescription className="text-sm mt-2">
  You are approving Revision {activeRevision.revisionNumber}.
  This action is final and will mark the build package as ready for provisioning.
@@ -533,7 +644,7 @@ export default function BuildsDetailPage() {
  </DialogHeader>
  <DialogFooter className="mt-8">
  <Button onClick={handleApprove} disabled={approveRun.isPending} className="rounded-md bg-foreground text-background hover:bg-foreground/90 font-medium shadow-soft">
- Confirm Approval
+ Confirm approval
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -542,12 +653,12 @@ export default function BuildsDetailPage() {
  <Dialog open={isReviseOpen} onOpenChange={setIsReviseOpen}>
  <DialogTrigger asChild>
  <Button variant="outline" className="rounded-md border-border/60 font-medium shadow-soft hover:bg-accent hover:text-accent-foreground">
- <MessageSquareText className="h-4 w-4 mr-2" /> Request Revision
+ <MessageSquareText className="h-4 w-4 mr-2" /> Request revision
  </Button>
  </DialogTrigger>
  <DialogContent className="rounded-2xl border-border/60 surface p-0 sm:max-w-[500px] shadow-lift">
  <DialogHeader>
- <DialogTitle className="text-xl font-semibold tracking-tight">Request Package Revision</DialogTitle>
+ <DialogTitle className="text-xl font-semibold tracking-tight">Request package revision</DialogTitle>
  <DialogDescription className="text-sm mt-2">
  What should be changed in the build package before approval?
  </DialogDescription>
@@ -560,7 +671,7 @@ export default function BuildsDetailPage() {
  />
  <DialogFooter className="mt-8">
  <Button onClick={handleRevise} disabled={!reviseInstruction.trim() || reviseRun.isPending} className="rounded-md bg-foreground text-background hover:bg-foreground/90 font-medium shadow-soft">
- Submit Revision
+ Submit revision
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -574,7 +685,7 @@ export default function BuildsDetailPage() {
  </DialogTrigger>
  <DialogContent className="rounded-2xl border-border/60 surface p-0 sm:max-w-[420px] shadow-lift">
  <DialogHeader>
- <DialogTitle className="text-xl font-semibold tracking-tight text-destructive">Reject Build Run</DialogTitle>
+ <DialogTitle className="text-xl font-semibold tracking-tight text-destructive">Reject build run</DialogTitle>
  <DialogDescription className="text-sm mt-2">
  Why is this package being rejected?
  </DialogDescription>
@@ -586,7 +697,7 @@ export default function BuildsDetailPage() {
  />
  <DialogFooter className="mt-8">
  <Button onClick={handleReject} disabled={!rejectReason.trim() || rejectRun.isPending} className="rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 font-medium shadow-soft">
- Confirm Rejection
+ Confirm rejection
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -599,10 +710,10 @@ export default function BuildsDetailPage() {
  {run.status === "failed" && (
  <div className="border border-destructive/30 bg-destructive/5 p-6 rounded-xl text-destructive shadow-soft">
  <h2 className="font-semibold tracking-tight flex items-center gap-2 mb-2">
- <XCircle className="h-5 w-5" /> Build Failed
+ <XCircle className="h-5 w-5" /> Build failed
  </h2>
- <div className="font-mono text-sm">
- <div className="font-semibold mb-1">Code: {run.failureCode || "UNKNOWN"}</div>
+ <div className="text-sm">
+ <div className="font-medium mb-1">Code: <span className="font-mono">{run.failureCode || "UNKNOWN"}</span></div>
  {run.failureMessage}
  </div>
  </div>
@@ -612,33 +723,62 @@ export default function BuildsDetailPage() {
  {(run.status === "cancelled") && (
  <div className="border border-border/60 bg-muted/20 p-6 rounded-xl shadow-soft">
  <h2 className="font-semibold tracking-tight flex items-center gap-2 mb-2">
- <Ban className="h-5 w-5" /> Run Cancelled
+ <Ban className="h-5 w-5" /> Run cancelled
  </h2>
- <div className="font-mono text-sm text-muted-foreground">
+ <div className="text-sm text-muted-foreground">
  {run.cancelledReason || "No reason provided."}
  </div>
  </div>
  )}
 
  {/* Provisioning Section */}
- {(run.status === "ready_for_provisioning" || provRun) && (
- <div className="border border-foreground/30 surface rounded-xl shadow-soft p-6 rounded-xl shadow-soft animate-in fade-in slide-in-from-bottom-4">
+ {(run.status === "ready_for_provisioning" || provRun || provisioningBroken) && (
+ <div className="border border-foreground/30 surface rounded-xl shadow-soft p-6 animate-in fade-in slide-in-from-bottom-4">
  <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2 mb-6">
  <Server className="h-5 w-5 text-foreground" />
  Provisioning
  </h2>
+
+ {/* Broken provisioning reads must say so, not pose as pristine state */}
+ {provisioningBroken && (
+ <div
+ role="alert"
+ data-testid="status-provisioning-error"
+ className="border border-destructive/30 bg-destructive/5 text-destructive rounded-lg p-4 mb-6 text-sm"
+ >
+ <div className="font-semibold mb-1 flex items-center gap-2">
+ <AlertTriangle className="h-4 w-4" />
+ Provisioning status unavailable
+ </div>
+ <p className="mb-3 leading-relaxed">
+ The provisioning records for this run could not be read, so this
+ section may be incomplete. This is not evidence that provisioning
+ never started.
+ </p>
+ <Button
+ variant="outline"
+ size="sm"
+ onClick={retryProvisioning}
+ disabled={provisioningFetching}
+ className="rounded-md border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground font-medium text-xs h-8"
+ data-testid="button-retry-provisioning"
+ >
+ {provisioningFetching ? "Retrying" : "Try again"}
+ </Button>
+ </div>
+ )}
 
  {/* Capability Status */}
  {(!provRun || provRun.status === 'blocked' || provRun.status === 'failed') && capability && (
  <div className={cn("p-4 mb-6 border rounded-lg text-sm flex gap-3",
  capability.health === 'healthy' ? "bg-foreground/5 border-foreground/20 text-foreground" :
  capability.health === 'degraded' ? "bg-accent border-accent-foreground/20 text-accent-foreground" :
- "bg-destructive/10 border-destructive text-destructive"
+ "bg-destructive/10 border-destructive/30 text-destructive"
  )}>
  <Activity className="h-4 w-4 shrink-0 mt-0.5" />
  <div>
  <div className="font-semibold mb-1 text-xs">
- Capability Status: {capability.health}
+ Capability status: {capability.health}
  </div>
  <div className="mb-2 leading-relaxed">{capability.summary}</div>
  {capability.recoveryGuidance && capability.health !== 'healthy' && (
@@ -648,10 +788,10 @@ export default function BuildsDetailPage() {
  </div>
  )}
 
- {!provRun ? (
+ {provisioningBroken && !provRun ? null : !provRun ? (
  // Initial Provisioning State
  <div>
- <p className="font-mono text-sm mb-6 leading-relaxed max-w-lg">
+ <p className="text-sm text-muted-foreground mb-6 leading-relaxed max-w-lg">
  The approved package is ready to be provisioned. This will transfer the package and source to a secure Replit environment and prepare a candidate release.
  </p>
  <Dialog open={isProvisionOpen} onOpenChange={(open) => {
@@ -665,33 +805,33 @@ export default function BuildsDetailPage() {
  disabled={!capability || (capability.health !== 'healthy' && capability.health !== 'degraded') || !capability.supportedTargetTypes.includes(run.targetType as any) || !approvedRevision || run.status !== "ready_for_provisioning"}
  className="rounded-md bg-foreground text-background hover:bg-foreground/90 font-medium shadow-soft transition-transform hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
  >
- <Rocket className="h-4 w-4 mr-2" /> Provision Target
+ <Rocket className="h-4 w-4 mr-2" /> Provision target
  </Button>
  </DialogTrigger>
  <DialogContent className="rounded-2xl border-border/60 surface p-0 sm:max-w-[500px] shadow-lift">
  <DialogHeader>
- <DialogTitle className="text-xl font-semibold tracking-tight">Provision Candidate</DialogTitle>
- <DialogDescription className="font-mono text-xs text-foreground">
- Create/link isolated Replit project and build candidate (does not publish).
+ <DialogTitle className="text-xl font-semibold tracking-tight">Provision candidate</DialogTitle>
+ <DialogDescription className="text-sm mt-2">
+ Creates or links an isolated Replit project and builds a candidate. Nothing is published yet.
  </DialogDescription>
  </DialogHeader>
 
- <div className="space-y-4 my-4 font-mono text-sm">
+ <div className="space-y-4 my-4 text-sm">
  <div className="grid grid-cols-3 gap-2 py-2 border-b border-border/60">
- <div className="text-xs text-muted-foreground mb-2">Target Name</div>
+ <div className="text-xs text-muted-foreground mb-2">Target name</div>
  <div className="col-span-2 font-semibold">{run.targetName}</div>
  </div>
  <div className="grid grid-cols-3 gap-2 py-2 border-b border-border/60">
- <div className="text-xs text-muted-foreground mb-2">Approved Revision</div>
- <div className="col-span-2">{approvedRevision?.revisionNumber} <span className="text-muted-foreground text-[10px]">({approvedRevision?.id.substring(0,8)})</span></div>
+ <div className="text-xs text-muted-foreground mb-2">Approved revision</div>
+ <div className="col-span-2">{approvedRevision?.revisionNumber} <span className="font-mono text-muted-foreground text-[10px]">({approvedRevision?.id.substring(0,8)})</span></div>
  </div>
 
  {approvedRevision?.package.sourceReferences?.[0] && (
  <div className="grid grid-cols-3 gap-2 py-2 border-b border-border/60">
- <div className="text-xs text-muted-foreground mb-2">Source Context</div>
+ <div className="text-xs text-muted-foreground mb-2">Source context</div>
  <div className="col-span-2">
- <div className="font-bold">{approvedRevision.package.sourceReferences[0].appName} <span className="text-muted-foreground text-xs font-normal">v{approvedRevision.package.sourceReferences[0].versionNumber}</span></div>
- <div className="text-[10px] text-muted-foreground truncate mt-1" title={approvedRevision.package.sourceReferences[0].checksumSha256}>
+ <div className="font-semibold">{approvedRevision.package.sourceReferences[0].appName} <span className="text-muted-foreground text-xs font-normal">v{approvedRevision.package.sourceReferences[0].versionNumber}</span></div>
+ <div className="font-mono text-[10px] text-muted-foreground truncate mt-1" title={approvedRevision.package.sourceReferences[0].checksumSha256}>
  {approvedRevision.package.sourceReferences[0].checksumSha256}
  </div>
  </div>
@@ -699,7 +839,7 @@ export default function BuildsDetailPage() {
  )}
 
  <div className="grid grid-cols-3 gap-2 py-2 border-b border-border/60">
- <div className="text-xs text-muted-foreground mb-2">Expected External Changes</div>
+ <div className="text-xs text-muted-foreground mb-2">Expected external changes</div>
  <div className="col-span-2 text-xs">
  <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
  <li>Create new project on target capability</li>
@@ -745,7 +885,7 @@ export default function BuildsDetailPage() {
 
  <div className="pt-2">
  <label htmlFor="confirm-provision-target" className="block text-xs font-medium mb-2">
- Type <span className="select-all bg-foreground/10 px-1 py-0.5">{run.targetName}</span> to confirm
+ Type <span className="select-all rounded-xs bg-foreground/10 px-1 py-0.5">{run.targetName}</span> to confirm
  </label>
  <Input
  id="confirm-provision-target"
@@ -764,7 +904,7 @@ export default function BuildsDetailPage() {
  disabled={provisionConfirmName !== run.targetName || provisionRun.isPending}
  className="rounded-md bg-foreground text-background hover:bg-foreground/90 font-medium w-full"
  >
- Confirm Provisioning
+ Confirm provisioning
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -776,10 +916,10 @@ export default function BuildsDetailPage() {
  <div className="flex flex-wrap items-center justify-between gap-4">
  <div>
  <div className="text-xs text-muted-foreground mb-1">
- Current Stage
+ Current stage
  </div>
- <div className="text-lg font-bold font-mono" aria-live="polite">
- {(provRun.stage || provRun.status).replace(/_/g, ' ')}
+ <div className="text-lg font-semibold tracking-tight" aria-live="polite">
+ {sentenceCase(provRun.stage || provRun.status)}
  </div>
  </div>
 
@@ -793,7 +933,7 @@ export default function BuildsDetailPage() {
  </DialogTrigger>
  <DialogContent className="rounded-2xl border-border/60 surface p-0 sm:max-w-[420px] shadow-lift">
  <DialogHeader>
- <DialogTitle className="text-xl font-semibold tracking-tight">Cancel Provisioning</DialogTitle>
+ <DialogTitle className="text-xl font-semibold tracking-tight">Cancel provisioning</DialogTitle>
  </DialogHeader>
  <Textarea
  value={cancelProvReason}
@@ -803,7 +943,7 @@ export default function BuildsDetailPage() {
  />
  <DialogFooter className="mt-8">
  <Button onClick={handleCancelProv} disabled={!cancelProvReason.trim() || cancelProvRun.isPending} className="rounded-md bg-destructive text-destructive-foreground font-medium">
- Confirm Cancel
+ Confirm cancellation
  </Button>
  </DialogFooter>
  </DialogContent>
@@ -819,7 +959,7 @@ export default function BuildsDetailPage() {
  </div>
 
  <div className="space-y-2">
- <div className="flex justify-between text-xs font-mono text-muted-foreground" aria-hidden="true">
+ <div className="flex justify-between text-xs text-muted-foreground" aria-hidden="true">
  <span>Progress</span>
  <span>{provRun.progress}%</span>
  </div>
@@ -828,12 +968,12 @@ export default function BuildsDetailPage() {
 
  {/* Run Error/Blocked Reason */}
  {provRun.failureMessage && (
- <div className="bg-destructive/10 border border-destructive p-4 text-sm font-mono text-destructive">
+ <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-sm text-destructive">
  <strong>Error:</strong> {provRun.failureMessage}
  </div>
  )}
  {provRun.blockedReason && (
- <div className="bg-accent border border-accent-foreground/20 p-4 text-sm font-mono text-accent-foreground">
+ <div className="bg-accent border border-accent-foreground/20 rounded-lg p-4 text-sm text-accent-foreground">
  <strong>Blocked:</strong> {provRun.blockedReason}
  </div>
  )}
@@ -844,21 +984,21 @@ export default function BuildsDetailPage() {
  <h3 className="text-xs font-semibold text-muted-foreground mb-4">Releases</h3>
  <div className="space-y-3">
  {appDetail.provisioningReleases.map((release) => (
- <div key={release.id} className="border border-border/60 bg-muted/10 p-4 flex flex-col md:flex-row gap-4 justify-between md:items-center">
+ <div key={release.id} className="border border-border/60 bg-muted/10 rounded-lg shadow-soft p-4 flex flex-col md:flex-row gap-4 justify-between md:items-center">
  <div>
  <div className="flex items-center gap-2 mb-1">
- <span className="text-sm font-semibold">{release.providerCandidateId || release.id.substring(0,8)}</span>
- <span className={cn("text-[9px] px-1.5 py-0.5 border font-bold",
+ <span className="font-mono text-sm font-medium">{release.providerCandidateId || release.id.substring(0,8)}</span>
+ <span className={cn("text-[10px] px-2 py-0.5 border rounded-full font-medium",
  release.status === 'published' ? "border-foreground bg-foreground text-background" :
  release.status === 'candidate' ? "border-foreground/30 text-foreground" :
  "border-muted-foreground/30 text-muted-foreground"
  )}>
- {release.status}
+ {sentenceCase(release.status)}
  </span>
  </div>
  {release.launchUrl && (
- <a href={release.launchUrl} target="_blank" rel="noreferrer" className="text-xs font-mono underline underline-offset-4 opacity-80 hover:opacity-100 flex items-center gap-1 mt-2">
- <Globe className="h-3 w-3" /> Visit {release.status === 'candidate' ? 'Candidate Preview' : 'Live App'}
+ <a href={release.launchUrl} target="_blank" rel="noreferrer" className="text-xs font-medium underline underline-offset-4 opacity-80 hover:opacity-100 flex items-center gap-1 mt-2">
+ <Globe className="h-3 w-3" /> Visit {release.status === 'candidate' ? 'candidate preview' : 'live app'}
  </a>
  )}
  </div>
@@ -883,14 +1023,14 @@ export default function BuildsDetailPage() {
  <div className="p-6">
 
  <DialogHeader>
- <DialogTitle className="text-xl font-semibold tracking-tight">Publish Release</DialogTitle>
+ <DialogTitle className="text-xl font-semibold tracking-tight">Publish release</DialogTitle>
  <DialogDescription className="text-sm mt-2">
  This will change the live launch to candidate {release.providerCandidateId || release.id.substring(0,8)}. Existing healthy deployment is preserved on failure.
  </DialogDescription>
  </DialogHeader>
  <div className="pt-2">
  <label htmlFor={`publish-confirm-${release.id}`} className="block text-xs font-medium mb-2">
- Type <span className="select-all bg-foreground/10 px-1 py-0.5">{release.targetName}</span> to confirm
+ Type <span className="select-all rounded-xs bg-foreground/10 px-1 py-0.5">{release.targetName}</span> to confirm
  </label>
  <Input
  id={`publish-confirm-${release.id}`}
@@ -907,7 +1047,7 @@ export default function BuildsDetailPage() {
  disabled={!release.targetName || publishConfirmName !== release.targetName || publishProvRelease.isPending}
  className="rounded-md bg-foreground text-background font-medium w-full mt-4"
  >
- Confirm Publish
+ Confirm publish
  </Button>
  </DialogFooter>
 
@@ -935,14 +1075,14 @@ export default function BuildsDetailPage() {
  <div className="p-6">
 
  <DialogHeader>
- <DialogTitle className="text-xl font-semibold tracking-tight">Rollback Release</DialogTitle>
+ <DialogTitle className="text-xl font-semibold tracking-tight">Rollback release</DialogTitle>
  <DialogDescription className="text-sm mt-2">
  This will change the live deployment to restore superseded release {release.providerCandidateId || release.id.substring(0,8)}.
  </DialogDescription>
  </DialogHeader>
  <div className="pt-2">
  <label htmlFor={`rollback-confirm-${release.id}`} className="block text-xs font-medium mb-2">
- Type <span className="select-all bg-foreground/10 px-1 py-0.5">{release.targetName}</span> to confirm
+ Type <span className="select-all rounded-xs bg-foreground/10 px-1 py-0.5">{release.targetName}</span> to confirm
  </label>
  <Input
  id={`rollback-confirm-${release.id}`}
@@ -959,7 +1099,7 @@ export default function BuildsDetailPage() {
  disabled={!release.targetName || rollbackConfirmName !== release.targetName || rollbackProvRelease.isPending}
  className="rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 font-medium w-full mt-4"
  >
- Confirm Rollback
+ Confirm rollback
  </Button>
  </DialogFooter>
 
@@ -977,13 +1117,13 @@ export default function BuildsDetailPage() {
  {/* Live Event Stream */}
  {provRun.events && provRun.events.length > 0 && (
  <div className="pt-4 border-t border-border/60">
- <h3 className="text-xs font-semibold text-muted-foreground mb-4">Provisioning Log</h3>
- <div className="max-h-[200px] overflow-y-auto space-y-3 font-mono text-xs p-4 bg-foreground/[0.02] border border-border/60">
+ <h3 className="text-xs font-semibold text-muted-foreground mb-4">Provisioning log</h3>
+ <div className="max-h-[200px] overflow-y-auto space-y-3 font-mono text-xs p-4 bg-foreground/[0.02] border border-border/60 rounded-lg">
  {provRun.events.map(ev => (
  <div key={ev.id} className="flex gap-3">
  <span className="text-muted-foreground shrink-0">{new Date(ev.createdAt).toLocaleTimeString()}</span>
  <span className={cn(
- "font-bold shrink-0 text-[9px] mt-0.5 w-[100px]",
+ "font-semibold shrink-0 text-[9px] mt-0.5 w-[100px]",
  ev.eventType === 'failed' || ev.eventType === 'blocked' ? "text-destructive" :
  ev.eventType === 'published' || ev.eventType === 'candidate_ready' ? "text-foreground" :
  "text-muted-foreground"
@@ -1001,9 +1141,9 @@ export default function BuildsDetailPage() {
 
  {/* Current Revision Inspection */}
  <section className="space-y-4">
- <h2 className="text-lg font-semibold tracking-tight border-b border-border/60 pb-2 flex items-center justify-between">
+ <h2 className="text-base font-semibold tracking-tight border-b border-border/60 pb-2 flex items-center justify-between">
  <div className="flex items-center gap-2">
- <PackageSearch className="h-5 w-5" /> Package Inspection
+ <PackageSearch className="h-5 w-5" /> Package inspection
  </div>
  <div className="flex items-center gap-2">
  {run.revisions && run.revisions.length > 1 && (
@@ -1016,7 +1156,7 @@ export default function BuildsDetailPage() {
  setComparisonRevisionId(null);
  }
  }}
- className="bg-transparent border border-border/60 text-xs p-1 rounded-sm focus-visible:ring-ring"
+ className="bg-transparent border border-border/60 text-xs p-1 rounded-md focus-visible:ring-ring"
  aria-label="Select revision to inspect"
  >
  {run.revisions.map(rev => (
@@ -1030,7 +1170,7 @@ export default function BuildsDetailPage() {
  <select
  value={comparisonRevisionId || ""}
  onChange={(event) => setComparisonRevisionId(event.target.value || null)}
- className="bg-transparent border border-border/60 text-xs p-1 rounded-sm focus-visible:ring-ring"
+ className="bg-transparent border border-border/60 text-xs p-1 rounded-md focus-visible:ring-ring"
  aria-label={`Compare revision ${activeRevision.revisionNumber} with another revision`}
  >
  <option value="">Compare with…</option>
@@ -1070,7 +1210,7 @@ export default function BuildsDetailPage() {
  </div>
  </div>
  {comparisonSections.length === 0 ? (
- <p className="text-xs font-mono text-muted-foreground">
+ <p className="text-xs text-muted-foreground">
  No list-item changes were detected between these revisions.
  </p>
  ) : (
@@ -1096,10 +1236,10 @@ export default function BuildsDetailPage() {
  )}
 
  {!activeRevision ? (
- <div className="border border-dashed border-border/60 p-12 flex flex-col items-center justify-center text-center bg-foreground/[0.01]">
- <Terminal className="h-8 w-8 text-muted-foreground mb-4 opacity-50" />
- <div className="font-medium text-sm mb-1">Compiling Package</div>
- <div className="font-mono text-xs text-muted-foreground max-w-sm">
+ <div className="border border-dashed border-border/60 rounded-xl p-12 flex flex-col items-center justify-center text-center bg-foreground/[0.01]">
+ <PackageSearch className="h-8 w-8 text-muted-foreground mb-4 opacity-50" />
+ <div className="font-medium text-sm mb-1">Compiling package</div>
+ <div className="text-xs text-muted-foreground max-w-sm">
  Venom is evaluating constraints and building the review package.
  </div>
  </div>
@@ -1107,23 +1247,23 @@ export default function BuildsDetailPage() {
  <div className="grid gap-6">
  {/* Summary */}
  <div className="border border-border/60 surface rounded-xl shadow-soft p-5">
- <h3 className="text-xs font-medium text-muted-foreground mb-3">Product Brief</h3>
+ <h3 className="text-xs font-medium text-muted-foreground mb-3">Product brief</h3>
  <div className="font-medium text-sm leading-relaxed mb-4">{activeRevision.package.productBrief.summary}</div>
 
  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
  <div>
- <h4 className="text-xs text-muted-foregroundmb-2 border-b border-border/60 pb-1">Audience</h4>
+ <h4 className="text-xs text-muted-foreground mb-2 border-b border-border/60 pb-1">Audience</h4>
  <ul className="space-y-1">
  {activeRevision.package.productBrief.audience.map((a, i) => (
- <li key={i} className="text-xs font-mono">- {a}</li>
+ <li key={i} className="text-xs flex gap-2"><span className="text-muted-foreground shrink-0">•</span><span>{a}</span></li>
  ))}
  </ul>
  </div>
  <div>
- <h4 className="text-xs text-muted-foregroundmb-2 border-b border-border/60 pb-1">Outcomes</h4>
+ <h4 className="text-xs text-muted-foreground mb-2 border-b border-border/60 pb-1">Outcomes</h4>
  <ul className="space-y-1">
  {activeRevision.package.productBrief.outcomes.map((o, i) => (
- <li key={i} className="text-xs font-mono">- {o}</li>
+ <li key={i} className="text-xs flex gap-2"><span className="text-muted-foreground shrink-0">•</span><span>{o}</span></li>
  ))}
  </ul>
  </div>
@@ -1132,14 +1272,14 @@ export default function BuildsDetailPage() {
 
  {/* Arrays */}
  {[
- { title: "Functional Scope", items: activeRevision.package.functionalScope },
- { title: "Brand Direction", items: activeRevision.package.brandDirection },
- { title: "Content Requirements", items: activeRevision.package.contentRequirements },
- { title: "Service Flow", items: activeRevision.package.serviceFlowRequirements },
- { title: "Data Needs", items: activeRevision.package.dataNeeds },
- { title: "Integration Needs", items: activeRevision.package.integrationNeeds },
- { title: "Acceptance Checks", items: activeRevision.package.acceptanceChecks },
- { title: "Launch Constraints", items: activeRevision.package.launchConstraints },
+ { title: "Functional scope", items: activeRevision.package.functionalScope },
+ { title: "Brand direction", items: activeRevision.package.brandDirection },
+ { title: "Content requirements", items: activeRevision.package.contentRequirements },
+ { title: "Service flow", items: activeRevision.package.serviceFlowRequirements },
+ { title: "Data needs", items: activeRevision.package.dataNeeds },
+ { title: "Integration needs", items: activeRevision.package.integrationNeeds },
+ { title: "Acceptance checks", items: activeRevision.package.acceptanceChecks },
+ { title: "Launch constraints", items: activeRevision.package.launchConstraints },
  ].map(section => (
  section.items && section.items.length > 0 && (
  <div key={section.title} className="border border-border/60 surface rounded-xl shadow-soft p-5">
@@ -1159,12 +1299,12 @@ export default function BuildsDetailPage() {
  {/* Sources */}
  {activeRevision.package.sourceReferences && activeRevision.package.sourceReferences.length > 0 && (
  <div className="border border-border/60 surface rounded-xl shadow-soft p-5">
- <h3 className="text-xs font-medium text-muted-foreground mb-3">Source References</h3>
+ <h3 className="text-xs font-medium text-muted-foreground mb-3">Source references</h3>
  <div className="space-y-3">
  {activeRevision.package.sourceReferences.map((ref, i) => (
- <div key={i} className="p-3 bg-foreground/[0.02] border border-border/60">
- <div className="font-mono text-xs font-bold mb-1">{ref.appName}</div>
- <div className="text-xs text-muted-foreground">
+ <div key={i} className="p-3 bg-foreground/[0.02] border border-border/60 rounded-lg">
+ <div className="text-sm font-medium mb-1">{ref.appName}</div>
+ <div className="font-mono text-xs text-muted-foreground">
  v{ref.versionNumber} &bull; {ref.checksumSha256.substring(0,8)}
  </div>
  </div>
@@ -1176,12 +1316,12 @@ export default function BuildsDetailPage() {
  {/* SOPs */}
  {activeRevision.package.sopReferences && activeRevision.package.sopReferences.length > 0 && (
  <div className="border border-border/60 surface rounded-xl shadow-soft p-5">
- <h3 className="text-xs font-medium text-muted-foreground mb-3">SOP References</h3>
+ <h3 className="text-xs font-medium text-muted-foreground mb-3">SOP references</h3>
  <div className="space-y-3">
  {activeRevision.package.sopReferences.map((ref, i) => (
- <div key={i} className="p-3 bg-foreground/[0.02] border border-border/60">
- <div className="font-mono text-xs font-bold mb-1">{ref.title}</div>
- <div className="text-xs text-muted-foreground">
+ <div key={i} className="p-3 bg-foreground/[0.02] border border-border/60 rounded-lg">
+ <div className="text-sm font-medium mb-1">{ref.title}</div>
+ <div className="font-mono text-xs text-muted-foreground">
  Rev {ref.revisionNumber} &bull; {ref.checksumSha256.substring(0,8)}
  </div>
  </div>
@@ -1193,13 +1333,13 @@ export default function BuildsDetailPage() {
  {/* Permissions */}
  {activeRevision.package.permissionRequests && activeRevision.package.permissionRequests.length > 0 && (
  <div className="border border-border/60 surface rounded-xl shadow-soft p-5">
- <h3 className="text-xs font-medium text-muted-foreground mb-3">Permission Requests</h3>
+ <h3 className="text-xs font-medium text-muted-foreground mb-3">Permission requests</h3>
  <div className="space-y-3">
  {activeRevision.package.permissionRequests.map((perm, i) => (
- <div key={i} className="p-3 bg-foreground/[0.02] border border-border/60">
+ <div key={i} className="p-3 bg-foreground/[0.02] border border-border/60 rounded-lg">
  <div className="flex items-center justify-between mb-1">
  <span className="text-sm font-semibold">{perm.capability}</span>
- <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-foreground text-background">
+ <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", perm.required ? "bg-foreground text-background" : "bg-muted text-muted-foreground")}>
  {perm.required ? "Required" : "Optional"}
  </span>
  </div>
@@ -1215,10 +1355,10 @@ export default function BuildsDetailPage() {
  </div>
 
  <div className="space-y-6">
- {/* Original Request Snapshot */}
- <div className="border border-border/60 surface rounded-xl shadow-soft shadow-lg flex flex-col h-[300px]">
+ {/* Original Request snapshot */}
+ <div className="border border-border/60 surface rounded-xl shadow-soft flex flex-col h-[300px]">
  <div className="p-4 border-b border-border/60 bg-muted/20 shrink-0 flex items-center justify-between gap-2">
- <h3 className="text-xs font-semibold text-muted-foreground">Request Snapshot</h3>
+ <h3 className="text-xs font-semibold text-muted-foreground">Request snapshot</h3>
  {run.runKind === "app_iteration" && (
  <span
  className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-foreground text-background whitespace-nowrap"
@@ -1228,13 +1368,13 @@ export default function BuildsDetailPage() {
  </span>
  )}
  </div>
- <div className="p-4 overflow-y-auto flex-1 font-mono text-xs leading-relaxed text-muted-foreground opacity-80 whitespace-pre-wrap">
+ <div className="p-4 overflow-y-auto flex-1 text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
  {run.request.requirements}
 
  {run.request.constraints && (
  <>
  {"\n\n"}
- <span className="font-bold text-foreground">Constraints:</span>
+ <span className="font-semibold text-foreground">Constraints:</span>
  {"\n"}{run.request.constraints}
  </>
  )}
@@ -1242,25 +1382,25 @@ export default function BuildsDetailPage() {
  {run.request.changesSummary && (
  <>
  {"\n\n"}
- <span className="font-bold text-foreground">New since baseline:</span>
+ <span className="font-semibold text-foreground">New since baseline:</span>
  {"\n"}{run.request.changesSummary}
  </>
  )}
  </div>
  </div>
 
- {/* Activity Log */}
- <div className="border border-border/60 surface rounded-xl shadow-soft shadow-lg">
+ {/* Activity log */}
+ <div className="border border-border/60 surface rounded-xl shadow-soft">
  <div className="p-4 border-b border-border/60 bg-muted/20">
- <h3 className="text-xs font-semibold text-muted-foreground">Activity Log</h3>
+ <h3 className="text-xs font-semibold text-muted-foreground">Activity log</h3>
  </div>
  <div className="max-h-[400px] overflow-y-auto p-4 space-y-4">
  {run.events.map((event) => (
  <div key={event.id} className="flex gap-3">
  <div className="w-1.5 h-1.5 rounded-full bg-foreground shrink-0 mt-1.5 opacity-30" />
  <div>
- <div className="text-xs font-bold leading-tight">{event.message}</div>
- <div className="text-[9px] font-mono text-muted-foreground mt-1 flex gap-2">
+ <div className="text-xs font-medium leading-tight">{event.message}</div>
+ <div className="text-[10px] font-mono text-muted-foreground mt-1 flex gap-2">
  <span>{new Date(event.createdAt).toLocaleTimeString()}</span>
  <span>•</span>
  <span>{event.eventType}</span>
@@ -1269,7 +1409,7 @@ export default function BuildsDetailPage() {
  </div>
  ))}
  {run.events.length === 0 && (
- <div className="text-xs font-mono text-muted-foreground italic text-center p-4">Waiting for events...</div>
+ <div className="text-xs text-muted-foreground text-center p-4">Waiting for events…</div>
  )}
  </div>
  </div>
@@ -1279,6 +1419,11 @@ export default function BuildsDetailPage() {
  </div>
  </div>
  );
+}
+
+function sentenceCase(value: string) {
+  const text = value.replace(/_/g, " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function StatusBadge({ status, progress }: { status: string; progress: number }) {
@@ -1299,9 +1444,9 @@ function StatusBadge({ status, progress }: { status: string; progress: number })
       {!isFailed && !isApproved && !needsReview && !isCancelled && (
         <Activity className="h-3 w-3 animate-pulse" />
       )}
-      <span className="capitalize">{status.replace(/_/g, " ")}</span>
+      <span>{sentenceCase(status)}</span>
       {!isFailed && !isApproved && !isCancelled && progress > 0 && progress < 100 && (
-        <span className="font-mono text-[10px]">[{progress}%]</span>
+        <span className="text-[10px]">{progress}%</span>
       )}
     </div>
   );

@@ -16,7 +16,7 @@ Unattended source updates are paced by a claim recorded on the source's synced s
 **Why:** two devices with the same workspace open would otherwise each fire a real GitHub/website connect request per due source and overwrite each other's snapshots.
 
 **How to apply:**
-- The schedule merge lives in the mobile source state module *and* is mirrored in the desktop workspace-state module (desktop never runs scheduled syncs but its conflict saves must not drop a phone's claim). Any new schedule field or rule change must land in both, or desktop saves silently re-enable double syncs.
+- The schedule/claim merge now lives in the shared workspace merge-rules lib (see the shared merge-rules topic); both apps re-export it and identity-guard tests block local copies. Change schedule fields or rules in the lib only — desktop never runs scheduled syncs but its conflict saves must not drop a phone's claim.
 - Session identity is a fresh random token per app launch, deliberately not persisted: a prior session's claim must expire rather than be resumed.
 - Plain UI-test mode never uploads, so the claim gate is bypassed there (claims would never confirm); the workspace-sync harness mode exercises the full protocol against the fake cloud.
 - Accepted trade-off: a device that completes the connect call but dies before its completion save causes at most one repeat sync after the lease.

@@ -99,12 +99,49 @@ const CONCEPT_DETAIL = {
   ],
 };
 
+/**
+ * The cited conversation behind the first evidence row, as the read-only
+ * conversation GET serves it from the cloud snapshot.
+ */
+const REMOTE_CONVERSATION = {
+  conversation: {
+    id: 'conv_supplier_review',
+    title: 'Supplier review',
+    projectId: 'proj_beyond',
+    updatedAt: 1700000000000,
+    messages: [
+      {
+        id: 'm1',
+        role: 'user',
+        content: 'Where did the Acme renewal land?',
+        createdAt: 1699999990000,
+        status: 'sent',
+      },
+      {
+        id: 'm2',
+        role: 'assistant',
+        content: 'Acme renewal lands in March with a 12% uplift cap.',
+        createdAt: 1700000000000,
+        status: 'sent',
+        speakerName: 'The Analyst',
+      },
+    ],
+  },
+  projectName: 'Beyond Ops',
+};
+
 async function searchFor(page: Page, term: string) {
   await page.goto('/workspace/brain');
   await expect(
     page.getByRole('region', { name: /Knowledge map/ }),
   ).toBeVisible();
   await page.getByLabel('Search map').fill(term);
+}
+
+async function openRemoteConcept(page: Page) {
+  await searchFor(page, 'vendor');
+  await page.getByTestId(`brain-search-result-${REMOTE_CONCEPT_ID}`).click();
+  await expect(page.getByTestId('brain-remote-concept')).toBeVisible();
 }
 
 test('a hit the device has not cached opens a server-backed evidence panel', async ({
@@ -202,4 +239,212 @@ test('a concept deleted elsewhere reads as gone, not as an error', async ({
   const missing = page.getByTestId('brain-remote-missing');
   await expect(missing).toBeVisible();
   await expect(missing).toContainText('no longer in your knowledge base');
+});
+
+test('an evidence row opens the cited conversation from the cloud', async ({
+  page,
+}) => {
+  await stubWorkspaceApis(page);
+  await stubJsonGet(page, '**/api/venom/ontology/search**', SEARCH_RESULTS);
+  await stubJsonGet(
+    page,
+    `**/api/venom/ontology/concepts/${REMOTE_CONCEPT_ID}`,
+    CONCEPT_DETAIL,
+  );
+  await stubJsonGet(
+    page,
+    '**/api/venom/conversations/conv_supplier_review',
+    REMOTE_CONVERSATION,
+  );
+
+  await openRemoteConcept(page);
+  await page
+    .getByTestId('brain-remote-evidence-conv_supplier_review')
+    .click();
+
+  const panel = page.getByTestId('brain-remote-conversation');
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('Supplier review');
+  await expect(panel).toContainText('Beyond Ops · read-only');
+  await expect(
+    panel.getByTestId('brain-conversation-message-m1'),
+  ).toContainText('Where did the Acme renewal land?');
+  await expect(
+    panel.getByTestId('brain-conversation-message-m2'),
+  ).toContainText('The Analyst');
+  await expect(
+    panel.getByTestId('brain-conversation-message-m2'),
+  ).toContainText('Acme renewal lands in March with a 12% uplift cap.');
+
+  // Closing the transcript returns to the concept's evidence list, so the
+  // trail of proof can be walked row by row.
+  await panel.getByTestId('brain-conversation-close').click();
+  await expect(page.getByTestId('brain-remote-conversation')).toHaveCount(0);
+  await expect(page.getByTestId('brain-remote-concept')).toBeVisible();
+});
+
+test('offline, an evidence row degrades to connect-to-view and retry recovers', async ({
+  page,
+}) => {
+  await stubWorkspaceApis(page);
+  await stubJsonGet(page, '**/api/venom/ontology/search**', SEARCH_RESULTS);
+  await stubJsonGet(
+    page,
+    `**/api/venom/ontology/concepts/${REMOTE_CONCEPT_ID}`,
+    CONCEPT_DETAIL,
+  );
+
+  let conversationCalls = 0;
+  await page.route('**/api/venom/conversations/**', async (route) => {
+    conversationCalls += 1;
+    if (conversationCalls === 1) {
+      await route.abort();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(REMOTE_CONVERSATION),
+    });
+  });
+
+  await openRemoteConcept(page);
+  await page
+    .getByTestId('brain-remote-evidence-conv_supplier_review')
+    .click();
+
+  const offline = page.getByTestId('brain-conversation-offline');
+  await expect(offline).toBeVisible();
+  await expect(offline).toContainText('Connect to view this conversation');
+
+  await page.getByTestId('brain-conversation-retry').click();
+  await expect(
+    page.getByTestId('brain-conversation-message-m2'),
+  ).toContainText('12% uplift cap');
+});
+
+test('a cited conversation deleted elsewhere reads as gone, not as an error', async ({
+  page,
+}) => {
+  await stubWorkspaceApis(page);
+  await stubJsonGet(page, '**/api/venom/ontology/search**', SEARCH_RESULTS);
+  await stubJsonGet(
+    page,
+    `**/api/venom/ontology/concepts/${REMOTE_CONCEPT_ID}`,
+    CONCEPT_DETAIL,
+  );
+  await stubJsonGet(
+    page,
+    '**/api/venom/conversations/**',
+    { error: 'Conversation not found' },
+    404,
+  );
+
+  await openRemoteConcept(page);
+  await page
+    .getByTestId('brain-remote-evidence-conv_supplier_review')
+    .click();
+
+  const missing = page.getByTestId('brain-conversation-missing');
+  await expect(missing).toBeVisible();
+  await expect(missing).toContainText('no longer in your synced workspace');
+});
+
+test('an evidence row whose conversation is on this device opens it in Chat', async ({
+  page,
+}) => {
+  // Seed the device with the cited conversation (plus a different active
+  // one) through the same local mirror a signed-in account keeps.
+  const seeded = {
+    projects: [
+      {
+        id: 'proj_beyond',
+        name: 'Beyond Ops',
+        description: 'Vendor workspace',
+        accent: '#e5e5e5',
+        sourceCount: 0,
+        updatedAt: 1700000000000,
+      },
+    ],
+    conversations: [
+      {
+        id: 'conv_other',
+        title: 'Unrelated session',
+        projectId: 'proj_beyond',
+        updatedAt: 1700000000000,
+        messages: [
+          {
+            id: 'mo1',
+            role: 'assistant',
+            content: 'Nothing about vendors here.',
+            createdAt: 1700000000000,
+            status: 'sent',
+          },
+        ],
+      },
+      {
+        id: 'conv_supplier_review',
+        title: 'Supplier review',
+        projectId: 'proj_beyond',
+        updatedAt: 1700000000000,
+        messages: [
+          {
+            id: 'm1',
+            role: 'assistant',
+            content: 'Acme renewal lands in March with a 12% uplift cap.',
+            createdAt: 1700000000000,
+            status: 'sent',
+          },
+        ],
+      },
+    ],
+    // The map only renders once the project holds knowledge, so seed one
+    // cluster alongside the conversations.
+    clusters: [
+      {
+        id: 'cl_seeded',
+        projectId: 'proj_beyond',
+        label: 'Vendor Landscape',
+        summary: 'Suppliers and contract posture.',
+        description: 'Suppliers and contract posture.',
+        category: 'core',
+        links: [],
+        x: 40,
+        y: 40,
+        strength: 0.8,
+        mentionCount: 1,
+        lastUpdatedAt: 1700000000000,
+        sources: [],
+      },
+    ],
+    sources: [],
+    activeProjectId: 'proj_beyond',
+    activeConversationId: 'conv_other',
+  };
+  await page.addInitScript(
+    ({ key, value }) => window.localStorage.setItem(key, value),
+    {
+      key: '@venom_desktop_v1:venom-desktop-ui-test',
+      value: JSON.stringify(seeded),
+    },
+  );
+  await stubWorkspaceApis(page);
+  await stubJsonGet(page, '**/api/venom/ontology/search**', SEARCH_RESULTS);
+  await stubJsonGet(
+    page,
+    `**/api/venom/ontology/concepts/${REMOTE_CONCEPT_ID}`,
+    CONCEPT_DETAIL,
+  );
+
+  await openRemoteConcept(page);
+  await page
+    .getByTestId('brain-remote-evidence-conv_supplier_review')
+    .click();
+
+  // No read-only panel: the on-device copy opens in Chat itself.
+  await expect(page).toHaveURL(/\/workspace\/chat/);
+  await expect(page.getByTestId('brain-remote-conversation')).toHaveCount(0);
+  await expect(
+    page.getByText('Acme renewal lands in March with a 12% uplift cap.'),
+  ).toBeVisible();
 });

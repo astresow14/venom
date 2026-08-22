@@ -28,6 +28,12 @@ the focus destination from pre-mutation state — the next sibling, else the pre
 container's create control — and stash it before dispatching the delete; at `onDismiss` time the
 deleted element and its refs are already gone, so nothing can be derived from it then.
 
+If the destructive action can also *create* the element that should receive focus (deleting the
+last item spawns a fallback/replacement), no pre-mutation neighbor exists: stash an explicit
+"no target" and resolve it at `onDismiss` time against the post-mutation ref registry — the
+replacement is mounted by then, because the modal's dismiss effect runs after the same commit —
+falling back to the screen's create control.
+
 Two more extensions of the pattern:
 
 - If confirming the dialog unmounts its whole screen (e.g. it navigates back), `onDismiss` has
@@ -42,3 +48,8 @@ Two more extensions of the pattern:
 Focus rings on this monochrome design need care: on filled (foreground-colored) controls a
 `colors.primary` ring is invisible — use an inset ring in `colors.background` instead, which stays
 visible in both themes.
+
+One platform caveat: Android never fires `Modal.onDismiss`, so a dialog whose close path runs
+through `onDismiss` (web: hide → dismiss → notify parent) must platform-split its close handler —
+on native, call the parent's close callback directly instead of waiting for a dismiss event that
+never comes, or the dialog becomes unclosable on Android.

@@ -10,9 +10,11 @@ import {
   mergeConversationResponsePrefs,
   normalizeConversationBlend,
   normalizeConversationResponsePrefs,
+  normalizeConversationVoiceModels,
   normalizeWeights,
   nudgeWeights,
   pinToWeights,
+  summarizeBlend,
   weightsToPin,
 } from "./responsePrefs.ts";
 import {
@@ -87,6 +89,16 @@ test("describeBlend announces even and favored states", () => {
   const favored = describeBlend([0.7, 0.15, 0.15], names);
   assert.ok(favored.includes("GPT-5 70%"));
   assert.ok(favored.includes("Claude 15%"));
+});
+
+test("summarizeBlend keeps the collapsed-mixer chip short", () => {
+  const names = ["GPT-5", "Claude", "Gemini"];
+  assert.equal(summarizeBlend(EVEN_BLEND, names), "Even blend");
+  assert.equal(summarizeBlend(favoredBlend(1), names), "Favoring Claude");
+  // Two voices neck and neck: naming one leader would be misleading.
+  assert.equal(summarizeBlend([0.45, 0.44, 0.11], names), "Custom blend");
+  // Junk weights fall back to even, matching normalizeWeights.
+  assert.equal(summarizeBlend([0, 0, 0], names), "Even blend");
 });
 
 // ── Preference block validation ─────────────────────────────────────────────
@@ -166,6 +178,49 @@ test("mergeConversationResponsePrefs takes the newer block whole", () => {
     modeUpdatedAt: 10,
   });
   assert.equal(missing.responseMode, "debate");
+});
+
+test("normalizeConversationVoiceModels drops junk, dedupes last-wins, orders canonically", () => {
+  assert.equal(normalizeConversationVoiceModels(undefined), undefined);
+  assert.equal(normalizeConversationVoiceModels([]), undefined);
+  assert.equal(
+    normalizeConversationVoiceModels([
+      { voiceId: "narrator", modelId: "venom-gpt" },
+      { voiceId: "skeptic", modelId: "gpt-4o" },
+      "junk",
+    ]),
+    undefined,
+  );
+  assert.deepEqual(
+    normalizeConversationVoiceModels([
+      { voiceId: "skeptic", modelId: "venom-claude" },
+      { voiceId: "direct", modelId: "venom-gpt" },
+      { voiceId: "skeptic", modelId: "venom-gemini" },
+    ]),
+    [
+      { voiceId: "direct", modelId: "venom-gpt" },
+      { voiceId: "skeptic", modelId: "venom-gemini" },
+    ],
+  );
+});
+
+test("voice picks move with the winning preference block", () => {
+  const base = { id: "c" };
+  const withPicks = {
+    responseMode: "verify",
+    voiceModels: [{ voiceId: "skeptic", modelId: "venom-claude" }],
+    modeUpdatedAt: 200,
+  };
+  const older = { responseMode: "talk", modeUpdatedAt: 120 };
+  const kept = mergeConversationResponsePrefs(base, withPicks, older);
+  assert.deepEqual(kept.voiceModels, [{ voiceId: "skeptic", modelId: "venom-claude" }]);
+
+  // A newer block without picks wins whole — no leak-through.
+  const wiped = mergeConversationResponsePrefs(base, withPicks, {
+    responseMode: "talk",
+    modeUpdatedAt: 300,
+  });
+  assert.equal(wiped.voiceModels, undefined);
 });
 
 // ── Workspace-level integration ─────────────────────────────────────────────
@@ -256,6 +311,52 @@ test("merge keeps the preference block with the newer modeUpdatedAt", () => {
   assert.equal(conv.responseMode, "verify");
   assert.deepEqual(conv.blend.corners, ["a", "b", "c"]);
   assert.equal(conv.modeUpdatedAt, 200);
+});
+
+test("a pick made elsewhere survives this device's snapshot merge", () => {
+  // Cloud carries a desktop-made voice pick; this device (mobile) has never
+  // heard of voiceModels and merges its own snapshot with newer chat content
+  // but an older preference block. The pick must come through untouched.
+  const cloud = stateWithConversation(
+    conversationWith({
+      responseMode: "verify",
+      voiceModels: [{ voiceId: "skeptic", modelId: "venom-claude" }],
+      modeUpdatedAt: 200,
+    }),
+  );
+  const device = stateWithConversation(
+    conversationWith(
+      { responseMode: "talk", modeUpdatedAt: 120 },
+      {
+        updatedAt: 300,
+        messages: [
+          { id: "m1", role: "user", content: "hi", createdAt: 10, status: "sent" },
+          { id: "m2", role: "assistant", content: "yo", createdAt: 20, status: "sent" },
+        ],
+      },
+    ),
+  );
+
+  const merged = mergeWorkspaceStates(cloud, device);
+  const conv = merged.conversations[0];
+  assert.equal(conv.messages.length, 2);
+  assert.deepEqual(conv.voiceModels, [{ voiceId: "skeptic", modelId: "venom-claude" }]);
+  assert.equal(conv.modeUpdatedAt, 200);
+
+  // And hydration keeps picks intact rather than treating them as junk.
+  const hydrated = stateWithConversation(
+    conversationWith({
+      voiceModels: [
+        { voiceId: "direct", modelId: "venom-gpt" },
+        { voiceId: "direct", modelId: "venom-gemini" },
+        { voiceId: "narrator", modelId: "venom-gpt" },
+      ],
+      modeUpdatedAt: 10,
+    }),
+  );
+  assert.deepEqual(hydrated.conversations[0].voiceModels, [
+    { voiceId: "direct", modelId: "venom-gemini" },
+  ]);
 });
 
 test("merge tie on modeUpdatedAt keeps the device preference block", () => {

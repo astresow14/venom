@@ -1,22 +1,41 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 
-if (!process.env.AI_INTEGRATIONS_GEMINI_BASE_URL) {
-  throw new Error(
-    "AI_INTEGRATIONS_GEMINI_BASE_URL must be set. Did you forget to provision the Gemini AI integration?",
-  );
+let _ai: GoogleGenAI | null = null;
+
+/**
+ * Image generation runs only through the managed Replit AI integration.
+ * Env is validated lazily, at first use — merely importing the package (for
+ * example, for text chat over a direct key) must never throw when the
+ * managed pair is absent.
+ */
+function getImageClient(): GoogleGenAI {
+  if (!_ai) {
+    const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+    if (!baseUrl) {
+      throw new Error(
+        "AI_INTEGRATIONS_GEMINI_BASE_URL must be set. Did you forget to provision the Gemini AI integration?",
+      );
+    }
+    if (!apiKey) {
+      throw new Error(
+        "AI_INTEGRATIONS_GEMINI_API_KEY must be set. Did you forget to provision the Gemini AI integration?",
+      );
+    }
+    _ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: { apiVersion: "", baseUrl },
+    });
+  }
+  return _ai;
 }
 
-if (!process.env.AI_INTEGRATIONS_GEMINI_API_KEY) {
-  throw new Error(
-    "AI_INTEGRATIONS_GEMINI_API_KEY must be set. Did you forget to provision the Gemini AI integration?",
-  );
-}
-
-export const ai = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-  httpOptions: {
-    apiVersion: "",
-    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
+/** Lazily-resolved singleton. Throws at first use if env vars are missing. */
+export const ai = new Proxy({} as GoogleGenAI, {
+  get(_target, prop) {
+    return (getImageClient() as unknown as Record<string | symbol, unknown>)[
+      prop
+    ];
   },
 });
 

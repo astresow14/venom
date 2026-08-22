@@ -12,6 +12,9 @@ const SUGGESTED_APP = {
   linkedProjectId: 'proj_alpha',
   linkedProjectName: 'Atlas Research',
   latestIterationNumber: 1,
+  liveReleaseId: null,
+  liveIterationNumber: null,
+  livePublishedAt: null,
   improvementSignal: {
     summary: 'Atlas Research absorbed 3 new concepts since package v1.',
     baselineIterationNumber: 1,

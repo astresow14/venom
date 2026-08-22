@@ -18,7 +18,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSharedValue, type SharedValue } from "react-native-reanimated";
 import { useAuth } from "@clerk/expo";
 import { fetch as expoFetch } from "expo/fetch";
-import { extractVenomKnowledge } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  extractVenomKnowledge,
+  getGetSharedWorkspaceKnowledgeQueryKey,
+} from "@workspace/api-client-react";
 
 import {
   useVenom,
@@ -33,6 +37,8 @@ import {
 } from "@/context/workspaceSync";
 import {
   createVoiceOutcomeTracker,
+  resolveDecisionGraceMs,
+  resolveDecisionRequestTimeoutMs,
   resolveWindDownDelayMs,
   type VoiceDecisionOutcomeKind,
   type VoiceOutcomeTracker,
@@ -127,6 +133,14 @@ type VoiceTurn = {
   speechFailed: boolean;
   speechUnavailable: boolean;
   finalized: boolean;
+  /** True while the stay-quiet decision is still pending: the respond stream
+   * runs, but nothing is shown, spoken, or closed until the decision lands. */
+  heldForDecision: boolean;
+  /** A stream failure parked while held; the decision decides its fate. */
+  heldFailureMessage: string | null;
+  /** This turn's respond-stream controller — a quiet decision cancels just
+   * this stream, leaving the rest of the run untouched. */
+  respondAbort?: AbortController;
   modelId: string;
   modelName: string | null;
   historyForExtraction: Array<{
@@ -150,6 +164,8 @@ type VoiceRun = {
   aborts: Set<AbortController>;
   turn: VoiceTurn | null;
   stopping: boolean;
+  /** The microphone stays untouched until the user explicitly starts a turn. */
+  captureStarted: boolean;
   /** Pairs each restraint decision with the outcome that followed it. */
   tracker: VoiceOutcomeTracker;
   /** Armed after a wind-down turn: sustained quiet eases the session shut. */
@@ -198,6 +214,8 @@ export type VoiceConversation = {
   activePreset: VoiceCatalogPreset | null;
   selectPreset: (id: VenomVoicePresetId) => void;
   begin: () => Promise<void>;
+  /** Start a recording, or finish and send the recording in progress. */
+  toggleRecording: () => Promise<void>;
   end: () => void;
   interrupt: () => void;
   retry: () => void;
@@ -214,8 +232,10 @@ export function useVoiceConversation(
     createNewConversation,
     setActiveConversation,
     applyKnowledgeInsights,
+    applyFiledKnowledge,
     setVoicePreset,
   } = useVenom();
+  const queryClient = useQueryClient();
 
   const [phase, setPhase] = useState<VoicePhase>("idle");
   const [error, setError] = useState<VoiceError | null>(null);
@@ -366,7 +386,17 @@ export function useVoiceConversation(
     turn.finalized = true;
     run.turn = null;
 
-    const text = turn.assistantText.trim();
+    if (turn.heldForDecision) {
+      // The turn is still speculative — its stay-quiet decision never
+      // landed. Whatever finalizes it here (overlay close, interrupt,
+      // session failure) discards the head start wholesale: no message,
+      // no transcript entry, no extraction. The user's words were already
+      // filed when the turn began.
+      turn.speakQueue.length = 0;
+      turn.respondAbort?.abort();
+    }
+
+    const text = turn.heldForDecision ? "" : turn.assistantText.trim();
     if (text.length > 0) {
       addMessage(turn.conversationId, {
         id: turn.assistantMessageId,
@@ -410,14 +440,39 @@ export function useVoiceConversation(
           if (runRef.current?.id !== run.id && phaseRef.current === "idle") {
             return;
           }
-          applyKnowledgeInsights(
-            {
-              id: turn.conversationId,
-              title: turn.conversationTitle,
-              projectId: turn.projectId,
-            },
-            result.clusters,
-          );
+          const conversationRef = {
+            id: turn.conversationId,
+            title: turn.conversationTitle,
+            projectId: turn.projectId,
+          };
+          // Topic classification may have filed some clusters straight into
+          // shared workspaces. Their records never merge into the personal
+          // blob — refresh the cached workspace knowledge; the notice (with
+          // undo) waits on the Brain page rather than interrupting a
+          // hands-free conversation.
+          const workspaceFilings = result.workspaceFilings ?? [];
+          for (const filing of workspaceFilings) {
+            void queryClient.invalidateQueries({
+              queryKey: getGetSharedWorkspaceKnowledgeQueryKey(
+                filing.workspaceId,
+              ),
+            });
+          }
+          if (result.filedScope?.ownerType === "org") {
+            // Company-shared project work grows the company Brain on the
+            // server; nothing to mirror locally.
+          } else if (result.filed && result.filed.length > 0) {
+            // The server filed these into the ontology store already; mirror
+            // its canonical records locally (Unsorted holdings ride along
+            // with `unsorted: true`).
+            applyFiledKnowledge(conversationRef, result.filed);
+          } else if (!result.filed && workspaceFilings.length === 0) {
+            // Older server or filing hiccup: fall back to local filing, which
+            // reaches the store on the next workspace sync. Never when
+            // workspace filings exist — re-filing those locally would
+            // duplicate shared content as personal.
+            applyKnowledgeInsights(conversationRef, result.clusters);
+          }
         })
         .catch(() => {
           // Voice chat stays usable when extraction is unavailable.
@@ -427,6 +482,9 @@ export function useVoiceConversation(
     setLiveAssistantText("");
     setLiveUserText(null);
     outputLevel.value = 0;
+    // The reply is over (or cut): leave the ducking window so the detector
+    // returns to its normal room-noise gating.
+    run.capture.setDucking(null);
 
     if (turn.speechUnavailable) {
       teardown();
@@ -443,19 +501,11 @@ export function useVoiceConversation(
       if (turn.speechFailed) {
         setNotice("Playback stumbled — the reply is in the thread.");
       }
-      run.capture.resume();
-      movePhase("listening");
-      if (run.windDownAfterTurn) {
-        // A wind-down closer played out: keep its decision pending and start
-        // the quiet-close clock — the timer (wound_down), a re-engagement
-        // (user_followed_up) or a manual close will settle it.
-        run.windDownAfterTurn = false;
-        armWindDown(run);
-      } else {
-        // The reply played out untouched (an interrupt settles first,
-        // making this a no-op).
-        run.tracker.replyCompleted();
-      }
+      // This mode is deliberately turn-based: after a reply (or an
+      // interruption) the user chooses when the microphone starts again.
+      run.windDownAfterTurn = false;
+      run.tracker.replyCompleted();
+      movePhase("idle");
     }
   };
 
@@ -542,6 +592,10 @@ export function useVoiceConversation(
   const maybeCloseTurnAudio = useCallback((run: VoiceRun) => {
     const turn = run.turn;
     if (!turn || turn.finalized) return;
+    // A held turn can't close: closure files the reply and reports its
+    // outcome, and the pending decision may yet be "stay quiet". Release
+    // or discard re-runs this once the decision lands.
+    if (turn.heldForDecision) return;
     if (!turn.respondDone || turn.pumping || turn.speakQueue.length > 0) return;
     if (turn.playbackBegun && !turn.speechFailed) {
       // 'finished' from playback finalizes the turn.
@@ -555,7 +609,8 @@ export function useVoiceConversation(
   const pumpSpeech = useCallback(
     async (run: VoiceRun) => {
       const turn = run.turn;
-      if (!turn || turn.pumping) return;
+      // Held turns buffer sentences without speaking; release pumps them.
+      if (!turn || turn.pumping || turn.heldForDecision) return;
       turn.pumping = true;
       try {
         while (
@@ -587,6 +642,67 @@ export function useVoiceConversation(
     },
     [pumpSpeech],
   );
+
+  // ── Held (optimistic) turns ───────────────────────────────────────────────
+
+  /**
+   * Serialized stream-failure semantics, shared by the live catch path and
+   * deferred held failures: keep any text the reply already produced behind
+   * a soft notice, otherwise fail the session outright.
+   */
+  const deliverRespondFailure = useCallback(
+    (run: VoiceRun, turn: VoiceTurn, message: string) => {
+      if (turn.assistantText.trim().length > 0) {
+        // Keep what was said; surface a soft notice and keep listening.
+        for (const controllerToStop of run.aborts) controllerToStop.abort();
+        run.playback.stop();
+        finalizeTurnRef.current?.(run, { resume: true });
+        setNotice(message);
+      } else {
+        failSession({ kind: "network", message });
+      }
+    },
+    [failSession],
+  );
+
+  /**
+   * The pending stay-quiet decision came back "respond" (or failed open):
+   * surface the held turn. Buffered text becomes the live bubble, queued
+   * sentences start speaking, and a stream that already finished may close.
+   * A stream failure parked while held is presented only now — exactly as
+   * the serialized path would have shown it.
+   */
+  const releaseHeldTurn = useCallback(
+    (run: VoiceRun, turn: VoiceTurn) => {
+      if (run.turn !== turn || turn.finalized || !turn.heldForDecision) return;
+      turn.heldForDecision = false;
+      if (turn.heldFailureMessage !== null) {
+        deliverRespondFailure(run, turn, turn.heldFailureMessage);
+        return;
+      }
+      if (turn.assistantText.length > 0) {
+        setLiveAssistantText(turn.assistantText);
+      }
+      void pumpSpeech(run);
+      maybeCloseTurnAudio(run);
+    },
+    [deliverRespondFailure, maybeCloseTurnAudio, pumpSpeech],
+  );
+
+  /**
+   * The pending decision came back quiet: unwind the head start as if it
+   * never happened. Nothing was shown, spoken, or filed for the assistant
+   * side, so cancelling the stream and detaching the turn erases it; the
+   * user's words stay filed, exactly like the serialized quiet paths.
+   */
+  const discardHeldTurn = useCallback((run: VoiceRun, turn: VoiceTurn) => {
+    if (run.turn !== turn || turn.finalized || !turn.heldForDecision) return;
+    turn.finalized = true;
+    turn.speakQueue.length = 0;
+    run.turn = null;
+    turn.respondAbort?.abort();
+    setLiveAssistantText("");
+  }, []);
 
   // ── Filing the user's side of a turn ──────────────────────────────────────
 
@@ -650,7 +766,18 @@ export function useVoiceConversation(
   // ── The assistant reply turn ──────────────────────────────────────────────
 
   const runAssistantTurn = useCallback(
-    async (run: VoiceRun, userText: string, token: string) => {
+    async (
+      run: VoiceRun,
+      userText: string,
+      token: string,
+      options?: {
+        /** A filing the caller already made (the overlapped path files
+         * before starting the stream); absent means file here. */
+        filing?: TurnFiling;
+        /** Start held: no live text, speech, or closure until released. */
+        holdForDecision?: boolean;
+      },
+    ) => {
       const snapshot = stateRef.current;
       const project = activeProjectRef.current;
       const {
@@ -659,7 +786,7 @@ export function useVoiceConversation(
         historyMessages,
         conversationTitle,
         onScreenProjectId,
-      } = fileUserTurn(userText);
+      } = options?.filing ?? fileUserTurn(userText);
 
       const projectSources = (snapshot.sources ?? []).filter(
         (source: ProjectSource) =>
@@ -692,6 +819,8 @@ export function useVoiceConversation(
         speechFailed: false,
         speechUnavailable: false,
         finalized: false,
+        heldForDecision: options?.holdForDecision === true,
+        heldFailureMessage: null,
         modelId: sendingModelId,
         modelName: null,
         historyForExtraction: historyMessages.slice(-46).map((message) => ({
@@ -709,6 +838,7 @@ export function useVoiceConversation(
 
       const controller = new AbortController();
       run.aborts.add(controller);
+      turn.respondAbort = controller;
       let streamCompleted = false;
       try {
         const response = await expoFetch(`${apiBase()}/api/venom/respond`, {
@@ -772,7 +902,9 @@ export function useVoiceConversation(
             if (parsed.modelName) turn.modelName = parsed.modelName;
             if (parsed.content) {
               turn.assistantText += parsed.content;
-              setLiveAssistantText(turn.assistantText);
+              if (!turn.heldForDecision) {
+                setLiveAssistantText(turn.assistantText);
+              }
               for (const segment of turn.chunker.push(parsed.content)) {
                 enqueueSpeech(run, segment);
               }
@@ -807,23 +939,23 @@ export function useVoiceConversation(
           err instanceof VoiceFlowError
             ? err.message
             : "The connection dropped mid-reply.";
-        if (turn.assistantText.trim().length > 0) {
-          // Keep what was said; surface a soft notice and keep listening.
-          for (const controllerToStop of run.aborts) controllerToStop.abort();
-          run.playback.stop();
-          finalizeTurnRef.current?.(run, { resume: true });
-          setNotice(message);
-        } else {
-          failSession({ kind: "network", message });
+        if (turn.heldForDecision) {
+          // The turn is still speculative — surfacing this failure now would
+          // file the partial reply and tear the session down before a quiet
+          // decision could discard it. Park it: release presents it with the
+          // serialized semantics, discard erases it.
+          turn.heldFailureMessage = message;
+          return;
         }
+        deliverRespondFailure(run, turn, message);
       } finally {
         run.aborts.delete(controller);
       }
     },
     [
       apiBase,
+      deliverRespondFailure,
       enqueueSpeech,
-      failSession,
       fileUserTurn,
       maybeCloseTurnAudio,
       movePhase,
@@ -857,6 +989,8 @@ export function useVoiceConversation(
         speechFailed: false,
         speechUnavailable: false,
         finalized: false,
+        heldForDecision: false,
+        heldFailureMessage: null,
         modelId: "",
         modelName: null,
         historyForExtraction: [],
@@ -913,7 +1047,10 @@ export function useVoiceConversation(
 
       const controller = new AbortController();
       run.aborts.add(controller);
-      const deadline = setTimeout(() => controller.abort(), 4_000);
+      const deadline = setTimeout(
+        () => controller.abort(),
+        resolveDecisionRequestTimeoutMs(),
+      );
       try {
         const response = await expoFetch(
           `${apiBase()}/api/venom/voice/decide`,
@@ -966,6 +1103,85 @@ export function useVoiceConversation(
     [apiBase],
   );
 
+  // ── The optimistic (overlapped) turn ──────────────────────────────────────
+
+  /**
+   * The stay-quiet decision outlived the grace window: run the reply and the
+   * decision concurrently. The respond stream starts now but the turn is
+   * *held* — no live text, no speech, no closure — so whichever way the
+   * decision lands, nothing has surfaced that shouldn't have. Semantics
+   * match the serialized path exactly: failure falls open to responding,
+   * and a quiet turn files the user's words but never shows a reply.
+   */
+  const runOverlappedTurn = useCallback(
+    async (
+      run: VoiceRun,
+      text: string,
+      token: string,
+      decisionPromise: Promise<TurnDecision | null>,
+    ) => {
+      // The decide snapshot was captured before this filing, so the server
+      // still judges the turn against pre-utterance history.
+      const filing = fileUserTurn(text);
+      const turnPromise = runAssistantTurn(run, text, token, {
+        filing,
+        holdForDecision: true,
+      });
+      // runAssistantTurn installs its turn synchronously (before any await).
+      const heldTurn = run.turn;
+
+      const decision = await decisionPromise;
+      const stillHeld =
+        runRef.current?.id === run.id &&
+        !run.stopping &&
+        heldTurn !== null &&
+        run.turn === heldTurn &&
+        !heldTurn.finalized &&
+        heldTurn.heldForDecision;
+      if (stillHeld) {
+        if (!decision || decision.decision === "respond") {
+          if (decision?.decisionId) {
+            run.tracker.register(decision.decisionId, "respond");
+          }
+          releaseHeldTurn(run, heldTurn);
+        } else {
+          // Quiet decision: unwind the head start as if it never happened.
+          discardHeldTurn(run, heldTurn);
+          if (decision.decisionId) {
+            run.tracker.register(decision.decisionId, decision.decision);
+          }
+          if (decision.decision === "acknowledge" && decision.acknowledgment) {
+            if (decision.windDown) run.windDownAfterTurn = true;
+            runAcknowledgeTurn(
+              run,
+              text,
+              decision.acknowledgment,
+              token,
+              filing,
+            );
+          } else {
+            // Stay silent: the orb just relaxes back into listening.
+            if (decision.windDown) armWindDown(run);
+            movePhase("idle");
+          }
+        }
+      }
+      // Otherwise the turn settled itself first (interrupt, error, close):
+      // whatever settled it owns the outcome, and the late decision goes
+      // untracked — the tracker allows executed-but-untracked turns.
+      await turnPromise;
+    },
+    [
+      armWindDown,
+      discardHeldTurn,
+      fileUserTurn,
+      movePhase,
+      releaseHeldTurn,
+      runAcknowledgeTurn,
+      runAssistantTurn,
+    ],
+  );
+
   // ── Utterance → transcription ─────────────────────────────────────────────
 
   const handleUtterance = useCallback(
@@ -1012,8 +1228,7 @@ export function useVoiceConversation(
         if (runRef.current?.id !== run.id || run.stopping) return;
         if (!text) {
           setNotice("Didn't catch that — go again.");
-          run.capture.resume();
-          movePhase("listening");
+          movePhase("idle");
           return;
         }
         setLiveUserText(text);
@@ -1022,8 +1237,28 @@ export function useVoiceConversation(
         // "did the user have to re-engage?".
         run.tracker.userSpoke();
 
-        const decision = await requestTurnDecision(run, text, token);
+        // The stay-quiet check must not cost latency on turns that become
+        // full replies: give it a short grace to land (confident heuristics
+        // do), then start preparing the reply while it keeps deciding.
+        const decisionPromise = requestTurnDecision(run, text, token);
+        const graceMs = resolveDecisionGraceMs(IS_UI_TEST);
+        // `undefined` means the grace elapsed first — the decide call itself
+        // never yields undefined (failures resolve to null → respond).
+        const decision =
+          graceMs > 0
+            ? await Promise.race([
+                decisionPromise,
+                new Promise<undefined>((resolve) => {
+                  setTimeout(() => resolve(undefined), graceMs);
+                }),
+              ])
+            : undefined;
         if (runRef.current?.id !== run.id || run.stopping) return;
+
+        if (decision === undefined) {
+          await runOverlappedTurn(run, text, token, decisionPromise);
+          return;
+        }
 
         if (!decision || decision.decision === "respond") {
           if (decision?.decisionId) {
@@ -1048,14 +1283,12 @@ export function useVoiceConversation(
         // Stay silent: no reply, no announcement — the orb just relaxes
         // back into listening. Wind-downs start the quiet-close clock.
         if (decision.windDown) armWindDown(run);
-        run.capture.resume();
-        movePhase("listening");
+        movePhase("idle");
       } catch {
         if (runRef.current?.id !== run.id || run.stopping) return;
         // One bad utterance shouldn't end the session — keep listening.
-        setNotice("That didn't come through. Say it again?");
-        run.capture.resume();
-        movePhase("listening");
+        setNotice("That didn't come through. Tap to try again.");
+        movePhase("idle");
       }
     },
     [
@@ -1068,10 +1301,32 @@ export function useVoiceConversation(
       resolveToken,
       runAcknowledgeTurn,
       runAssistantTurn,
+      runOverlappedTurn,
     ],
   );
 
   // ── Audio event plumbing ──────────────────────────────────────────────────
+
+  /**
+   * Cut the in-flight reply short and hand the floor back: file what was
+   * already said, stop playback, resume listening. Shared by the orb tap
+   * (interrupt) and hands-free barge-in.
+   */
+  const cutReplyShort = useCallback(
+    (run: VoiceRun) => {
+      if (!run.turn || run.turn.finalized) return;
+      // Cutting a reply off is itself the outcome — and it cancels any
+      // wind-down: the user clearly wants the floor.
+      run.tracker.replyInterrupted();
+      disarmWindDown(run);
+      for (const controller of run.aborts) controller.abort();
+      run.aborts.clear();
+      run.turn.speakQueue.length = 0;
+      run.playback.stop();
+      finalizeTurnRef.current?.(run, { resume: true });
+    },
+    [disarmWindDown],
+  );
 
   const handleCaptureEvent = useCallback(
     (run: VoiceRun) => (event: VoiceCaptureEvent) => {
@@ -1087,11 +1342,32 @@ export function useVoiceConversation(
           if (phaseRef.current === "listening") {
             setUserSpeaking(true);
             setNotice(null);
+          } else if (phaseRef.current === "speaking") {
+            // Hands-free barge-in: the mic stayed hot through playback with
+            // the detector ducked against the output level, so this is
+            // sustained real speech, not the bot's own voice. Yield the
+            // floor immediately; the words being spoken become the next
+            // turn's input once the utterance completes.
+            setUserSpeaking(true);
+            setNotice(null);
+            cutReplyShort(run);
           }
           break;
         case "utterance":
           if (phaseRef.current !== "listening") return;
-          if (event.durationMs < MIN_UTTERANCE_MS) return;
+          if (event.durationMs < MIN_UTTERANCE_MS) {
+            // Every platform pauses the recorder before it hands a finished
+            // clip to us. A stray tap must therefore return the UI to its
+            // ready state, or the next tap would try to finish an already
+            // paused recorder forever.
+            disarmWindDown(run);
+            inputLevel.value = 0;
+            setUserSpeaking(false);
+            setLiveUserText(null);
+            setNotice("That was too short — tap to try again.");
+            movePhase("idle");
+            return;
+          }
           disarmWindDown(run);
           void handleUtterance(run, event.audioBase64);
           break;
@@ -1117,7 +1393,7 @@ export function useVoiceConversation(
           break;
       }
     },
-    [disarmWindDown, failSession, handleUtterance, inputLevel],
+    [cutReplyShort, disarmWindDown, failSession, handleUtterance, inputLevel],
   );
 
   const handlePlaybackEvent = useCallback(
@@ -1125,10 +1401,18 @@ export function useVoiceConversation(
       if (runRef.current?.id !== run.id) return;
       switch (event.type) {
         case "started":
-          if (run.turn && !run.turn.finalized) movePhase("speaking");
+          if (run.turn && !run.turn.finalized) {
+            movePhase("speaking");
+            // Playback is interruptible by tap, but recording never resumes
+            // on its own while a reply is playing.
+            run.capture.setDucking(null);
+          }
           break;
         case "level":
           outputLevel.value = event.level;
+          if (phaseRef.current === "speaking") {
+            run.capture.setDucking(event.level);
+          }
           break;
         case "finished":
           outputLevel.value = 0;
@@ -1232,6 +1516,7 @@ export function useVoiceConversation(
       aborts: new Set(),
       turn: null,
       stopping: false,
+      captureStarted: false,
       tracker: createVoiceOutcomeTracker((decisionId, outcome) => {
         void reportDecisionOutcome(decisionId, outcome);
       }),
@@ -1242,13 +1527,9 @@ export function useVoiceConversation(
     run.playback = adapter.createPlayback(handlePlaybackEvent(run));
     runRef.current = run;
 
-    await run.capture.start();
-    if (runRef.current?.id !== run.id) return;
-    // A capture error during start() moves the phase to 'error'; only a
-    // still-connecting session may proceed to listening.
-    if (phaseRef.current === "connecting") {
-      movePhase("listening");
-    }
+    // Catalog and playback prepare on open, but native microphone permission
+    // is requested only when the user taps to record.
+    movePhase("idle");
   }, [
     handleCaptureEvent,
     handlePlaybackEvent,
@@ -1259,22 +1540,42 @@ export function useVoiceConversation(
     userId,
   ]);
 
+  // Tap-to-interrupt stays as the fallback (and the only path while the
+  // reply is still being thought up, before any audio plays).
   const interrupt = useCallback(() => {
     const run = runRef.current;
     if (!run || !run.turn || run.turn.finalized) return;
     if (phaseRef.current !== "speaking" && phaseRef.current !== "thinking") {
       return;
     }
-    // Cutting a reply off is itself the outcome — and it cancels any
-    // wind-down: the user clearly wants the floor.
-    run.tracker.replyInterrupted();
-    disarmWindDown(run);
-    for (const controller of run.aborts) controller.abort();
-    run.aborts.clear();
-    run.turn.speakQueue.length = 0;
-    run.playback.stop();
-    finalizeTurnRef.current?.(run, { resume: true });
-  }, [disarmWindDown]);
+    cutReplyShort(run);
+  }, [cutReplyShort]);
+
+  const toggleRecording = useCallback(async () => {
+    const run = runRef.current;
+    if (!run) return;
+
+    if (phaseRef.current === "listening") {
+      setUserSpeaking(false);
+      run.capture.finish();
+      return;
+    }
+    if (phaseRef.current !== "idle") return;
+
+    setNotice(null);
+    setUserSpeaking(true);
+    if (run.captureStarted) {
+      run.capture.resume();
+      movePhase("listening");
+      return;
+    }
+
+    run.captureStarted = true;
+    await run.capture.start();
+    if (runRef.current?.id !== run.id) return;
+    // Permission failures move the phase to error through the adapter event.
+    if (phaseRef.current === "idle") movePhase("listening");
+  }, [movePhase]);
 
   const end = useCallback(() => {
     const run = runRef.current;
@@ -1334,6 +1635,7 @@ export function useVoiceConversation(
     activePreset,
     selectPreset,
     begin,
+    toggleRecording,
     end,
     interrupt,
     retry,

@@ -109,6 +109,58 @@ test("the global sweep removes an inactive user's expired rows and keeps fresh o
   }
 });
 
+test("listForUser reads only the owner's window, oldest first, without user ids", async () => {
+  await ensureVoiceDecisionSchema();
+
+  const suffix = randomUUID().slice(0, 8);
+  const owner = `user_voiceList_${suffix}`;
+  const neighbor = `user_voiceListOther_${suffix}`;
+
+  const beyondWindow = decisionRow(owner, 45);
+  const older = decisionRow(owner, 2);
+  const settled = {
+    ...decisionRow(owner, 0),
+    outcome: "stayed_quiet",
+    outcomeAt: new Date(),
+  };
+  const foreign = decisionRow(neighbor, 1);
+  const allIds = [beyondWindow.id, older.id, settled.id, foreign.id];
+
+  await db
+    .insert(venomVoiceDecisionsTable)
+    .values([beyondWindow, older, settled, foreign]);
+
+  try {
+    const since = new Date(Date.now() - 30 * DAY_MS);
+    const rows = await voiceDecisionStore.listForUser(owner, since);
+
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      [older.id, settled.id],
+      "window-filtered, owner-scoped, oldest first",
+    );
+
+    const [pendingRow, settledRow] = rows;
+    assert.equal(pendingRow!.decision, "silent");
+    assert.equal(pendingRow!.talkativeness, "balanced");
+    assert.deepEqual(pendingRow!.signals, { backchannel: true });
+    assert.equal(pendingRow!.outcome, null);
+    assert.equal(pendingRow!.outcomeAt, null);
+    assert.ok(pendingRow!.createdAt instanceof Date);
+    assert.ok(
+      !("userId" in pendingRow!),
+      "read rows never carry the user id",
+    );
+
+    assert.equal(settledRow!.outcome, "stayed_quiet");
+    assert.ok(settledRow!.outcomeAt instanceof Date);
+  } finally {
+    await db
+      .delete(venomVoiceDecisionsTable)
+      .where(inArray(venomVoiceDecisionsTable.id, allIds));
+  }
+});
+
 test("the real store accepts exactly one outcome per recorded decision", async () => {
   await ensureVoiceDecisionSchema();
 

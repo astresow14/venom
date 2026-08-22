@@ -9,3 +9,9 @@ A correlated scalar subquery written with drizzle's sql template — `sql`(SELEC
 
 **How to apply:** for per-row aggregates, run a second query — `select({ id, count }) 
  ... where(inArray(child.parentId, ids)).groupBy(child.parentId)` — and join in JS. Assert exact aggregate values in integration tests rather than `>= 1` shapes.
+
+## Array parameters in raw sql
+
+`sql`${table.col} = ANY(${jsArray})`` fails at runtime with PG 42809 ("op ANY/ALL (array) requires array") because drizzle binds the JS array as a record/scalar, not a PG array.
+
+**How to apply:** use drizzle's `inArray(table.col, jsArray)` for membership tests in any raw-ish condition; never hand-roll `= ANY(...)` with a JS array param.

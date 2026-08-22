@@ -4,10 +4,10 @@ import { stubWorkspaceApis } from './support/stubs';
 /**
  * Voice preferences on desktop.
  *
- * Voice mode runs on the phone, but its two synced preferences — the speaking
- * voice and the chatty ↔ reserved talkativeness dial — are workspace state,
- * so desktop must let the user set them and must carry the choice through the
- * normal save path. The UI-test harness runs signed-out with cloud sync
+ * Voice mode's two synced preferences — the speaking voice and the chatty ↔
+ * reserved talkativeness dial — are workspace state, so desktop must let the
+ * user set them from settings too (voice-mode.spec.ts covers the in-session
+ * picker) and must carry the choice through the normal save path. The UI-test harness runs signed-out with cloud sync
  * disabled; the workspace provider mirrors every state change into the same
  * user-scoped local snapshot a signed-in reload hydrates from, so persistence
  * across a reload proves the write went through the real save path (normalize

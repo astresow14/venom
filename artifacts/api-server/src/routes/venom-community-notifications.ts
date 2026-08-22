@@ -44,6 +44,8 @@ import {
   notificationRetentionCutoff,
   pruneExpiredNotifications,
 } from "../lib/community-notifications";
+import { countUnreadSourceSyncAlerts } from "../lib/venom-source-sync-alerts";
+import { venomWorkspaceStateLoader } from "./venom-source-alerts";
 import { resolveViewerProfile } from "./venom-community-threads";
 
 const router: IRouter = Router();
@@ -227,10 +229,32 @@ router.get(
     await pruneExpiredNotifications(db);
     const retentionCutoff = notificationRetentionCutoff();
 
+    // Scheduled source sync alerts ride the same badge, so a persistently
+    // failing unattended sync reaches users who never touch the community —
+    // including users with no community profile at all. Best-effort: if the
+    // alert lookup hiccups, the community badge must keep working.
+    let alertCount = 0;
+    try {
+      alertCount = await countUnreadSourceSyncAlerts(
+        userId,
+        venomWorkspaceStateLoader,
+      );
+    } catch (error) {
+      req.log.warn(
+        {
+          op: "notifications_unread_count",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        },
+        "Source sync alert count unavailable; showing community unread only",
+      );
+    }
+
     const viewerProfile = await resolveViewerProfile(userId);
     if (!viewerProfile) {
       res.json(
-        GetCommunityNotificationUnreadCountResponse.parse({ count: 0 }),
+        GetCommunityNotificationUnreadCountResponse.parse({
+          count: alertCount,
+        }),
       );
       return;
     }
@@ -249,7 +273,7 @@ router.get(
         ),
       );
 
-    const value = row?.value ?? 0;
+    const value = (row?.value ?? 0) + alertCount;
 
     req.log.info(
       { op: "notifications_unread_count", count: value },

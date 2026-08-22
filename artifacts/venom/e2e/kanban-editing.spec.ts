@@ -15,7 +15,7 @@ async function openBoard(page: Page) {
 
 async function addField(
   page: Page,
-  type: "Number" | "Date" | "Single select" | "Checkbox",
+  type: "Text" | "Number" | "Date" | "Single select" | "Checkbox",
   name: string,
   options?: string,
 ) {
@@ -326,4 +326,58 @@ test("Deleting a card hands keyboard focus to a surviving neighbour", async ({
   await expectVisibleKeyboardFocus(
     page.getByRole("button", { name: "Add card to To Do" }),
   );
+});
+
+// Confirming "Reassign & remove" on a stage or "Confirm removal" on a field
+// unmounts the settings row that owned the focused confirm button, so board
+// settings must hand keyboard focus to the control that takes the removed
+// row's place: the next row's rename input, or the section's "New stage/field
+// name" input when no row follows.
+test("Removing a stage or field hands keyboard focus to a surviving settings control", async ({
+  page,
+}) => {
+  await page.goto("/?venomUiTest=true");
+  await openBoard(page);
+  await page.getByRole("button", { name: "Open board settings" }).click();
+
+  // The seeded board is To Do / Active / Done. Append a fourth stage so the
+  // first removal exercises the bottom-row branch.
+  await page.getByLabel("New stage name").fill("Wrap up");
+  await page.getByRole("button", { name: "Add stage" }).click();
+  await expect(page.getByLabel("Rename stage Wrap up")).toBeVisible();
+
+  // Removing the bottom stage leaves no next row, so focus falls to the
+  // "New stage name" input just below it.
+  await page.getByRole("button", { name: "Remove stage Wrap up" }).click();
+  await page.getByRole("button", { name: "Reassign & remove" }).click();
+  await expect(page.getByLabel("Rename stage Wrap up")).toHaveCount(0);
+  await expectVisibleKeyboardFocus(page.getByLabel("New stage name"));
+
+  // Removing a middle stage hands focus to the next stage's rename input.
+  await page.getByRole("button", { name: "Remove stage Active" }).click();
+  await page.getByRole("button", { name: "Reassign & remove" }).click();
+  await expect(page.getByLabel("Rename stage Active")).toHaveCount(0);
+  await expectVisibleKeyboardFocus(page.getByLabel("Rename stage Done"));
+
+  await addField(page, "Text", "Owner");
+  await addField(page, "Number", "Effort");
+
+  // Removing a field with a successor hands focus to that field's rename
+  // input.
+  await page.getByRole("button", { name: "Remove field Owner" }).click();
+  await expect(
+    page.getByText("Remove Owner and its values from every card?"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Confirm removal of Owner" }).click();
+  await expect(page.getByLabel("Rename field Owner")).toHaveCount(0);
+  await expectVisibleKeyboardFocus(page.getByLabel("Rename field Effort"));
+
+  // Removing the last field leaves none, so focus falls to the "New field
+  // name" input.
+  await page.getByRole("button", { name: "Remove field Effort" }).click();
+  await page
+    .getByRole("button", { name: "Confirm removal of Effort" })
+    .click();
+  await expect(page.getByLabel("Rename field Effort")).toHaveCount(0);
+  await expectVisibleKeyboardFocus(page.getByLabel("New field name"));
 });

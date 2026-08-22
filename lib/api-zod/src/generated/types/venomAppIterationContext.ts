@@ -9,9 +9,11 @@ import type { Uuid } from './uuid';
 import type { VenomAppIterationBaseline } from './venomAppIterationBaseline';
 import type { VenomAppIterationChanges } from './venomAppIterationChanges';
 import type { VenomAppIterationContextBlockedReason } from './venomAppIterationContextBlockedReason';
+import type { VenomAppIterationContextDivergence } from './venomAppIterationContextDivergence';
 import type { VenomAppIterationContextLatestSourceVersion } from './venomAppIterationContextLatestSourceVersion';
 import type { VenomAppIterationContextLinkedProject } from './venomAppIterationContextLinkedProject';
 import type { VenomAppIterationContextSuggestedSopsItem } from './venomAppIterationContextSuggestedSopsItem';
+import type { VenomAppLiveRelease } from './venomAppLiveRelease';
 
 export interface VenomAppIterationContext {
   appId: Uuid;
@@ -26,6 +28,8 @@ export interface VenomAppIterationContext {
   /** @maxItems 20 */
   suggestedSops: VenomAppIterationContextSuggestedSopsItem[];
   changes: VenomAppIterationChanges | null;
+  live: VenomAppLiveRelease | null;
+  divergence: VenomAppIterationContextDivergence;
   canIterate: boolean;
   blockedReason: VenomAppIterationContextBlockedReason;
 }

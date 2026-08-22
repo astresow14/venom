@@ -87,7 +87,8 @@ test("Brain notes name their sources instead of raw markers", async ({
 
   // The fixture note was written from an answer that cited a source which is
   // no longer connected, so it must read as an archived reference.
-  await page.goto("/?venomUiTest=true&brainFixture=cited");
+  // slimeTier=off: citation text never touches the goo layer.
+  await page.goto("/?venomUiTest=true&brainFixture=cited&slimeTier=off");
   await expect(page.getByTestId("chat-input")).toBeVisible();
 
   let details = await openCitedClusterDetails(page);

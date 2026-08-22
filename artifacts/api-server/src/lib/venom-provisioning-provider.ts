@@ -25,7 +25,8 @@
  *
  *   GET  /v1/capability
  *        Response: { health, summary, recoveryGuidance, supportedTargetTypes,
- *                    rollbackSupported, publishSupported }
+ *                    rollbackSupported, publishSupported,
+ *                    frameEmbeddingSupported? (default true) }
  *        health: "healthy" | "degraded" | "unavailable" | "unconfigured"
  *
  *   POST /v1/permissions/validate
@@ -98,6 +99,14 @@ export type ProvisioningCapabilitySummary = {
   rollbackSupported: boolean;
   /** Whether publish is available (not just candidate). */
   publishSupported: boolean;
+  /**
+   * Whether deployments served by this provider can be embedded in iframes
+   * on other origins (no frame-ancestors lockdown). Defaults to true when
+   * the gateway does not report it: provider-hosted deployments are
+   * frameable by default, and a capability outage must not silently
+   * downgrade existing share embeds.
+   */
+  frameEmbeddingSupported: boolean;
 };
 
 export type ProvisioningPermissionSummary = {
@@ -154,6 +163,23 @@ export type ProvisioningPackageHandoff = {
    * Never stored or logged. Absent when the package pins no source.
    */
   sourceRef: ProvisioningSourceRef | null;
+  /**
+   * Runtime credentials to place in the app's secret storage alongside the
+   * package (whitelabeled AI gateway access). Null when the target project
+   * already holds a delivered credential. Values are live secrets —
+   * transient, never persisted, returned, or logged.
+   */
+  runtimeCredentials: ProvisioningRuntimeCredentials | null;
+};
+
+/**
+ * Runtime credentials delivered into a provisioned app's secret storage —
+ * today the whitelabeled AI gateway URL + per-app key. The deployed app
+ * reads them as environment variables; end users never see them.
+ */
+export type ProvisioningRuntimeCredentials = {
+  /** Environment variable name → secret value. Never logged. */
+  envVars: Record<string, string>;
 };
 
 export type ProviderProjectResult = {
@@ -272,6 +298,19 @@ export interface ProvisioningProvider {
   handOffPackage(opts: {
     providerProjectId: string;
     handoff: ProvisioningPackageHandoff;
+    signal?: AbortSignal;
+  }): Promise<void>;
+
+  /**
+   * Deliver runtime credentials into the provider project's secret storage
+   * outside a package handoff (rotation, or first provisioning of an app
+   * whose record is created after handoff). The env var map carries live
+   * secrets: it must NEVER be stored on DB records or included in any log
+   * line.
+   */
+  deliverRuntimeCredentials(opts: {
+    providerProjectId: string;
+    credentials: ProvisioningRuntimeCredentials;
     signal?: AbortSignal;
   }): Promise<void>;
 
@@ -611,6 +650,9 @@ function parseCapabilityResponse(data: unknown): ProvisioningCapabilitySummary {
     supportedTargetTypes,
     rollbackSupported: isBoolean(data["rollbackSupported"]) ? data["rollbackSupported"] : false,
     publishSupported: isBoolean(data["publishSupported"]) ? data["publishSupported"] : false,
+    frameEmbeddingSupported: isBoolean(data["frameEmbeddingSupported"])
+      ? data["frameEmbeddingSupported"]
+      : true,
   };
 }
 
@@ -770,6 +812,7 @@ class ReplitGatewayProvider implements ProvisioningProvider {
         supportedTargetTypes: [],
         rollbackSupported: false,
         publishSupported: false,
+        frameEmbeddingSupported: true,
       };
     }
 
@@ -797,6 +840,7 @@ class ReplitGatewayProvider implements ProvisioningProvider {
           supportedTargetTypes: [],
           rollbackSupported: false,
           publishSupported: false,
+          frameEmbeddingSupported: true,
         };
       }
       if (err instanceof ProvisioningProviderError) {
@@ -812,6 +856,7 @@ class ReplitGatewayProvider implements ProvisioningProvider {
           supportedTargetTypes: [],
           rollbackSupported: false,
           publishSupported: false,
+          frameEmbeddingSupported: true,
         };
       }
       // Unexpected error — treat as degraded, not unconfigured
@@ -822,6 +867,7 @@ class ReplitGatewayProvider implements ProvisioningProvider {
         supportedTargetTypes: [],
         rollbackSupported: false,
         publishSupported: false,
+        frameEmbeddingSupported: true,
       };
     }
   }
@@ -914,6 +960,22 @@ class ReplitGatewayProvider implements ProvisioningProvider {
       "POST",
       `/v1/projects/${encodeURIComponent(opts.providerProjectId)}/handoff`,
       { handoff: opts.handoff },
+      opts.signal,
+      () => undefined,
+    );
+  }
+
+  async deliverRuntimeCredentials(opts: {
+    providerProjectId: string;
+    credentials: ProvisioningRuntimeCredentials;
+    signal?: AbortSignal;
+  }): Promise<void> {
+    // The env var map carries live secrets bound for the provisioned app's
+    // secret storage. Server-to-server only. NEVER log the request body.
+    await gatewayRequest(
+      "POST",
+      `/v1/projects/${encodeURIComponent(opts.providerProjectId)}/runtime-credentials`,
+      { credentials: opts.credentials },
       opts.signal,
       () => undefined,
     );

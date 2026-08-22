@@ -12,6 +12,7 @@
 import type {
   VenomConversation,
   VenomConversationBlend,
+  VenomVoiceModelPick,
 } from '@workspace/api-client-react';
 
 export type BlendWeights = [number, number, number];
@@ -90,6 +91,20 @@ export function describeBlend(weights: number[], names: string[]): string {
     .join(', ');
 }
 
+/**
+ * Compact one-line blend summary for the collapsed mixer chip. Shares
+ * describeBlend's even-blend threshold; a clearly leading voice reads as
+ * "Favoring X", and anything in between as "Custom blend".
+ */
+export function summarizeBlend(weights: number[], names: string[]): string {
+  const normalized = normalizeWeights(weights);
+  const spread = Math.max(...normalized) - Math.min(...normalized);
+  if (spread < 0.08) return 'Even blend';
+  const sorted = [...normalized].sort((a, b) => b - a);
+  if (sorted[0] - sorted[1] < 0.05) return 'Custom blend';
+  return `Favoring ${names[normalized.indexOf(sorted[0])]}`;
+}
+
 // ---------------------------------------------------------------------------
 // Conversation preference block
 // ---------------------------------------------------------------------------
@@ -124,7 +139,12 @@ export function normalizeConversationBlend(
   return { corners, weights: [...normalizeWeights(raw.weights)] };
 }
 
-type ResponsePrefs = Pick<VenomConversation, 'responseMode' | 'blend' | 'modeUpdatedAt'>;
+/** Canonical voice order for persisted per-voice model picks. */
+const VOICE_MODEL_VOICE_IDS = ['direct', 'skeptic', 'evidence'] as const;
+type ResponsePrefs = Pick<
+  VenomConversation,
+  'responseMode' | 'blend' | 'modeUpdatedAt' | 'voiceModels'
+>;
 
 /**
  * Normalize a conversation's response-mode preference block in place on
@@ -137,6 +157,7 @@ export function normalizeConversationResponsePrefs<T extends ResponsePrefs>(
     ? conversation.responseMode
     : undefined;
   const blend = normalizeConversationBlend(conversation.blend);
+  const voiceModels = normalizeConversationVoiceModels(conversation.voiceModels);
   const modeUpdatedAt =
     typeof conversation.modeUpdatedAt === 'number' &&
     Number.isFinite(conversation.modeUpdatedAt) &&
@@ -147,6 +168,7 @@ export function normalizeConversationResponsePrefs<T extends ResponsePrefs>(
   if (
     mode === conversation.responseMode &&
     blend === conversation.blend &&
+    voiceModels === conversation.voiceModels &&
     modeUpdatedAt === conversation.modeUpdatedAt
   ) {
     return conversation;
@@ -156,9 +178,13 @@ export function normalizeConversationResponsePrefs<T extends ResponsePrefs>(
   delete next.responseMode;
   delete next.blend;
   delete next.modeUpdatedAt;
+  delete next.voiceModels;
   if (mode) next.responseMode = mode;
   if (blend) next.blend = blend;
-  if ((mode || blend) && modeUpdatedAt !== undefined) next.modeUpdatedAt = modeUpdatedAt;
+  if (voiceModels) next.voiceModels = voiceModels;
+  if ((mode || blend || voiceModels) && modeUpdatedAt !== undefined) {
+    next.modeUpdatedAt = modeUpdatedAt;
+  }
   return next;
 }
 
@@ -181,12 +207,15 @@ export function mergeConversationResponsePrefs<T extends ResponsePrefs>(
   delete next.responseMode;
   delete next.blend;
   delete next.modeUpdatedAt;
+  delete next.voiceModels;
   if (winner) {
     if (isResponseMode(winner.responseMode)) next.responseMode = winner.responseMode;
     const blend = normalizeConversationBlend(winner.blend);
     if (blend) next.blend = blend;
+    const voiceModels = normalizeConversationVoiceModels(winner.voiceModels);
+    if (voiceModels) next.voiceModels = voiceModels;
     if (
-      (next.responseMode || next.blend) &&
+      (next.responseMode || next.blend || next.voiceModels) &&
       typeof winner.modeUpdatedAt === 'number' &&
       winner.modeUpdatedAt >= 0
     ) {
@@ -194,4 +223,42 @@ export function mergeConversationResponsePrefs<T extends ResponsePrefs>(
     }
   }
   return next;
+}
+
+type VoiceModelVoiceId = (typeof VOICE_MODEL_VOICE_IDS)[number];
+
+/** Managed model ids a pick may name — mirrors the server catalog. */
+const VOICE_MODEL_MODEL_IDS = new Set([
+  'venom-gpt',
+  'venom-claude',
+  'venom-gemini',
+  'venom-grok',
+]);
+
+/**
+ * Validate persisted per-voice model picks: known voices, known managed
+ * models, at most one pick per voice (the last entry wins), canonical voice
+ * order, at most three entries. Returns a normalized copy or undefined; junk
+ * from older builds is dropped rather than synced onward.
+ */
+export function normalizeConversationVoiceModels(
+  value: unknown,
+): VenomVoiceModelPick[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const byVoice = new Map<VoiceModelVoiceId, string>();
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const { voiceId, modelId } = entry as { voiceId?: unknown; modelId?: unknown };
+    if (typeof voiceId !== 'string' || typeof modelId !== 'string') continue;
+    if (!(VOICE_MODEL_VOICE_IDS as readonly string[]).includes(voiceId)) continue;
+    if (!VOICE_MODEL_MODEL_IDS.has(modelId)) continue;
+    byVoice.set(voiceId as VoiceModelVoiceId, modelId);
+  }
+  if (byVoice.size === 0) return undefined;
+  return VOICE_MODEL_VOICE_IDS.filter((voiceId) => byVoice.has(voiceId)).map(
+    (voiceId) => ({
+      voiceId,
+      modelId: byVoice.get(voiceId) as VenomVoiceModelPick['modelId'],
+    }),
+  );
 }

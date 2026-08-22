@@ -58,7 +58,7 @@ import {
   github,
   redact,
   warnIfExpiring,
-  workflowSetupHelp,
+  workflowPushRefusal,
 } from "./lib/github";
 import {
   isWorkflowPath,
@@ -447,18 +447,14 @@ async function main(): Promise<void> {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    // GitHub only reveals a missing workflow permission at push time for
-    // fine-grained tokens, which report no scopes to inspect beforehand.
-    if (workflowPaths.length > 0 && /workflow/i.test(message)) {
-      throw new SyncError(
-        [
-          message,
-          "",
-          `GitHub refused the push: ${describeCredential(pushCredential)} cannot write .github/workflows.`,
-          "",
-          ...workflowSetupHelp(options.repo),
-        ].join("\n"),
-      );
+    const refusal = workflowPushRefusal(
+      message,
+      workflowPaths,
+      pushCredential,
+      options.repo,
+    );
+    if (refusal) {
+      throw refusal;
     }
     throw error;
   }

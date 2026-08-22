@@ -1,9 +1,10 @@
 /**
  * Real-database integration tests for shared workspaces: creation,
- * membership with admin/member roles, membership-checked knowledge and SOP
- * reads, and — the heart of the feature — revocation that takes effect on
- * the removed member's next request while everyone else's view and the
- * removed member's personal tier stay intact.
+ * membership with admin/member roles, in-place role changes (promote and
+ * demote without removal), membership-checked knowledge and SOP reads, and
+ * — the heart of the feature — revocation that takes effect on the removed
+ * member's next request while everyone else's view and the removed
+ * member's personal tier stay intact.
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -20,13 +21,14 @@ import {
   venomSharedWorkspacesTable,
   venomSopsTable,
 } from "@workspace/db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import express from "express";
 import router, {
   overrideSharedWorkspaceUserDirectoryForTests,
   overrideSharedWorkspaceUserIdResolverForTests,
 } from "./venom-shared-workspaces.js";
 import venomRouter from "./venom.js";
+import venomKnowledgeMovesRouter from "./venom-knowledge-moves-router.js";
 import {
   fileExtractedKnowledge,
   loadOntologyConcepts,
@@ -46,9 +48,14 @@ async function ensureSharedWorkspaceTestSchema(): Promise<void> {
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       name text NOT NULL,
       created_by_clerk_user_id text NOT NULL,
+      allow_sensitive_export boolean NOT NULL DEFAULT true,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     )
+  `);
+  await db.execute(sql`
+    ALTER TABLE venom_shared_workspaces
+      ADD COLUMN IF NOT EXISTS allow_sensitive_export boolean NOT NULL DEFAULT true
   `);
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS venom_shared_workspaces_creator_idx
@@ -314,11 +321,15 @@ test("shared workspaces enforce membership, roles, and next-request revocation",
       },
     );
     assertStatus(memberAdds, 403);
+    // A member is refused with the admin-required code — never the
+    // access-denied code, which clients treat as membership loss.
+    assert.equal(memberAdds.body.code, "workspace_admin_required");
     const memberRemoves = await request(
       `/venom/workspaces/${workspaceId}/members/${adminId}`,
       { method: "DELETE" },
     );
     assertStatus(memberRemoves, 403);
+    assert.equal(memberRemoves.body.code, "workspace_admin_required");
 
     // Both accounts see the same member list with roles.
     const memberList = await request(
@@ -334,6 +345,108 @@ test("shared workspaces enforce membership, roles, and next-request revocation",
     );
     assert.equal(roles.get(adminId), "admin");
     assert.equal(roles.get(memberId), "member");
+
+    // --- Role changes happen in place, never via remove/re-add -----------
+    // Non-admins cannot change roles (activeUserId is still the member).
+    const memberPromotes = await request(
+      `/venom/workspaces/${workspaceId}/members/${memberId}`,
+      { method: "PATCH", body: JSON.stringify({ role: "admin" }) },
+    );
+    assertStatus(memberPromotes, 403);
+    assert.equal(memberPromotes.body.code, "workspace_admin_required");
+
+    activeUserId = adminId;
+    // The last admin cannot be demoted — same 409 rule as removal.
+    const lastAdminDemoted = await request(
+      `/venom/workspaces/${workspaceId}/members/${adminId}`,
+      { method: "PATCH", body: JSON.stringify({ role: "member" }) },
+    );
+    assertStatus(lastAdminDemoted, 409);
+
+    const ghostRoleChange = await request(
+      `/venom/workspaces/${workspaceId}/members/ghost-${suffix}`,
+      { method: "PATCH", body: JSON.stringify({ role: "admin" }) },
+    );
+    assertStatus(ghostRoleChange, 404);
+
+    const bogusRole = await request(
+      `/venom/workspaces/${workspaceId}/members/${memberId}`,
+      { method: "PATCH", body: JSON.stringify({ role: "owner" }) },
+    );
+    assertStatus(bogusRole, 400);
+
+    // Promote: effective from the member's next request, nothing revoked.
+    const promoted = await request(
+      `/venom/workspaces/${workspaceId}/members/${memberId}`,
+      { method: "PATCH", body: JSON.stringify({ role: "admin" }) },
+    );
+    assertStatus(promoted, 200);
+    assert.equal(promoted.body.userId, memberId);
+    assert.equal(promoted.body.role, "admin");
+    assert.equal(promoted.body.name, "Mo Member");
+
+    // The promotion is real: the promoted member may now demote the other
+    // admin (allowed while two admins exist) — proof they hold admin power
+    // without ever having been removed and re-added.
+    activeUserId = memberId;
+    const demotedByPromoted = await request(
+      `/venom/workspaces/${workspaceId}/members/${adminId}`,
+      { method: "PATCH", body: JSON.stringify({ role: "member" }) },
+    );
+    assertStatus(demotedByPromoted, 200);
+    assert.equal(demotedByPromoted.body.userId, adminId);
+    assert.equal(demotedByPromoted.body.role, "member");
+
+    const swappedList = await request(
+      `/venom/workspaces/${workspaceId}/members`,
+    );
+    assertStatus(swappedList, 200);
+    const swappedRoles = new Map(
+      swappedList.body.map((entry: { userId: string; role: string }) => [
+        entry.userId,
+        entry.role,
+      ]),
+    );
+    assert.equal(swappedRoles.get(adminId), "member");
+    assert.equal(swappedRoles.get(memberId), "admin");
+
+    // The demoted account keeps plain membership: reads still work.
+    activeUserId = adminId;
+    const demotedStillReads = await request(
+      `/venom/workspaces/${workspaceId}/members`,
+    );
+    assertStatus(demotedStillReads, 200);
+
+    // Admin-gated endpoints refuse the demoted admin with the
+    // admin-required code, NOT the access-denied code — their device must
+    // not evict the workspace as if they had been removed.
+    const demotedSettings = await request(
+      `/venom/workspaces/${workspaceId}/settings`,
+    );
+    assertStatus(demotedSettings, 403);
+    assert.equal(demotedSettings.body.code, "workspace_admin_required");
+
+    // Now the promoted member is the last admin: stepping down is refused.
+    activeUserId = memberId;
+    const selfDemotion = await request(
+      `/venom/workspaces/${workspaceId}/members/${memberId}`,
+      { method: "PATCH", body: JSON.stringify({ role: "member" }) },
+    );
+    assertStatus(selfDemotion, 409);
+
+    // Restore the original roles for the rest of the flow.
+    const restoredAdmin = await request(
+      `/venom/workspaces/${workspaceId}/members/${adminId}`,
+      { method: "PATCH", body: JSON.stringify({ role: "admin" }) },
+    );
+    assertStatus(restoredAdmin, 200);
+    activeUserId = adminId;
+    const restoredMember = await request(
+      `/venom/workspaces/${workspaceId}/members/${memberId}`,
+      { method: "PATCH", body: JSON.stringify({ role: "member" }) },
+    );
+    assertStatus(restoredMember, 200);
+    assert.equal(restoredMember.body.role, "member");
 
     // --- Shared knowledge: filed once, visible to every member ----------
     await fileExtractedKnowledge({
@@ -534,6 +647,7 @@ test("venom chat and extraction routes gate workspace requests by current member
     next();
   });
   app.use(venomRouter);
+  app.use(venomKnowledgeMovesRouter);
   const server = app.listen(0);
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const address = server.address();
@@ -571,41 +685,284 @@ test("venom chat and extraction routes gate workspace requests by current member
     });
     assert.equal(noteShaped.status, 400);
 
-    // A non-member's workspace chat request is refused before any
-    // streaming or provider work starts.
+    // Scope steering is gone from the wire: chat and extraction requests
+    // carry no workspace choice anymore. Non-member boundaries now live
+    // where scope is decided — context assembly and classified filing —
+    // covered by their own suites; the manual move endpoint keeps the
+    // route-level 403 contract here.
     actingUserId = outsiderId;
-    const chatBody = {
-      projectId: `proj-${suffix}`,
-      workspaceId: workspace.id,
-      messages: [{ id: "m1", role: "user", content: "What do we know?" }],
-    };
-    const deniedChat = await fetch(`${baseUrl}/venom/respond`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(chatBody),
-    });
-    assert.equal(deniedChat.status, 403);
-    const deniedChatBody = (await deniedChat.json()) as { code?: string };
-    assert.equal(deniedChatBody.code, "workspace_access_denied");
-
-    // Extraction refuses a non-member's workspace request before any model
-    // call, so nothing can be read from or filed into the shared tier.
-    const deniedExtract = await fetch(`${baseUrl}/venom/knowledge/extract`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        workspaceId: workspace.id,
-        file: true,
-        conversation: { id: `conv-${suffix}`, title: "Gate check" },
-        messages: [{ id: "m1", role: "user", content: "Capture this decision." }],
-      }),
-    });
-    assert.equal(deniedExtract.status, 403);
-    const deniedExtractBody = (await deniedExtract.json()) as {
-      code?: string;
-    };
-    assert.equal(deniedExtractBody.code, "workspace_access_denied");
+    const deniedMove = await fetch(
+      `${baseUrl}/venom/knowledge/unsorted/concept-x/move`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workspaceId: workspace.id }),
+      },
+    );
+    assert.equal(deniedMove.status, 403);
+    const deniedMoveBody = (await deniedMove.json()) as { code?: string };
+    assert.equal(deniedMoveBody.code, "workspace_access_denied");
   } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});
+
+test("concurrent admin-removing mutations never strand a workspace without admins", async () => {
+  await ensureSharedWorkspaceTestSchema();
+  const suffix = randomUUID();
+  const adminA = `race-admin-a-${suffix}`;
+  const adminB = `race-admin-b-${suffix}`;
+  createdUserIds.push(adminA, adminB);
+
+  // Two actors must act at the same moment, so the resolver reads the
+  // acting account from a per-request header instead of shared state.
+  const restoreAuth = overrideSharedWorkspaceUserIdResolverForTests(
+    (request) => {
+      const actor = request.headers["x-test-actor"];
+      return typeof actor === "string" ? actor : null;
+    },
+  );
+  const restoreDirectory = overrideSharedWorkspaceUserDirectoryForTests({
+    async getUser(userId) {
+      return { id: userId, name: null };
+    },
+    async getUsers(userIds) {
+      return new Map(userIds.map((userId) => [userId, null]));
+    },
+  });
+
+  const app = express();
+  app.use(express.json());
+  app.use((request, _response, next) => {
+    request.log = {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    } as unknown as typeof request.log;
+    next();
+  });
+  app.use(router);
+  const server = app.listen(0);
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  async function requestAs(
+    actorId: string,
+    path: string,
+    options: RequestInit = {},
+  ): Promise<TestResponse> {
+    const response = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers: {
+        "content-type": "application/json",
+        "x-test-actor": actorId,
+        ...options.headers,
+      },
+    });
+    const rawBody = await response.text();
+    let body: unknown = null;
+    if (rawBody) {
+      try {
+        body = JSON.parse(rawBody);
+      } catch {
+        body = { rawBody: rawBody.slice(0, 2_000) };
+      }
+    }
+    return { status: response.status, body };
+  }
+
+  try {
+    const created = await requestAs(adminA, "/venom/workspaces", {
+      method: "POST",
+      body: JSON.stringify({ name: `Race Ops ${suffix}` }),
+    });
+    assertStatus(created, 201);
+    const workspaceId: string = created.body.id;
+    createdWorkspaceIds.push(workspaceId);
+
+    const addSecondAdmin = await requestAs(
+      adminA,
+      `/venom/workspaces/${workspaceId}/members`,
+      {
+        method: "POST",
+        body: JSON.stringify({ userId: adminB, role: "admin" }),
+      },
+    );
+    assertStatus(addSecondAdmin, 201);
+
+    // --- Race 1: both admins step down at the same moment ---------------
+    // Whatever the interleaving, only one demotion may win; the loser must
+    // hit the last-admin refusal. Zero admins is never acceptable.
+    const [aStepsDown, bStepsDown] = await Promise.all([
+      requestAs(adminA, `/venom/workspaces/${workspaceId}/members/${adminA}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role: "member" }),
+      }),
+      requestAs(adminB, `/venom/workspaces/${workspaceId}/members/${adminB}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role: "member" }),
+      }),
+    ]);
+    assert.deepEqual(
+      [aStepsDown.status, bStepsDown.status].sort(),
+      [200, 409],
+      `Expected one demotion to win and one last-admin refusal; got ${aStepsDown.status} and ${bStepsDown.status}`,
+    );
+
+    const afterDemotions = await requestAs(
+      adminA,
+      `/venom/workspaces/${workspaceId}/members`,
+    );
+    assertStatus(afterDemotions, 200);
+    const remainingAdmins = (
+      afterDemotions.body as Array<{ userId: string; role: string }>
+    ).filter((entry) => entry.role === "admin");
+    assert.equal(remainingAdmins.length, 1);
+
+    // Restore two admins: the surviving admin promotes the other back.
+    const survivor = remainingAdmins[0].userId;
+    const demoted = survivor === adminA ? adminB : adminA;
+    const repromoted = await requestAs(
+      survivor,
+      `/venom/workspaces/${workspaceId}/members/${demoted}`,
+      { method: "PATCH", body: JSON.stringify({ role: "admin" }) },
+    );
+    assertStatus(repromoted, 200);
+
+    // --- Race 2: both admins leave at the same moment -------------------
+    // The remove route participates in the same per-workspace
+    // serialization as the role-change route.
+    const [aLeaves, bLeaves] = await Promise.all([
+      requestAs(adminA, `/venom/workspaces/${workspaceId}/members/${adminA}`, {
+        method: "DELETE",
+      }),
+      requestAs(adminB, `/venom/workspaces/${workspaceId}/members/${adminB}`, {
+        method: "DELETE",
+      }),
+    ]);
+    assert.deepEqual(
+      [aLeaves.status, bLeaves.status].sort(),
+      [200, 409],
+      `Expected one leave to win and one last-admin refusal; got ${aLeaves.status} and ${bLeaves.status}`,
+    );
+
+    const stayer = aLeaves.status === 200 ? adminB : adminA;
+    const finalMembers = await requestAs(
+      stayer,
+      `/venom/workspaces/${workspaceId}/members`,
+    );
+    assertStatus(finalMembers, 200);
+    assert.equal(finalMembers.body.length, 1);
+    assert.equal(finalMembers.body[0].userId, stayer);
+    assert.equal(finalMembers.body[0].role, "admin");
+
+    // --- Race 3: authorization is re-checked under the lock -------------
+    // An admin fires a mutation, then loses the admin role while their
+    // request is parked at the per-workspace lock. The gate already passed,
+    // so only the in-transaction re-check can refuse the mutation.
+    const leaver = stayer === adminA ? adminB : adminA;
+    const memberC = `race-member-c-${suffix}`;
+    createdUserIds.push(memberC);
+    const readdLeaver = await requestAs(
+      stayer,
+      `/venom/workspaces/${workspaceId}/members`,
+      {
+        method: "POST",
+        body: JSON.stringify({ userId: leaver, role: "admin" }),
+      },
+    );
+    assertStatus(readdLeaver, 201);
+    const addTarget = await requestAs(
+      stayer,
+      `/venom/workspaces/${workspaceId}/members`,
+      { method: "POST", body: JSON.stringify({ userId: memberC }) },
+    );
+    assertStatus(addTarget, 201);
+
+    let parkedPromotion: Promise<TestResponse> | null = null;
+    await db.transaction(async (lockTx) => {
+      // Hold the workspace's advisory lock so the actor's request passes
+      // the route's admin gate and then parks at the lock.
+      await lockTx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+      );
+      parkedPromotion = requestAs(
+        leaver,
+        `/venom/workspaces/${workspaceId}/members/${memberC}`,
+        { method: "PATCH", body: JSON.stringify({ role: "admin" }) },
+      );
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      // Demote the actor while their mutation is parked. A plain row
+      // update: advisory locks only serialize other lock holders.
+      await db
+        .update(venomSharedWorkspaceMembersTable)
+        .set({ role: "member" })
+        .where(
+          and(
+            eq(venomSharedWorkspaceMembersTable.workspaceId, workspaceId),
+            eq(venomSharedWorkspaceMembersTable.clerkUserId, leaver),
+          ),
+        );
+      // Returning commits and releases the lock; the parked request runs.
+    });
+    const refusedPromotion = await parkedPromotion!;
+    assertStatus(refusedPromotion, 403);
+    assert.equal(refusedPromotion.body.code, "workspace_admin_required");
+
+    // Same race against the remove route, this time with the actor removed
+    // outright while parked. Re-promote them first so the pre-lock gate
+    // passes and only the in-transaction re-check can refuse.
+    const repromoteLeaver = await requestAs(
+      stayer,
+      `/venom/workspaces/${workspaceId}/members/${leaver}`,
+      { method: "PATCH", body: JSON.stringify({ role: "admin" }) },
+    );
+    assertStatus(repromoteLeaver, 200);
+
+    let parkedRemoval: Promise<TestResponse> | null = null;
+    await db.transaction(async (lockTx) => {
+      await lockTx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+      );
+      parkedRemoval = requestAs(
+        leaver,
+        `/venom/workspaces/${workspaceId}/members/${memberC}`,
+        { method: "DELETE" },
+      );
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      // Remove the actor entirely this time: the re-check must answer a
+      // gone member with the eviction code, not the admin-required one.
+      await db
+        .delete(venomSharedWorkspaceMembersTable)
+        .where(
+          and(
+            eq(venomSharedWorkspaceMembersTable.workspaceId, workspaceId),
+            eq(venomSharedWorkspaceMembersTable.clerkUserId, leaver),
+          ),
+        );
+    });
+    const refusedRemoval = await parkedRemoval!;
+    assertStatus(refusedRemoval, 403);
+    assert.equal(refusedRemoval.body.code, "workspace_access_denied");
+
+    // The target was never touched by either refused mutation.
+    const targetAfterRaces = await requestAs(
+      stayer,
+      `/venom/workspaces/${workspaceId}/members`,
+    );
+    assertStatus(targetAfterRaces, 200);
+    const targetRow = (
+      targetAfterRaces.body as Array<{ userId: string; role: string }>
+    ).find((entry) => entry.userId === memberC);
+    assert.ok(targetRow);
+    assert.equal(targetRow.role, "member");
+  } finally {
+    restoreAuth();
+    restoreDirectory();
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
     });

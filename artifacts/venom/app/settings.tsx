@@ -1,19 +1,28 @@
 import React from "react";
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Switch,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Modal,
+  Platform,
+  Pressable,
+  Animated as RNAnimated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useReducedMotion } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useClerk, useUser } from "@clerk/expo";
 import { useRouter } from "expo-router";
 import {
+  exportVenomPersonalMarkdown,
+  getVenomMasterContribution,
+  updateVenomMasterContribution,
+  type VenomMasterContribution,
   useHealthCheck,
   useGetGitHubRepositories,
   useConnectGitHubSource,
@@ -22,19 +31,29 @@ import {
   getGetVenomIdentityQueryKey,
   useGetVenomModels,
   useGetVenomVoices,
+  useGetVenomUsageSummary,
+  getGetVenomUsageSummaryQueryKey,
   useListVenomProjectSops,
   getListVenomProjectSopsQueryKey,
   type VenomManagedModel,
+  type VenomUsageSummary,
 } from "@workspace/api-client-react";
+import {
+  deliverMarkdown,
+  markdownExportFileName,
+} from "@/lib/downloadMarkdown";
 
 import { useColors } from "@/hooks/useColors";
 import { Header } from "@/components/Header";
 import { VoicePresetList } from "@/components/voice/VoicePresetList";
 import { useVoiceSample } from "@/hooks/useVoiceSample";
 import {
+  IS_UI_TEST,
+  UI_TEST_USER_ID,
   useVenom,
   type ProjectSource,
   type VenomModelId,
+  type VenomModelSelectionPolicy,
   type VenomVoicePresetId,
 } from "@/context/VenomContext";
 import {
@@ -65,6 +84,63 @@ function describeSourceFailure(error: unknown, fallback: string): string {
   return message === "" || message.startsWith("HTTP ") ? fallback : message;
 }
 
+const USAGE_MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+const AnimatedPressable = RNAnimated.createAnimatedComponent(Pressable);
+
+/**
+ * The account-level model selection policy choices. Manual keeps today's
+ * explicit picks; the auto modes hand the choice to the server on every
+ * request, which is why their copy says who is choosing and why.
+ */
+const MODEL_POLICY_OPTIONS: Array<{
+  id: VenomModelSelectionPolicy;
+  title: string;
+  description: string;
+}> = [
+  {
+    id: "manual",
+    title: "Manual",
+    description: "You choose which models run.",
+  },
+  {
+    id: "auto-cheapest",
+    title: "Auto — cheapest",
+    description:
+      "Venom keeps you on the cheapest healthy models and switches the moment availability or account health changes.",
+  },
+  {
+    id: "auto-max-power",
+    title: "Auto — max power",
+    description:
+      "Venom runs the most capable models for complex, advanced thought and switches the moment availability changes.",
+  },
+];
+
+type FocusableHandle = {
+  focus?: () => void;
+};
+
+// Where keyboard focus should land once the remove-source dialog has fully
+// dismissed: back on the remove control on cancel, or on a surviving row's
+// remove control (else the always-present browse-sources entry) after a
+// removal unmounts the row that opened the dialog.
+type RemoveDismissFocusTarget =
+  | { kind: "remove-button"; sourceId: string }
+  | { kind: "neighbor-or-browse"; sourceId: string | null };
+
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -82,8 +158,11 @@ export default function SettingsScreen() {
     enableModel,
     removeModel,
     setDefaultModel,
+    setModelSelectionPolicy,
     setVoicePreset,
     setVoiceTalkativeness,
+    orgs,
+    orgInvites,
   } = useVenom();
 
   const [showGitHubPicker, setShowGitHubPicker] = React.useState(false);
@@ -97,15 +176,92 @@ export default function SettingsScreen() {
   >({});
   // Keeps the "last synced" labels honest while the screen stays open.
   const [now, setNow] = React.useState(() => Date.now());
+  const [exportingKind, setExportingKind] = React.useState<
+    "brain" | "sops" | null
+  >(null);
+  // Removing a source is destructive and propagates to every synced device
+  // via tombstones (a removed source is retired for good), so the "x" control
+  // never acts on one tap: it stages the source here and the dialog's own
+  // destructive action performs the actual removal. The name is snapshotted
+  // so the dialog stays coherent even if a sync merge rewrites the source
+  // list while it is open.
+  const [pendingRemove, setPendingRemove] = React.useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [focusedRemoveId, setFocusedRemoveId] = React.useState<string | null>(
+    null,
+  );
+  const [cancelRemoveFocused, setCancelRemoveFocused] = React.useState(false);
+  const [confirmRemoveFocused, setConfirmRemoveFocused] = React.useState(false);
+  const reduceMotion = useReducedMotion();
+  const dialogAppear = React.useRef(new RNAnimated.Value(0)).current;
+  const cancelRemoveRef = React.useRef<FocusableHandle | null>(null);
+  const removeButtonRefs = React.useRef<Map<string, FocusableHandle>>(
+    new Map(),
+  );
+  const browseSourcesRef = React.useRef<FocusableHandle | null>(null);
+  const removeDismissFocusRef = React.useRef<RemoveDismissFocusTarget | null>(
+    null,
+  );
+
+  // Personal markdown export is always available and always scoped to this
+  // account's personal tier — it contains no workspace content, so it keeps
+  // working even after leaving a workspace.
+  const handlePersonalExport = async (kind: "brain" | "sops") => {
+    if (exportingKind) return;
+    setExportingKind(kind);
+    try {
+      const markdown = await exportVenomPersonalMarkdown(kind);
+      await deliverMarkdown(markdownExportFileName("personal", kind), markdown);
+    } catch {
+      Alert.alert(
+        "Export failed",
+        "The download could not be prepared. Try again.",
+      );
+    } finally {
+      setExportingKind(null);
+    }
+  };
 
   React.useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
 
+  // The dialog animates its own card because the modal container must not
+  // animate on web: an animated modal keeps its focus trap alive while it
+  // fades out and strands keyboard focus (see app/projects.tsx for the
+  // shared pattern).
+  React.useEffect(() => {
+    if (!pendingRemove) return;
+    dialogAppear.setValue(reduceMotion ? 1 : 0);
+    if (reduceMotion) return;
+    const appearance = RNAnimated.timing(dialogAppear, {
+      toValue: 1,
+      duration: 170,
+      useNativeDriver: Platform.OS !== "web",
+    });
+    appearance.start();
+    return () => appearance.stop();
+  }, [dialogAppear, pendingRemove, reduceMotion]);
+
+  // The remove dialog holds no input to autoFocus, so focus is placed
+  // explicitly on the safe action once the modal is mounted; without this,
+  // keyboard focus would stay behind the open dialog.
+  React.useEffect(() => {
+    if (!pendingRemove) return;
+    const frame = requestAnimationFrame(() => {
+      cancelRemoveRef.current?.focus?.();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingRemove]);
+
   const modelPreferences = state.modelPreferences;
   const enabledModelIds = modelPreferences?.enabledModelIds ?? ["venom-gpt"];
   const defaultModelId = modelPreferences?.defaultModelId ?? "venom-gpt";
+  const selectionPolicy = modelPreferences?.selectionPolicy ?? "manual";
+  const autoPolicyActive = selectionPolicy !== "manual";
 
   const modelsQuery = useGetVenomModels({
     query: {
@@ -299,6 +455,50 @@ export default function SettingsScreen() {
     });
   };
 
+  // Venom network contribution (the anonymous master ontology). Off until
+  // this account opts in; the server record is the source of truth. UI-test
+  // runs get a deterministic "off" so no unstubbed fetch fires.
+  const [networkContribution, setNetworkContribution] =
+    React.useState<VenomMasterContribution | null>(null);
+  const [networkContributionBusy, setNetworkContributionBusy] =
+    React.useState(false);
+  const [networkContributionFailed, setNetworkContributionFailed] =
+    React.useState(false);
+  React.useEffect(() => {
+    if (IS_UI_TEST) {
+      setNetworkContribution({ enabled: false });
+      return;
+    }
+    let stale = false;
+    (async () => {
+      try {
+        const contribution = await getVenomMasterContribution();
+        if (!stale) setNetworkContribution(contribution);
+      } catch {
+        if (!stale) setNetworkContributionFailed(true);
+      }
+    })();
+    return () => {
+      stale = true;
+    };
+  }, []);
+  const toggleNetworkContribution = async () => {
+    if (networkContributionBusy || !networkContribution) return;
+    const next = !networkContribution.enabled;
+    setNetworkContributionBusy(true);
+    try {
+      const updated = await updateVenomMasterContribution({ enabled: next });
+      setNetworkContribution(updated);
+    } catch {
+      Alert.alert(
+        "Couldn't update",
+        "Venom couldn't reach the network settings. Check your connection and try again.",
+      );
+    } finally {
+      setNetworkContributionBusy(false);
+    }
+  };
+
   const syncLabels = {
     loading: "Restoring",
     pending: "Action needed",
@@ -311,15 +511,37 @@ export default function SettingsScreen() {
   const isSyncHealthy = syncStatus === "synced" || syncStatus === "syncing";
   // Who Venom recognizes this account as. The server identity record is the
   // source of truth (it is what gets stamped onto captured knowledge); the
-  // Clerk client profile fills in while it loads or offline.
+  // Clerk client profile fills in while it loads or offline. UI-test mode has
+  // no Clerk session, so the placeholder account keeps this query live for
+  // the browser suite's stubbed identity.
+  const accountId = IS_UI_TEST ? UI_TEST_USER_ID : (user?.id ?? null);
   const { data: identity } = useGetVenomIdentity({
     query: {
       queryKey: getGetVenomIdentityQueryKey(),
-      enabled: Boolean(user?.id),
+      enabled: Boolean(accountId),
       staleTime: 5 * 60_000,
       retry: 1,
     },
   });
+  // Personal AI spend for the current month. The server computes dollars from
+  // its private pricing table and returns Venom-branded model names only.
+  // UI-test runs render a deterministic fixture so no unstubbed fetch fires.
+  const usageQuery = useGetVenomUsageSummary({
+    query: {
+      queryKey: getGetVenomUsageSummaryQueryKey(),
+      enabled: !IS_UI_TEST,
+      staleTime: 60_000,
+      retry: 1,
+    },
+  });
+  const usageSummary: VenomUsageSummary | null = IS_UI_TEST
+    ? UI_TEST_USAGE_SUMMARY
+    : (usageQuery.data ?? null);
+  const usageFailed = !IS_UI_TEST && usageQuery.isError;
+  const usageLoading = usageSummary === null && !usageFailed;
+  const usageMaxDailyCost = usageSummary
+    ? Math.max(...usageSummary.daily.map((day) => day.costUsd), 0)
+    : 0;
   const accountName =
     identity?.displayName ?? user?.fullName ?? user?.firstName ?? null;
   const accountLabel =
@@ -353,6 +575,71 @@ export default function SettingsScreen() {
       projectId: activeProject.id,
       data: { url: websiteUrl.trim() },
     });
+  };
+
+  const registerRemoveButtonRef =
+    (sourceId: string) => (node: FocusableHandle | null) => {
+      if (node) removeButtonRefs.current.set(sourceId, node);
+      else removeButtonRefs.current.delete(sourceId);
+    };
+
+  const requestRemoveSource = (source: ProjectSource) => {
+    removeDismissFocusRef.current = null;
+    setPendingRemove({ id: source.id, name: source.name });
+  };
+
+  const cancelRemoveSource = () => {
+    // The source is untouched, so its remove control still exists: hand
+    // focus straight back to it.
+    if (pendingRemove) {
+      removeDismissFocusRef.current = {
+        kind: "remove-button",
+        sourceId: pendingRemove.id,
+      };
+    }
+    setPendingRemove(null);
+  };
+
+  const confirmRemoveSource = () => {
+    if (!pendingRemove) return;
+    // Confirming unmounts the row that opened this dialog, so the focus
+    // destination must be computed from pre-removal state: the next source
+    // in the rendered order, else the previous one. When neither exists (the
+    // last source was removed) the target stays null and dismissal falls
+    // back to the browse-sources entry that stays on screen.
+    const index = projectSources.findIndex(
+      (source) => source.id === pendingRemove.id,
+    );
+    const neighbor =
+      index >= 0
+        ? (projectSources[index + 1] ?? projectSources[index - 1])
+        : undefined;
+    removeDismissFocusRef.current = {
+      kind: "neighbor-or-browse",
+      sourceId: neighbor?.id ?? null,
+    };
+    removeSource(pendingRemove.id);
+    setPendingRemove(null);
+  };
+
+  // Fires once the modal is actually gone (immediately on web) and its focus
+  // trap has released, so an explicit focus target sticks.
+  const handleRemoveDialogDismiss = () => {
+    const target = removeDismissFocusRef.current;
+    removeDismissFocusRef.current = null;
+    if (!target) return;
+    if (target.kind === "remove-button") {
+      removeButtonRefs.current.get(target.sourceId)?.focus?.();
+      return;
+    }
+    const preferred = target.sourceId
+      ? removeButtonRefs.current.get(target.sourceId)
+      : undefined;
+    if (preferred?.focus) {
+      preferred.focus();
+      return;
+    }
+    browseSourcesRef.current?.focus?.();
   };
 
   return (
@@ -403,6 +690,7 @@ export default function SettingsScreen() {
                     { color: colors.mutedForeground },
                   ]}
                   numberOfLines={1}
+                  testID="text-account-email"
                 >
                   {accountLabel}
                 </Text>
@@ -512,6 +800,111 @@ export default function SettingsScreen() {
             Enable or remove managed models from your account. The default model
             is used when no specific selection is made.
           </Text>
+
+          {/* Account-level selection policy: manual keeps explicit picks;
+              the auto modes hand the choice to Venom on every reply. */}
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Model selection policy"
+            testID="model-policy-control"
+          >
+            {MODEL_POLICY_OPTIONS.map((option, index) => {
+              const selected = selectionPolicy === option.id;
+              return (
+                <React.Fragment key={option.id}>
+                  {index > 0 && (
+                    <View
+                      style={[
+                        styles.divider,
+                        { backgroundColor: colors.border, marginLeft: 0 },
+                      ]}
+                    />
+                  )}
+                  <TouchableOpacity
+                    onPress={() => setModelSelectionPolicy(option.id)}
+                    style={styles.policyRow}
+                    accessibilityRole="radio"
+                    accessibilityLabel={option.title}
+                    accessibilityState={{ selected, checked: selected }}
+                    aria-checked={selected}
+                    testID={`policy-${option.id}`}
+                  >
+                    <View
+                      style={[
+                        styles.policyRadio,
+                        {
+                          borderColor: selected
+                            ? colors.primary
+                            : colors.border,
+                          backgroundColor: selected
+                            ? colors.primary
+                            : "transparent",
+                        },
+                      ]}
+                    >
+                      {selected && (
+                        <Feather
+                          name="check"
+                          size={12}
+                          color={colors.primaryForeground}
+                        />
+                      )}
+                    </View>
+                    <View style={styles.policyCopy}>
+                      <Text
+                        style={[
+                          styles.rowTitle,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {option.title}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.policyDescription,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        {option.description}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </React.Fragment>
+              );
+            })}
+          </View>
+
+          {/* In auto modes the manual pickers below visibly hand over. */}
+          {autoPolicyActive && (
+            <View
+              style={[
+                styles.policyTakeover,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                },
+              ]}
+              testID="model-policy-takeover"
+            >
+              <Feather name="zap" size={14} color={colors.primary} />
+              <Text
+                style={[
+                  styles.policyTakeoverText,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                Venom is choosing —{" "}
+                {selectionPolicy === "auto-cheapest"
+                  ? "the cheapest healthy models carry every reply, and the account switches automatically when availability or account health changes."
+                  : "the most capable models carry every reply, and the account switches automatically when availability changes."}{" "}
+                Your manual picks below wake up again on Manual.
+              </Text>
+            </View>
+          )}
 
           {modelsQuery.isLoading ? (
             <View style={styles.modelLoading}>
@@ -626,14 +1019,38 @@ export default function SettingsScreen() {
                                   </Text>
                                 </View>
                               )}
+                              {model.costTier && (
+                                <View
+                                  style={[
+                                    styles.modelBadge,
+                                    { borderColor: colors.border },
+                                  ]}
+                                  accessibilityLabel={`Relative cost ${model.costTier} of $$$`}
+                                  testID={`cost-badge-${model.id}`}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.modelBadgeText,
+                                      { color: colors.mutedForeground },
+                                    ]}
+                                  >
+                                    {model.costTier}
+                                  </Text>
+                                </View>
+                              )}
                             </View>
                             <Text
                               style={[
                                 styles.modelAvailability,
                                 {
-                                  color: model.available
-                                    ? colors.mutedForeground
-                                    : colors.destructive,
+                                  // A configured model with a billing-dead
+                                  // provider account keeps its toggle but its
+                                  // status reads as a problem, not "Ready".
+                                  color:
+                                    model.available &&
+                                    model.accountHealth !== "unfunded"
+                                      ? colors.mutedForeground
+                                      : colors.destructive,
                                 },
                               ]}
                               numberOfLines={1}
@@ -648,12 +1065,19 @@ export default function SettingsScreen() {
                               onPress={() =>
                                 setDefaultModel(model.id as VenomModelId)
                               }
+                              disabled={autoPolicyActive}
                               style={[
                                 styles.modelActionButton,
-                                { borderColor: colors.border },
+                                {
+                                  borderColor: colors.border,
+                                  opacity: autoPolicyActive ? 0.38 : 1,
+                                },
                               ]}
                               accessibilityRole="button"
                               accessibilityLabel={`Set ${model.name} as default`}
+                              accessibilityState={{
+                                disabled: autoPolicyActive,
+                              }}
                               hitSlop={8}
                               testID={`set-default-model-${model.id}`}
                             >
@@ -689,7 +1113,8 @@ export default function SettingsScreen() {
                             }
                             disabled={
                               (isOnlyEnabled && isEnabled) ||
-                              (!isEnabled && !model.available)
+                              (!isEnabled && !model.available) ||
+                              autoPolicyActive
                             }
                             style={[
                               styles.modelActionButton,
@@ -699,7 +1124,8 @@ export default function SettingsScreen() {
                                   : colors.border,
                                 opacity:
                                   (isOnlyEnabled && isEnabled) ||
-                                  (!isEnabled && !model.available)
+                                  (!isEnabled && !model.available) ||
+                                  autoPolicyActive
                                     ? 0.38
                                     : 1,
                               },
@@ -713,7 +1139,8 @@ export default function SettingsScreen() {
                             accessibilityState={{
                               disabled:
                                 (isOnlyEnabled && isEnabled) ||
-                                (!isEnabled && !model.available),
+                                (!isEnabled && !model.available) ||
+                                autoPolicyActive,
                             }}
                             hitSlop={8}
                             testID={`toggle-model-${model.id}`}
@@ -831,10 +1258,10 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* Sync and privacy */}
+        {/* Sync and your data */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-            Sync
+            Your data
           </Text>
           <View
             style={[
@@ -842,25 +1269,91 @@ export default function SettingsScreen() {
               { backgroundColor: colors.card, borderColor: colors.border },
             ]}
           >
-            <View style={styles.row}>
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => handlePersonalExport("brain")}
+              disabled={exportingKind !== null}
+              accessibilityRole="button"
+              accessibilityLabel="Download your Brain notes as Markdown"
+              testID="button-export-personal-brain"
+            >
               <View style={styles.rowLeft}>
                 <Feather
-                  name="eye"
+                  name="download"
                   size={18}
                   color={colors.mutedForeground}
                 />
-                <Text style={[styles.rowTitle, { color: colors.foreground }]}>
-                   Private workspace
-                </Text>
+                <View style={{ flexShrink: 1 }}>
+                  <Text style={[styles.rowTitle, { color: colors.foreground }]}>
+                    Download Brain notes (.md)
+                  </Text>
+                  <Text
+                    style={[
+                      styles.sourceDescription,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    Your personal knowledge as a Markdown file.
+                  </Text>
+                </View>
               </View>
-              <Switch
-                value={true}
-                onValueChange={() => {}}
-                accessibilityLabel="Private workspace"
-                trackColor={{ false: colors.accent, true: colors.primary }}
-                thumbColor={colors.background}
-              />
-            </View>
+              {exportingKind === "brain" ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.mutedForeground}
+                />
+              ) : (
+                <Feather
+                  name="chevron-right"
+                  size={16}
+                  color={colors.mutedForeground}
+                />
+              )}
+            </TouchableOpacity>
+            <View
+              style={[styles.divider, { backgroundColor: colors.border }]}
+            />
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => handlePersonalExport("sops")}
+              disabled={exportingKind !== null}
+              accessibilityRole="button"
+              accessibilityLabel="Download your SOPs as Markdown"
+              testID="button-export-personal-sops"
+            >
+              <View style={styles.rowLeft}>
+                <Feather
+                  name="download"
+                  size={18}
+                  color={colors.mutedForeground}
+                />
+                <View style={{ flexShrink: 1 }}>
+                  <Text style={[styles.rowTitle, { color: colors.foreground }]}>
+                    Download SOPs (.md)
+                  </Text>
+                  <Text
+                    style={[
+                      styles.sourceDescription,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    Your personal procedures as a Markdown file.
+                  </Text>
+                </View>
+              </View>
+              {exportingKind === "sops" ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.mutedForeground}
+                />
+              ) : (
+                <Feather
+                  name="chevron-right"
+                  size={16}
+                  color={colors.mutedForeground}
+                />
+              )}
+            </TouchableOpacity>
             <View
               style={[styles.divider, { backgroundColor: colors.border }]}
             />
@@ -906,6 +1399,362 @@ export default function SettingsScreen() {
             </View>
           </View>
         </View>
+
+        {/* Venom network */}
+        <View style={styles.section} testID="settings-network-section">
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            Venom network
+          </Text>
+          <Text
+            style={[
+              styles.sourceDescription,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            Help improve Venom's shared knowledge network. When this is on,
+            your account contributes anonymous concept patterns — concept
+            names, categories, and which concepts connect. Your chats, notes,
+            sources, evidence, and identity never leave your account, and a
+            concept stays hidden until it is common across many accounts.
+            Turning this off also removes your influence from future updates.
+          </Text>
+          <TouchableOpacity
+            testID="network-contribution-toggle"
+            style={[
+              styles.networkToggleRow,
+              { borderColor: colors.border, backgroundColor: colors.card },
+            ]}
+            onPress={() => void toggleNetworkContribution()}
+            disabled={networkContributionBusy || !networkContribution}
+            accessibilityRole="switch"
+            accessibilityLabel="Contribute anonymous concept patterns to the Venom network"
+            accessibilityState={{
+              checked: networkContribution?.enabled === true,
+              disabled: networkContributionBusy || !networkContribution,
+            }}
+          >
+            <View style={styles.networkToggleCopy}>
+              <Text
+                testID="network-contribution-state"
+                style={[
+                  styles.networkToggleTitle,
+                  { color: colors.foreground },
+                ]}
+              >
+                {networkContribution
+                  ? networkContribution.enabled
+                    ? "Contributing"
+                    : "Off"
+                  : networkContributionFailed
+                    ? "Unavailable"
+                    : "Checking…"}
+              </Text>
+              <Text
+                style={[
+                  styles.networkToggleCaption,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                {networkContribution?.enabled
+                  ? "Anonymous patterns from this account are helping every Brain."
+                  : "Nothing is shared until you turn this on."}
+              </Text>
+            </View>
+            {networkContributionBusy ? (
+              <ActivityIndicator size="small" color={colors.mutedForeground} />
+            ) : (
+              <Feather
+                name={networkContribution?.enabled ? "check-circle" : "circle"}
+                size={20}
+                color={
+                  networkContribution?.enabled
+                    ? colors.primary
+                    : colors.mutedForeground
+                }
+              />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Usage */}
+        <View style={styles.section} testID="settings-usage-section">
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            Usage
+          </Text>
+          <Text
+            style={[
+              styles.sourceDescription,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            What your AI activity has cost this month, across your devices.
+            Only you can see this.
+          </Text>
+          <View
+            style={[
+              styles.usageCard,
+              { borderColor: colors.border, backgroundColor: colors.card },
+            ]}
+          >
+            {usageLoading ? (
+              <View style={styles.usageStateRow} testID="usage-loading">
+                <ActivityIndicator
+                  size="small"
+                  color={colors.mutedForeground}
+                />
+                <Text
+                  style={[
+                    styles.usageStateText,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Adding up this month…
+                </Text>
+              </View>
+            ) : usageFailed ? (
+              <View testID="usage-error">
+                <Text
+                  style={[styles.usageStateText, { color: colors.destructive }]}
+                >
+                  Your usage couldn&rsquo;t be loaded. Check your connection
+                  and try again.
+                </Text>
+                <TouchableOpacity
+                  testID="usage-retry"
+                  onPress={() => void usageQuery.refetch()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry loading usage"
+                  style={[styles.usageRetry, { borderColor: colors.border }]}
+                >
+                  <Text
+                    style={[
+                      styles.usageRetryText,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Try again
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : usageSummary ? (
+              <>
+                <Text
+                  style={[
+                    styles.usageMonthLabel,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  {usageMonthLabel(usageSummary.periodStart)}
+                </Text>
+                <Text
+                  testID="usage-month-total"
+                  style={[styles.usageSpend, { color: colors.foreground }]}
+                >
+                  {formatUsdAmount(usageSummary.totals.costUsd)}
+                </Text>
+                <Text
+                  testID="usage-requests-total"
+                  style={[
+                    styles.usageCaption,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  {formatCompactCount(usageSummary.totals.requests)}{" "}
+                  {usageSummary.totals.requests === 1
+                    ? "request"
+                    : "requests"}{" "}
+                  ·{" "}
+                  {formatCompactCount(
+                    usageSummary.totals.promptTokens +
+                      usageSummary.totals.outputTokens,
+                  )}{" "}
+                  tokens
+                </Text>
+                {usageSummary.totals.requests === 0 ? (
+                  <Text
+                    testID="usage-empty"
+                    style={[
+                      styles.usageEmptyText,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    Nothing metered yet this month. Costs appear here as soon
+                    as Venom answers you.
+                  </Text>
+                ) : (
+                  <>
+                    <View
+                      style={styles.usageTrendRow}
+                      testID="usage-daily-trend"
+                      accessibilityLabel="Daily spend this month"
+                    >
+                      {usageSummary.daily.map((day) => {
+                        const share =
+                          usageMaxDailyCost > 0
+                            ? day.costUsd / usageMaxDailyCost
+                            : 0;
+                        return (
+                          <View
+                            key={day.date}
+                            testID={`usage-day-${day.date}`}
+                            style={[
+                              styles.usageTrendBar,
+                              {
+                                backgroundColor: colors.foreground,
+                                opacity: day.costUsd > 0 ? 0.85 : 0.25,
+                                height: `${Math.max(
+                                  share * 100,
+                                  day.costUsd > 0 ? 8 : 4,
+                                )}%`,
+                              },
+                            ]}
+                          />
+                        );
+                      })}
+                    </View>
+                    {usageSummary.daily.length > 0 && (
+                      <View style={styles.usageAxisRow}>
+                        <Text
+                          style={[
+                            styles.usageAxisText,
+                            { color: colors.mutedForeground },
+                          ]}
+                        >
+                          {usageDayLabel(usageSummary.daily[0].date)}
+                        </Text>
+                        {usageSummary.daily.length > 1 && (
+                          <Text
+                            style={[
+                              styles.usageAxisText,
+                              { color: colors.mutedForeground },
+                            ]}
+                          >
+                            {usageDayLabel(
+                              usageSummary.daily[
+                                usageSummary.daily.length - 1
+                              ].date,
+                            )}
+                          </Text>
+                        )}
+                      </View>
+                    )}
+                    <View style={styles.usageModels}>
+                      {usageSummary.models.map((model) => (
+                        <View
+                          key={model.modelId}
+                          testID={`usage-model-row-${model.modelId}`}
+                          style={[
+                            styles.usageModelRow,
+                            { borderColor: colors.border },
+                          ]}
+                        >
+                          <View style={styles.usageModelCopy}>
+                            <Text
+                              style={[
+                                styles.usageModelName,
+                                { color: colors.foreground },
+                              ]}
+                            >
+                              {model.modelName}
+                              {model.hasEstimates ? " *" : ""}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.usageModelCaption,
+                                { color: colors.mutedForeground },
+                              ]}
+                            >
+                              {formatCompactCount(model.requests)}{" "}
+                              {model.requests === 1 ? "request" : "requests"}{" "}
+                              · {formatCompactCount(model.promptTokens)} in /{" "}
+                              {formatCompactCount(model.outputTokens)} out
+                            </Text>
+                          </View>
+                          <Text
+                            style={[
+                              styles.usageModelCost,
+                              { color: colors.foreground },
+                            ]}
+                          >
+                            {formatUsdAmount(model.costUsd)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                    {usageSummary.hasEstimates && (
+                      <Text
+                        testID="usage-estimate-note"
+                        style={[
+                          styles.usageEstimateNote,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        * Some entries are estimates: a provider didn&rsquo;t
+                        report exact token counts (an interrupted reply, for
+                        example), or the call was a voice audio leg, metered
+                        at a flat per-request rate.
+                      </Text>
+                    )}
+                  </>
+                )}
+              </>
+            ) : null}
+          </View>
+        </View>
+
+        {/* Canon — visible only to super admins; the server re-verifies the
+            role on every canon call, so this row is purely a doorway. */}
+        {identity?.superAdmin === true ? (
+          <View style={styles.section} testID="settings-canon-section">
+            <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+              Canon
+            </Text>
+            <Text
+              style={[
+                styles.sourceDescription,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              The teachings Venom holds for everyone — browse them by skill,
+              see who taught what, edit or retire entries, and manage who can
+              teach.
+            </Text>
+            <TouchableOpacity
+              testID="settings-canon-open"
+              style={[
+                styles.networkToggleRow,
+                { borderColor: colors.border, backgroundColor: colors.card },
+              ]}
+              onPress={() => router.push("/canon" as never)}
+              accessibilityRole="button"
+              accessibilityLabel="Open Venom's canon"
+            >
+              <View style={styles.networkToggleCopy}>
+                <Text
+                  style={[
+                    styles.networkToggleTitle,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  Venom's canon
+                </Text>
+                <Text
+                  style={[
+                    styles.networkToggleCaption,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Curated principles that shape every answer.
+                </Text>
+              </View>
+              <Feather
+                name="chevron-right"
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* Project Sources */}
         <View style={styles.section}>
@@ -1199,6 +2048,9 @@ export default function SettingsScreen() {
 
           {/* Browse the connected sources and their citations */}
           <TouchableOpacity
+            ref={(node: FocusableHandle | null) => {
+              browseSourcesRef.current = node;
+            }}
             style={[
               styles.browseSources,
               { borderColor: colors.border, backgroundColor: colors.card },
@@ -1322,10 +2174,23 @@ export default function SettingsScreen() {
                         )}
                       </TouchableOpacity>
                       <TouchableOpacity
-                        onPress={() => removeSource(source.id)}
+                        ref={registerRemoveButtonRef(source.id)}
+                        onPress={() => requestRemoveSource(source)}
                         disabled={isRefreshing}
                         accessibilityRole="button"
                         accessibilityLabel={`Remove ${source.name}`}
+                        onFocus={() => setFocusedRemoveId(source.id)}
+                        onBlur={() =>
+                          setFocusedRemoveId((current) =>
+                            current === source.id ? null : current,
+                          )
+                        }
+                        style={[
+                          styles.removeSourceButton,
+                          focusedRemoveId === source.id && {
+                            borderColor: colors.destructive,
+                          },
+                        ]}
                         hitSlop={12}
                         testID={`remove-source-${source.id}`}
                       >
@@ -1447,6 +2312,51 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Company */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            COMPANY
+          </Text>
+          <TouchableOpacity
+            testID="open-company"
+            accessibilityRole="button"
+            accessibilityLabel={
+              orgInvites.length > 0
+                ? `Open company workspaces. ${orgInvites.length} invitation${orgInvites.length === 1 ? "" : "s"} waiting.`
+                : orgs.length > 0
+                  ? `Open company workspaces. You belong to ${orgs.length}.`
+                  : "Open company workspaces to create one or join a team."
+            }
+            style={[
+              styles.card,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => router.push("/company" as never)}
+            activeOpacity={0.75}
+          >
+            <View style={styles.row}>
+              <View style={styles.rowLeft}>
+                <Feather name="users" size={18} color={colors.mutedForeground} />
+                <Text style={[styles.rowTitle, { color: colors.foreground }]}>
+                  Company Brains
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                {orgInvites.length > 0 ? (
+                  <Text style={[styles.statusText, { color: colors.primary }]}>
+                    {orgInvites.length} INVITE{orgInvites.length === 1 ? "" : "S"}
+                  </Text>
+                ) : orgs.length > 0 ? (
+                  <Text style={[styles.statusText, { color: colors.mutedForeground }]}>
+                    {orgs.length} JOINED
+                  </Text>
+                ) : null}
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Procedures */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>
@@ -1524,6 +2434,101 @@ export default function SettingsScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal
+        transparent
+        visible={pendingRemove !== null}
+        // On web an animated dismissal keeps the dialog (and its focus trap)
+        // mounted while it fades and yanks keyboard focus back into the
+        // closing dialog, so it closes immediately there (see
+        // app/projects.tsx for the shared pattern).
+        animationType={Platform.OS === "web" ? "none" : "fade"}
+        onDismiss={handleRemoveDialogDismiss}
+        onRequestClose={cancelRemoveSource}
+      >
+        <Pressable onPress={cancelRemoveSource} style={styles.modalBackdrop}>
+          <AnimatedPressable
+            onPress={(event) => event.stopPropagation()}
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+            accessibilityViewIsModal
+            role="alertdialog"
+            accessibilityLabel={
+              pendingRemove ? `Remove ${pendingRemove.name}?` : undefined
+            }
+            testID="remove-source-dialog"
+          >
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+              Remove {pendingRemove?.name}?
+            </Text>
+            <Text
+              style={[styles.confirmBody, { color: colors.mutedForeground }]}
+            >
+              Venom stops drawing on it: its citations and scheduled syncs are
+              removed from every synced device. This cannot be undone.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                ref={(node: FocusableHandle | null) => {
+                  cancelRemoveRef.current = node;
+                }}
+                accessibilityRole="button"
+                onPress={cancelRemoveSource}
+                onFocus={() => setCancelRemoveFocused(true)}
+                onBlur={() => setCancelRemoveFocused(false)}
+                style={[
+                  styles.dialogTextButton,
+                  cancelRemoveFocused && { borderColor: colors.foreground },
+                ]}
+                testID="cancel-remove-source"
+              >
+                <Text
+                  style={[styles.cancel, { color: colors.mutedForeground }]}
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={confirmRemoveSource}
+                onFocus={() => setConfirmRemoveFocused(true)}
+                onBlur={() => setConfirmRemoveFocused(false)}
+                style={[
+                  styles.destructiveButton,
+                  { backgroundColor: colors.destructive },
+                  // A primary-colored ring is invisible on a filled control;
+                  // the background-colored inset ring stays visible on the
+                  // destructive fill in both themes.
+                  confirmRemoveFocused && { borderColor: colors.background },
+                ]}
+                testID="confirm-remove-source"
+              >
+                <Text
+                  style={[
+                    styles.destructiveText,
+                    { color: colors.destructiveForeground },
+                  ]}
+                >
+                  Remove source
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </AnimatedPressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1642,6 +2647,133 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     marginBottom: 12,
+  },
+  networkToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14,
+  },
+  networkToggleCopy: { flex: 1, gap: 3 },
+  networkToggleTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14.5,
+  },
+  networkToggleCaption: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  usageCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+  },
+  usageStateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  usageStateText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    lineHeight: 19,
+    flexShrink: 1,
+  },
+  usageRetry: {
+    alignSelf: "flex-start",
+    marginTop: 12,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  usageRetryText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+  },
+  usageMonthLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
+  },
+  usageSpend: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 32,
+    letterSpacing: -0.8,
+    marginTop: 4,
+    fontVariant: ["tabular-nums"],
+  },
+  usageCaption: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  usageEmptyText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 12,
+  },
+  usageTrendRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 3,
+    height: 64,
+    marginTop: 16,
+  },
+  usageTrendBar: {
+    flex: 1,
+    minWidth: 6,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
+  },
+  usageAxisRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  usageAxisText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 10,
+  },
+  usageModels: {
+    marginTop: 14,
+    gap: 8,
+  },
+  usageModelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  usageModelCopy: { flex: 1, gap: 2 },
+  usageModelName: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+  },
+  usageModelCaption: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  usageModelCost: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    fontVariant: ["tabular-nums"],
+  },
+  usageEstimateNote: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 11.5,
+    lineHeight: 17,
+    marginTop: 12,
   },
   sourceError: {
     flexDirection: "row",
@@ -1806,6 +2938,62 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     fontSize: 11,
   },
+  // The remove control carries an always-on transparent border so gaining a
+  // focus ring never shifts the row's layout.
+  removeSourceButton: {
+    alignItems: "center",
+    borderColor: "transparent",
+    borderRadius: 12,
+    borderWidth: 2,
+    justifyContent: "center",
+    padding: 3,
+  },
+  modalBackdrop: {
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.58)",
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalCard: { borderRadius: 26, padding: 22, width: "100%", maxWidth: 440 },
+  modalTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 20,
+    marginBottom: 18,
+  },
+  confirmBody: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    lineHeight: 21,
+    marginBottom: 6,
+  },
+  modalActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 8,
+    gap: 22,
+  },
+  cancel: { fontFamily: "Inter_500Medium", fontSize: 14 },
+  // Dialog action buttons carry an always-on transparent border so gaining
+  // a focus ring never shifts layout.
+  dialogTextButton: {
+    borderColor: "transparent",
+    borderRadius: 12,
+    borderWidth: 2,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 10,
+  },
+  destructiveButton: {
+    borderColor: "transparent",
+    borderRadius: 14,
+    borderWidth: 2,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 18,
+  },
+  destructiveText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
   refreshError: {
     fontFamily: "Inter_400Regular",
     fontSize: 12,
@@ -1860,6 +3048,47 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     fontSize: 10,
     letterSpacing: 0.2,
+  },
+  policyRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  policyRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  policyCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  policyDescription: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  policyTakeover: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  policyTakeoverText: {
+    flex: 1,
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 17,
   },
   modelAvailability: {
     fontFamily: "Inter_400Regular",
@@ -1922,3 +3151,85 @@ const SCHEDULE_OPTIONS: Array<{
     testId: cadence,
   })),
 ];
+
+const UI_TEST_USAGE_SUMMARY: VenomUsageSummary = {
+  periodStart: "2026-08-01",
+  periodEnd: "2026-09-01",
+  totals: {
+    costUsd: 1.86,
+    requests: 42,
+    promptTokens: 96_000,
+    outputTokens: 31_000,
+  },
+  hasEstimates: true,
+  daily: [
+    { date: "2026-08-14", costUsd: 0.22, requests: 6 },
+    { date: "2026-08-15", costUsd: 0.91, requests: 18 },
+    { date: "2026-08-16", costUsd: 0.05, requests: 3 },
+    { date: "2026-08-18", costUsd: 0.68, requests: 15 },
+  ],
+  models: [
+    {
+      modelId: "venom-gpt",
+      modelName: "Venom GPT",
+      costUsd: 1.24,
+      requests: 26,
+      promptTokens: 70_000,
+      outputTokens: 22_000,
+      hasEstimates: false,
+    },
+    {
+      modelId: "venom-claude",
+      modelName: "Venom Claude",
+      costUsd: 0.57,
+      requests: 12,
+      promptTokens: 26_000,
+      outputTokens: 9_000,
+      hasEstimates: true,
+    },
+    {
+      modelId: "venom-voice",
+      modelName: "Venom Voice",
+      costUsd: 0.05,
+      requests: 4,
+      promptTokens: 0,
+      outputTokens: 0,
+      hasEstimates: true,
+    },
+  ],
+};
+
+function usageDayLabel(date: string): string {
+  const month = Number(date.slice(5, 7));
+  const day = Number(date.slice(8, 10));
+  const name = USAGE_MONTHS[month - 1];
+  return name && Number.isFinite(day) && day > 0
+    ? `${name.slice(0, 3)} ${day}`
+    : date;
+}
+
+function usageMonthLabel(periodStart: string): string {
+  const month = Number(periodStart.slice(5, 7));
+  const year = periodStart.slice(0, 4);
+  const name = USAGE_MONTHS[month - 1];
+  return name ? `${name} ${year}` : "This month";
+}
+
+/** Compact token/request counts: 940, 12.4k, 3.1M. */
+function formatCompactCount(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  if (value < 1_000) return String(Math.round(value));
+  if (value < 1_000_000) {
+    const k = value / 1_000;
+    return `${k >= 100 ? Math.round(k) : k.toFixed(1)}k`;
+  }
+  const m = value / 1_000_000;
+  return `${m >= 100 ? Math.round(m) : m.toFixed(1)}M`;
+}
+
+/** Dollar display: exact to the cent, honest about dust. */
+function formatUsdAmount(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "$0.00";
+  if (value < 0.01) return "<$0.01";
+  return `$${value.toFixed(2)}`;
+}

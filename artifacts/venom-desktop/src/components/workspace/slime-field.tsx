@@ -2,8 +2,10 @@ import { useEffect, useRef } from "react";
 import {
   createAdaptiveQuality,
   createEmptyField,
+  createSlimeBloom,
   createSlimeEmphasis,
   createSlimeLife,
+  createSlimeMomentum,
   createSlimeRenderer,
   packSlimeField,
   slimeCapacityForTierName,
@@ -52,6 +54,10 @@ type SlimeTelemetry = {
   changes: number;
   bufferWidth: number;
   bufferHeight: number;
+  /** The capacity tier this context actually compiled. */
+  capacity: { blobs: number; links: number; drops: number };
+  /** Droplets packed into the most recently rendered frame. */
+  dropCount: number;
 };
 
 declare global {
@@ -142,6 +148,12 @@ export function SlimeFieldCanvas({
     // Touch emphasis lives beside it for the same reason: a rebuilt context
     // resumes mid-reaction instead of re-easing from rest.
     const emphasis = createSlimeEmphasis();
+    // Camera momentum too: the mass trails a flung map and settles, and a
+    // restored context resumes mid-settle rather than snapping into place.
+    const momentum = createSlimeMomentum();
+    // Bloom-in for newly absorbed concepts is session-scoped for the same
+    // reason again: a rebuilt context must not treat the whole map as new.
+    const bloom = createSlimeBloom();
 
     const pinnedScale = scaleOverrideFromLocation();
 
@@ -197,11 +209,21 @@ export function SlimeFieldCanvas({
       // Reduced motion keeps the sculpted 3D mass (and its droplet colony)
       // but stops everything moving: the sim is frozen, not emptied.
       const frozen = motionQuery.matches;
-      // The mass leans toward the concept the user is on. Folded in before
-      // the life step so droplets orbit the swollen radius too; frozen means
-      // the state change lands instantly instead of easing.
+      // Camera momentum first, on the raw projected stream: a fling makes
+      // the mass lag, stretch and settle instead of reprojecting rigidly.
+      // Frozen means rigid motion — no added animation for reduced motion.
+      const flung = momentum.step(scene.nodes, timestamp / 1000, { frozen });
+      // Newly absorbed concepts grow out of the mass next, on the trailed
+      // geometry, so everything downstream — touch swell, droplet orbits —
+      // tracks the growing size; frozen shows newcomers full-size at once.
+      const grown = bloom.step(flung, timestamp / 1000, { frozen });
+      // The mass leans toward the concept the user is on. Folded in after
+      // momentum (so the touch reaction stays as tuned, on the trailed
+      // geometry) and before the life step so droplets orbit the swollen
+      // radius too; frozen means the state change lands instantly instead
+      // of easing.
       const touched = emphasis.step(
-        scene.nodes,
+        grown,
         scene.edges,
         { selectedId: scene.selectedId, hoveredId: scene.hoveredId },
         timestamp / 1000,
@@ -212,6 +234,7 @@ export function SlimeFieldCanvas({
         frozen,
       });
       packSlimeField(living.nodes, scene.edges, scale, field, living.droplets);
+      if (telemetry) telemetry.dropCount = field.dropCount;
 
       const time = frozen ? 0 : timestamp / 1000;
       // Fusion distance lives in drawing-buffer pixels, so it has to track the
@@ -275,6 +298,8 @@ export function SlimeFieldCanvas({
           changes: 0,
           bufferWidth: 0,
           bufferHeight: 0,
+          capacity: { ...renderer.capacity },
+          dropCount: 0,
         };
         window.__venomSlime = telemetry;
       }

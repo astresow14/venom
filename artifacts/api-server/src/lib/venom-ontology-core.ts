@@ -34,6 +34,13 @@ export type OntologyEvidence = {
   capturedByUserId: string | null;
   /** When that capture was filed (ms since epoch); null pre-attribution. */
   capturedAt: number | null;
+  /**
+   * Sensitivity lock. Server-managed on workspace-tier evidence — set only
+   * through the sensitivity endpoints (sanitizeEvidence deliberately drops
+   * it, so client snapshots can never set or clear it). Present only when
+   * true.
+   */
+  sensitive?: boolean;
 };
 
 export type OntologyConcept = {
@@ -50,6 +57,32 @@ export type OntologyConcept = {
   mentionCount: number;
   lastUpdatedAt: number;
   sources: OntologyEvidence[];
+  /**
+   * Sensitivity lock on the whole concept. Same contract as the evidence
+   * flag: server-managed, never absorbed from client snapshots, present
+   * only when true.
+   */
+  sensitive?: boolean;
+  /**
+   * Admin-only restriction on the whole concept (workspace tier). Restricted
+   * concepts never reach non-admin members: the server filters them from
+   * member reads, chat context, citations, and exports. Server-managed —
+   * sanitizeConcept deliberately drops it, so client snapshots can never set
+   * or clear it; applyInsightCandidates spreads existing concepts, so a
+   * refiled conversation keeps the restriction. Present only when true.
+   */
+  adminOnly?: boolean;
+  /**
+   * Author-private "Unsorted" holding state (personal tier only). Extraction
+   * files a concept unsorted when the scope classifier is not confident
+   * whether it is personal or workspace material; it re-files once related
+   * knowledge clarifies it. UNLIKE sensitive/adminOnly this is a normal
+   * synced field: sanitizeConcept preserves it so the author's own devices
+   * can clear it ("keep personal") through the ordinary snapshot merge.
+   * Workspace/org stores must never contain it — every write path that
+   * targets a non-user owner strips the flag. Present only when true.
+   */
+  unsorted?: boolean;
 };
 
 export type OntologyTombstone = {
@@ -65,6 +98,14 @@ export type InsightCandidate = {
   summary: string;
   sourceMessageIds: string[];
   relatedLabels: string[];
+  /**
+   * Scope-classification verdict for this candidate: file it into the
+   * author-private Unsorted holding area instead of the sorted personal
+   * Brain. Only meaningful when filing into a personal ("user") store.
+   * A confident (non-unsorted) candidate merging into an existing unsorted
+   * concept clears that concept's flag — new knowledge clarified it.
+   */
+  unsorted?: boolean;
 };
 
 // Bounds mirror the OpenAPI workspace schema so stored records always
@@ -94,7 +135,12 @@ export const MAX_INJECTED_CLUSTER_TOMBSTONES = 2000;
 export const normalizeLabel = (label: string) =>
   label.trim().toLocaleLowerCase();
 
-/** Exact port of the client positionForLabel hash placement. */
+/**
+ * Exact port of the client positionForLabel hash placement
+ * (hashPositionForLabel in @workspace/venom-workspace-merge). Two labels can
+ * hash to the same point, so this is only the *seed* for a new concept's
+ * spot; placeConceptPosition below adjusts it until it has clearance.
+ */
 export function positionForLabel(
   label: string,
   index: number,
@@ -109,6 +155,97 @@ export function positionForLabel(
     x: Math.round(Math.cos(angle) * radius),
     y: Math.round(Math.sin(angle) * radius),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Clearance-aware placement — exact port of placeClusterPosition from
+// @workspace/venom-workspace-merge (clusterPlacement.ts), on this file's own
+// types like the rest of the core. Keep the constants and the integer ring
+// walk byte-identical to the shared lib: positions are synced fields, and a
+// server that placed a new topic differently from how the apps would have
+// placed it hands the clients a stack (or a disagreement) to repair later.
+// ---------------------------------------------------------------------------
+
+/** Minimum centre distance before one map dot buries another (12 units = 24 map px). */
+export const CONCEPT_SPACING_FLOOR = 12;
+/** Clearance a freshly placed concept aims for: twice the floor. */
+export const CONCEPT_PLACEMENT_CLEARANCE = 24;
+
+const FLOOR_SQUARED = CONCEPT_SPACING_FLOOR * CONCEPT_SPACING_FLOOR;
+const CLEARANCE_SQUARED =
+  CONCEPT_PLACEMENT_CLEARANCE * CONCEPT_PLACEMENT_CLEARANCE;
+const PROBE_STEP = CONCEPT_SPACING_FLOOR / 2;
+const COMFORT_RING_LIMIT = 64;
+const FLOOR_RING_LIMIT = 256;
+
+type ConceptMapPoint = { x: number; y: number };
+
+function minDistanceSquared(
+  x: number,
+  y: number,
+  occupied: readonly ConceptMapPoint[],
+): number {
+  let min = Infinity;
+  for (const point of occupied) {
+    const dx = point.x - x;
+    const dy = point.y - y;
+    const squared = dx * dx + dy * dy;
+    if (squared < min) min = squared;
+  }
+  return min;
+}
+
+/**
+ * Keeps the seed whenever it clears the spacing floor; otherwise walks
+ * integer square rings around it (pitch = half the floor, ring start rotated
+ * by a seed-derived offset) and returns the first point with comfortable
+ * clearance, falling back to the best floor-clearing point seen. Integer
+ * arithmetic and squared-distance comparisons only, so every JS engine
+ * computes the identical spot.
+ */
+export function placeConceptPosition(
+  seed: ConceptMapPoint,
+  occupied: readonly ConceptMapPoint[],
+): ConceptMapPoint {
+  const seedX = Math.round(seed.x);
+  const seedY = Math.round(seed.y);
+  const seedClearance = minDistanceSquared(seedX, seedY, occupied);
+  if (seedClearance >= FLOOR_SQUARED) {
+    return { x: seedX, y: seedY };
+  }
+
+  let bestPoint: ConceptMapPoint = { x: seedX, y: seedY };
+  let bestSquared = seedClearance;
+  for (let ring = 1; ring <= FLOOR_RING_LIMIT; ring += 1) {
+    const half = ring * PROBE_STEP;
+    const pointsPerSide = ring * 2;
+    const perimeter = pointsPerSide * 4;
+    const start =
+      (((seedX * 31 + seedY) % perimeter) + perimeter) % perimeter;
+    for (let step = 0; step < perimeter; step += 1) {
+      const walk = (start + step) % perimeter;
+      const side = Math.floor(walk / pointsPerSide);
+      const along = (walk % pointsPerSide) * PROBE_STEP - half;
+      const x =
+        seedX +
+        (side === 0 ? half : side === 1 ? -along : side === 2 ? -half : along);
+      const y =
+        seedY +
+        (side === 0 ? along : side === 1 ? half : side === 2 ? -along : -half);
+      const squared = minDistanceSquared(x, y, occupied);
+      if (squared >= CLEARANCE_SQUARED) {
+        return { x, y };
+      }
+      if (squared > bestSquared) {
+        bestPoint = { x, y };
+        bestSquared = squared;
+      }
+    }
+    if (ring >= COMFORT_RING_LIMIT && bestSquared >= FLOOR_SQUARED) {
+      return bestPoint;
+    }
+  }
+  return bestPoint;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -253,6 +390,12 @@ export function sanitizeConcept(raw: unknown): OntologyConcept | null {
     ONTOLOGY_BOUNDS.description,
   );
   if (description) concept.description = description;
+  // Unsorted survives snapshot round-trips on purpose: it is the author's
+  // own holding-area state, so their devices may set or clear it locally
+  // ("keep personal") and sync the change. sensitive/adminOnly stay
+  // server-managed and are still dropped here. Non-user write paths strip
+  // this flag before persisting.
+  if (raw.unsorted === true) concept.unsorted = true;
   return concept;
 }
 
@@ -474,6 +617,12 @@ export type ApplyInsightsInput = {
   projectConcepts: OntologyConcept[];
   /** Total concept count for the owner, used for placement parity. */
   totalConceptCount: number;
+  /**
+   * Stored positions of every concept the owner's map already shows — all
+   * projects, not just this scope — so a new concept never buries a dot from
+   * another project. Falls back to the project scope when omitted.
+   */
+  occupiedPositions?: readonly { x: number; y: number }[];
   conversation: { id: string; title: string; projectId: string | null };
   candidates: InsightCandidate[];
   now: number;
@@ -504,6 +653,7 @@ export type ApplyInsightsResult = {
 export function applyInsightCandidates({
   projectConcepts,
   totalConceptCount,
+  occupiedPositions,
   conversation,
   candidates,
   now,
@@ -520,6 +670,14 @@ export function applyInsightCandidates({
     links: [...concept.links],
     sources: [...concept.sources],
     strength: Math.max(0.12, concept.strength * 0.96),
+  }));
+
+  // Every position a new concept must keep clear of; grows as this filing
+  // creates concepts so a batch of new topics spreads out too (mirrors the
+  // clients passing their live cluster list to positionForNewCluster).
+  const occupied = (occupiedPositions ?? concepts).map((point) => ({
+    x: point.x,
+    y: point.y,
   }));
 
   const conceptByLabel = new Map(
@@ -576,17 +734,29 @@ export function applyInsightCandidates({
               ...evidence.messageIds,
             ]),
           ].slice(0, ONTOLOGY_BOUNDS.messageIdsPerEvidence),
+          // A refiled conversation must not shake off an existing lock: the
+          // fresh evidence object knows nothing about sensitivity, so carry
+          // the prior entry's flag forward explicitly.
+          ...(priorEvidence?.sensitive ? { sensitive: true } : {}),
         },
         ...existing.sources.filter(
           (entry) => entry.conversationId !== conversation.id,
         ),
       ].slice(0, ONTOLOGY_BOUNDS.evidencePerConcept);
+      // A confidently-scoped candidate landing on an unsorted concept is the
+      // clarifying signal the holding area waits for: the concept leaves
+      // Unsorted. An unsorted candidate merging into an existing concept
+      // never flips a sorted concept back — the flag only clears here.
+      if (candidate.unsorted !== true && existing.unsorted === true) {
+        delete existing.unsorted;
+      }
       touchedIds.add(existing.id);
     } else {
-      const position = positionForLabel(
-        label,
-        totalConceptCount + createdCount,
+      const position = placeConceptPosition(
+        positionForLabel(label, totalConceptCount + createdCount),
+        occupied,
       );
+      occupied.push(position);
       const created: OntologyConcept = {
         id: generateId(),
         projectId: conversation.projectId,
@@ -602,6 +772,7 @@ export function applyInsightCandidates({
         x: position.x,
         y: position.y,
         links: [],
+        ...(candidate.unsorted === true ? { unsorted: true } : {}),
       };
       concepts.push(created);
       conceptByLabel.set(normalizedLabel, created);

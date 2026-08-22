@@ -21,6 +21,12 @@ returns or times out. Two sessions wasted long debugging loops on this.
   `timeout 280 ... > /tmp/x.log 2>&1; echo exit=$?; tail /tmp/x.log` so the
   shell cap never eats the output, or run the suite through a configured test
   workflow and poll its log file.
+- Polling a workflow's run with `pgrep -f <pattern>` has the same self-match
+  trap in loop form: every polling invocation's wrapper shell carries the
+  pattern in its own cmdline, so it reports RUNNING forever. Bracket a
+  character (`pgrep -f "playwright [t]est"`) or just refresh the workflow
+  logs and look for the summary line. One session polled a finished suite
+  for an hour because of this.
 - Playwright suites that boot their own webServer work fine within a single
   invocation once bundler caches are warm; the first cold run may need the
   workflow route instead.

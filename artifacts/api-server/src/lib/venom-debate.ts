@@ -23,12 +23,14 @@
  * and per-turn statuses only.
  */
 
-import type { VenomManagedModel, VenomModelId } from "./venom-models";
+import { providerLabel, type VenomManagedModel, type VenomModelId } from "./venom-models";
 import {
+  PROVIDER_ACCOUNT_ERROR_MESSAGE,
   ProviderError,
   streamVenomResponse,
   streamWithSingleRetry,
   type VenomMessage,
+  type VenomStreamUsage,
 } from "./venom-provider-adapters";
 import {
   createCitationStreamFilter,
@@ -124,9 +126,15 @@ export function planDebateVoices(
           "A selected debate participant is not available right now.",
         );
       }
-      if (!requestedModels.some((entry) => entry.id === model.id)) {
-        requestedModels.push(model);
+      if (requestedModels.some((entry) => entry.id === model.id)) {
+        // A duplicated corner would put one model on both sides of an
+        // argument. Reject with the argue-itself rule instead of silently
+        // replanning a roster the user never asked for.
+        throw new InvalidDebateParticipants(
+          `${model.name} can't argue itself — pick three different models for the debate.`,
+        );
       }
+      requestedModels.push(model);
     } else if (PERSONA_ID_SET.has(id)) {
       requestedPersonas.add(id);
     } else {
@@ -153,6 +161,18 @@ export function planDebateVoices(
   });
 
   if (requestedModels.length === 3) {
+    // Every pair of debate participants must sit on different LLM providers —
+    // judged on catalog provider metadata, never model-id equality — so two
+    // distinct models fronting the same account can't fake an argument.
+    for (let i = 0; i < requestedModels.length; i += 1) {
+      for (let j = i + 1; j < requestedModels.length; j += 1) {
+        if (requestedModels[i].provider === requestedModels[j].provider) {
+          throw new InvalidDebateParticipants(
+            `${requestedModels[i].name} and ${requestedModels[j].name} both run on ${providerLabel(requestedModels[i].provider)} — debate participants need different providers.`,
+          );
+        }
+      }
+    }
     return requestedModels.map(asVoice);
   }
 
@@ -172,19 +192,41 @@ export function planDebateVoices(
     }));
   }
 
-  const availableModels = catalog.filter((model) => model.available);
-  if (availableModels.length >= 3) {
-    // Default pick: the anchor first, then the rest in catalog order.
+  // The automatic plan never seats a model whose provider account is failing
+  // billing-class checks — it would fail every one of its turns. An explicit
+  // corner request above still honors the user's stated choice, and the
+  // anchor keeps its persona corner below for the same reason.
+  const usableModels = catalog.filter(
+    (model) => model.available && model.accountHealth !== "unfunded",
+  );
+  if (usableModels.length >= 3) {
+    // Default pick: the anchor first (when usable), then the rest in catalog
+    // order — preferring models whose provider is not already seated, so the
+    // automatic roster spreads across providers whenever it can. When too few
+    // providers exist to avoid a clash, the remaining seats fill in catalog
+    // order anyway: automatic planning degrades, it never rejects.
     const ordered = [
-      ...(anchor.available ? [anchor] : []),
-      ...availableModels.filter((model) => model.id !== anchor.id),
-    ].slice(0, 3);
-    return ordered.map(asVoice);
+      ...(anchor.available && anchor.accountHealth !== "unfunded"
+        ? [anchor]
+        : []),
+      ...usableModels.filter((model) => model.id !== anchor.id),
+    ];
+    const seated: VenomManagedModel[] = [];
+    for (const model of ordered) {
+      if (seated.length === 3) break;
+      if (seated.some((entry) => entry.provider === model.provider)) continue;
+      seated.push(model);
+    }
+    for (const model of ordered) {
+      if (seated.length === 3) break;
+      if (!seated.some((entry) => entry.id === model.id)) seated.push(model);
+    }
+    return seated.map(asVoice);
   }
 
   // Fewer than three real providers: personas on the reachable models, in the
   // same assignment the deliberation planner uses.
-  const alternates = availableModels.filter((model) => model.id !== anchor.id);
+  const alternates = usableModels.filter((model) => model.id !== anchor.id);
   const assignments = [anchor, alternates[0] ?? anchor, alternates[1] ?? anchor];
   return DELIBERATION_VOICES.map((voice, index) => {
     const model = assignments[index] ?? anchor;
@@ -367,6 +409,17 @@ export type RunDebateOptions = {
   retryDelayMs?: number;
   streamModel?: StreamModel;
   now?: () => number;
+  /**
+   * Metering hook: fires once per provider stream attempt, turn by turn, so
+   * the caller can ledger each call against the asking account. Turns cut
+   * at their char budget abort mid-stream — those report flagged estimates
+   * when the provider's usage frame never arrived.
+   */
+  onUsage?: (event: {
+    voiceId: string;
+    modelId: VenomModelId;
+    usage: VenomStreamUsage;
+  }) => void;
 };
 
 export type DebateOutcome = {
@@ -378,8 +431,9 @@ export type DebateOutcome = {
 /**
  * Run one bounded debate round inside the caller's response window: turns
  * stream one after another, each seeing every prior turn. A failed voice is
- * reported and skipped without aborting the round; the round throws
- * (retryable) only when every turn failed.
+ * reported and skipped without aborting the round; the round throws only
+ * when every turn failed — retryable for transient faults, or the fixed
+ * non-retryable account error when every turn died billing-class.
  */
 export async function runDebate(options: RunDebateOptions): Promise<DebateOutcome> {
   const {
@@ -395,6 +449,7 @@ export async function runDebate(options: RunDebateOptions): Promise<DebateOutcom
     retryDelayMs,
     streamModel = streamVenomResponse,
     now = Date.now,
+    onUsage,
   } = options;
 
   const turnPlan = (options.turnPlan ?? planDebateTurns(weights)).slice(
@@ -403,6 +458,7 @@ export async function runDebate(options: RunDebateOptions): Promise<DebateOutcom
   );
   const startedAt = now();
   const turns: DebateTurnRecord[] = [];
+  const failures = { billing: 0, other: 0 };
   let truncated = false;
 
   for (let turnIndex = 0; turnIndex < turnPlan.length; turnIndex += 1) {
@@ -446,6 +502,7 @@ export async function runDebate(options: RunDebateOptions): Promise<DebateOutcom
       citationFilterOptions,
     );
     let content = "";
+    let caught: unknown;
 
     // The character budget is enforced here, at the emission boundary: a
     // chunk that would overshoot is cut to the remaining budget before it is
@@ -473,6 +530,16 @@ export async function runDebate(options: RunDebateOptions): Promise<DebateOutcom
               debateWordBudget(weight),
             ),
             controller.signal,
+            onUsage
+              ? {
+                  onUsage: (usage) =>
+                    onUsage({
+                      voiceId: voice.id,
+                      modelId: voice.modelId,
+                      usage,
+                    }),
+                }
+              : undefined,
           ),
         controller.signal,
         retryDelayMs,
@@ -488,9 +555,10 @@ export async function runDebate(options: RunDebateOptions): Promise<DebateOutcom
         }
       }
       if (!signal.aborted) forward(filter.flush());
-    } catch {
+    } catch (error) {
       // A turn that dies with a partial reply still contributes it; a turn
       // that produced nothing is reported failed and the round continues.
+      caught = error;
       if (content.length > 0 && !signal.aborted) forward(filter.flush());
     } finally {
       clearTimeout(timer);
@@ -502,6 +570,16 @@ export async function runDebate(options: RunDebateOptions): Promise<DebateOutcom
     const finalContent = content.trim().slice(0, charBudget);
     const status: DebateTurnRecord["status"] =
       finalContent.length > 0 ? "ok" : "failed";
+    if (status === "failed") {
+      // Only a turn whose stream died billing-class counts toward the
+      // account verdict; a silent empty stream stays an unknown (generic)
+      // cause so the aggregate never overstates what it knows.
+      if (caught instanceof ProviderError && caught.kind === "account_billing") {
+        failures.billing += 1;
+      } else {
+        failures.other += 1;
+      }
+    }
     const record: DebateTurnRecord = {
       turn: turnIndex,
       voiceId: voice.id,
@@ -516,6 +594,17 @@ export async function runDebate(options: RunDebateOptions): Promise<DebateOutcom
   }
 
   if (!signal.aborted && turns.length > 0 && turns.every((turn) => turn.status === "failed")) {
+    if (failures.billing === turns.length) {
+      // Every turn died because the provider account cannot pay. Saying
+      // "retry" would promise recovery that never comes — surface the
+      // account problem with the fixed safe copy instead.
+      throw new ProviderError(
+        PROVIDER_ACCOUNT_ERROR_MESSAGE,
+        402,
+        false,
+        "account_billing",
+      );
+    }
     throw new ProviderError("No debate voice completed a turn.", 502, true);
   }
 

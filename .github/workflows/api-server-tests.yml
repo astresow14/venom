@@ -1,0 +1,98 @@
+name: API Server Tests
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect API server changes
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.changed }}
+    steps:
+      # A checkout must come first so the local composite action below can be
+      # resolved from the workspace; the action re-checks-out at the depth the
+      # event actually needs.
+      - uses: actions/checkout@v4
+
+      # Owns the event-conditional fetch depth and the merge_group base/head
+      # wiring; this workflow only supplies its filter list.
+      - id: filter
+        uses: ./.github/actions/detect-changes
+        with:
+          name: server
+          filters: |
+            server:
+              - "artifacts/api-server/**"
+              - "lib/api-spec/**"
+              - "lib/api-zod/**"
+              - "lib/db/**"
+              - "lib/integrations-openai-ai-server/**"
+              - "lib/integrations-anthropic-ai/**"
+              - "lib/integrations-gemini-ai/**"
+              - "lib/integrations-openrouter-ai/**"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - "tsconfig.base.json"
+              - ".github/workflows/api-server-tests.yml"
+              - ".github/actions/detect-changes/**"
+
+  server-tests:
+    name: API server test suites
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: venom_api_tests
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      CI: "true"
+      # The route/integration suites talk to a throwaway Postgres service; the
+      # schema is pushed into it before the tests run.
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/venom_api_tests
+      # The OpenAI integration lib asserts these at import time. Every suite
+      # stubs its provider calls, so dead-end placeholders both satisfy the
+      # assertion and prove no test reaches a real provider.
+      AI_INTEGRATIONS_OPENAI_BASE_URL: http://127.0.0.1:9/v1
+      AI_INTEGRATIONS_OPENAI_API_KEY: ci-placeholder
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create database schema
+        run: pnpm --filter @workspace/db run push-force
+
+      - name: Run API server tests
+        run: pnpm --filter @workspace/api-server run test

@@ -196,6 +196,26 @@ test("searches the map and opens a matched cluster", async ({ page }) => {
     page.getByTestId(`knowledge-map-label-${syncCluster.id}`),
   ).toBeVisible();
 
+  // A phrase that appears only in a citation's excerpt — never in a label or
+  // category — highlights exactly the cluster carrying that citation, the way
+  // the sources view's filter already finds it. The overview citation belongs
+  // to the repository cluster alone, so its sibling dims like any other miss.
+  await mapSearch.fill("mobile intelligence");
+  await expect(page.getByTestId("knowledge-map-match-count")).toContainText(
+    /1 of \d+ clusters match/,
+  );
+  await expect(repoNode).toHaveCSS("opacity", "1");
+  await expect(syncNode).toHaveCSS("opacity", "0.25");
+
+  // Citation titles count too, and every cluster holding the citation lights
+  // up: both of the source's clusters cite the README.
+  await mapSearch.fill("readme");
+  await expect(page.getByTestId("knowledge-map-match-count")).toContainText(
+    /2 of \d+ clusters match/,
+  );
+  await expect(repoNode).toHaveCSS("opacity", "1");
+  await expect(syncNode).toHaveCSS("opacity", "1");
+
   // Selecting the match opens the existing cluster detail panel.
   await syncNode.click();
   const detail = page.getByTestId("knowledge-map-detail");
@@ -210,6 +230,160 @@ test("searches the map and opens a matched cluster", async ({ page }) => {
   await page.getByTestId("knowledge-map-search-clear").click();
   await expect(page.getByTestId("knowledge-map-match-count")).toHaveCount(0);
   await expect(repoNode).toHaveCSS("opacity", "1");
+});
+
+const MEMORY_MATCHES = { strongest: "3", weaker: "5" };
+
+/**
+ * Distance between a node's centre and the map viewport's centre, in screen
+ * pixels. The pan centres its target (both "memory" clusters sit far enough
+ * from the canvas edge that clamping never applies), so a settled step reads
+ * near zero while the other match sits hundreds of pixels away.
+ */
+async function centerDistance(page: Page, clusterId: string) {
+  const viewport = await page
+    .getByTestId("knowledge-map-viewport")
+    .boundingBox();
+  const node = await page
+    .getByTestId(`knowledge-map-node-${clusterId}`)
+    .boundingBox();
+  if (!viewport || !node) return Number.POSITIVE_INFINITY;
+  return Math.hypot(
+    node.x + node.width / 2 - (viewport.x + viewport.width / 2),
+    node.y + node.height / 2 - (viewport.y + viewport.height / 2),
+  );
+}
+
+test("steps the viewport through every map match and wraps at the ends", async ({
+  page,
+}) => {
+  await openConnectedSources(page);
+  await page.getByTestId("knowledge-view-map").click();
+
+  // A single match keeps the old behaviour: the map pans to it and no
+  // stepper appears beside the count.
+  const mapSearch = page.getByTestId("knowledge-map-search");
+  await mapSearch.fill("pipeline");
+  await expect(page.getByTestId("knowledge-map-match-count")).toContainText(
+    /1 of \d+ clusters match/,
+  );
+  await expect(page.getByTestId("knowledge-map-match-stepper")).toHaveCount(0);
+
+  // Several matches grow the stepper. The strongest match is the first stop:
+  // centred, counted as "1 of 2", and haloed as current.
+  await mapSearch.fill("memory");
+  await expect(page.getByTestId("knowledge-map-match-count")).toContainText(
+    /2 of \d+ clusters match/,
+  );
+  const position = page.getByTestId("knowledge-map-match-position");
+  await expect(position).toHaveText("1 of 2");
+  await expect(
+    page.getByTestId(`knowledge-map-current-${MEMORY_MATCHES.strongest}`),
+  ).toBeVisible();
+  await expect
+    .poll(() => centerDistance(page, MEMORY_MATCHES.strongest), {
+      timeout: 10_000,
+    })
+    .toBeLessThan(40);
+
+  // Next pans to the weaker match and the current marker moves with it.
+  await page.getByTestId("knowledge-map-match-next").click();
+  await expect(position).toHaveText("2 of 2");
+  await expect(
+    page.getByTestId(`knowledge-map-current-${MEMORY_MATCHES.weaker}`),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId(`knowledge-map-current-${MEMORY_MATCHES.strongest}`),
+  ).toHaveCount(0);
+  await expect
+    .poll(() => centerDistance(page, MEMORY_MATCHES.weaker), {
+      timeout: 10_000,
+    })
+    .toBeLessThan(40);
+
+  // Stepping past the last match wraps back around to the first…
+  await page.getByTestId("knowledge-map-match-next").click();
+  await expect(position).toHaveText("1 of 2");
+  await expect
+    .poll(() => centerDistance(page, MEMORY_MATCHES.strongest), {
+      timeout: 10_000,
+    })
+    .toBeLessThan(40);
+
+  // …and previous from the first wraps to the last.
+  await page.getByTestId("knowledge-map-match-prev").click();
+  await expect(position).toHaveText("2 of 2");
+  await expect(
+    page.getByTestId(`knowledge-map-current-${MEMORY_MATCHES.weaker}`),
+  ).toBeVisible();
+  await expect
+    .poll(() => centerDistance(page, MEMORY_MATCHES.weaker), {
+      timeout: 10_000,
+    })
+    .toBeLessThan(40);
+
+  // Editing the query restarts the walk at the strongest match even when the
+  // edited query matches the very same two clusters ("memo" hits Memory
+  // Matrix's label and User Persona's "memory" category too): the counter,
+  // the halo, and the viewport all return to the strongest.
+  await mapSearch.fill("memo");
+  await expect(position).toHaveText("1 of 2");
+  await expect(
+    page.getByTestId(`knowledge-map-current-${MEMORY_MATCHES.strongest}`),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId(`knowledge-map-current-${MEMORY_MATCHES.weaker}`),
+  ).toHaveCount(0);
+  await expect
+    .poll(() => centerDistance(page, MEMORY_MATCHES.strongest), {
+      timeout: 10_000,
+    })
+    .toBeLessThan(40);
+
+  // A detour through a different match list restarts the walk as well.
+  await page.getByTestId("knowledge-map-match-next").click();
+  await expect(position).toHaveText("2 of 2");
+  await mapSearch.fill("pipeline");
+  await expect(page.getByTestId("knowledge-map-match-stepper")).toHaveCount(0);
+  await mapSearch.fill("memory");
+  await expect(position).toHaveText("1 of 2");
+});
+
+test("map keeps every node on its own spot and opens the source cluster's details", async ({
+  page,
+}) => {
+  await openConnectedSources(page);
+
+  await page.getByTestId("knowledge-view-map").click();
+
+  // Every rendered node — the five core clusters plus the connected
+  // repository's two clusters — must hold its own spot. Stacked nodes were
+  // the old failure mode: the buried one could never be tapped.
+  const nodes = page.locator('[data-testid^="knowledge-map-node-"]');
+  await expect(nodes.first()).toBeVisible();
+  const nodeCount = await nodes.count();
+  expect(nodeCount).toBeGreaterThanOrEqual(7);
+
+  const centers: { x: number; y: number }[] = [];
+  for (let index = 0; index < nodeCount; index += 1) {
+    const box = await nodes.nth(index).boundingBox();
+    expect(box).not.toBeNull();
+    centers.push({ x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 });
+  }
+  for (let i = 0; i < centers.length; i += 1) {
+    for (let j = i + 1; j < centers.length; j += 1) {
+      const gap = Math.hypot(centers[i].x - centers[j].x, centers[i].y - centers[j].y);
+      expect(gap).toBeGreaterThanOrEqual(20);
+    }
+  }
+
+  // The connected source's node is tappable and opens its detail panel.
+  await page
+    .getByTestId("knowledge-map-node-source_acme_venom_repository")
+    .click();
+  const detail = page.getByTestId("knowledge-map-detail");
+  await expect(detail).toContainText("acme/venom");
+  await expect(detail).toContainText("repository");
 });
 
 test("filters the sources view down to a single citation and opens it", async ({

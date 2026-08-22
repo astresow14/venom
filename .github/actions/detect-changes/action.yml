@@ -1,0 +1,65 @@
+name: Detect changes
+description: >-
+  Shared change detection for workflows that gate jobs on changed paths and run
+  on both pull_request and merge_group events. Owns the event-conditional
+  checkout depth and the merge-queue base/head wiring so individual workflows
+  cannot forget it — a hand-copied version of this job once dropped the
+  merge_group inputs and wedged the merge queue with "Could not determine what
+  is main". Workflows only supply their filter list.
+
+inputs:
+  name:
+    description: >-
+      The filter key (a top-level key in `filters`) whose verdict is reported
+      through the `changed` output.
+    required: true
+  filters:
+    description: >-
+      dorny/paths-filter filter definition (YAML string mapping filter names to
+      path glob lists), passed through verbatim.
+    required: true
+
+outputs:
+  changed:
+    description: >-
+      "true" when the filter named by `name` matched changed paths, otherwise
+      "false".
+    value: ${{ steps.filter.outputs[inputs.name] }}
+
+runs:
+  using: composite
+  steps:
+    # Pull requests only need the tip; merge_group runs need full history so
+    # the queue head and its base commit are both present locally for the diff
+    # below. The depth must stay written with 1 in the && arm and 0 in the ||
+    # arm: GitHub expressions coerce a bare 0 to false, so flipping the
+    # condition (`== 'merge_group' && 0 || 1`) would always evaluate to 1 and
+    # leave merge-queue runs shallow.
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: ${{ github.event_name == 'pull_request' && 1 || 0 }}
+
+    # On pull_request the action derives the base from the event payload and
+    # ignores these inputs. A merge_group event carries no pull request, so the
+    # queue's own base/head commits have to be passed explicitly — omitting
+    # them fails queue runs with "Could not determine what is main".
+    - id: filter
+      uses: dorny/paths-filter@v3
+      with:
+        base: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
+        ref: ${{ github.event_name == 'merge_group' && github.event.merge_group.head_sha || '' }}
+        filters: ${{ inputs.filters }}
+
+    # If `name` does not match a filter key, the output above would be empty,
+    # downstream `== 'true'` conditions would read false, and every gated job
+    # would skip silently. Fail loudly instead.
+    - name: Verify the named filter produced a verdict
+      shell: bash
+      env:
+        FILTER_NAME: ${{ inputs.name }}
+        FILTER_RESULT: ${{ steps.filter.outputs[inputs.name] }}
+      run: |
+        if [ "$FILTER_RESULT" != "true" ] && [ "$FILTER_RESULT" != "false" ]; then
+          echo "::error::detect-changes: filter '${FILTER_NAME}' produced no verdict. The 'name' input must match a top-level key in 'filters'."
+          exit 1
+        fi

@@ -28,4 +28,6 @@ export interface VenomIdentity {
      * @nullable
      */
   provider: string | null;
+  /** Whether this account holds the platform super admin role. Derived server-side from the durable designation table on every request — never from a client claim — and re-verified on the server for every privileged call, so this flag only ever gates what the UI offers to show. */
+  superAdmin: boolean;
 }

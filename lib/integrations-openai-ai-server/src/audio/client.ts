@@ -62,7 +62,13 @@ export function detectAudioFormat(buffer: Buffer): AudioFormat {
  * Convert any audio/video format to WAV using ffmpeg.
  */
 export async function convertToWav(audioBuffer: Buffer): Promise<Buffer> {
-  const inputPath = join(tmpdir(), `input-${randomUUID()}`);
+  const detected = detectAudioFormat(audioBuffer);
+  // A real suffix helps ffmpeg select the right demuxer for some Apple M4A
+  // variants. The content is still detected by ffmpeg; this is a compatibility
+  // hint, not trust in client-provided metadata.
+  const extension =
+    detected === "mp4" ? ".m4a" : detected === "ogg" ? ".ogg" : ".bin";
+  const inputPath = join(tmpdir(), `input-${randomUUID()}${extension}`);
   const outputPath = join(tmpdir(), `output-${randomUUID()}.wav`);
 
   try {
@@ -80,10 +86,27 @@ export async function convertToWav(audioBuffer: Buffer): Promise<Buffer> {
         outputPath,
       ]);
 
-      ffmpeg.stderr.on("data", () => {});
+      let stderr = "";
+      ffmpeg.stderr.on("data", (chunk: Buffer) => {
+        // Format diagnostics are safe to retain, but bound them so a malformed
+        // media file cannot inflate an error log.
+        if (stderr.length < 2_000) stderr += chunk.toString("utf8");
+      });
       ffmpeg.on("close", (code) => {
         if (code === 0) resolve();
-        else reject(new Error(`ffmpeg exited with code ${code}`));
+        else {
+          const summary = stderr
+            .replace(/\s+/g, " ")
+            .slice(-800)
+            .trim();
+          reject(
+            new Error(
+              `ffmpeg conversion failed for ${detected} input (code ${code})${
+                summary ? `: ${summary}` : ""
+              }`,
+            ),
+          );
+        }
       });
       ffmpeg.on("error", reject);
     });

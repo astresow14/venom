@@ -18,9 +18,13 @@ import {
   APP_INSTALLATION_ENV,
   APP_KEY_ENV,
   appJwt,
+  type Credential,
   CredentialPool,
   GITHUB_API,
   normalizePrivateKey,
+  redact,
+  rememberSecret,
+  workflowPushRefusal,
 } from "./github";
 
 const REPO = "astresow14/venom";
@@ -198,7 +202,9 @@ function stubAppInstallation(options: {
   installationId: number;
   discoverable: boolean;
   permissions: Record<string, string>;
+  mintedToken?: string;
 }): void {
+  const mintedToken = options.mintedToken ?? "ghs_minted-installation-token";
   if (options.discoverable) {
     routes.push({
       method: "GET",
@@ -217,7 +223,7 @@ function stubAppInstallation(options: {
         ? {
             status: 201,
             body: {
-              token: "ghs_minted-installation-token",
+              token: mintedToken,
               expires_at: "2026-08-21T23:59:00Z",
               permissions: options.permissions,
             },
@@ -562,5 +568,208 @@ test("a rejected connector token is skipped, not fatal, when a stored token work
   assert.ok(
     requests.some((request) => request.url === CONNECTOR_URL),
     "the connector was tried first",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Redaction: every credential that enters the pool must be scrubbed from
+// anything that could reach stdout or the sync-state file. The redaction list
+// lives for the whole process, so each test below uses token values unique to
+// itself — a shared fixture string could pass because an earlier test
+// registered it, not because the code path under test did.
+// ---------------------------------------------------------------------------
+
+test("redact scrubs every occurrence, across lines and back to back", () => {
+  rememberSecret("");
+  assert.equal(
+    redact("an empty registration must never corrupt ordinary text"),
+    "an empty registration must never corrupt ordinary text",
+  );
+
+  rememberSecret("tok_contract-alpha");
+  rememberSecret("tok_contract-beta");
+  const scrubbed = redact(
+    [
+      "push failed for tok_contract-alpha and tok_contract-alphatok_contract-alpha",
+      "second line still holds tok_contract-beta",
+    ].join("\n"),
+  );
+
+  assert.equal(
+    scrubbed,
+    [
+      "push failed for ***redacted*** and ***redacted******redacted***",
+      "second line still holds ***redacted***",
+    ].join("\n"),
+  );
+});
+
+test("all four credential kinds enter the redaction list once a run touches them", async () => {
+  // A run that consults everything: the connector carries the sync, the app
+  // JWT mints an installation token for the workflow push, and the stored
+  // token is inspected as a candidate along the way. Four secrets in play.
+  stubConnector("gho_audit-connector");
+  stubUser("gho_audit-connector", { headers: { "x-oauth-scopes": "repo" } });
+  process.env[APP_ID_ENV] = "907856";
+  process.env[APP_KEY_ENV] = APP_KEY.privatePem;
+  process.env[APP_INSTALLATION_ENV] = "9042";
+  stubAppInstallation({
+    installationId: 9042,
+    discoverable: false,
+    permissions: { contents: "write", workflows: "write" },
+    mintedToken: "ghs_audit-minted",
+  });
+  process.env.GITHUB_TOKEN = "ghp_audit-stored";
+  stubUser("ghp_audit-stored", { headers: { "x-oauth-scopes": "repo" } });
+
+  const pool = new CredentialPool(REPO);
+  const base = await pool.base();
+  assert.equal(base.source, "replit-connector");
+  const workflow = await pool.forWorkflows(base, WORKFLOW_CHANGE);
+  assert.equal(workflow.token, "ghs_audit-minted");
+
+  // The JWT only ever exists inside the pool; recover the real one from the
+  // mint request so the assertion covers the exact value that was sent.
+  const jwt = requests
+    .find((request) => request.url.endsWith("/access_tokens"))
+    ?.authorization?.replace(/^Bearer /, "");
+  assert.ok(jwt, "the mint request carries the app JWT");
+
+  const failure = [
+    `fatal: unable to access 'https://github.com/${REPO}.git/': gho_audit-connector was rejected`,
+    `remote: JWT ${jwt} minted ghs_audit-minted then ghs_audit-minted again`,
+    "hint: stored fallback ghp_audit-stored",
+  ].join("\n");
+  const scrubbed = redact(failure);
+
+  for (const secret of [
+    "gho_audit-connector",
+    jwt,
+    "ghs_audit-minted",
+    "ghp_audit-stored",
+  ]) {
+    assert.ok(!scrubbed.includes(secret), "a live credential survived redact()");
+  }
+  assert.equal(scrubbed.split("***redacted***").length - 1, 5);
+});
+
+test("credentials rejected at inspection are already in the redaction list", async () => {
+  // rememberSecret must run before the first request that carries a token, so
+  // even a revoked credential can never appear in what its failure prints.
+  stubConnector("gho_audit-revoked");
+  stubUser("gho_audit-revoked", { status: 401 });
+  process.env.GITHUB_TOKEN = "ghp_audit-revoked";
+  stubUser("ghp_audit-revoked", { status: 401 });
+
+  await assert.rejects(new CredentialPool(REPO).base(), SyncError);
+
+  assert.equal(
+    redact("rejected gho_audit-revoked then ghp_audit-revoked"),
+    "rejected ***redacted*** then ***redacted***",
+  );
+});
+
+test("the app JWT is scrubbed even when the mint it authorizes fails", async () => {
+  process.env[APP_ID_ENV] = "615243";
+  process.env[APP_KEY_ENV] = APP_KEY.privatePem;
+  process.env[APP_INSTALLATION_ENV] = "9107";
+  routes.push({
+    method: "POST",
+    url: `${GITHUB_API}/app/installations/9107/access_tokens`,
+    reply: () => ({ status: 502, body: { message: "mint exploded" } }),
+  });
+
+  await assert.rejects(new CredentialPool(REPO).base(), (error: unknown) => {
+    assert.ok(error instanceof SyncError);
+    assert.match(error.message, /Could not mint an installation token/);
+    return true;
+  });
+
+  const jwt = requests[0]?.authorization?.replace(/^Bearer /, "");
+  assert.ok(jwt, "the failed mint was attempted with the app JWT");
+  assert.equal(
+    redact(`signed ${jwt} before the mint failed`),
+    "signed ***redacted*** before the mint failed",
+  );
+});
+
+/**
+ * A fine-grained token as the pool would hand it back: no scopes to inspect,
+ * so its workflow access stays "unknown" and the push itself is the test.
+ */
+function fineGrainedCredential(): Credential {
+  return {
+    token: "github_pat_fine-grained",
+    source: "GITHUB_TOKEN",
+    scopes: null,
+    workflows: "unknown",
+    expiresAt: null,
+    detail: "no expiry reported",
+  };
+}
+
+/** Git's relayed error when GitHub refuses a workflow write at push time. */
+const PUSH_REFUSAL = [
+  "git push --force https://github.com/astresow14/venom.git failed (exit 1):",
+  "! [remote rejected] replit-sync (refusing to allow a Personal Access Token to create or update workflow `.github/workflows/ci.yml` without `workflow` scope)",
+].join("\n");
+
+test("a push-time workflow refusal becomes the guided setup message", () => {
+  const refusal = workflowPushRefusal(
+    PUSH_REFUSAL,
+    WORKFLOW_CHANGE,
+    fineGrainedCredential(),
+    REPO,
+  );
+
+  assert.ok(refusal instanceof SyncError);
+  assert.ok(
+    refusal.message.includes(PUSH_REFUSAL),
+    "git's own words stay visible for diagnosis",
+  );
+  assert.match(
+    refusal.message,
+    /GITHUB_TOKEN \(no expiry reported\) cannot write \.github\/workflows/,
+  );
+  // The message must teach both permanent setups, aimed at the right repo.
+  assert.match(refusal.message, /Fine-grained token/);
+  assert.match(refusal.message, /GitHub App/);
+  assert.ok(refusal.message.includes(REPO));
+});
+
+test("the refusal diagnosis needs workflow files in the diff, not just the word in an error", () => {
+  // A hook or branch policy could mention "workflow" while refusing a push
+  // that carried none; dressing that up as a permission problem would send
+  // whoever reads it to configure a credential that fixes nothing.
+  assert.equal(
+    workflowPushRefusal(PUSH_REFUSAL, [], fineGrainedCredential(), REPO),
+    null,
+  );
+});
+
+test("a push failure without workflow language is rethrown untouched", () => {
+  const unrelated =
+    "git push --force failed (exit 128):\nfatal: unable to access the repository: connection reset";
+  assert.equal(
+    workflowPushRefusal(
+      unrelated,
+      WORKFLOW_CHANGE,
+      fineGrainedCredential(),
+      REPO,
+    ),
+    null,
+  );
+});
+
+test("the refusal is recognised however GitHub cases it", () => {
+  const shouted =
+    "remote: Refusing to allow an OAuth App to create or update Workflow files";
+  assert.ok(
+    workflowPushRefusal(
+      shouted,
+      WORKFLOW_CHANGE,
+      fineGrainedCredential(),
+      REPO,
+    ) instanceof SyncError,
   );
 });

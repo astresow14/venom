@@ -1,10 +1,10 @@
 ---
-name: React Native Web checked state
-description: Why checkbox and radio controls need explicit web ARIA state in addition to React Native accessibility state.
+name: React Native Web ARIA state
+description: Why checked/expanded control state needs explicit web ARIA props in addition to React Native accessibility state.
 ---
 
-For cross-platform checkbox and radio controls rendered by React Native Web, mirror the control state to `aria-checked` as well as `accessibilityState`.
+For cross-platform controls rendered by React Native Web, mirror stateful accessibility (`checked`, `expanded`) to the explicit web ARIA prop (`aria-checked`, `aria-expanded`) as well as `accessibilityState`.
 
-**Why:** A control can update visually while the browser accessibility tree continues to report it as unchecked when only React Native's `accessibilityState` is supplied. This breaks assistive technology and accessibility-aware browser tests.
+**Why:** A control can update visually while the browser accessibility tree reports nothing: `accessibilityState={{ checked }}` can fail to update `aria-checked`, and `accessibilityState={{ expanded }}` never reaches the DOM at all on the RN Web version in use (the attribute is simply absent). This breaks assistive technology and accessibility-aware browser tests.
 
-**How to apply:** Keep the native `accessibilityRole` and `accessibilityState`, add the matching web ARIA state on shared controls, and verify the result through the browser accessibility tree plus keyboard interaction.
+**How to apply:** Keep the native `accessibilityRole` and `accessibilityState` for iOS/Android, add the matching `aria-*` prop alongside (RN passes it through on web), and verify via the rendered DOM attribute in a browser test — not the RN props.

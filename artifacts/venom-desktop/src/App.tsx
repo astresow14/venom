@@ -21,7 +21,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { prefetchOnIdle } from "@/lib/prefetch-routes";
 import { IS_UI_TEST } from "@/lib/ui-test";
-import NotFound from "@/pages/not-found";
 import {
   Route,
   Switch,
@@ -40,11 +39,20 @@ const loadLanding = () => import("@/pages/landing");
 const loadSignIn = () => import("@/pages/auth/sign-in");
 const loadSignUp = () => import("@/pages/auth/sign-up");
 const loadWorkspace = () => import("@/routes/workspace-routes");
+// Public share surfaces load for anonymous visitors; they must stay outside
+// the workspace bundle and never touch the auth gate.
+const loadShareEmbed = () => import("@/pages/share/embed");
+const loadShare = () => import("@/pages/share/[slug]");
 
 const LandingPage = lazy(loadLanding);
 const SignInPage = lazy(loadSignIn);
 const SignUpPage = lazy(loadSignUp);
 const WorkspaceRoutes = lazy(loadWorkspace);
+const ShareEmbedPage = lazy(loadShareEmbed);
+const SharePage = lazy(loadShare);
+// The 404 page is split like every other route so its Card/lucide imports
+// stay off the critical path (Card keeps the tailwind-merge cn()).
+const NotFound = lazy(() => import("@/pages/not-found"));
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const clerkPubKey = publishableKeyFromHost(
@@ -195,6 +203,9 @@ function Router() {
               <WorkspaceRoutes />
             </ProtectedWorkspace>
           </Route>
+          {/* Public share link + embed — intentionally unauthenticated. */}
+          <Route path="/s/:slug/embed" component={ShareEmbedPage} />
+          <Route path="/s/:slug" component={SharePage} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>

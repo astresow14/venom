@@ -8,7 +8,7 @@ declare global {
 }
 
 const initialUserId = "venom-ui-test";
-const DEFAULT_PROJECT = "Global Workspace";
+const DEFAULT_PROJECT = "General";
 
 function syncTestUrl() {
   return "/?venomUiTest=true&venomWorkspaceSyncTest=true";

@@ -7,7 +7,6 @@
  */
 import type { KnowledgeConversation } from './knowledgeConversation';
 import type { KnowledgeMessage } from './knowledgeMessage';
-import type { Uuid } from './uuid';
 
 export interface KnowledgeExtractionInput {
   conversation: KnowledgeConversation;
@@ -16,7 +15,6 @@ export interface KnowledgeExtractionInput {
      * @maxItems 48
      */
   messages: KnowledgeMessage[];
-  /** When true, the server files the extracted insights into the signed-in user's ontology store and returns the touched concepts in `filed`. Clients that omit this keep filing locally. */
+  /** When true, the server files the extracted insights into the signed-in user's ontology store and returns the touched concepts in `filed`. The server decides scope per cluster (personal, a workspace the caller belongs to, or the private Unsorted holding area); clients no longer pick a destination. Clients that omit this keep filing locally. */
   file?: boolean;
-  workspaceId?: Uuid;
 }

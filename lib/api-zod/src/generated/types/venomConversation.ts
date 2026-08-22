@@ -8,6 +8,7 @@
 import type { VenomConversationBlend } from './venomConversationBlend';
 import type { VenomMessage } from './venomMessage';
 import type { VenomResponseMode } from './venomResponseMode';
+import type { VenomVoiceModelPick } from './venomVoiceModelPick';
 
 export interface VenomConversation {
   /**
@@ -32,8 +33,13 @@ export interface VenomConversation {
   responseMode?: VenomResponseMode;
   blend?: VenomConversationBlend;
   /**
-     * When the response mode or blend last changed on any device; the newer block wins in cross-device merges.
+     * When the response mode, blend, or voice picks last changed on any device; the newer block wins in cross-device merges.
      * @minimum 0
      */
   modeUpdatedAt?: number;
+  /**
+     * Per-conversation verify voice assignments. Part of the response-mode preference block: it merges on modeUpdatedAt with mode and blend so a pick made on one device survives another device's snapshot merge.
+     * @maxItems 3
+     */
+  voiceModels?: VenomVoiceModelPick[];
 }

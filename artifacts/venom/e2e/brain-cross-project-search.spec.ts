@@ -134,7 +134,8 @@ test("finds a concept from another project and lands on it", async ({
     { key: STORAGE_KEY, value: JSON.stringify(WORKSPACE_STATE) },
   );
 
-  await page.goto("/?venomUiTest=true");
+  // slimeTier=off: search and evidence panels never touch the goo layer.
+  await page.goto("/?venomUiTest=true&slimeTier=off");
   await expect(page.getByTestId("chat-input")).toBeVisible();
   // Hydration finished once the seeded project is the one on screen.
   await expect(page.getByTestId("open-projects")).toContainText(

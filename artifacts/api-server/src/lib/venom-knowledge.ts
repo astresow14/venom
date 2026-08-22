@@ -28,6 +28,15 @@ export type NormalizedKnowledgeCluster = {
   summary: string;
   sourceMessageIds: string[];
   relatedLabels: string[];
+  /**
+   * Raw scope verdict from the extraction model when scope classification
+   * was requested: "personal" or a workspace id. Validated and thresholded
+   * by `resolveClusterScope` — never trusted as-is. Stripped from the HTTP
+   * response before parsing (clients never see raw verdicts).
+   */
+  scope?: string;
+  /** Raw model confidence for `scope`, clamped to [0, 1]. */
+  scopeConfidence?: number;
 };
 
 const MAX_CLUSTERS = 8;
@@ -97,6 +106,16 @@ export function normalizeExtractedClusters(
           : sourceExcerpt.trim().slice(0, MAX_SUMMARY_LENGTH);
       if (!summary) return null;
 
+      const scope =
+        typeof candidate.scope === "string" && candidate.scope.trim()
+          ? candidate.scope.trim().slice(0, 128)
+          : null;
+      const scopeConfidence =
+        typeof candidate.scopeConfidence === "number" &&
+        Number.isFinite(candidate.scopeConfidence)
+          ? Math.max(0, Math.min(1, candidate.scopeConfidence))
+          : null;
+
       return {
         label,
         category:
@@ -118,6 +137,8 @@ export function normalizeExtractedClusters(
               .filter((relatedLabel) => relatedLabel.length > 0)
               .slice(0, MAX_RELATED_LABELS)
           : [],
+        ...(scope !== null ? { scope } : {}),
+        ...(scopeConfidence !== null ? { scopeConfidence } : {}),
       };
     })
     .filter((candidate): candidate is NormalizedKnowledgeCluster =>

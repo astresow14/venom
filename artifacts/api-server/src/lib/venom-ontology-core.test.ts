@@ -4,11 +4,13 @@ import {
   applyEvidenceHygiene,
   applyInsightCandidates,
   boundTombstonesForInjection,
+  CONCEPT_SPACING_FLOOR,
   injectKnowledgeIntoState,
   MAX_INJECTED_CLUSTERS,
   mergeConceptSets,
   mergeTombstoneRecords,
   ONTOLOGY_BOUNDS,
+  placeConceptPosition,
   positionForLabel,
   readWorkspaceKnowledge,
   reconcileConceptLinks,
@@ -550,4 +552,78 @@ test("restrictEvidenceAttribution strips stamps that name anyone else", () => {
   assert.equal(clean, concepts[0]);
   assert.equal(forged?.sources[0]?.capturedByUserId, null);
   assert.equal(forged?.sources[0]?.capturedAt, null);
+});
+
+// ---------------------------------------------------------------------------
+// Clearance-aware placement: the server must not file stacked concepts
+// ---------------------------------------------------------------------------
+
+test("placeConceptPosition keeps a clear seed exactly and moves a buried one deterministically", () => {
+  // A clear seed is kept verbatim — healthy legacy positions never shift.
+  assert.deepEqual(placeConceptPosition({ x: 160, y: 130 }, [{ x: 0, y: 0 }]), {
+    x: 160,
+    y: 130,
+  });
+  // A buried seed re-places onto the same pinned spot the shared client rule
+  // computes for this fixture ({178,148} / {82,118}); these literals are also
+  // asserted in the apps' suites, so the two copies cannot drift silently.
+  assert.deepEqual(
+    placeConceptPosition({ x: 160, y: 130 }, [{ x: 160, y: 130 }]),
+    { x: 178, y: 148 },
+  );
+  assert.deepEqual(
+    placeConceptPosition({ x: 100, y: 100 }, [{ x: 100, y: 100 }]),
+    { x: 82, y: 118 },
+  );
+});
+
+test("filing a colliding label picks a spot with clearance from every stored concept", () => {
+  // "Serialization" at index 3 hashes onto the exact same point as
+  // "Debouncing" at index 0 — (160, 130).
+  const debouncing = positionForLabel("Debouncing", 0);
+  assert.deepEqual(debouncing, positionForLabel("Serialization", 3));
+
+  const existing = [
+    concept({ id: "c_debounce", label: "Debouncing", x: 160, y: 130 }),
+    concept({ id: "c_far", label: "Faraway", x: -100, y: -100 }),
+  ];
+  const { concepts } = applyInsightCandidates({
+    projectConcepts: existing,
+    totalConceptCount: 3,
+    occupiedPositions: [
+      { x: 160, y: 130 },
+      { x: -100, y: -100 },
+      { x: 0, y: 0 },
+    ],
+    conversation: { id: "conv", title: "Chat", projectId: "project_1" },
+    candidates: [
+      {
+        label: "Serialization",
+        category: "topic",
+        confidence: 0.9,
+        summary: "Serialization summary",
+        sourceMessageIds: ["m1"],
+        relatedLabels: [],
+      },
+    ],
+    now: 50,
+    generateId: () => "cluster_serialization",
+    capturedByUserId: null,
+  });
+
+  const created = concepts.find((entry) => entry.id === "cluster_serialization");
+  assert.ok(created);
+  for (const point of [
+    { x: 160, y: 130 },
+    { x: -100, y: -100 },
+    { x: 0, y: 0 },
+  ]) {
+    const gap = Math.hypot(created!.x - point.x, created!.y - point.y);
+    assert.ok(
+      gap >= CONCEPT_SPACING_FLOOR,
+      `created concept sits ${gap.toFixed(2)} from (${point.x},${point.y})`,
+    );
+  }
+  // Matches the shared client fixture pin for this exact collision.
+  assert.deepEqual({ x: created!.x, y: created!.y }, { x: 178, y: 148 });
 });

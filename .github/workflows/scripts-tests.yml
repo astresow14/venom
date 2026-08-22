@@ -1,0 +1,73 @@
+name: Scripts Tests
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect scripts changes
+    runs-on: ubuntu-latest
+    outputs:
+      scripts: ${{ steps.filter.outputs.changed }}
+    steps:
+      # A checkout must come first so the local composite action below can be
+      # resolved from the workspace; the action re-checks-out at the depth the
+      # event actually needs.
+      - uses: actions/checkout@v4
+
+      # Owns the event-conditional fetch depth and the merge_group base/head
+      # wiring; this workflow only supplies its filter list. @workspace/scripts
+      # has no workspace: dependencies, so the filter is the package dir plus
+      # the root manifests and this workflow's own machinery.
+      - id: filter
+        uses: ./.github/actions/detect-changes
+        with:
+          name: scripts
+          filters: |
+            scripts:
+              - "scripts/**"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - "tsconfig.base.json"
+              - ".github/workflows/scripts-tests.yml"
+              - ".github/actions/detect-changes/**"
+
+  # To make this check required on main, follow the observed-identity rule
+  # used for the existing required checks: let the workflow report on a real
+  # pull request first, then add the exact check name from that run
+  # (expected: "Scripts unit tests") to the ruleset — never a guessed label.
+  scripts-tests:
+    name: Scripts unit tests
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The GitHub-sync tooling's offline unit suite (tsx --test): credential
+      # guard, snapshot publishing, drift classification, redaction. The tests
+      # build their own throwaway git fixtures and never contact GitHub.
+      - name: Run scripts unit tests
+        run: pnpm --filter @workspace/scripts run test

@@ -28,8 +28,8 @@ export function NotificationHeader({
         </Text>
         <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
           {unreadCount === 0
-            ? "No unread replies"
-            : `${unreadCount} unread ${unreadCount === 1 ? "reply" : "replies"}`}
+            ? "No unread notifications"
+            : `${unreadCount} unread ${unreadCount === 1 ? "notification" : "notifications"}`}
         </Text>
       </View>
       {unreadCount > 0 && (

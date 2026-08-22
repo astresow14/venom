@@ -232,7 +232,7 @@ test('reads, paginates, and opens the triggering reply', async ({ page }) => {
   await expect(page.getByText('Riley replied to your thread.')).toBeVisible();
 
   await page.getByTestId('button-mark-all-read').click();
-  await expect(page.getByText('No unread replies')).toBeVisible();
+  await expect(page.getByText('No unread notifications')).toBeVisible();
   await expect(page.getByTestId('button-mark-all-read')).toHaveCount(0);
 
   await page
@@ -247,6 +247,125 @@ test('reads, paginates, and opens the triggering reply', async ({ page }) => {
   await expect(openedReply).toBeVisible();
   await expect(openedReply).toBeFocused();
   await expect(openedReply).toHaveAccessibleName('Opened reply from Alex');
+});
+
+test('surfaces failing scheduled sources and clears their badge', async ({
+  page,
+}) => {
+  const ALERT_ID = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+  let alertReadAt: string | null = null;
+  let alertReadAllCalls = 0;
+  let communityReadAllCalls = 0;
+
+  const alertPayload = () => ({
+    alerts: [
+      {
+        id: ALERT_ID,
+        sourceId: 'proj1-github-octocat-hello',
+        projectId: 'proj1',
+        provider: 'github',
+        sourceName: 'octocat/hello',
+        consecutiveFailures: 3,
+        lastError:
+          "Your GitHub connection isn't working, so this source can't update.",
+        firstFailedAt: '2026-08-21T05:00:00.000Z',
+        lastFailedAt: '2026-08-21T07:00:00.000Z',
+        readAt: alertReadAt,
+      },
+    ],
+  });
+
+  await page.route('**/api/venom/sources/sync-alerts**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === 'POST' && url.pathname.endsWith('/read-all')) {
+      alertReadAllCalls += 1;
+      alertReadAt = new Date().toISOString();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ marked: 1 }),
+      });
+      return;
+    }
+    if (request.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(alertPayload()),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.route('**/api/venom/community/notifications**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === 'GET' && url.pathname.endsWith('/unread-count')) {
+      // The server folds unread alerts into the same badge count.
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ count: alertReadAt == null ? 1 : 0 }),
+      });
+      return;
+    }
+    if (
+      request.method() === 'GET' &&
+      url.pathname.endsWith('/community/notifications')
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [], nextCursor: null }),
+      });
+      return;
+    }
+    if (request.method() === 'POST' && url.pathname.endsWith('/read-all')) {
+      communityReadAllCalls += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ marked: 0 }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto('/workspace/notifications');
+
+  await expect(
+    page.getByRole('link', { name: 'Notifications (1 unread)' }),
+  ).toBeVisible();
+
+  const alertCard = page.getByTestId(`alert-source-sync-${ALERT_ID}`);
+  await expect(alertCard).toBeVisible();
+  await expect(alertCard).toContainText(
+    'Scheduled updates for octocat/hello keep failing',
+  );
+  await expect(alertCard).toContainText(
+    'Reconnect GitHub or ask the workspace owner to restore access.',
+  );
+  await expect(alertCard).toContainText('3 failed attempts');
+  await expect(alertCard).toContainText(
+    "Your GitHub connection isn't working, so this source can't update.",
+  );
+  await expect(alertCard).toContainText('Unread');
+  // An active alert suppresses the celebratory empty-state heading.
+  await expect(
+    page.getByRole('heading', { name: 'All caught up' }),
+  ).toHaveCount(0);
+
+  await page.getByTestId('button-mark-all-read').click();
+  await expect(page.getByText('No unread notifications')).toBeVisible();
+  await expect(page.getByTestId('button-mark-all-read')).toHaveCount(0);
+  // Reading silences the badge; the alert itself stays until a sync succeeds.
+  await expect(alertCard).toBeVisible();
+  await expect(alertCard.getByText('Unread')).toHaveCount(0);
+  expect(alertReadAllCalls).toBe(1);
+  expect(communityReadAllCalls).toBe(1);
 });
 
 test('recovers from a failed inbox request into the empty state', async ({

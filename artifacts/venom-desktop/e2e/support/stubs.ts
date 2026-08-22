@@ -65,4 +65,43 @@ export async function stubWorkspaceApis(page: Page) {
     { message: 'Community profile not set up' },
     404,
   );
+  await stubJsonGet(page, '**/venom/sources/sync-alerts', { alerts: [] });
+  // The Brain page polls filing-move notices and share suggestions.
+  await stubJsonGet(page, '**/venom/knowledge/moves', {
+    notices: [],
+    suggestions: [],
+  });
+  // App detail pages read the whitelabeled AI overview; specs that exercise
+  // the AI panel register their own stateful route after this default.
+  await page.route('**/venom/apps/*/ai', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    const match = new URL(route.request().url()).pathname.match(
+      /venom\/apps\/([^/]+)\/ai$/,
+    );
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        appId: match?.[1] ?? '',
+        paused: false,
+        monthlyCapUsd: null,
+        safetyCapUsd: 25,
+        credential: null,
+        usage: {
+          periodStart: '2026-08-01',
+          periodEnd: '2026-09-01',
+          costUsd: 0,
+          requests: 0,
+          promptTokens: 0,
+          outputTokens: 0,
+          hasEstimates: false,
+          models: [],
+        },
+        ownerMonthUsd: 0,
+      }),
+    });
+  });
 }

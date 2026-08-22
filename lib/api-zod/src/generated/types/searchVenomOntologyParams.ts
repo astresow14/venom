@@ -13,6 +13,12 @@ export type SearchVenomOntologyParams = {
  */
 q: string;
 /**
+ * Company id. When present, searches that company's shared Brain instead of the personal ontology; the caller must be a member.
+ * @minLength 1
+ * @maxLength 64
+ */
+org?: string;
+/**
  * @minimum 1
  * @maximum 50
  */

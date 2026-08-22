@@ -14,12 +14,16 @@ import { useAuth } from "@clerk/expo";
 import {
   listCommunityNotifications,
   getListCommunityNotificationsQueryKey,
+  getListVenomSourceSyncAlertsQueryKey,
+  useListVenomSourceSyncAlerts,
+  useMarkAllVenomSourceSyncAlertsRead,
   useMarkCommunityNotificationRead,
   useMarkAllCommunityNotificationsRead,
   useGetCommunityNotificationUnreadCount,
   getGetCommunityNotificationUnreadCountQueryKey,
   type CommunityNotification,
   type CommunityNotificationPage,
+  type VenomSourceSyncAlertList,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import {
@@ -47,6 +51,21 @@ function notificationCountQueryKey(userId: string | null | undefined) {
     userId ?? "ui-test",
   ] as const;
 }
+
+function sourceSyncAlertsQueryKey(userId: string | null | undefined) {
+  return [
+    ...getListVenomSourceSyncAlertsQueryKey(),
+    "account",
+    userId ?? "ui-test",
+  ] as const;
+}
+
+// Kept word-for-word identical with the desktop app so the nudge reads the
+// same wherever it catches the user.
+const GITHUB_ALERT_ACTION =
+  "Venom's GitHub connection can't update this source. Reconnect GitHub or ask the workspace owner to restore access.";
+const WEBSITE_ALERT_ACTION =
+  "Venom can't reach this site on its schedule. Check that the address still works, or pause the schedule in Settings.";
 
 function formatRelativeTime(dateString: string) {
   const date = new Date(dateString);
@@ -103,6 +122,17 @@ export function CommunityNotifications({ isActive }: { isActive: boolean }) {
       queryKey: countQueryKey,
     },
   });
+
+  const alertsQueryKey = sourceSyncAlertsQueryKey(userId);
+  const { data: alertData } = useListVenomSourceSyncAlerts({
+    query: {
+      enabled: isActive,
+      refetchInterval: isActive ? 30000 : false,
+      queryKey: alertsQueryKey,
+    },
+  });
+  const alerts = alertData?.alerts ?? [];
+  const hasUnreadAlerts = alerts.some((alert) => alert.readAt == null);
 
   const markReadMutation = useMarkCommunityNotificationRead({
     mutation: {
@@ -216,10 +246,53 @@ export function CommunityNotifications({ isActive }: { isActive: boolean }) {
     },
   });
 
+  const alertsMarkAllMutation = useMarkAllVenomSourceSyncAlertsRead({
+    mutation: {
+      onMutate: async () => {
+        setActionError("");
+        await queryClient.cancelQueries({ queryKey: alertsQueryKey });
+        const previousAlerts =
+          queryClient.getQueryData<VenomSourceSyncAlertList>(alertsQueryKey);
+        const readAt = new Date().toISOString();
+        queryClient.setQueryData<VenomSourceSyncAlertList>(
+          alertsQueryKey,
+          (current) =>
+            current
+              ? {
+                  alerts: current.alerts.map((alert) => ({
+                    ...alert,
+                    readAt: alert.readAt ?? readAt,
+                  })),
+                }
+              : current,
+        );
+        return { previousAlerts };
+      },
+      onError: (_error, _variables, context) => {
+        if (context?.previousAlerts) {
+          queryClient.setQueryData(alertsQueryKey, context.previousAlerts);
+        }
+        setActionError("Could not mark all notifications read. Try again.");
+      },
+      onSettled: () => {
+        void queryClient.invalidateQueries({ queryKey: alertsQueryKey });
+        void queryClient.invalidateQueries({ queryKey: countQueryKey });
+      },
+    },
+  });
+
   const notifications = useMemo(
     () => data?.pages.flatMap((page) => page.items) ?? [],
     [data?.pages],
   );
+
+  const handleAlertPress = useCallback(() => {
+    if (hasUnreadAlerts) {
+      alertsMarkAllMutation.mutate();
+    }
+    // Source cards (and their schedules) live in Settings.
+    router.push("/settings");
+  }, [hasUnreadAlerts, alertsMarkAllMutation, router]);
 
   const handleNotificationPress = useCallback(
     (notification: CommunityNotification) => {
@@ -405,9 +478,97 @@ export function CommunityNotifications({ isActive }: { isActive: boolean }) {
             <>
               <NotificationHeader
                 unreadCount={unreadData?.count ?? 0}
-                isPending={markAllReadMutation.isPending}
-                onMarkAllRead={() => markAllReadMutation.mutate()}
+                isPending={
+                  markAllReadMutation.isPending ||
+                  alertsMarkAllMutation.isPending
+                }
+                onMarkAllRead={() => {
+                  markAllReadMutation.mutate();
+                  if (hasUnreadAlerts) alertsMarkAllMutation.mutate();
+                }}
               />
+              {alerts.map((alert) => {
+                const isUnread = alert.readAt == null;
+                const action =
+                  alert.provider === "github"
+                    ? GITHUB_ALERT_ACTION
+                    : WEBSITE_ALERT_ACTION;
+                const headline = `Scheduled updates for ${alert.sourceName} keep failing`;
+                return (
+                  <TouchableOpacity
+                    key={alert.id}
+                    style={[
+                      styles.alertCard,
+                      {
+                        borderColor: isUnread
+                          ? colors.foreground
+                          : colors.border,
+                        backgroundColor: isUnread
+                          ? colors.symbiotePanel
+                          : colors.background,
+                      },
+                    ]}
+                    onPress={handleAlertPress}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${isUnread ? "Unread alert. " : ""}${headline}. ${action}`}
+                    accessibilityHint="Opens Settings, where connected sources are managed, and marks these alerts read"
+                    testID={`alert-source-sync-${alert.id}`}
+                  >
+                    {isUnread && (
+                      <Text
+                        style={[
+                          styles.unreadLabel,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        Unread
+                      </Text>
+                    )}
+                    <View style={styles.alertTitleRow}>
+                      <Feather
+                        name="alert-triangle"
+                        size={16}
+                        color={colors.foreground}
+                      />
+                      <Text
+                        style={[
+                          styles.alertTitle,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {headline}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.alertAction,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      {action}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.alertError,
+                        { color: colors.mutedForeground },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {alert.lastError}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.alertMeta,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      {alert.consecutiveFailures} failed attempts ·{" "}
+                      {formatRelativeTime(alert.lastFailedAt)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
               {actionError ? (
                 <View
                   style={[
@@ -457,9 +618,11 @@ export function CommunityNotifications({ isActive }: { isActive: boolean }) {
                 color={colors.mutedForeground}
                 style={styles.emptyIcon}
               />
-              <Text style={[styles.emptyText, { color: colors.foreground }]}>
-                All caught up
-              </Text>
+              {alerts.length === 0 && (
+                <Text style={[styles.emptyText, { color: colors.foreground }]}>
+                  All caught up
+                </Text>
+              )}
               <Text
                 style={[
                   styles.emptySubtext,
@@ -586,6 +749,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  alertCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    gap: 6,
+  },
+  alertTitleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  alertTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    lineHeight: 20,
+  },
+  alertAction: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+  },
+  alertError: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 16,
+  },
+  alertMeta: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
   },
   actionErrorText: {
     fontSize: 13,

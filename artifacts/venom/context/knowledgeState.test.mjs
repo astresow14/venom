@@ -393,3 +393,144 @@ test("Brain note text never shows a raw source marker", () => {
   assert.equal(withoutLookup, "Blocked by (archived source) and (archived source), see");
   assert.equal(knowledgeDisplayText(""), "");
 });
+
+// ---------------------------------------------------------------------------
+// Map placement: chat-learned topics must never bury each other
+// ---------------------------------------------------------------------------
+
+const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+const assertClusterSpacing = (clusters, floor = 12) => {
+  for (let i = 0; i < clusters.length; i += 1) {
+    for (let j = i + 1; j < clusters.length; j += 1) {
+      const gap = distance(clusters[i], clusters[j]);
+      assert.ok(
+        gap >= floor,
+        `clusters ${clusters[i].id} and ${clusters[j].id} are ${gap.toFixed(2)} apart (< ${floor})`,
+      );
+    }
+  }
+};
+
+test("a label with a clear hash spot keeps its legacy position exactly", () => {
+  const chat = conversation("alpha-chat", "alpha");
+  const result = apply(
+    {
+      projects: [project("alpha")],
+      conversations: [chat],
+      clusters: [],
+      activeProjectId: "alpha",
+      activeConversationId: chat.id,
+    },
+    chat,
+    [insight("Debouncing", "alpha-chat-message")],
+  );
+  // hashPositionForLabel("Debouncing", 0) — the pre-clearance legacy spot.
+  assert.equal(result.clusters[0].x, 160);
+  assert.equal(result.clusters[0].y, 130);
+});
+
+test("a colliding label is placed with clearance instead of burying the earlier dot", () => {
+  // "Serialization" at index 3 hashes onto the exact same map point as
+  // "Debouncing" at index 0 — (160, 130) — the latent stack this guards.
+  const chat = conversation("alpha-chat", "alpha");
+  const build = () => {
+    const seeded = apply(
+      {
+        projects: [project("alpha")],
+        conversations: [chat],
+        clusters: [],
+        activeProjectId: "alpha",
+        activeConversationId: chat.id,
+      },
+      chat,
+      [insight("Debouncing", "alpha-chat-message")],
+    );
+    const padded = apply(seeded, chat, [
+      insight("GraphQL", "alpha-chat-message"),
+      insight("Caching", "alpha-chat-message"),
+    ]);
+    return apply(padded, chat, [
+      insight("Serialization", "alpha-chat-message"),
+    ]);
+  };
+
+  const result = build();
+  assert.equal(result.clusters.length, 4);
+  const debouncing = result.clusters.find((c) => c.label === "Debouncing");
+  const serialization = result.clusters.find(
+    (c) => c.label === "Serialization",
+  );
+  assert.deepEqual({ x: debouncing.x, y: debouncing.y }, { x: 160, y: 130 });
+  assert.notDeepEqual(
+    { x: serialization.x, y: serialization.y },
+    { x: 160, y: 130 },
+  );
+  assertClusterSpacing(result.clusters);
+
+  // Deterministic: a second device replaying the same filings computes the
+  // identical coordinates — no render-time jitter, nothing to ping-pong.
+  const again = build();
+  assert.deepEqual(
+    again.clusters.map((c) => ({ id: c.id, x: c.x, y: c.y })),
+    result.clusters.map((c) => ({ id: c.id, x: c.x, y: c.y })),
+  );
+});
+
+test("hydration separates chat dots stored on top of each other", () => {
+  const alphaConversation = conversation("alpha-conversation", "alpha");
+  const raw = {
+    projects: [project("alpha")],
+    conversations: [alphaConversation],
+    clusters: [
+      {
+        id: "stack-a",
+        label: "Alpha topic",
+        summary: "Alpha summary",
+        x: 100,
+        y: 100,
+        lastUpdatedAt: 111,
+        sources: [
+          {
+            conversationId: alphaConversation.id,
+            messageIds: ["alpha-conversation-message"],
+          },
+        ],
+      },
+      {
+        id: "stack-b",
+        label: "Beta topic",
+        summary: "Beta summary",
+        x: 100,
+        y: 100,
+        lastUpdatedAt: 222,
+        sources: [
+          {
+            conversationId: alphaConversation.id,
+            messageIds: ["alpha-conversation-message"],
+          },
+        ],
+      },
+    ],
+  };
+
+  const hydrated = hydrateVenomState(raw);
+  assert.equal(hydrated.clusters.length, 2);
+  const [a, b] = hydrated.clusters;
+  // Ascending-id priority: the first cluster keeps its stored spot exactly.
+  assert.deepEqual({ x: a.x, y: a.y }, { x: 100, y: 100 });
+  // The buried one is re-placed deterministically from its own stored seed.
+  assert.deepEqual({ x: b.x, y: b.y }, { x: 82, y: 118 });
+  // Repair must never touch sync recency — repaired coords converge on both
+  // devices instead of winning merges.
+  assert.equal(a.lastUpdatedAt, 111);
+  assert.equal(b.lastUpdatedAt, 222);
+  assertClusterSpacing(hydrated.clusters);
+
+  // Idempotent: hydrating the repaired state moves nothing further.
+  const rehydrated = hydrateVenomState(hydrated);
+  assert.deepEqual(
+    rehydrated.clusters.map((c) => ({ id: c.id, x: c.x, y: c.y })),
+    hydrated.clusters.map((c) => ({ id: c.id, x: c.x, y: c.y })),
+  );
+});

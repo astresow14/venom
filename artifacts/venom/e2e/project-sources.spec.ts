@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const CITATION = {
   id: "cite_repository_overview",
@@ -177,6 +177,88 @@ test("adds a GitHub source and opens the citation it renders in chat", async ({
     .toContain(CITATION.url);
 });
 
+// Focus handed back after the dialog closes must actually be visible, same
+// bar as e2e/dialog-focus-handoff.spec.ts: a border, outline, or shadow.
+async function expectVisibleKeyboardFocus(locator: Locator) {
+  await expect(locator).toBeFocused();
+  const focusIsVisible = await locator.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const borderIsVisible = [
+      style.borderTopColor,
+      style.borderRightColor,
+      style.borderBottomColor,
+      style.borderLeftColor,
+    ].some(
+      (color) =>
+        color !== "rgba(0, 0, 0, 0)" &&
+        color !== "transparent" &&
+        style.borderWidth !== "0px",
+    );
+    const outlineIsVisible =
+      style.outlineStyle !== "none" && style.outlineWidth !== "0px";
+    return borderIsVisible || outlineIsVisible || style.boxShadow !== "none";
+  });
+  expect(focusIsVisible).toBe(true);
+}
+
+test("the remove control asks first, and cancelling leaves the source untouched", async ({
+  page,
+}) => {
+  await stubSourceApi(page);
+
+  await page.goto("/?venomUiTest=true");
+  await expect(page.getByTestId("chat-input")).toBeVisible();
+
+  await connectRepositorySource(page);
+
+  const removeControl = page.getByTestId(
+    `remove-source-${REPOSITORY_SOURCE.id}`,
+  );
+  await removeControl.click();
+
+  // Nothing is removed yet: the dialog names the source and spells out what
+  // disappears with it.
+  const dialog = page.getByTestId("remove-source-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByText(`Remove ${REPOSITORY_SOURCE.name}?`),
+  ).toBeVisible();
+  await expect(
+    dialog.getByText(/citations and scheduled syncs/),
+  ).toBeVisible();
+  await expect(removeControl).toHaveCount(1);
+
+  // Focus lands inside the dialog on the safe action, and the destructive
+  // action is labeled by what it does rather than a bare "OK".
+  await expect(page.getByTestId("cancel-remove-source")).toBeFocused();
+  await expect(page.getByTestId("confirm-remove-source")).toContainText(
+    "Remove source",
+  );
+
+  // Cancelling closes without removing and hands focus back to the remove
+  // control that opened the dialog.
+  await page.getByTestId("cancel-remove-source").click();
+  await expect(dialog).toHaveCount(0);
+  await expect(removeControl).toHaveCount(1);
+  await expectVisibleKeyboardFocus(removeControl);
+
+  // Escape closes through onRequestClose and lands the same way.
+  await removeControl.click();
+  await expect(page.getByTestId("cancel-remove-source")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(removeControl).toHaveCount(1);
+  await expectVisibleKeyboardFocus(removeControl);
+
+  // Confirming behaves exactly as removal always has: the source is gone,
+  // and focus lands on the browse-sources entry once no row survives.
+  await removeControl.click();
+  await page.getByTestId("confirm-remove-source").click();
+  await expect(dialog).toHaveCount(0);
+  await expect(removeControl).toHaveCount(0);
+  await expect(page.getByTestId("open-connected-sources")).toBeFocused();
+});
+
 test("removing a source archives its citation and survives a workspace merge", async ({
   page,
 }) => {
@@ -196,9 +278,11 @@ test("removing a source archives its citation and survives a workspace merge", a
   });
   await expect(citationLink).toBeVisible();
 
-  // Disconnect the source the answer cited.
+  // Disconnect the source the answer cited, passing through the
+  // confirmation the destructive control now stages.
   await page.getByTestId("open-settings").click();
   await page.getByTestId(`remove-source-${REPOSITORY_SOURCE.id}`).click();
+  await page.getByTestId("confirm-remove-source").click();
   await expect(
     page.getByTestId(`remove-source-${REPOSITORY_SOURCE.id}`),
   ).toHaveCount(0);

@@ -1,5 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mockChatStream, mockKnowledgeExtraction } from './support/chat-stream';
+import {
+  mockChatStream,
+  mockKnowledgeExtraction,
+  mockStagedChatStream,
+} from './support/chat-stream';
 
 const DESKTOP = { width: 1280, height: 860 };
 
@@ -103,6 +107,9 @@ async function mockDeliberationAvailability(
       body: JSON.stringify({
         available: true,
         mode,
+        // The catalog behind these tests holds a single usable model, so the
+        // server reports that per-voice model choice is unavailable.
+        distinctModels: false,
         voices: ROSTER.map(({ voiceId, name, tagline }) => ({
           voiceId,
           name,
@@ -111,50 +118,6 @@ async function mockDeliberationAvailability(
       }),
     });
   });
-}
-
-/**
- * Replays SSE events with real delays so the in-progress deliberation panel
- * stays on screen long enough to assert. `page.route` fulfills atomically,
- * so the stream is produced inside the page by wrapping `window.fetch`.
- */
-async function mockStreamingRespond(
-  page: Page,
-  events: Array<[number, unknown]>,
-) {
-  await page.addInitScript((scripted: Array<[number, unknown]>) => {
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ): Promise<Response> => {
-      const url =
-        typeof input === 'string'
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
-      if (!url.includes('/api/venom/respond')) {
-        return originalFetch(input as RequestInfo, init);
-      }
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          for (const [delay, payload] of scripted) {
-            await new Promise((resolve) => setTimeout(resolve, delay));
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify(payload)}\n\n`),
-            );
-          }
-          controller.close();
-        },
-      });
-      return new Response(stream, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      });
-    }) as typeof window.fetch;
-  }, events);
 }
 
 async function openChat(page: Page) {
@@ -170,25 +133,29 @@ test('deliberates a turn: voices stream, one fails, the collective answer flags 
   await mockModels(page);
   await mockDeliberationAvailability(page);
   await mockKnowledgeExtraction(page);
-  await mockStreamingRespond(page, [
+  // A single script: the shared stub replays it for this turn (and any
+  // further calls, which this test never makes).
+  await mockStagedChatStream(page, [
     [
-      0,
-      {
-        modelId: 'gpt-5',
-        modelName: 'Venom GPT',
-        deliberation: { voices: ROSTER },
-      },
+      [
+        0,
+        {
+          modelId: 'gpt-5',
+          modelName: 'Venom GPT',
+          deliberation: { voices: ROSTER },
+        },
+      ],
+      [250, { voice: 'direct', content: DIRECT_TAKE }],
+      [250, { voice: 'evidence', content: EVIDENCE_TAKE }],
+      [250, { voice: 'direct', voiceStatus: 'ok' }],
+      [250, { voice: 'skeptic', voiceStatus: 'failed' }],
+      [250, { voice: 'evidence', voiceStatus: 'ok' }],
+      [250, { stage: 'synthesis' }],
+      [250, { content: 'Collective: stage it first, ' }],
+      [200, { content: 'then ship behind a flag.' }],
+      [200, finalDeliberation([DISAGREEMENT])],
+      [100, { done: true }],
     ],
-    [250, { voice: 'direct', content: DIRECT_TAKE }],
-    [250, { voice: 'evidence', content: EVIDENCE_TAKE }],
-    [250, { voice: 'direct', voiceStatus: 'ok' }],
-    [250, { voice: 'skeptic', voiceStatus: 'failed' }],
-    [250, { voice: 'evidence', voiceStatus: 'ok' }],
-    [250, { stage: 'synthesis' }],
-    [250, { content: 'Collective: stage it first, ' }],
-    [200, { content: 'then ship behind a flag.' }],
-    [200, finalDeliberation([DISAGREEMENT])],
-    [100, { done: true }],
   ]);
   await openChat(page);
 
@@ -200,9 +167,18 @@ test('deliberates a turn: voices stream, one fails, the collective answer flags 
   await verifyOption.click();
   await expect(verifyOption).toHaveAttribute('aria-checked', 'true');
 
-  // With a single real model, the personas fill the blend pad's corners.
+  // The blend pad lives in the combined models & voices popup; in Verify the
+  // corners are the three voices themselves.
+  await page.getByTestId('button-open-voices').click();
+  await expect(page.getByTestId('dialog-model-voices')).toBeVisible();
   await expect(page.getByTestId('blend-pad')).toBeVisible();
   await expect(page.getByTestId('blend-weight-direct')).toContainText('33%');
+  // A single usable model: voice choice is limited, and the popup says why
+  // instead of offering per-voice pickers.
+  await expect(page.getByTestId('text-voices-limited')).toBeVisible();
+  await expect(page.getByTestId('voice-pick-skeptic-auto')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   const composer = page.getByTestId('input-message');
   await composer.fill('Should we ship the migration?');
@@ -337,6 +313,7 @@ test('hides the control when the server has no deliberation endpoint', async ({
 
   await expect(page.getByTestId('mode-switch')).toHaveCount(0);
   await expect(page.getByTestId('blend-pad')).toHaveCount(0);
+  await expect(page.getByTestId('button-open-voices')).toHaveCount(0);
 
   // Ordinary messages behave exactly as before.
   const composer = page.getByTestId('input-message');

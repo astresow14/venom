@@ -39,6 +39,23 @@ export const venomPortfolioAppsTable = pgTable(
       "improvement_suggestion_dismissed_at",
       { withTimezone: true },
     ),
+    /**
+     * The candidate release currently serving this app, or null when nothing
+     * is live. Pin-style pointer (no foreign key): it is written only inside
+     * the provisioning publish/rollback transactions, so it always reflects
+     * what those flows actually promoted — which may lag the newest approved
+     * package.
+     */
+    liveReleaseId: uuid("live_release_id"),
+    /**
+     * Template lineage: which global build template this app was created
+     * from, stamped once at creation and never rewritten. Pin-style (no
+     * foreign key) with a denormalized name snapshot so origin display
+     * survives anything that happens to the catalog. This is the hook the
+     * future learning loop keys on.
+     */
+    templateId: uuid("template_id"),
+    templateName: text("template_name"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -228,9 +245,18 @@ export const venomPortfolioAppIterationsTable = pgTable(
     runKind: text("run_kind").notNull().default("standard"),
     baselineIterationId: uuid("baseline_iteration_id"),
     baselineRevisionId: uuid("baseline_revision_id"),
+    /** Template lineage carried from the approved run (no FK). */
+    templateId: uuid("template_id"),
     /** Human-readable request or data change that drove this version. */
     reason: text("reason").notNull(),
     changesSummary: text("changes_summary"),
+    /**
+     * The candidate release this package last shipped as, stamped when
+     * provisioning publishes (or restores) it. Historical pin, not a live
+     * pointer: it survives supersede/rollback so the row keeps naming the
+     * release it went out the door as. Null until provisioning reports one.
+     */
+    releaseId: uuid("release_id"),
     createdBy: text("created_by").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -249,6 +275,43 @@ export const venomPortfolioAppIterationsTable = pgTable(
       table.appId,
       table.createdAt,
     ),
+  ],
+);
+
+/**
+ * Public share state for a portfolio app. One row per app, created the first
+ * time the owner enables sharing. The slug is a high-entropy public
+ * identifier that is stable for the lifetime of the app: disabling sharing
+ * flips `enabled` off (killing the public surface immediately) but keeps the
+ * slug reserved so re-enabling restores the same link. Public resolution
+ * joins app → liveReleaseId → published release at read time, so rollbacks
+ * and republishes change what the link serves without touching this row.
+ * No owner identity or provider identifiers ever leave the server from here.
+ */
+export const venomPortfolioAppSharesTable = pgTable(
+  "venom_portfolio_app_shares",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    appId: uuid("app_id")
+      .notNull()
+      .references(() => venomPortfolioAppsTable.id, { onDelete: "cascade" }),
+    clerkUserId: text("clerk_user_id").notNull(),
+    slug: text("slug").notNull(),
+    enabled: boolean("enabled").notNull().default(false),
+    enabledAt: timestamp("enabled_at", { withTimezone: true }),
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("venom_portfolio_app_shares_app_idx").on(table.appId),
+    uniqueIndex("venom_portfolio_app_shares_slug_idx").on(table.slug),
+    index("venom_portfolio_app_shares_owner_idx").on(table.clerkUserId),
   ],
 );
 
@@ -272,3 +335,5 @@ export type VenomPortfolioImportJob =
   typeof venomPortfolioImportJobsTable.$inferSelect;
 export type VenomPortfolioAppIteration =
   typeof venomPortfolioAppIterationsTable.$inferSelect;
+export type VenomPortfolioAppShare =
+  typeof venomPortfolioAppSharesTable.$inferSelect;

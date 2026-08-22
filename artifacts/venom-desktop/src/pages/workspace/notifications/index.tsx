@@ -4,12 +4,17 @@ import { useAuth } from "@clerk/react";
 import {
   getGetCommunityNotificationUnreadCountQueryKey,
   getListCommunityNotificationsQueryKey,
+  getListVenomSourceSyncAlertsQueryKey,
   listCommunityNotifications,
   useGetCommunityNotificationUnreadCount,
+  useListVenomSourceSyncAlerts,
   useMarkAllCommunityNotificationsRead,
+  useMarkAllVenomSourceSyncAlertsRead,
   useMarkCommunityNotificationRead,
   type CommunityNotification,
   type CommunityNotificationPage,
+  type VenomSourceSyncAlert,
+  type VenomSourceSyncAlertList,
 } from "@workspace/api-client-react";
 import {
   useInfiniteQuery,
@@ -19,9 +24,12 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import {
   AlertCircle,
+  AlertTriangle,
   Bell,
   Check,
   Clock,
+  GitBranch,
+  Globe,
   Inbox,
   RefreshCw,
   User,
@@ -48,6 +56,81 @@ function notificationCountQueryKey(userId: string | null | undefined) {
     "account",
     userId ?? "signed-out",
   ] as const;
+}
+
+function sourceSyncAlertsQueryKey(userId: string | null | undefined) {
+  return [
+    ...getListVenomSourceSyncAlertsQueryKey(),
+    "account",
+    userId ?? "signed-out",
+  ] as const;
+}
+
+// Kept word-for-word identical with the mobile app so the nudge reads the
+// same wherever it catches the user.
+const GITHUB_ALERT_ACTION =
+  "Venom's GitHub connection can't update this source. Reconnect GitHub or ask the workspace owner to restore access.";
+const WEBSITE_ALERT_ACTION =
+  "Venom can't reach this site on its schedule. Check that the address still works, or pause the schedule in Settings.";
+
+function sourceSyncAlertHeadline(alert: VenomSourceSyncAlert) {
+  return `Scheduled updates for ${alert.sourceName} keep failing`;
+}
+
+function SourceSyncAlertCard({ alert }: { alert: VenomSourceSyncAlert }) {
+  const isUnread = alert.readAt == null;
+  const action =
+    alert.provider === "github" ? GITHUB_ALERT_ACTION : WEBSITE_ALERT_ACTION;
+  const ProviderIcon = alert.provider === "github" ? GitBranch : Globe;
+  const attempts = `${alert.consecutiveFailures} failed attempts`;
+  const lastTried = formatDistanceToNow(new Date(alert.lastFailedAt), {
+    addSuffix: true,
+  });
+
+  return (
+    <article
+      className={cn(
+        "border-b border-border/60 p-4 last:border-b-0 md:p-6",
+        isUnread ? "bg-muted/20" : "bg-background",
+      )}
+      aria-label={`${isUnread ? "Unread alert. " : ""}${sourceSyncAlertHeadline(alert)}. ${action}`}
+      data-testid={`alert-source-sync-${alert.id}`}
+    >
+      <div className="flex gap-4">
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center border border-border/60 rounded-full bg-muted"
+          aria-hidden="true"
+        >
+          <AlertTriangle className="h-5 w-5 text-foreground" />
+        </span>
+        <div className="min-w-0 flex-1">
+          {isUnread && (
+            <span className="mb-1 block text-xs font-semibold text-foreground">
+              Unread
+            </span>
+          )}
+          <p
+            className={cn(
+              "text-sm leading-relaxed",
+              isUnread ? "font-semibold text-foreground" : "text-muted-foreground",
+            )}
+          >
+            {sourceSyncAlertHeadline(alert)}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{action}</p>
+          <p className="mt-3 border border-dashed border-border/60 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+            {alert.lastError}
+          </p>
+          <span className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ProviderIcon className="h-3 w-3" aria-hidden="true" />
+            {attempts}
+            <span aria-hidden="true">·</span>
+            last tried {lastTried}
+          </span>
+        </div>
+      </div>
+    </article>
+  );
 }
 
 function NotificationRow({
@@ -210,11 +293,23 @@ export default function NotificationsPage() {
     },
   });
 
+  const alertsQueryKey = sourceSyncAlertsQueryKey(userId);
+  const { data: alertData } = useListVenomSourceSyncAlerts({
+    query: {
+      queryKey: alertsQueryKey,
+      refetchInterval: 30000,
+    },
+  });
+
   const notifications = useMemo(
     () => data?.pages.flatMap((page) => page.items) ?? [],
     [data?.pages],
   );
   const unreadCount = unreadData?.count ?? 0;
+  const alerts = alertData?.alerts ?? [];
+  const unreadAlertCount = alerts.filter(
+    (alert) => alert.readAt == null,
+  ).length;
 
   const markReadMutation = useMarkCommunityNotificationRead({
     mutation: {
@@ -334,10 +429,56 @@ export default function NotificationsPage() {
     },
   });
 
+  const alertsMarkAllMutation = useMarkAllVenomSourceSyncAlertsRead({
+    mutation: {
+      onMutate: async () => {
+        await queryClient.cancelQueries({ queryKey: alertsQueryKey });
+        const previousAlerts =
+          queryClient.getQueryData<VenomSourceSyncAlertList>(alertsQueryKey);
+        const readAt = new Date().toISOString();
+        queryClient.setQueryData<VenomSourceSyncAlertList>(
+          alertsQueryKey,
+          (current) =>
+            current
+              ? {
+                  alerts: current.alerts.map((alert) => ({
+                    ...alert,
+                    readAt: alert.readAt ?? readAt,
+                  })),
+                }
+              : current,
+        );
+        return { previousAlerts };
+      },
+      onError: (_error, _variables, context) => {
+        if (context?.previousAlerts) {
+          queryClient.setQueryData(alertsQueryKey, context.previousAlerts);
+        }
+        toast({
+          title: "Could not mark all notifications read",
+          description: "Please try again.",
+          variant: "destructive",
+        });
+      },
+      onSettled: () => {
+        void queryClient.invalidateQueries({ queryKey: alertsQueryKey });
+        void queryClient.invalidateQueries({ queryKey: countQueryKey });
+      },
+    },
+  });
+
+  const markEverythingRead = () => {
+    markAllMutation.mutate();
+    if (unreadAlertCount > 0) alertsMarkAllMutation.mutate();
+  };
+  const markAllPending =
+    markAllMutation.isPending || alertsMarkAllMutation.isPending;
+
   const refresh = () => {
     void Promise.all([
       refetch(),
       queryClient.invalidateQueries({ queryKey: countQueryKey }),
+      queryClient.invalidateQueries({ queryKey: alertsQueryKey }),
     ]);
   };
   const retryLoadingMore = () => {
@@ -358,8 +499,8 @@ export default function NotificationsPage() {
               aria-live="polite"
             >
               {unreadCount === 0
-                ? "No unread replies"
-                : `${unreadCount} unread ${unreadCount === 1 ? "reply" : "replies"}`}
+                ? "No unread notifications"
+                : `${unreadCount} unread ${unreadCount === 1 ? "notification" : "notifications"}`}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -381,9 +522,9 @@ export default function NotificationsPage() {
             {unreadCount > 0 && (
               <Button
                 size="sm"
-                onClick={() => markAllMutation.mutate()}
-                disabled={markAllMutation.isPending}
-                aria-busy={markAllMutation.isPending}
+                onClick={markEverythingRead}
+                disabled={markAllPending}
+                aria-busy={markAllPending}
                 className="min-h-10 rounded-md"
                 data-testid="button-mark-all-read"
               >
@@ -393,6 +534,23 @@ export default function NotificationsPage() {
             )}
           </div>
         </header>
+
+        {alerts.length > 0 && (
+          <section
+            className="mb-6 overflow-hidden rounded-2xl border border-border/60 surface shadow-soft"
+            aria-label="Source update alerts"
+            data-testid="section-source-sync-alerts"
+          >
+            <div className="border-b border-border/60 bg-muted/30 px-4 py-3 md:px-6">
+              <h2 className="text-sm font-semibold text-foreground">
+                Source updates need attention
+              </h2>
+            </div>
+            {alerts.map((alert) => (
+              <SourceSyncAlertCard key={alert.id} alert={alert} />
+            ))}
+          </section>
+        )}
 
         <section
           className="flex-1 overflow-hidden rounded-2xl border border-border/60 surface shadow-soft"
@@ -420,9 +578,11 @@ export default function NotificationsPage() {
           ) : notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-6 py-24 text-center">
               <Inbox className="mb-4 h-12 w-12 text-muted-foreground" />
-              <h2 className="mb-2 text-xl font-semibold text-foreground">
-                All caught up
-              </h2>
+              {alerts.length === 0 && (
+                <h2 className="mb-2 text-xl font-semibold text-foreground">
+                  All caught up
+                </h2>
+              )}
               <p className="max-w-md text-sm text-muted-foreground">
                 Replies to your community threads and replies will appear here.
               </p>

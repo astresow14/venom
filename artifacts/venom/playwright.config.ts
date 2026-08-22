@@ -8,6 +8,10 @@ const usesExternalTarget = Boolean(process.env.VENOM_E2E_BASE_URL);
 
 export default defineConfig({
   testDir: "./e2e",
+  // The live credential-flow suite (e2e/auth) needs network access to Clerk
+  // plus CLERK_SECRET_KEY, so it runs through playwright.auth.config.ts
+  // only — never as part of this hermetic suite or its CI check.
+  testIgnore: "**/auth/**",
   globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
@@ -55,24 +59,17 @@ export default defineConfig({
       },
       dependencies: ["warmup"],
     },
-    // The desktop-viewport pass of this suite is skipped on GitHub CI only:
-    // the "Kanban browser regression" job has a fixed 15-minute budget (the
-    // workflow file needs a credential this workspace does not hold, so the
-    // budget cannot move), and running every spec twice needs roughly double
-    // that. The mobile project is the app's real surface and keeps the full
-    // spec list on the pull-request gate; the desktop pass still runs on
-    // every Replit task validation via the package's `test` script, and can
-    // return to CI once a workflow-capable credential lets the job budget
-    // grow (see replit.md).
-    ...(process.env.CI
-      ? []
-      : [
-          {
-            name: "desktop-chromium",
-            use: devices["Desktop Chrome"],
-            dependencies: ["warmup"],
-          },
-        ]),
+    // Runs everywhere, including the GitHub "Kanban browser regression"
+    // job. That job once excluded this project under a fixed 15-minute
+    // budget (no workflow-capable credential could raise it); its
+    // timeout-minutes in .github/workflows/venom-kanban-e2e.yml is now
+    // sized for both viewport passes, so keep the two in step when adding
+    // especially heavy specs.
+    {
+      name: "desktop-chromium",
+      use: devices["Desktop Chrome"],
+      dependencies: ["warmup"],
+    },
   ],
   webServer: usesExternalTarget
     ? undefined

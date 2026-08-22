@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated as RNAnimated,
   Modal,
   Platform,
   ScrollView,
@@ -10,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useReducedMotion } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
@@ -86,6 +88,53 @@ export function BrainNoteComposer({
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRestoringDraft, setIsRestoringDraft] = useState(true);
+  const [dismissing, setDismissing] = useState(false);
+
+  const reducedMotion = useReducedMotion();
+  const sheetAppear = useRef(new RNAnimated.Value(0)).current;
+  const initialFocusDoneRef = useRef(false);
+
+  // Close by hiding the modal first so the web focus trap releases before
+  // the parent unmounts us and hands keyboard focus back to the capture
+  // button. Native has no such trap: close directly so Android (which never
+  // fires onDismiss) cannot strand an invisible mounted modal.
+  const requestClose = useCallback(() => {
+    if (Platform.OS === "web") {
+      setDismissing(true);
+      return;
+    }
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    sheetAppear.setValue(reducedMotion ? 1 : 0);
+    if (reducedMotion) return;
+    const animation = RNAnimated.timing(sheetAppear, {
+      toValue: 1,
+      duration: 170,
+      useNativeDriver: Platform.OS !== "web",
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [reducedMotion, sheetAppear]);
+
+  // The composer opens without an autofocused field (the note input mounts
+  // after draft restoration), so place keyboard focus explicitly once the
+  // draft is ready.
+  useEffect(() => {
+    if (
+      Platform.OS !== "web" ||
+      initialFocusDoneRef.current ||
+      isRestoringDraft
+    ) {
+      return;
+    }
+    initialFocusDoneRef.current = true;
+    const frame = requestAnimationFrame(() => {
+      originalInputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isRestoringDraft]);
 
   activeUserIdRef.current = userId ?? null;
   activeProjectIdRef.current = state.activeProjectId;
@@ -238,11 +287,11 @@ export function BrainNoteComposer({
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") requestClose();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [requestClose]);
 
   const beginRequest = () => {
     abortRef.current?.abort();
@@ -404,7 +453,7 @@ export function BrainNoteComposer({
           ),
         );
       });
-      onClose();
+      requestClose();
     } catch (requestError) {
       if (controller.signal.aborted) return;
       setError(recoveryError("file", requestError));
@@ -500,22 +549,34 @@ export function BrainNoteComposer({
 
   return (
     <Modal
-      visible
+      visible={!dismissing}
       transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      animationType={Platform.OS === "web" ? "none" : "slide"}
+      onRequestClose={requestClose}
+      onDismiss={onClose}
       statusBarTranslucent
     >
       <View
         style={[styles.backdrop, { backgroundColor: colors.symbioteBackdrop }]}
       >
-        <View
+        <RNAnimated.View
           style={[
             styles.sheet,
             {
               backgroundColor: colors.background,
               borderColor: colors.border,
               paddingTop: Math.max(insets.top, Platform.OS === "web" ? 32 : 12),
+            },
+            {
+              opacity: sheetAppear,
+              transform: [
+                {
+                  translateY: sheetAppear.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [10, 0],
+                  }),
+                },
+              ],
             },
           ]}
           accessibilityViewIsModal
@@ -534,7 +595,7 @@ export function BrainNoteComposer({
               </Text>
             </View>
             <TouchableOpacity
-              onPress={onClose}
+              onPress={requestClose}
               style={styles.iconButton}
               accessibilityRole="button"
               accessibilityLabel="Cancel note capture"
@@ -738,7 +799,7 @@ export function BrainNoteComposer({
             <View style={styles.actions}>
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={onClose}
+                onPress={requestClose}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel note capture"
               >
@@ -793,7 +854,7 @@ export function BrainNoteComposer({
               </TouchableOpacity>
             </View>
           </KeyboardAwareScrollView>
-        </View>
+        </RNAnimated.View>
       </View>
     </Modal>
   );

@@ -15,14 +15,36 @@ import {
  *
  * Requirements: network access to Clerk plus CLERK_PUBLISHABLE_KEY and
  * CLERK_SECRET_KEY in the environment (both are workspace secrets).
+ * Global setup fails the run loudly when either is missing.
  *
- * Run with: pnpm --filter @workspace/venom-desktop run test:e2e:auth
+ * Run manually with: pnpm --filter @workspace/venom-desktop run test:e2e:auth
+ *
+ * Wiring: the suite ALSO runs automatically as the `desktop-auth-e2e`
+ * validation step on every task completion, alongside the hermetic
+ * suites, via the test:e2e:auth:validation package script. That script
+ * pins its own web-server port (22170), so a stale manual auth run
+ * (22169) or the hermetic suite's server (22168) can never collide with
+ * the automated copy. The GitHub mirror's CI deliberately does NOT run
+ * this suite: the mirror has no Clerk secrets, and its workflow files
+ * cannot be edited from this workspace until a workflow-capable
+ * credential exists.
  */
 export default defineConfig({
   testDir: './e2e/auth',
+  globalSetup: './e2e/support/auth-global-setup.ts',
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 2 : 0,
+  /**
+   * A network-dependent suite gets retries wherever it runs unattended: a
+   * retry lands in a fresh worker, which mints fresh credentials, so a
+   * transient Clerk/network blip never blocks a task merge on its own.
+   * Set VENOM_DESKTOP_AUTH_E2E_RETRIES=0 for immediate failures while
+   * debugging locally.
+   */
+  retries:
+    process.env.VENOM_DESKTOP_AUTH_E2E_RETRIES !== undefined
+      ? Number(process.env.VENOM_DESKTOP_AUTH_E2E_RETRIES)
+      : 2,
   workers: 1,
   timeout: 180_000,
   expect: {

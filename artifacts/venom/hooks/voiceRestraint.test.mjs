@@ -11,7 +11,11 @@ import test from "node:test";
 
 import {
   createVoiceOutcomeTracker,
+  DECISION_OVERLAP_GRACE_MS,
+  DECISION_REQUEST_TIMEOUT_MS,
   FOLLOW_UP_WINDOW_MS,
+  resolveDecisionGraceMs,
+  resolveDecisionRequestTimeoutMs,
   resolveWindDownDelayMs,
   TALKATIVENESS_OPTIONS,
   talkativenessOption,
@@ -161,4 +165,47 @@ test("talkativeness options are ordered chatty → reserved with copy", () => {
 test("wind-down delay defaults sensibly outside a browser", () => {
   assert.equal(resolveWindDownDelayMs(), WIND_DOWN_CLOSE_DELAY_MS);
   assert.ok(WIND_DOWN_CLOSE_DELAY_MS > FOLLOW_UP_WINDOW_MS / 4);
+});
+
+// ── Decision-overlap grace ───────────────────────────────────────────────────
+
+test("decision grace is tight in production and serialized for UI tests", () => {
+  // Without a window (native / node): production overlaps quickly…
+  assert.equal(resolveDecisionGraceMs(false), DECISION_OVERLAP_GRACE_MS);
+  assert.ok(DECISION_OVERLAP_GRACE_MS > 0 && DECISION_OVERLAP_GRACE_MS < 1_000);
+  // …while UI-test builds wait beyond the decide call's own 4s abort, so
+  // stubbed (instant) decides always keep the serialized flow and a slow
+  // runner can't flip restraint specs onto the optimistic path.
+  assert.ok(resolveDecisionGraceMs(true) > 4_000);
+});
+
+test("a window override pins the decision grace exactly", () => {
+  globalThis.window = { __venomVoiceDecideGraceMs: 0 };
+  try {
+    // 0 forces the optimistic path even where the default serializes.
+    assert.equal(resolveDecisionGraceMs(true), 0);
+    globalThis.window.__venomVoiceDecideGraceMs = 125;
+    assert.equal(resolveDecisionGraceMs(false), 125);
+    // Nonsense values fall back to the defaults.
+    globalThis.window.__venomVoiceDecideGraceMs = -1;
+    assert.equal(resolveDecisionGraceMs(false), DECISION_OVERLAP_GRACE_MS);
+  } finally {
+    delete globalThis.window;
+  }
+});
+
+test("the decide request budget honors only sane overrides", () => {
+  assert.equal(resolveDecisionRequestTimeoutMs(), DECISION_REQUEST_TIMEOUT_MS);
+  globalThis.window = { __venomVoiceDecideTimeoutMs: 30_000 };
+  try {
+    assert.equal(resolveDecisionRequestTimeoutMs(), 30_000);
+    // A zero or negative budget would abort every decide instantly and turn
+    // the restraint layer into a no-op — such overrides are ignored.
+    globalThis.window.__venomVoiceDecideTimeoutMs = 0;
+    assert.equal(resolveDecisionRequestTimeoutMs(), DECISION_REQUEST_TIMEOUT_MS);
+    globalThis.window.__venomVoiceDecideTimeoutMs = -500;
+    assert.equal(resolveDecisionRequestTimeoutMs(), DECISION_REQUEST_TIMEOUT_MS);
+  } finally {
+    delete globalThis.window;
+  }
 });

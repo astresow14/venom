@@ -127,6 +127,25 @@ const streamedDeliberationEvents: Array<[number, unknown]> = [
   [200, { done: true }],
 ];
 
+/**
+ * The same turn again, but with two quiet stretches sized for walking to
+ * another project and back: one while the voices are still forming (the
+ * chamber is up), one after the collective answer has started streaming
+ * (the answer bubble is up). Both must stay on the chat that asked.
+ */
+const projectSwitchDeliberationEvents: Array<[number, unknown]> = [
+  [0, rosterEvent],
+  [600, { voice: "direct", content: DIRECT_TAKE }],
+  [300, { voice: "direct", voiceStatus: "ok" }],
+  [300, { voice: "evidence", content: EVIDENCE_TAKE }],
+  [12_000, { voice: "evidence", voiceStatus: "ok" }],
+  [300, { voice: "skeptic", voiceStatus: "failed" }],
+  [300, { stage: "synthesis" }],
+  [600, { content: COLLECTIVE }],
+  [9_000, finalDeliberationEvent],
+  [200, { done: true }],
+];
+
 function sseBody(events: unknown[]): string {
   return events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("");
 }
@@ -230,6 +249,25 @@ async function armAndSend(page: Page) {
   await page.getByTestId("send-message-button").click();
 }
 
+const DEFAULT_PROJECT = "General";
+const OTHER_PROJECT = "Side Errands";
+
+async function createProject(page: Page, name: string) {
+  await page.getByTestId("open-projects").click();
+  await page.getByTestId("create-project").click();
+  await page.getByTestId("new-project-name").fill(name);
+  await page.getByTestId("save-project").click();
+  await expect(page.getByTestId("chat-input")).toBeVisible();
+  await expect(page.getByTestId("open-projects")).toContainText(name);
+}
+
+async function switchToProject(page: Page, name: string) {
+  await page.getByTestId("open-projects").click();
+  await page.getByRole("button", { name: `Switch to ${name}` }).click();
+  await expect(page.getByTestId("chat-input")).toBeVisible();
+  await expect(page.getByTestId("open-projects")).toContainText(name);
+}
+
 test("holds the chamber open on the phone: voices stream, one fails, synthesis dims", async ({
   page,
 }, testInfo) => {
@@ -328,6 +366,74 @@ test("holds the chamber open on the phone: voices stream, one fails, synthesis d
   expect(Math.abs((panelBox?.x ?? 0) - (resultBox?.x ?? 0))).toBeLessThanOrEqual(
     1.5,
   );
+});
+
+test("keeps the chamber on the chat that asked when projects switch mid-turn", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "desktop-chromium",
+    "The mobile deliberation journey is covered at the mobile viewport.",
+  );
+
+  await mockModels(page);
+  await mockDeliberationAvailability(page);
+  await mockKnowledgeExtraction(page);
+  await mockStreamingRespond(page, projectSwitchDeliberationEvents);
+
+  await page.goto("/");
+  await expect(page.getByTestId("chat-input")).toBeVisible();
+
+  // A second project to walk to. Creating it selects it, so walk back to the
+  // default project before asking anything.
+  await createProject(page, OTHER_PROJECT);
+  await switchToProject(page, DEFAULT_PROJECT);
+
+  await armAndSend(page);
+
+  // The chamber opens on the chat that asked.
+  const panel = page.getByTestId("deliberation-panel");
+  const chat = page.getByTestId("workspace-chat");
+  await expect(panel).toBeVisible();
+  await expect(page.getByTestId("deliberation-voice-direct")).toContainText(
+    "Ship the migration",
+  );
+
+  // Mid-deliberation, the other project's chat shows none of the turn's
+  // transient UI: no chamber, no takes — just its own idle state.
+  await switchToProject(page, OTHER_PROJECT);
+  await expect(panel).toHaveCount(0);
+  await expect(chat.getByText("Ship the migration")).toHaveCount(0);
+  await expect(chat.getByText("How can I help?")).toBeVisible();
+
+  // Switching back mid-turn returns the still-forming chamber, takes intact.
+  await switchToProject(page, DEFAULT_PROJECT);
+  await expect(panel).toBeVisible();
+  await expect(page.getByTestId("deliberation-voice-direct")).toContainText(
+    "Ship the migration",
+  );
+
+  // The collective answer starts streaming into this chat; it must not
+  // follow the reader onto the other project either.
+  await expect(chat.getByText(COLLECTIVE)).toBeVisible({ timeout: 20_000 });
+  await switchToProject(page, OTHER_PROJECT);
+  await expect(chat.getByText(COLLECTIVE)).toHaveCount(0);
+  await expect(panel).toHaveCount(0);
+
+  // Back on the chat that asked, the turn lands as usual: the collective
+  // answer with the split flagged, chamber folded away.
+  await switchToProject(page, DEFAULT_PROJECT);
+  await expect(chat.getByText(COLLECTIVE)).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("deliberation-disagreements")).toContainText(
+    DISAGREEMENT,
+    { timeout: 20_000 },
+  );
+  await expect(panel).toHaveCount(0);
+
+  // The other project's chat stays clean after the turn completes too.
+  await switchToProject(page, OTHER_PROJECT);
+  await expect(chat.getByText(COLLECTIVE)).toHaveCount(0);
+  await expect(chat.getByText("How can I help?")).toBeVisible();
 });
 
 test("keeps the live chamber on the dark palette with reduced motion honored", async ({
@@ -507,6 +613,355 @@ test("verifies a turn end to end on the mobile chat", async ({
   expect("mode" in respondBodies[1]).toBe(false);
   expect("blend" in respondBodies[1]).toBe(false);
   expect("deliberate" in respondBodies[1]).toBe(false);
+});
+
+test("folds the mixer away and keeps verifying with the committed blend", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "desktop-chromium",
+    "The mobile deliberation journey is covered at the mobile viewport.",
+  );
+
+  const respondBodies: RespondBody[] = [];
+
+  await mockModels(page);
+  await mockDeliberationAvailability(page);
+  await mockKnowledgeExtraction(page);
+  await page.route("**/api/venom/respond", async (route) => {
+    respondBodies.push(route.request().postDataJSON() as RespondBody);
+    await route.fulfill({
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+      },
+      body: sseBody(deliberationEvents),
+    });
+  });
+
+  await page.goto("/");
+
+  // Verify opens the mixer expanded — first entry keeps it discoverable —
+  // with the collapse control announcing button semantics and state.
+  await page.getByTestId("mode-option-verify").click();
+  await expect(page.getByTestId("blend-pad")).toBeVisible();
+  const collapse = page.getByTestId("button-blend-collapse");
+  await expect(collapse).toBeVisible();
+  await expect(collapse).toHaveRole("button");
+  await expect(collapse).toHaveAttribute("aria-expanded", "true");
+  await expect(collapse).toHaveAttribute("aria-label", "Hide the blend mixer");
+
+  // Favor a corner, then fold the mixer away.
+  await page.getByTestId("button-blend-favor-direct").click();
+  await expect(page.getByTestId("blend-weight-direct")).toHaveText("70%");
+  await collapse.click();
+
+  // The pad is gone but the mode is untouched, and the compact chip
+  // restates the committed blend. Focus lands on the chip — the control
+  // that replaced the one that just unmounted.
+  await expect(page.getByTestId("blend-pad")).toHaveCount(0);
+  await expect(page.getByTestId("mode-option-verify")).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  const summaryChip = page.getByTestId("button-blend-summary");
+  await expect(summaryChip).toBeVisible();
+  await expect(summaryChip).toContainText("Favoring First take");
+  await expect(summaryChip).toHaveRole("button");
+  await expect(summaryChip).toHaveAttribute("aria-expanded", "false");
+  await expect(summaryChip).toHaveAttribute(
+    "aria-label",
+    /Show the blend mixer/,
+  );
+  await expect(summaryChip).toBeFocused();
+
+  // Keyboard reopens it: Enter on the chip, focus hands to the collapse
+  // control, and the favored weights survived the round trip.
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("blend-pad")).toBeVisible();
+  await expect(page.getByTestId("blend-weight-direct")).toHaveText("70%");
+  await expect(collapse).toBeFocused();
+
+  // Keyboard folds it again from the collapse control itself.
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("blend-pad")).toHaveCount(0);
+  await expect(summaryChip).toBeFocused();
+
+  // Sending while collapsed still runs Verify with the committed blend…
+  await page.getByTestId("chat-input").fill("Should we ship the migration?");
+  await page.getByTestId("send-message-button").click();
+  await expect.poll(() => respondBodies.length).toBe(1);
+  expect(respondBodies[0].mode).toBe("verify");
+  const favored = respondBodies[0].blend?.find(
+    (entry) => entry.id === "direct",
+  );
+  expect(favored?.weight ?? 0).toBeGreaterThan(0.6);
+
+  // …and the mixer stays folded through the turn and after it lands — the
+  // next mode-eligible message never springs it back open.
+  await expect(
+    page.getByTestId("workspace-chat").getByText(COLLECTIVE),
+  ).toBeVisible();
+  await expect(page.getByTestId("blend-pad")).toHaveCount(0);
+  await expect(summaryChip).toBeVisible();
+
+  // Talk still hides the whole section — chip included — and coming back
+  // to Verify respects the collapse until it's reopened by hand.
+  await page.getByTestId("mode-option-talk").click();
+  await expect(summaryChip).toHaveCount(0);
+  await expect(page.getByTestId("blend-pad")).toHaveCount(0);
+  await page.getByTestId("mode-option-verify").click();
+  await expect(summaryChip).toBeVisible();
+  await expect(page.getByTestId("blend-pad")).toHaveCount(0);
+  await summaryChip.click();
+  await expect(page.getByTestId("blend-pad")).toBeVisible();
+  await expect(page.getByTestId("blend-weight-direct")).toHaveText("70%");
+});
+
+/**
+ * Pad geometry mirrored from BlendPad.tsx: a 248x172 view with the triangle
+ * inset by 34 left/right, 22 top, 30 bottom. Targets are computed from the
+ * live bounding box, so unit-space points map to exact weights: with corners
+ * a=(0.5,0) b=(0,1) c=(1,1), w0 = 1-y, w1 = 0.5+0.5y-x, w2 = the rest
+ * (clamped and renormalized outside the triangle).
+ */
+const PAD_GEOMETRY = { insetX: 34, insetTop: 22, innerWidth: 180, innerHeight: 120 };
+
+function padPoint(
+  box: { x: number; y: number },
+  unit: { x: number; y: number },
+) {
+  return {
+    x: box.x + PAD_GEOMETRY.insetX + unit.x * PAD_GEOMETRY.innerWidth,
+    y: box.y + PAD_GEOMETRY.insetTop + unit.y * PAD_GEOMETRY.innerHeight,
+  };
+}
+
+test("blend pad pointer path: taps land where they hit, drags preview and commit on release", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "desktop-chromium",
+    "The pad's gesture path is exercised at the mobile viewport.",
+  );
+
+  const respondBodies: RespondBody[] = [];
+  await mockModels(page);
+  await mockDeliberationAvailability(page);
+  await mockKnowledgeExtraction(page);
+  await page.route("**/api/venom/respond", async (route) => {
+    respondBodies.push(route.request().postDataJSON() as RespondBody);
+    await route.fulfill({
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+      },
+      body: sseBody(deliberationEvents),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByTestId("mode-option-verify").click();
+  const pad = page.getByTestId("blend-pad");
+  await expect(pad).toBeVisible();
+  const box = await pad.boundingBox();
+  if (!box) throw new Error("blend pad has no bounding box");
+
+  // A stationary tap commits the point under the finger. Regression: the
+  // release path once read gesture.moveX/moveY, which stay (0, 0) when the
+  // pointer never moves, so a tap committed a corner it never touched.
+  const tapAt = padPoint(box, { x: 0.5, y: 0.2 }); // weights [0.8, 0.1, 0.1]
+  await page.mouse.click(tapAt.x, tapAt.y);
+  await expect(page.getByTestId("blend-weight-direct")).toHaveText("80%");
+  await expect(page.getByTestId("blend-weight-skeptic")).toHaveText("10%");
+  await expect(page.getByTestId("blend-weight-evidence")).toHaveText("10%");
+
+  // A drag previews continuously and the release point is what commits.
+  const start = padPoint(box, { x: 0.5, y: 0.5 });
+  const end = padPoint(box, { x: 0.8, y: 0.9 }); // weights [0.1, 0.15, 0.75]
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 12 });
+  await expect(page.getByTestId("blend-weight-evidence")).toHaveText("75%");
+  await page.mouse.up();
+  await expect(page.getByTestId("blend-weight-direct")).toHaveText("10%");
+  await expect(page.getByTestId("blend-weight-skeptic")).toHaveText("15%");
+  await expect(page.getByTestId("blend-weight-evidence")).toHaveText("75%");
+
+  // The send body carries the committed weights — proof the release wrote
+  // through to the stored blend instead of leaving a dangling draft preview.
+  await page.getByTestId("chat-input").fill("Should we ship the migration?");
+  await page.getByTestId("send-message-button").click();
+  await expect.poll(() => respondBodies.length).toBe(1);
+  const sent = respondBodies[0].blend;
+  expect(sent?.map((entry) => entry.id)).toEqual([
+    "direct",
+    "skeptic",
+    "evidence",
+  ]);
+  expect(sent?.[0]?.weight).toBeCloseTo(0.1, 5);
+  expect(sent?.[1]?.weight).toBeCloseTo(0.15, 5);
+  expect(sent?.[2]?.weight).toBeCloseTo(0.75, 5);
+});
+
+test("a horizontal pad drag stays on the pad instead of swiping the workspace pager", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "desktop-chromium",
+    "The pad's gesture path is exercised at the mobile viewport.",
+  );
+
+  await mockModels(page);
+  await mockDeliberationAvailability(page);
+  await mockKnowledgeExtraction(page);
+
+  await page.goto("/");
+  await page.getByTestId("mode-option-verify").click();
+  const pad = page.getByTestId("blend-pad");
+  await expect(pad).toBeVisible();
+  const box = await pad.boundingBox();
+  if (!box) throw new Error("blend pad has no bounding box");
+
+  // Mostly-horizontal and well past the pager's 70px swipe threshold. The
+  // pad refuses the responder handover, so the pin rides to the left edge
+  // and the workspace stays on the chat instead of swiping to the feed.
+  const start = padPoint(box, { x: 0.5, y: 0.5 });
+  const end = padPoint(box, { x: 0, y: 0.5 }); // dx = -90; weights [0.4, 0.6, 0]
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 12 });
+  await page.mouse.up();
+
+  await expect(page.getByTestId("blend-weight-direct")).toHaveText("40%");
+  await expect(page.getByTestId("blend-weight-skeptic")).toHaveText("60%");
+  await expect(page.getByTestId("blend-weight-evidence")).toHaveText("0%");
+  await expect(page.getByTestId("workspace-chat")).toBeVisible();
+  await expect(page.getByTestId("workspace-feed")).toBeHidden();
+  await expect(page.getByTestId("blend-pad")).toBeVisible();
+});
+
+test("falls back to the accumulated takes when the stream ends before the final snapshot", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "desktop-chromium",
+    "The mobile deliberation journey is covered at the mobile viewport.",
+  );
+
+  // The server closes the turn cleanly (done arrives) but dies before the
+  // final deliberation snapshot. The client must persist the takes it
+  // accumulated while streaming instead of throwing them away.
+  const eventsWithoutSnapshot = deliberationEvents.filter(
+    (event) => event !== finalDeliberationEvent,
+  );
+
+  await mockModels(page);
+  await mockDeliberationAvailability(page);
+  await mockKnowledgeExtraction(page);
+  await page.route("**/api/venom/respond", async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+      },
+      body: sseBody(eventsWithoutSnapshot),
+    });
+  });
+
+  await page.goto("/");
+  await armAndSend(page);
+
+  // The collective answer persists as a normal completed message.
+  const chatWorkspace = page.getByTestId("workspace-chat");
+  await expect(chatWorkspace.getByText(COLLECTIVE)).toBeVisible();
+  await expect(page.getByTestId("deliberation-panel")).toHaveCount(0);
+  await expect(chatWorkspace.getByText("Tap send to retry")).toHaveCount(0);
+
+  // The persisted message still carries a deliberation block, rebuilt from
+  // the streamed takes. The fallback has no disagreement notes.
+  await expect(page.getByTestId("deliberation-result")).toBeVisible();
+  await expect(page.getByTestId("deliberation-disagreements")).toHaveCount(0);
+  await expect(page.getByTestId("deliberation-agreement")).toContainText(
+    "The voices converged without real disagreement.",
+  );
+
+  // Only the two voices that finished count as readable takes.
+  const toggle = page.getByTestId("toggle-deliberation-takes");
+  await expect(toggle).toContainText("Read the takes (2)");
+  await toggle.click();
+
+  // Every individual take survived, including the failed-voice status, and
+  // citation markers still resolve instead of leaking raw.
+  await expect(page.getByTestId("deliberation-take-direct")).toContainText(
+    "Ship the migration",
+  );
+  await expect(page.getByTestId("deliberation-take-skeptic")).toContainText(
+    "This voice didn't finish its take.",
+  );
+  const evidenceTake = page.getByTestId("deliberation-take-evidence");
+  await expect(evidenceTake).toContainText("(archived source)");
+  await expect(evidenceTake).not.toContainText("[source:");
+});
+
+test("keeps the interrupted treatment when the stream drops before the collective answer", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "desktop-chromium",
+    "The mobile deliberation journey is covered at the mobile viewport.",
+  );
+
+  // The connection dies right after the voices finish: the replayer closes
+  // the ReadableStream early — no synthesis, no collective answer, no done
+  // event. A long gap before the skeptic's failure holds the in-progress
+  // chamber open so the test can watch the takes form before the drop.
+  const droppedEvents: Array<[number, unknown]> = [
+    [0, rosterEvent],
+    [350, { voice: "direct", content: DIRECT_TAKE }],
+    [300, { voice: "direct", voiceStatus: "ok" }],
+    [300, { voice: "evidence", content: EVIDENCE_TAKE }],
+    [4200, { voice: "skeptic", voiceStatus: "failed" }],
+    [600, { voice: "evidence", voiceStatus: "ok" }],
+  ];
+
+  await mockModels(page);
+  await mockDeliberationAvailability(page);
+  await mockKnowledgeExtraction(page);
+  await mockStreamingRespond(page, droppedEvents);
+
+  await page.goto("/");
+  await armAndSend(page);
+
+  // The chamber opens and the takes really form before the connection dies.
+  const panel = page.getByTestId("deliberation-panel");
+  await expect(panel).toBeVisible();
+  await expect(page.getByTestId("deliberation-voice-direct")).toContainText(
+    "Ship the migration",
+  );
+  await expect(page.getByTestId("deliberation-voice-evidence")).toContainText(
+    "(archived source)",
+  );
+  await expect(page.getByTestId("deliberation-voice-skeptic")).toContainText(
+    "Didn't finish — the others carry on.",
+  );
+
+  // The collective answer never arrives, so the ordinary interrupted-stream
+  // treatment appears: an error bubble with the retry affordance.
+  const chatWorkspace = page.getByTestId("workspace-chat");
+  await expect(
+    chatWorkspace.getByText("The response was interrupted. Please try again."),
+  ).toBeVisible();
+  await expect(chatWorkspace.getByText("Tap send to retry")).toBeVisible();
+
+  // The transient chamber is gone and nothing pretends to be an answer: no
+  // collective text, no half-persisted verify result on the error bubble.
+  await expect(page.getByTestId("deliberation-panel")).toHaveCount(0);
+  await expect(page.getByTestId("deliberation-result")).toHaveCount(0);
+  await expect(chatWorkspace.getByText(COLLECTIVE)).toHaveCount(0);
 });
 
 test("hides the mode controls when the server lacks the endpoint", async ({

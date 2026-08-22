@@ -1,12 +1,17 @@
 ---
 name: Venom provider availability vs account health
-description: Why an env-available model can still fail every call, and how to tell a billing-dead key from a code bug.
+description: How billing-dead provider keys surface — a passive account-health overlay on the catalog — and how to verify one.
 ---
 
-Catalog availability is deliberately env-presence-only (key/base-URL vars exist ⇒ "Ready"). It cannot see account state: a direct provider key whose account has run out of credits keeps the model advertised as Ready while **every** call fails fast with a non-retryable HTTP 400 carrying a billing message in the error body. Nothing retries it (correct — 400 is non-retryable), so in deliberation that voice reports `failed` on every turn, and ordinary single-model chat on that model fails every time.
+Catalog availability stays env-presence-only (key/base-URL vars exist ⇒ configured) — except a direct Gemini key, which must pass a runtime capability check first. Any availability gate must mirror the client's credential precedence (direct key wins even when the managed pair is also set), or the catalog advertises a credential requests never use.
 
-**Why:** availability was designed as a static capability check so the picker never promises a provider with no credentials; account-level health is a different failure class that only shows up on a real call. Confusing the two wastes debugging time on the adapter code, which is innocent.
+Account state is a separate, passive overlay: live calls report billing-class failures (HTTP 402; or 4xx with an `insufficient_quota` code or explicit billing text such as "credit balance" / "exceeded your current quota") into a per-process registry. The catalog then keeps the model `available` but flags `accountHealth: "unfunded"` ("Provider account issue" instead of "Ready"), deliberation/debate planning stop auto-seating it, and chat maps the failure to a non-retryable `provider_account` error with fixed safe copy — never provider error text. The next successful stream, or a restart, clears the verdict.
+
+**Why:** presence-only availability promised replies a billing-dead account could never deliver — a dead alternate silently cost a deliberation voice on every turn. Passive detection adds zero startup token cost and self-heals on the first good call after the owner tops up; explicit user choices (active model, requested debate corners) stay honored with warnings, never silently rerouted, so retrying remains the recovery path.
 
 **How to apply:**
-- First move when one provider fails instantly on every turn: run the api-server's `smoke:venom-providers` script — it reports a safe per-model verdict with HTTP status. A 400 on a minimal request usually means account/billing state, not request shape; probe once with the SDK error body (it names billing explicitly and never contains the key).
-- Fixing it is a user account action (add credits or replace the key), never a code change. Removing the dead key from secrets is the only way to make the catalog stop advertising the model, and that is the user's call.
+- One provider failing instantly on every turn? Run the api-server's `smoke:venom-providers` script — safe per-model verdicts; billing-class failures print "Provider account cannot cover requests". The overlay is per process: a smoke run does not mark the separately running dev server, which learns from its own first failed call.
+- Keep the classifier narrow (explicit billing signals on 4xx only) so transient per-minute rate limits stay retryable — and check billing before the 429 rate-limit branch, because exhausted prepaid quotas arrive as 429.
+- Server-side planning filters are not enough: both clients build DEFAULT debate corners from the catalog and send them as an explicit roster the server honors. Any health rule must also gate the clients' corner candidates, or defaults smuggle a dead model back in.
+- Fan-out runners (multi-voice passes) must aggregate normalized failure kinds: catching per-voice errors and rethrowing a fresh generic retryable error when all fail masks the account problem for explicitly selected models. All-billing → the fixed account error; mixed → generic.
+- Funding the account is still the owner's action, not a code change — the code's job ends at honest presentation, planning, and error copy.

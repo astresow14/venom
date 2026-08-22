@@ -4,10 +4,11 @@
  * chatty ↔ reserved talkativeness dial that tunes how eager Venom is to
  * answer remarks that don't clearly call for one.
  *
- * Voice mode itself runs on the phone; this dialog edits the same synced
- * `voicePreferences` block of the workspace state, so a choice made here
- * follows the account onto every device. The talkativeness copy is mirrored
- * 1:1 from the mobile picker so the dial reads the same everywhere.
+ * Voice mode runs on the phone and on desktop (the composer's mic button);
+ * this dialog edits the same synced `voicePreferences` block of the
+ * workspace state, so a choice made here follows the account onto every
+ * device. The copy is shared with the voice-mode picker so the dial reads
+ * the same everywhere.
  */
 
 import React from 'react';
@@ -27,38 +28,7 @@ import {
   createDefaultVoicePreferences,
   DEFAULT_VOICE_TALKATIVENESS,
 } from '@/lib/workspaceState';
-import type {
-  VenomVoicePresetId,
-  VenomVoiceTalkativeness,
-} from '@workspace/api-client-react';
-
-const PRESET_LABELS: Record<VenomVoicePresetId, string> = {
-  sam: 'Sam',
-  marcus: 'Marcus',
-  rowan: 'Rowan',
-  elijah: 'Elijah',
-  maya: 'Maya',
-  isla: 'Isla',
-};
-
-/** Mirrored 1:1 from the mobile talkativeness picker. */
-const TALKATIVENESS_COPY: Record<
-  VenomVoiceTalkativeness,
-  { label: string; description: string }
-> = {
-  chatty: {
-    label: 'Chatty',
-    description: 'Answers almost everything — even a stray “okay” gets a nod.',
-  },
-  balanced: {
-    label: 'Balanced',
-    description: 'Answers real questions, lets throwaway remarks pass quietly.',
-  },
-  reserved: {
-    label: 'Reserved',
-    description: 'Speaks when spoken to. Asides and musings are left alone.',
-  },
-};
+import { PRESET_LABELS, TALKATIVENESS_COPY } from '@/lib/voice/voiceCopy';
 
 export default function VoicePreferencesDialog({
   trigger,
@@ -82,7 +52,7 @@ export default function VoicePreferencesDialog({
           <DialogTitle>Voice mode</DialogTitle>
           <DialogDescription>
             How Venom sounds — and how eager it is to speak — in hands-free
-            voice chats on your phone. Synced across your devices.
+            voice chats. Synced across your devices.
           </DialogDescription>
         </DialogHeader>
 

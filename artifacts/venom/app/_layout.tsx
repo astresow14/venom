@@ -154,6 +154,8 @@ function RootLayoutNav() {
             <Stack.Screen name="index" />
             <Stack.Screen name="projects" />
             <Stack.Screen name="settings" />
+            <Stack.Screen name="canon" />
+            <Stack.Screen name="company" />
             <Stack.Screen name="knowledge" />
             <Stack.Screen name="apps" />
             <Stack.Screen name="sops" />
@@ -195,16 +197,34 @@ export default function RootLayout() {
               tokenCache={tokenCache}
               proxyUrl={proxyUrl}
             >
-              <ClerkLoading>
-                <AppLoading />
-              </ClerkLoading>
-              <ClerkLoaded>
+              {IS_READ_ONLY_UI_TEST ? (
+                // UI-test mode never signs in: the auth gate treats the
+                // placeholder user as signed in and the API token getter
+                // stays null, so nothing below needs a loaded Clerk. Waiting
+                // for clerk-js (script download plus two bootstrap requests)
+                // would only delay first paint — and the browser suite pays
+                // that wait once per test. The provider stays mounted so
+                // Clerk hooks keep resolving; the signed-out opt-out
+                // (`venomUiTest=false`) and native builds keep the real gate.
                 <GestureHandlerRootView style={{ flex: 1 }}>
                   <KeyboardProvider>
                     <RootLayoutNav />
                   </KeyboardProvider>
                 </GestureHandlerRootView>
-              </ClerkLoaded>
+              ) : (
+                <>
+                  <ClerkLoading>
+                    <AppLoading />
+                  </ClerkLoading>
+                  <ClerkLoaded>
+                    <GestureHandlerRootView style={{ flex: 1 }}>
+                      <KeyboardProvider>
+                        <RootLayoutNav />
+                      </KeyboardProvider>
+                    </GestureHandlerRootView>
+                  </ClerkLoaded>
+                </>
+              )}
             </ClerkProvider>
           </QueryClientProvider>
         </ErrorBoundary>

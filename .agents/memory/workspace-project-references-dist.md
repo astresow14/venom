@@ -24,3 +24,12 @@ the signature of a stale dist.
 The durable fix for a consumer is a typecheck script that builds its referenced
 projects before the `--noEmit` check; a consumer whose script skips that prebuild stays
 exposed, and a prebuilt check that goes red is reporting real contract drift — trust it.
+
+**Prebuilds need `--force`.** The libs set `rootDir: src` with the tsconfig above it, so
+the default `.tsbuildinfo` path escapes `outDir` and lands at the lib root
+(`lib/<pkg>/tsconfig.tsbuildinfo`), outside `dist/`. Deleting `dist/` orphans the
+buildinfo, and plain `tsc -b` trusts buildinfo mtime alone — it reports "up to date",
+recreates nothing, and the consumer then fails with TS6305 "output file has not been
+built". A deterministic prebuild is `tsc -b --force <libs...>` (all six of the API
+server's referenced libs rebuild in ~15s). Plain `tsc -b` only covers the
+inputs-newer-than-buildinfo case, not the deleted-outputs case.

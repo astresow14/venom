@@ -1,14 +1,15 @@
 import { expect, test } from '@playwright/test';
-import { stubWorkspaceApis } from './support/stubs';
+import { stubJsonGet, stubWorkspaceApis } from './support/stubs';
 
 /**
  * Inline citation markers in the desktop workspace.
  *
- * Assistant answers, Brain note summaries, and feed entries store machine
- * markers like `[source:cite_xyz]`. A reader must never see one: a live
- * citation reads as its source title (and links to the document), a citation
- * retired by a refresh reads as its archived reference, and a marker nothing
- * knows about falls back to the generic archived label.
+ * Assistant answers, Brain note summaries (local details panel and the
+ * server-backed concept panel), and feed entries store machine markers like
+ * `[source:cite_xyz]`. A reader must never see one: a live citation reads as
+ * its source title (and links to the document), a citation retired by a
+ * refresh reads as its archived reference, and a marker nothing knows about
+ * falls back to the generic archived label.
  *
  * Mirrors the mobile suite (artifacts/venom/e2e/brain-citations.spec.ts); the
  * workspace is seeded through the local mirror UI-test mode reads at startup.
@@ -161,6 +162,85 @@ test('a Brain note summary resolves markers to source names', async ({
   await expect(page.locator('body')).not.toContainText('[source:');
 });
 
+test('the server-backed concept panel resolves markers in summary and evidence', async ({
+  page,
+}) => {
+  // A concept the device has not cached, in the same project as the seeded
+  // connected source. Its summary and evidence excerpts were written from
+  // conversation text, so they carry the same markers a local note does —
+  // live, retired, unknown, and the unterminated tail a truncated stream
+  // leaves behind.
+  await stubJsonGet(page, '**/api/venom/ontology/search**', {
+    results: [
+      {
+        id: 'concept_cited',
+        projectId: 'proj_alpha',
+        label: 'Vendor Terms',
+        category: 'external',
+        summary: 'Server-held concept citing [source:cite_readme].',
+        strength: 0.7,
+        mentionCount: 3,
+        lastUpdatedAt: NOW,
+        evidenceCount: 1,
+      },
+    ],
+  });
+  await stubJsonGet(page, '**/api/venom/ontology/concepts/concept_cited', {
+    concept: {
+      id: 'concept_cited',
+      projectId: 'proj_alpha',
+      label: 'Vendor Terms',
+      category: 'external',
+      strength: 0.7,
+      x: 0,
+      y: 0,
+      links: [],
+      description: 'Concept held by the server, not this device.',
+      summary:
+        'Negotiated terms come from [source:cite_readme]; the retired checklist [source:cite_retired] still informs [source:cite_unknown].',
+      mentionCount: 3,
+      lastUpdatedAt: NOW,
+      sources: [
+        {
+          conversationId: 'conv_vendor_review',
+          projectId: 'proj_alpha',
+          conversationTitle: 'Vendor review',
+          messageIds: ['m1'],
+          excerpt:
+            'Renewal terms follow [source:cite_readme], cut off mid-stream at [source:cite_tr',
+          updatedAt: NOW,
+        },
+      ],
+    },
+    neighbors: [],
+  });
+
+  await page.goto('/workspace/brain');
+  await page.getByLabel('Search map').fill('vendor');
+
+  await page.getByTestId('brain-search-result-concept_cited').click();
+
+  const panel = page.getByTestId('brain-remote-concept');
+  await expect(panel).toBeVisible();
+
+  // Summary: live marker → source title, retired → archived reference,
+  // unknown → generic archived label.
+  await expect(panel).toContainText(
+    'Negotiated terms come from README.md; the retired checklist Rollout checklist (archived) still informs (archived source).',
+  );
+
+  // Evidence excerpt: the live marker resolves, and the unterminated marker a
+  // truncated stream left behind is dropped rather than shown raw.
+  const evidence = panel.getByTestId(
+    'brain-remote-evidence-conv_vendor_review',
+  );
+  await expect(evidence).toContainText(
+    'Renewal terms follow README.md, cut off mid-stream at',
+  );
+
+  await expect(page.locator('body')).not.toContainText('[source:');
+});
+
 test('a feed entry never shows a raw marker even when the server text carries one', async ({
   page,
 }) => {
@@ -179,6 +259,9 @@ test('a feed entry never shows a raw marker even when the server text carries on
           linkedProjectId: 'proj_alpha',
           linkedProjectName: 'Aurora Systems',
           latestIterationNumber: 1,
+          liveReleaseId: null,
+          liveIterationNumber: null,
+          livePublishedAt: null,
           improvementSignal: {
             summary:
               'Aurora Systems absorbed 2 new concepts (topics: Launch Ops, [source:cite_unknown]) since package v1.',

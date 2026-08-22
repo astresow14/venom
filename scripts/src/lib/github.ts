@@ -383,6 +383,40 @@ export function workflowSetupHelp(repo: string): string[] {
   ];
 }
 
+/**
+ * The error to raise when GitHub refused a push over workflow permissions.
+ *
+ * GitHub only reveals a missing workflow permission at push time for
+ * fine-grained tokens, which report no scopes to inspect beforehand. The
+ * refusal is recognisable by "workflow" in git's relayed error — but only a
+ * push whose diff actually carried workflow files gets this diagnosis, so an
+ * unrelated failure that happens to mention the word is never dressed up as a
+ * permission problem.
+ *
+ * Returns `null` when the failure is not that refusal; the caller rethrows
+ * the original error untouched.
+ */
+export function workflowPushRefusal(
+  message: string,
+  workflowPaths: string[],
+  pushCredential: Credential,
+  repo: string,
+): SyncError | null {
+  if (workflowPaths.length === 0 || !/workflow/i.test(message)) {
+    return null;
+  }
+
+  return new SyncError(
+    [
+      message,
+      "",
+      `GitHub refused the push: ${describeCredential(pushCredential)} cannot write .github/workflows.`,
+      "",
+      ...workflowSetupHelp(repo),
+    ].join("\n"),
+  );
+}
+
 /** Resolves credentials on demand and remembers what it already looked up. */
 export class CredentialPool {
   private readonly cache = new Map<TokenSource, Credential | null>();

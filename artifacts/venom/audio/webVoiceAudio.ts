@@ -1,19 +1,15 @@
 /**
  * webVoiceAudio.ts — browser implementation of the voice audio interface.
  *
- * Capture: getUserMedia + AnalyserNode levels feed the pure speech detector;
- * a MediaRecorder rolls per listening window and each detected utterance is
- * cut into one base64 blob (webm/opus where supported, mp4 on Safari).
+ * Capture: getUserMedia + AnalyserNode levels animate the recorder. The user
+ * explicitly stops each MediaRecorder window, which is emitted as one base64
+ * blob (webm/opus where supported, mp4 on Safari).
  *
  * Playback: base64 PCM16 chunks are decoded into AudioBuffers and scheduled
  * back-to-back on a cursor, so streamed sentences play gaplessly and can be
  * cut instantly on interrupt.
  */
 
-import {
-  createSpeechDetector,
-  type SpeechDetector,
-} from '../context/voiceActivity.ts';
 import type {
   VoiceAudioAdapter,
   VoiceAudioSupport,
@@ -24,9 +20,6 @@ import type {
 } from './types.ts';
 
 const LEVEL_INTERVAL_MS = 50;
-/** Restart an idle recorder after this long so silence can't grow the blob. */
-const IDLE_RECORDER_RESTART_MS = 40_000;
-
 type AnyWindow = typeof globalThis & {
   AudioContext?: typeof AudioContext;
   webkitAudioContext?: typeof AudioContext;
@@ -103,11 +96,9 @@ function createWebCapture(
   let levelTimer: ReturnType<typeof setInterval> | null = null;
   let recorder: MediaRecorder | null = null;
   let recorderChunks: BlobPart[] = [];
-  let recorderStartedAt = 0;
   let utteranceStartedAt = 0;
   let paused = false;
   let stopped = false;
-  let detector: SpeechDetector = createSpeechDetector();
   /** What to do when the in-flight recorder stop completes. */
   let onRecorderStop: 'discard' | 'emit' = 'discard';
 
@@ -160,7 +151,7 @@ function createWebCapture(
       // Keep listening for the next turn unless paused/stopped meanwhile.
       if (!stopped && !paused) startRecorder();
     };
-    recorderStartedAt = Date.now();
+    utteranceStartedAt = Date.now();
     recorder.start();
   };
 
@@ -192,22 +183,6 @@ function createWebCapture(
     const level = readLevel();
     const atMs = Date.now();
     onEvent({ type: 'level', level, atMs });
-    if (paused) return;
-    const transition = detector.push(level, atMs);
-    if (transition === 'speech-start') {
-      utteranceStartedAt = atMs;
-      onEvent({ type: 'speech-start' });
-    } else if (transition === 'speech-end') {
-      stopRecorder('emit');
-    } else if (
-      detector.state() === 'idle' &&
-      recorder &&
-      recorder.state === 'recording' &&
-      atMs - recorderStartedAt > IDLE_RECORDER_RESTART_MS
-    ) {
-      // Nothing said for a long while: roll the recorder to bound memory.
-      stopRecorder('discard');
-    }
   };
 
   return {
@@ -263,7 +238,6 @@ function createWebCapture(
       analyser = audioContext.createAnalyser();
       analyser.fftSize = 1024;
       source.connect(analyser);
-      detector = createSpeechDetector();
       paused = false;
       startRecorder();
       levelTimer = setInterval(tick, LEVEL_INTERVAL_MS);
@@ -271,15 +245,20 @@ function createWebCapture(
     pause() {
       if (paused || stopped) return;
       paused = true;
-      detector.reset();
       stopRecorder('discard');
+    },
+    finish() {
+      if (paused || stopped) return;
+      paused = true;
+      stopRecorder('emit');
     },
     resume() {
       if (!paused || stopped) return;
       paused = false;
-      detector.reset();
       startRecorder();
     },
+    // Explicit recordings never run during playback, so ducking is inactive.
+    setDucking() {},
     stop() {
       stopped = true;
       paused = false;

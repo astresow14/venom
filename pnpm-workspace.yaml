@@ -75,6 +75,10 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
+  # Metro needs the legacy callable API. No compatible image-size release is
+  # published for CVE-2025-71329, so use the bounded internal implementation.
+  image-size: "file:patches/image-size"
+  brace-expansion@5.0.8: 5.0.9
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"
   "esbuild>@esbuild/darwin-x64": "-"

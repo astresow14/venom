@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import {
   useGetVenomSop,
@@ -52,7 +52,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { Checkbox } from "@/components/ui/checkbox";
-import { asList } from "@/lib/as-list";
+import { resolveAppPortfolioState } from "@/lib/appPortfolio";
+import { resolveSopDetailState } from "@/lib/sopLibrary";
 
 export default function SopDetailPage() {
   const [, params] = useRoute("/workspace/sops/:id");
@@ -61,15 +62,36 @@ export default function SopDetailPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: detail, isLoading, isError } = useGetVenomSop(sopId!, {
+  const detailQuery = useGetVenomSop(sopId!, {
     query: {
       enabled: !!sopId,
       queryKey: getGetVenomSopQueryKey(sopId!),
     },
   });
+  // The record is never trusted to be `{ sop, revisions, assignments }`: a
+  // failing backend, an error payload, or an unauthenticated response hands
+  // this query something else entirely, and reading fields off it directly
+  // used to crash the whole workspace route instead of rendering this page's
+  // error state.
+  const detailState = useMemo(
+    () =>
+      resolveSopDetailState({
+        data: detailQuery.data,
+        isLoading: detailQuery.isLoading,
+        isError: detailQuery.isError,
+      }),
+    [detailQuery.data, detailQuery.isLoading, detailQuery.isError],
+  );
+  const detail = detailState.status === "ready" ? detailState.detail : null;
 
-  const { data: appsResponse } = useListVenomApps();
-  const appsData = asList(appsResponse);
+  const appsQuery = useListVenomApps();
+  // Same rule for the assignable app list; a broken portfolio may not read
+  // as "no apps", because that would suggest assignments were removed.
+  const appsPortfolio = resolveAppPortfolioState({
+    data: appsQuery.data,
+    isLoading: appsQuery.isLoading,
+    isError: appsQuery.isError,
+  });
 
   const updateSop = useUpdateVenomSop();
   const publishSop = usePublishVenomSop();
@@ -107,31 +129,50 @@ export default function SopDetailPage() {
     }
   }, [detail]);
 
-  if (isLoading || !localData) {
+  if (detailState.status === "error") {
     return (
-      <div className="p-8 max-w-5xl mx-auto w-full space-y-8">
-        <Skeleton className="h-12 w-64 rounded-lg bg-muted/20" />
-        <Skeleton className="h-[600px] rounded-xl bg-muted/20" />
+      <div
+        className="flex flex-col items-center justify-center h-full p-8 text-center"
+        role="alert"
+        data-testid="status-sop-detail-error"
+      >
+        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
+        <h2 className="text-xl font-semibold tracking-tight">
+          SOP unavailable
+        </h2>
+        <p className="text-muted-foreground text-sm mt-2 mb-6 max-w-md">
+          {detailState.reason === "malformed-response"
+            ? "This SOP came back in an unexpected shape. It may have been removed, it may belong to another account, or the library may be answering incorrectly."
+            : "We could not load this SOP. Try again in a moment."}
+        </p>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => {
+              void detailQuery.refetch();
+            }}
+            disabled={detailQuery.isFetching}
+            className="rounded-md font-medium border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
+            data-testid="button-retry-sop-detail"
+          >
+            {detailQuery.isFetching ? "Retrying" : "Try again"}
+          </Button>
+          <Link 
+            href="/workspace/sops"
+            className="inline-flex items-center justify-center whitespace-nowrap text-sm h-10 px-4 py-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-md font-medium"
+          >
+            Return to Library
+          </Link>
+        </div>
       </div>
     );
   }
 
-  if (isError || !detail) {
+  if (!detail || !localData) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <h2 className="text-xl font-semibold tracking-tight">
-          SOP Not Found
-        </h2>
-        <p className="text-muted-foreground text-sm mt-2 mb-6">
-          This SOP does not exist or belongs to another workspace.
-        </p>
-        <Link 
-          href="/workspace/sops"
-          className="inline-flex items-center justify-center whitespace-nowrap text-sm h-10 px-4 py-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-md font-medium"
-        >
-          Return to Library
-        </Link>
+      <div className="p-8 max-w-5xl mx-auto w-full space-y-8">
+        <Skeleton className="h-12 w-64 rounded-lg bg-muted/20" />
+        <Skeleton className="h-[600px] rounded-xl bg-muted/20" />
       </div>
     );
   }
@@ -656,7 +697,18 @@ export default function SopDetailPage() {
                 <h3 className="text-[10px] font-semibold text-muted-foreground mb-4 flex items-center gap-2">
                   <Hexagon className="h-3 w-3" /> App Assignments
                 </h3>
-                {(!appsData || appsData.length === 0) ? (
+                {appsPortfolio.status === "loading" ? (
+                  <div className="text-[10px] text-muted-foreground">Loading the app portfolio…</div>
+                ) : appsPortfolio.status === "error" ? (
+                  <div
+                    className="text-[10px] leading-relaxed text-destructive"
+                    role="alert"
+                    data-testid="status-sop-apps-error"
+                  >
+                    The app portfolio could not be read, so assignments cannot
+                    be edited right now. Saving keeps the existing assignments.
+                  </div>
+                ) : appsPortfolio.status === "empty" ? (
                   <div className="text-[10px] text-muted-foreground">No portfolio apps found.</div>
                 ) : (
                   <>
@@ -664,7 +716,7 @@ export default function SopDetailPage() {
                       No app selected means this SOP is account-wide.
                     </p>
                     <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
-                    {appsData.map((app) => {
+                    {appsPortfolio.apps.map((app) => {
                       const isSelected = localAppIds.has(app.id);
                       return (
                         <div key={app.id} className="flex items-start space-x-2">

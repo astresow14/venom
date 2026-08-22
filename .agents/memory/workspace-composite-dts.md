@@ -10,3 +10,5 @@ Runtime and typecheck disagree by design here: package `exports` point at `src`,
 **Rule:** when a dependent typecheck reports `has no exported member` for something visibly exported in the lib's source — and tests/runtime use it fine — the lib's declarations are stale. Rebuild them with `--force`: plain `tsc -b <pkg>` can claim "up to date" off a stale `.tsbuildinfo` and rebuild nothing.
 
 **Why:** this cost an investigation that pointed at correct code; runtime-vs-typecheck disagreement is the tell that distinguishes it from a real missing export.
+
+**Multi-file lib barrels:** an index.ts re-export needs an explicit './file.ts' extension for node --experimental-strip-types consumers, but composite builds reject it (TS5097) unless allowImportingTsExtensions is set — legal only because these libs are emitDeclarationOnly. Consuming apps typecheck fine against the emitted d.ts.

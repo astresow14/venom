@@ -563,6 +563,228 @@ test("leaves archived citations alone when the refresh reuses their id", () => {
   assert.equal(remap.size, 0);
 });
 
+function archivedEntry(overrides) {
+  return {
+    id: "cite_gone",
+    title: "Deployment checklist",
+    url: "https://docs.acme.dev/ops/deploy-checklist",
+    retiredAt: 1_700,
+    ...overrides,
+  };
+}
+
+test("remaps an archived citation by title when its page returned at a new address", () => {
+  // The page vanished and later came back under a new URL: only the title
+  // (modulo case and whitespace) still names it, and it is unique across the
+  // refreshed citations.
+  const refreshed = [
+    citation({
+      id: "cite_back",
+      kind: "website",
+      title: " Deployment   CHECKLIST ",
+      url: "https://docs.acme.dev/handbook/deployment-checklist",
+      reference: null,
+    }),
+  ];
+
+  assert.deepEqual(
+    [...restoredCitationRemap([archivedEntry()], refreshed)],
+    [["cite_gone", "cite_back"]],
+  );
+});
+
+test("does not remap an archived citation by a title several refreshed citations share", () => {
+  // Two refreshed items carry the archived title: there is no way to tell
+  // which one the older answer meant, so neither may claim it.
+  const remap = restoredCitationRemap(
+    [archivedEntry()],
+    [
+      citation({
+        id: "cite_copy_a",
+        kind: "website",
+        title: "Deployment checklist",
+        url: "https://docs.acme.dev/handbook/deployment-checklist",
+        reference: null,
+      }),
+      citation({
+        id: "cite_copy_b",
+        kind: "website",
+        title: "Deployment checklist",
+        url: "https://docs.acme.dev/archive/deployment-checklist",
+        reference: null,
+      }),
+    ],
+  );
+
+  assert.equal(remap.size, 0);
+});
+
+test("does not remap an archived citation by a title shared across citation kinds", () => {
+  // The archive keeps no kind, so a title carried by an issue and a website
+  // is just as ambiguous as two websites sharing it.
+  const remap = restoredCitationRemap(
+    [archivedEntry({ title: "Fix the drawer", url: "https://docs.acme.dev/notes/drawer" })],
+    [
+      citation({
+        id: "cite_issue",
+        url: "https://github.com/acme/venom/issues/44",
+        reference: "acme/venom#44",
+      }),
+      citation({
+        id: "cite_site",
+        kind: "website",
+        title: "Fix the drawer",
+        url: "https://docs.acme.dev/guides/drawer",
+        reference: null,
+      }),
+    ],
+  );
+
+  assert.equal(remap.size, 0);
+});
+
+test("does not remap by title onto a citation another archived entry already matches", () => {
+  // The refreshed page is one archived entry's url match; a second entry that
+  // merely shares the title must stay archived rather than collapse onto it.
+  const archived = [
+    archivedEntry({
+      id: "cite_same_page",
+      url: "https://docs.acme.dev/handbook/deployment-checklist",
+      retiredAt: 1_600,
+    }),
+    archivedEntry(),
+  ];
+  const refreshed = [
+    citation({
+      id: "cite_back",
+      kind: "website",
+      title: "Deployment checklist",
+      url: "https://docs.acme.dev/handbook/deployment-checklist",
+      reference: null,
+    }),
+  ];
+
+  assert.deepEqual(
+    [...restoredCitationRemap(archived, refreshed)],
+    [["cite_same_page", "cite_back"]],
+  );
+});
+
+test("does not remap by title onto a citation live again under an archived id", () => {
+  // cite_back is live under its own id (the renderer already prefers it);
+  // another archived entry sharing its title may not claim it.
+  const archived = [
+    archivedEntry({ id: "cite_back", retiredAt: 1_600 }),
+    archivedEntry({ url: "https://docs.acme.dev/legacy/deploy-checklist" }),
+  ];
+  const refreshed = [
+    citation({
+      id: "cite_back",
+      kind: "website",
+      title: "Deployment checklist",
+      url: "https://docs.acme.dev/handbook/deployment-checklist",
+      reference: null,
+    }),
+  ];
+
+  assert.equal(restoredCitationRemap(archived, refreshed).size, 0);
+});
+
+test("does not collapse two archived items that share a title onto one restored page", () => {
+  // Distinct archived items (different urls) merely share a name: neither may
+  // claim the one refreshed citation carrying it.
+  const archived = [
+    archivedEntry(),
+    archivedEntry({
+      id: "cite_twin",
+      url: "https://wiki.acme.dev/deploy-checklist",
+      retiredAt: 1_800,
+    }),
+  ];
+  const refreshed = [
+    citation({
+      id: "cite_back",
+      kind: "website",
+      title: "Deployment checklist",
+      url: "https://docs.acme.dev/handbook/deployment-checklist",
+      reference: null,
+    }),
+  ];
+
+  assert.equal(restoredCitationRemap(archived, refreshed).size, 0);
+});
+
+test("remaps duplicate archived entries for one item onto its new address", () => {
+  // The same page was archived twice under different citation ids; both may
+  // point at the one refreshed citation carrying its title.
+  const archived = [
+    archivedEntry({ id: "cite_dup_a" }),
+    archivedEntry({ id: "cite_dup_b", retiredAt: 1_800 }),
+  ];
+  const refreshed = [
+    citation({
+      id: "cite_back",
+      kind: "website",
+      title: "Deployment checklist",
+      url: "https://docs.acme.dev/handbook/deployment-checklist",
+      reference: null,
+    }),
+  ];
+
+  assert.deepEqual(
+    [...restoredCitationRemap(archived, refreshed)],
+    [
+      ["cite_dup_a", "cite_back"],
+      ["cite_dup_b", "cite_back"],
+    ],
+  );
+});
+
+test("prefers the archived url match over a title match elsewhere", () => {
+  const refreshed = [
+    citation({
+      id: "cite_same_page",
+      kind: "website",
+      title: "Deployment checklist, rewritten",
+      url: "https://docs.acme.dev/ops/deploy-checklist",
+      reference: null,
+    }),
+    citation({
+      id: "cite_same_title",
+      kind: "website",
+      title: "Deployment checklist",
+      url: "https://docs.acme.dev/handbook/deployment-checklist",
+      reference: null,
+    }),
+  ];
+
+  assert.deepEqual(
+    [...restoredCitationRemap([archivedEntry()], refreshed)],
+    [["cite_gone", "cite_same_page"]],
+  );
+});
+
+test("matches an archived title the schema limit truncated", () => {
+  // The archive stores at most 300 title characters; a longer live title
+  // still matches its truncated archived copy.
+  const fullTitle = `Deployment checklist ${"x".repeat(400)}`;
+  const archived = [archivedEntry({ title: fullTitle.slice(0, 300) })];
+  const refreshed = [
+    citation({
+      id: "cite_back",
+      kind: "website",
+      title: fullTitle,
+      url: "https://docs.acme.dev/handbook/deployment-checklist",
+      reference: null,
+    }),
+  ];
+
+  assert.deepEqual(
+    [...restoredCitationRemap(archived, refreshed)],
+    [["cite_gone", "cite_back"]],
+  );
+});
+
 test("collects the citation ids saved answers still point at", () => {
   const conversations = [
     {

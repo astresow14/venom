@@ -176,6 +176,10 @@ export async function summarizeThread(
   let modelVersion: string | null = null;
 
   try {
+    // Deliberately unmetered (see venom-usage-store): thread summaries are
+    // community-shared infrastructure with no single asking account, and
+    // charging whichever member happened to bump the revision would
+    // misattribute personal spend.
     const response = await _client.chat.completions.create({
       model: SUMMARY_MODEL,
       max_completion_tokens: SUMMARY_MAX_COMPLETION_TOKENS,

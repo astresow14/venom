@@ -18,6 +18,9 @@ import {
 } from "@workspace/db";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { userOwner, type OntologyOwner } from "./venom-ontology-store";
+import type { VenomStreamUsage } from "./venom-provider-adapters";
+import { usageFromCompletion } from "./venom-usage-pricing";
+import { recordVenomUsage } from "./venom-usage-store";
 import {
   bondLevelFor,
   buildIdentityDigest,
@@ -167,24 +170,39 @@ export async function loadHostPersonaContext(
 async function deriveProfileFromMessages(
   recentUserMessages: string[],
   previousProfile: HostStyleProfile | null,
+  onUsage?: (usage: VenomStreamUsage) => void,
 ): Promise<HostStyleProfile | null> {
+  const extractionInput = buildProfileExtractionInput(
+    recentUserMessages,
+    previousProfile,
+  );
   const completion = await openai.chat.completions.create({
     model: "gpt-5.6-terra",
     max_completion_tokens: 700,
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: HOST_PROFILE_EXTRACTION_PROMPT },
-      {
-        role: "user",
-        content: buildProfileExtractionInput(
-          recentUserMessages,
-          previousProfile,
-        ),
-      },
+      { role: "user", content: extractionInput },
     ],
   });
 
   const content = completion.choices[0]?.message?.content;
+  // The provider billed this call whether or not the reply parses into a
+  // usable profile, so meter before any validation can bail. Metering is
+  // best-effort by design: a callback failure must never break a refresh.
+  if (onUsage) {
+    try {
+      onUsage(
+        usageFromCompletion(completion.usage, {
+          promptChars:
+            HOST_PROFILE_EXTRACTION_PROMPT.length + extractionInput.length,
+          outputChars: content?.length ?? 0,
+        }),
+      );
+    } catch {
+      // Swallowed: usage bookkeeping stays off the refresh's failure path.
+    }
+  }
   if (!content) return null;
   let parsed: unknown;
   try {
@@ -268,7 +286,24 @@ export async function absorbHostMessage(input: {
   if (claimed.length === 0) return "absorbed";
 
   try {
-    const derive = input.derive ?? deriveProfileFromMessages;
+    // Bond upkeep is still the host's own AI spend: a refresh only runs
+    // because this user's chat crossed the material threshold, so the
+    // ledger charges the same account (SKU billed under the venom-gpt
+    // alias). The injected test seam replaces the model call entirely, so
+    // it meters nothing.
+    const derive =
+      input.derive ??
+      ((messages: string[], previous: HostStyleProfile | null) =>
+        deriveProfileFromMessages(messages, previous, (usage) =>
+          recordVenomUsage({
+            userId: input.userId,
+            modelAlias: "venom-gpt",
+            callKind: "host_profile",
+            promptTokens: usage.promptTokens,
+            outputTokens: usage.outputTokens,
+            estimated: usage.estimated,
+          }),
+        ));
     const profile = await derive(input.recentUserMessages, previousProfile);
     if (!profile) {
       input.log.warn(

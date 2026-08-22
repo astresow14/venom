@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
 import router from "./routes";
+import venomAppAiGatewayRouter from "./routes/venom-app-ai-gateway";
 import { logger } from "./lib/logger";
 import {
   CLERK_PROXY_PATH,
@@ -72,6 +73,12 @@ app.use(
 );
 app.use(express.json({ limit: MAX_API_JSON_BODY_BYTES }));
 app.use(express.urlencoded({ extended: true }));
+
+// The app AI gateway authenticates provisioned apps by their own runtime
+// credentials, so it mounts BEFORE Clerk middleware: its bearer tokens are
+// not Clerk tokens and must never reach Clerk parsing. Deliberately outside
+// CORS allowances too — hosted apps call it server-to-server.
+app.use("/api/app-gateway", venomAppAiGatewayRouter);
 
 app.use(
   clerkMiddleware((req) => ({

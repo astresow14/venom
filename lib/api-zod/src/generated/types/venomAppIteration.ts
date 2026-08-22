@@ -33,6 +33,8 @@ export interface VenomAppIteration {
      */
   changesSummary: string | null;
   baselineIterationNumber: number | null;
+  releaseId: Uuid | null;
+  isLive: boolean;
   /**
      * @minLength 1
      * @maxLength 200

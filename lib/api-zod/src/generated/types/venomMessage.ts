@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VenomMessageAttachment } from './venomMessageAttachment';
 import type { VenomMessageDeliberation } from './venomMessageDeliberation';
 import type { VenomMessageRole } from './venomMessageRole';
 import type { VenomMessageStatus } from './venomMessageStatus';
@@ -41,4 +42,9 @@ export interface VenomMessage {
      * @maxLength 80
      */
   speakerName?: string;
+  /**
+     * Files carried by this message — uploads on user turns, generated files on assistant turns. Optional, so older clients and existing history remain valid.
+     * @maxItems 5
+     */
+  attachments?: VenomMessageAttachment[];
 }

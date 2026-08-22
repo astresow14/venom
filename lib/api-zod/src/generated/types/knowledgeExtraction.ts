@@ -6,8 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { KnowledgeCandidate } from './knowledgeCandidate';
-import type { Uuid } from './uuid';
+import type { VenomFiledScope } from './venomFiledScope';
 import type { VenomKnowledgeCluster } from './venomKnowledgeCluster';
+import type { VenomWorkspaceFiling } from './venomWorkspaceFiling';
 
 export interface KnowledgeExtraction {
   /** @maxItems 8 */
@@ -17,5 +18,10 @@ export interface KnowledgeExtraction {
      * @maxItems 80
      */
   filed?: VenomKnowledgeCluster[];
-  filedWorkspaceId?: Uuid;
+  filedScope?: VenomFiledScope;
+  /**
+     * Workspaces the extraction auto-filed clusters into, one entry per workspace, each carrying the ledger row id that lets the author undo the filing. The clusters themselves are not returned: workspace records never merge into personal state.
+     * @maxItems 8
+     */
+  workspaceFilings?: VenomWorkspaceFiling[];
 }

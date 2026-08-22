@@ -33,6 +33,8 @@ export interface VenomBuildRunInput {
   projectId: string | null;
   /** @maxItems 20 */
   sopRevisionIds: Uuid[];
+  /** Optional template lineage for runs that started from a global template. When the run is pinned to an app that already carries template lineage, the app's lineage wins. */
+  templateId?: Uuid | null;
   /**
      * @minLength 16
      * @maxLength 120

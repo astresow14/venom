@@ -199,6 +199,8 @@ async function deleteProjectOnDevice(
 
   await page.getByTestId("open-projects").click();
   await page.getByRole("button", { name: `Delete ${name}` }).click();
+  // Deleting asks first now: pass through the confirmation dialog.
+  await page.getByTestId("confirm-delete-project").click();
   await expect(
     page.getByRole("button", { name: `Switch to ${name}` }),
   ).toHaveCount(0);
@@ -291,6 +293,67 @@ test("keeps a message written while cloud saves fail across a reload", async ({
   await expect
     .poll(() => savedMessageContents(page, initialUserId))
     .not.toContain(offlineMessage);
+});
+
+test("tells the writer in chat when their messages have not reached the cloud", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "desktop-chromium",
+    "The chat composer journey is covered at the mobile viewport.",
+  );
+
+  const syncedMessage = `Backed up question ${testInfo.project.name}`;
+  const strandedMessage = `Stranded question ${testInfo.project.name}`;
+  await stubChat(page);
+
+  await page.goto(syncTestUrl());
+  await expect(page.getByTestId("chat-input")).toBeVisible();
+
+  const notice = page.getByTestId("chat-unsynced-notice");
+  const boardNotice = page.getByTestId("board-unsynced-notice");
+
+  // A normal healthy save comes and goes without chat ever mentioning it.
+  // The board workspace stays mounted behind the chat tab, so its notice
+  // staying absent is observable here too.
+  await sendChatMessage(page, syncedMessage);
+  await expect
+    .poll(() => savedMessageContents(page, initialUserId))
+    .toContain(syncedMessage);
+  await expect(notice).toHaveCount(0);
+  await expect(boardNotice).toHaveCount(0);
+
+  // Saves keep failing: the message exists only on this device, and chat has
+  // to say so in plain language instead of leaving the hint buried in
+  // Settings. Four failures keep the workspace unsynced long enough for the
+  // notice's arming delay to elapse while retries are still backing off.
+  await page.evaluate(() => {
+    window.__venomWorkspaceSyncTest?.failNextSaves(4);
+  });
+  await sendChatMessage(page, strandedMessage);
+  await expect
+    .poll(() => savedMessageContents(page, initialUserId))
+    .not.toContain(strandedMessage);
+  await expect(notice).toBeVisible({ timeout: 15_000 });
+  await expect(notice).toContainText("on this device only");
+  await expect(notice).toContainText("when the connection returns");
+
+  // The board tells the same story with the same calm pattern: armed by the
+  // failed save, sustained through the retries still backing off — never a
+  // status-keyed blink.
+  await page.getByRole("tab", { name: "Open To-Do workspace" }).click();
+  await expect(page.getByText("Task Board", { exact: true })).toBeVisible();
+  await expect(boardNotice).toBeVisible();
+  await expect(boardNotice).toContainText("on this device only");
+
+  // The fifth attempt lands. Both notices must clear on their own once the
+  // cloud really holds the message — that clearing is the signal people
+  // rely on.
+  await expect(notice).toHaveCount(0, { timeout: 60_000 });
+  await expect(boardNotice).toHaveCount(0);
+  expect(await savedMessageContents(page, initialUserId)).toContain(
+    strandedMessage,
+  );
 });
 
 test("keeps a project created while cloud saves fail, without reviving one deleted elsewhere", async ({
@@ -466,7 +529,7 @@ test("keeps a project deleted while cloud saves fail deleted once saves recover"
   const attemptsBefore = await page.evaluate(
     () => window.__venomWorkspaceSyncTest?.attempts.length ?? 0,
   );
-  await deleteProjectOnDevice(page, doomedProject, "Global Workspace");
+  await deleteProjectOnDevice(page, doomedProject, "General");
   await page.waitForFunction(
     (previous) =>
       (window.__venomWorkspaceSyncTest?.attempts.length ?? 0) > previous,
@@ -494,7 +557,7 @@ test("keeps a project deleted while cloud saves fail deleted once saves recover"
 
   await page.getByTestId("open-projects").click();
   await expect(
-    page.getByRole("button", { name: `Switch to Global Workspace` }),
+    page.getByRole("button", { name: `Switch to General` }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: `Switch to ${doomedProject}` }),

@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { VenomMark } from "@/components/venom-mark";
 import { VenomWordmark } from "@/components/venom-wordmark";
+import { VenomWordmarkReveal } from "@/components/venom-wordmark-reveal";
 import {
   Activity,
   AudioLines,
@@ -135,17 +136,16 @@ export default function LandingPage() {
         </header>
 
         <main className="relative flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-4 pb-16 md:items-start md:pt-[22vh]">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-            className="flex w-full max-w-[590px] flex-col items-center"
-          >
+          <div className="flex w-full max-w-[590px] flex-col items-center">
             <h1 className="sr-only">What are you working on?</h1>
-            <VenomWordmark className="mb-7 h-24 text-white md:h-28" />
+            {/* The tag throws itself on first; the composer rises just after. */}
+            <VenomWordmarkReveal className="mb-7 h-24 text-white md:h-28" />
 
-            <form
+            <motion.form
               onSubmit={handleSubmit}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
               className={cn(
                 "flex w-full items-center rounded-full border border-white/[0.12] bg-[#111111] px-3 py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.25)] transition-colors duration-200",
                 isFocused && "border-white/30",
@@ -206,8 +206,8 @@ export default function LandingPage() {
                   <AudioLines className="h-4 w-4" />
                 )}
               </Button>
-            </form>
-          </motion.div>
+            </motion.form>
+          </div>
         </main>
       </div>
     </div>

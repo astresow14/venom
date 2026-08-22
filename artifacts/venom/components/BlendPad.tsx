@@ -68,6 +68,14 @@ export function BlendPad({
   const colors = useColors();
   const padRef = useRef<View>(null);
   const originRef = useRef<{ x: number; y: number } | null>(null);
+  // The newest touch point that arrived before measureInWindow answered —
+  // the measure callback replays it, so a fast tap whose release beats the
+  // (async) measurement still lands and commits.
+  const pendingRef = useRef<{
+    pageX: number;
+    pageY: number;
+    commit: boolean;
+  } | null>(null);
   const latestRef = useRef<BlendWeights>(weights);
   latestRef.current = weights;
 
@@ -85,12 +93,20 @@ export function BlendPad({
   const applyPagePoint = useCallback(
     (pageX: number, pageY: number, commit: boolean) => {
       const origin = originRef.current;
-      if (!origin) return;
+      if (!origin) {
+        // measureInWindow hasn't answered yet; remember the newest point so
+        // the measure callback can replay it instead of dropping a commit.
+        pendingRef.current = { pageX, pageY, commit };
+        return;
+      }
       const next = pinToWeights({
         x: (pageX - origin.x - INSET_X) / INNER_WIDTH,
         y: (pageY - origin.y - INSET_TOP) / INNER_HEIGHT,
       });
       if (commit) {
+        if (Platform.OS !== "web") {
+          Haptics.selectionAsync();
+        }
         onCommit(next);
         announce(next);
       } else {
@@ -105,24 +121,45 @@ export function BlendPad({
       PanResponder.create({
         onStartShouldSetPanResponder: () => !disabled,
         onMoveShouldSetPanResponder: () => !disabled,
+        // The workspace pager claims mostly-horizontal moves; refusing the
+        // handover keeps a drag toward a side corner on the pad instead of
+        // swiping tabs mid-gesture.
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: (event) => {
           const { pageX, pageY } = event.nativeEvent;
+          originRef.current = null;
+          pendingRef.current = { pageX, pageY, commit: false };
           padRef.current?.measureInWindow((x, y) => {
             originRef.current = { x, y };
-            applyPagePoint(pageX, pageY, false);
+            const pending = pendingRef.current;
+            pendingRef.current = null;
+            if (pending) {
+              applyPagePoint(pending.pageX, pending.pageY, pending.commit);
+            }
           });
         },
-        onPanResponderMove: (_event, gesture) => {
-          applyPagePoint(gesture.moveX, gesture.moveY, false);
+        // Coordinates come from the event itself: gesture.moveX/moveY stay
+        // (0, 0) until the first move, so a stationary tap would otherwise
+        // release at the screen origin and commit a corner the finger never
+        // touched.
+        onPanResponderMove: (event) => {
+          applyPagePoint(
+            event.nativeEvent.pageX,
+            event.nativeEvent.pageY,
+            false,
+          );
         },
-        onPanResponderRelease: (_event, gesture) => {
-          applyPagePoint(gesture.moveX, gesture.moveY, true);
+        onPanResponderRelease: (event) => {
+          applyPagePoint(event.nativeEvent.pageX, event.nativeEvent.pageY, true);
           originRef.current = null;
         },
         onPanResponderTerminate: () => {
-          // Drag interrupted: settle on whatever the live weights show.
+          // Drag interrupted by the system: settle on whatever the live
+          // weights show, quietly.
           onCommit(latestRef.current);
           originRef.current = null;
+          pendingRef.current = null;
         },
       }),
     [applyPagePoint, disabled, onCommit],

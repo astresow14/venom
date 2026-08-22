@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "codegen": "orval --config ./orval.config.ts && pnpm -w run typecheck:libs"
+    "codegen:generate": "orval --config ./orval.config.ts && node ./scripts/hoist-literal-consts.mjs",
+    "codegen": "pnpm run codegen:generate && pnpm -w run typecheck:libs",
+    "check:freshness": "node ./scripts/check-generated-freshness.mjs"
   },
   "devDependencies": {
     "orval": "^8.23.0"

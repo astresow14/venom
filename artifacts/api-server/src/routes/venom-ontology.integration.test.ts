@@ -26,6 +26,7 @@ import {
   searchOntologyConcepts,
   userOwner,
 } from "../lib/venom-ontology-store";
+import { readWorkspaceConversation } from "../lib/venom-conversation-read";
 
 const testUserIds: string[] = [];
 
@@ -515,4 +516,61 @@ test("absorb strips forged capture stamps but keeps the owner's", async () => {
   assert.equal(own.capturedAt, 900);
   assert.equal(forged.capturedByUserId, null);
   assert.equal(forged.capturedAt, null);
+});
+
+test("a cited conversation reads back out of a stored snapshot", async () => {
+  const userId = freshUserId();
+  const state = workspaceState([], {
+    conversations: [
+      {
+        id: "conv_cited",
+        title: "Vendor call",
+        projectId: "p1",
+        updatedAt: 5000,
+        messages: [
+          {
+            id: "m1",
+            role: "user",
+            content: "What did we agree on pricing?",
+            createdAt: 4000,
+            status: "sent",
+          },
+          {
+            id: "m2",
+            role: "assistant",
+            content: "A 12% cap on the uplift.",
+            createdAt: 4500,
+            status: "sent",
+            speakerName: "The Analyst",
+          },
+        ],
+      },
+    ],
+  });
+
+  await db.insert(venomWorkspacesTable).values({
+    clerkUserId: userId,
+    state,
+    revision: 1,
+  });
+
+  // The JSONB round trip must preserve everything the read-only
+  // conversation GET serves.
+  const [row] = await db
+    .select()
+    .from(venomWorkspacesTable)
+    .where(eq(venomWorkspacesTable.clerkUserId, userId));
+  assert.ok(row);
+  const read = readWorkspaceConversation(row.state, "conv_cited");
+  assert.ok(read);
+  assert.equal(read.conversation.title, "Vendor call");
+  assert.equal(read.projectName, "Project One");
+  assert.deepEqual(
+    read.conversation.messages.map((entry) => entry.content),
+    ["What did we agree on pricing?", "A 12% cap on the uplift."],
+  );
+  assert.equal(read.conversation.messages[1].speakerName, "The Analyst");
+
+  // A miss stays a miss - the GET turns this into its 404.
+  assert.equal(readWorkspaceConversation(row.state, "conv_absent"), null);
 });

@@ -5,6 +5,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -14,45 +15,68 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import {
+  exportSharedWorkspaceMarkdown,
   getGetSharedWorkspaceKnowledgeQueryKey,
+  getGetSharedWorkspaceSettingsQueryKey,
   getListSharedWorkspaceMembersQueryKey,
   getListSharedWorkspaceSopsQueryKey,
   getListSharedWorkspacesQueryKey,
   useAddSharedWorkspaceMember,
   useCreateSharedWorkspace,
   useGetSharedWorkspaceKnowledge,
+  useGetSharedWorkspaceSettings,
   useListSharedWorkspaceMembers,
   useListSharedWorkspaceSops,
   useRemoveSharedWorkspaceMember,
+  useSetSharedWorkspaceConceptRestriction,
+  useSetSharedWorkspaceConceptSensitivity,
+  useUpdateSharedWorkspaceMemberRole,
+  useSetSharedWorkspaceEvidenceSensitivity,
+  useSetSharedWorkspaceSopRestriction,
+  useSetSharedWorkspaceSopSensitivity,
+  useUpdateSharedWorkspaceSettings,
   type SharedWorkspaceMember,
+  type VenomKnowledgeCluster,
 } from "@workspace/api-client-react";
 import { Header } from "@/components/Header";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { useColors } from "@/hooks/useColors";
 import { useSharedWorkspace } from "@/context/sharedWorkspace";
+import {
+  deliverMarkdown,
+  markdownExportFileName,
+} from "@/lib/downloadMarkdown";
 
 function statusOf(error: unknown): number | undefined {
   return (error as { status?: number } | null)?.status;
 }
 
 /**
- * Shared workspaces on mobile: create, switch between personal and shared
- * views, see members (admins add/remove), and read the workspace's shared
- * knowledge and procedures. Everything here comes from membership-checked
- * endpoints — nothing is stored in the synced personal snapshot.
+ * Shared-workspace management on mobile: create workspaces, see members
+ * (admins add/remove and change roles in place), and review each
+ * workspace's shared knowledge and procedures. Everything here comes from
+ * membership-checked endpoints — nothing is stored in the synced personal
+ * snapshot.
+ *
+ * This screen is management only. There is no app-wide workspace
+ * selection anymore: chat knowledge sorts itself at filing time, and the
+ * Brain screen carries the Personal / workspace / Unsorted filter. Opening
+ * a workspace here just expands its management panel.
  */
 export default function WorkspacesScreen() {
   const colors = useColors();
   const queryClient = useQueryClient();
   const { userId: myUserId } = useAuth();
-  const {
-    workspaces,
-    isLoading,
-    activeWorkspace,
-    selectWorkspace,
-    accessLostNotice,
-    dismissAccessLostNotice,
-  } = useSharedWorkspace();
+  const { workspaces, isLoading, accessLostNotice, dismissAccessLostNotice } =
+    useSharedWorkspace();
+
+  // Which workspace's management panel is open — screen-local state, not a
+  // scope the rest of the app follows.
+  const [managedId, setManagedId] = useState<string | null>(null);
+  const activeWorkspace = useMemo(
+    () => workspaces.find((entry) => entry.id === managedId) ?? null,
+    [workspaces, managedId],
+  );
 
   const [newName, setNewName] = useState("");
   const [newMemberId, setNewMemberId] = useState("");
@@ -96,6 +120,151 @@ export default function WorkspacesScreen() {
   const createWorkspace = useCreateSharedWorkspace();
   const addMember = useAddSharedWorkspaceMember();
   const removeMember = useRemoveSharedWorkspaceMember();
+  const updateMemberRole = useUpdateSharedWorkspaceMemberRole();
+
+  // Sensitivity locks: any member may mark or unmark workspace knowledge and
+  // procedures. The lock governs what leaves the workspace in exports, not
+  // who inside the workspace can see the item.
+  const conceptSensitivity = useSetSharedWorkspaceConceptSensitivity();
+  const evidenceSensitivity = useSetSharedWorkspaceEvidenceSensitivity();
+  const sopSensitivity = useSetSharedWorkspaceSopSensitivity();
+  // Admin-only restrictions: the server filters restricted items out of
+  // member responses entirely, so the badge and toggle below only ever
+  // render for admins — members never receive a restricted row to show.
+  const conceptRestriction = useSetSharedWorkspaceConceptRestriction();
+  const sopRestriction = useSetSharedWorkspaceSopRestriction();
+  const [expandedClusterId, setExpandedClusterId] = useState<string | null>(
+    null,
+  );
+  const [exportingKind, setExportingKind] = useState<"brain" | "sops" | null>(
+    null,
+  );
+
+  // The export policy is admin-only on the server, so the query stays off
+  // for regular members.
+  const settingsQuery = useGetSharedWorkspaceSettings(workspaceId, {
+    query: {
+      queryKey: getGetSharedWorkspaceSettingsQueryKey(workspaceId),
+      enabled: Boolean(activeWorkspace) && isAdmin,
+    },
+  });
+  const updateSettings = useUpdateSharedWorkspaceSettings();
+
+  const lockFailed = () => {
+    Alert.alert("Could not update the lock", "Try again in a moment.");
+  };
+
+  const invalidateKnowledge = () => {
+    queryClient.invalidateQueries({
+      queryKey: getGetSharedWorkspaceKnowledgeQueryKey(workspaceId),
+    });
+  };
+
+  const handleConceptLock = (cluster: VenomKnowledgeCluster) => {
+    if (!activeWorkspace || conceptSensitivity.isPending) return;
+    conceptSensitivity.mutate(
+      {
+        workspaceId,
+        conceptId: cluster.id,
+        data: { sensitive: cluster.sensitive !== true },
+      },
+      { onSuccess: invalidateKnowledge, onError: lockFailed },
+    );
+  };
+
+  const handleEvidenceLock = (
+    cluster: VenomKnowledgeCluster,
+    conversationId: string,
+    sensitive: boolean,
+  ) => {
+    if (!activeWorkspace || evidenceSensitivity.isPending) return;
+    evidenceSensitivity.mutate(
+      { workspaceId, conceptId: cluster.id, conversationId, data: { sensitive } },
+      { onSuccess: invalidateKnowledge, onError: lockFailed },
+    );
+  };
+
+  const handleSopLock = (sopId: string, sensitive: boolean) => {
+    if (!activeWorkspace || sopSensitivity.isPending) return;
+    sopSensitivity.mutate(
+      { workspaceId, sopId, data: { sensitive } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getListSharedWorkspaceSopsQueryKey(workspaceId),
+          });
+        },
+        onError: lockFailed,
+      },
+    );
+  };
+
+  const restrictionFailed = () => {
+    Alert.alert("Could not update the restriction", "Try again in a moment.");
+  };
+
+  const handleConceptRestrict = (cluster: VenomKnowledgeCluster) => {
+    if (!activeWorkspace || conceptRestriction.isPending) return;
+    conceptRestriction.mutate(
+      {
+        workspaceId,
+        conceptId: cluster.id,
+        data: { adminOnly: cluster.adminOnly !== true },
+      },
+      { onSuccess: invalidateKnowledge, onError: restrictionFailed },
+    );
+  };
+
+  const handleSopRestrict = (sopId: string, adminOnly: boolean) => {
+    if (!activeWorkspace || sopRestriction.isPending) return;
+    sopRestriction.mutate(
+      { workspaceId, sopId, data: { adminOnly } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getListSharedWorkspaceSopsQueryKey(workspaceId),
+          });
+        },
+        onError: restrictionFailed,
+      },
+    );
+  };
+
+  const handlePolicyChange = (nextAllow: boolean) => {
+    if (updateSettings.isPending) return;
+    updateSettings.mutate(
+      { workspaceId, data: { allowSensitiveExport: nextAllow } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getGetSharedWorkspaceSettingsQueryKey(workspaceId),
+          });
+        },
+        onError: () => {
+          Alert.alert("Could not update the policy", "Try again in a moment.");
+        },
+      },
+    );
+  };
+
+  const handleExport = async (kind: "brain" | "sops") => {
+    if (!activeWorkspace || exportingKind) return;
+    setExportingKind(kind);
+    try {
+      const markdown = await exportSharedWorkspaceMarkdown(workspaceId, kind);
+      await deliverMarkdown(
+        markdownExportFileName(activeWorkspace.name, kind),
+        markdown,
+      );
+    } catch {
+      Alert.alert(
+        "Export failed",
+        "The download could not be prepared. Try again.",
+      );
+    } finally {
+      setExportingKind(null);
+    }
+  };
 
   const handleCreate = () => {
     const name = newName.trim();
@@ -107,7 +276,7 @@ export default function WorkspacesScreen() {
           await queryClient.invalidateQueries({
             queryKey: getListSharedWorkspacesQueryKey(),
           });
-          selectWorkspace(workspace.id);
+          setManagedId(workspace.id);
           setNewName("");
         },
         onError: (error: unknown) => {
@@ -164,6 +333,61 @@ export default function WorkspacesScreen() {
     );
   };
 
+  // Role changes happen in place: nobody is removed, so the member's access
+  // and cached workspace content never lapse.
+  const performRoleChange = (member: SharedWorkspaceMember) => {
+    if (!activeWorkspace) return;
+    const nextRole = member.role === "admin" ? "member" : "admin";
+    updateMemberRole.mutate(
+      {
+        workspaceId: activeWorkspace.id,
+        memberUserId: member.userId,
+        data: { role: nextRole },
+      },
+      {
+        // The caller's own role also rides the workspace list.
+        onSuccess: () => invalidateMembership(),
+        onError: (error: unknown) => {
+          const status = statusOf(error);
+          Alert.alert(
+            "Could not change the role",
+            status === 409
+              ? "A workspace needs at least one admin. Promote someone else first."
+              : status === 404
+                ? "They are no longer a member."
+                : status === 403
+                  ? "Only admins can change roles."
+                  : "Try again in a moment.",
+          );
+        },
+      },
+    );
+  };
+
+  const handleRoleChange = (member: SharedWorkspaceMember) => {
+    if (updateMemberRole.isPending) return;
+    const demotingSelf =
+      member.userId === myUserId && member.role === "admin";
+    if (!demotingSelf) {
+      performRoleChange(member);
+      return;
+    }
+    // Stepping down is safe but not self-reversible; confirm it.
+    const title = "Step down as admin?";
+    const detail =
+      "You keep your membership and access, but only another admin can promote you again.";
+    if (Platform.OS === "web") {
+      // RN Web's Alert has no buttons; confirm() keeps the guard.
+      // eslint-disable-next-line no-alert
+      if (window.confirm(`${title}\n\n${detail}`)) performRoleChange(member);
+      return;
+    }
+    Alert.alert(title, detail, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Step down", onPress: () => performRoleChange(member) },
+    ]);
+  };
+
   const performRemove = (member: SharedWorkspaceMember) => {
     if (!activeWorkspace) return;
     const removingSelf = member.userId === myUserId;
@@ -172,7 +396,7 @@ export default function WorkspacesScreen() {
       {
         onSuccess: async () => {
           if (removingSelf) {
-            selectWorkspace(null);
+            setManagedId(null);
             await queryClient.invalidateQueries({
               queryKey: getListSharedWorkspacesQueryKey(),
             });
@@ -245,10 +469,12 @@ export default function WorkspacesScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Space picker */}
+        {/* Workspace list: tap a workspace to open its management panel.
+            Selection here is screen-local — knowledge files itself now, and
+            the Brain screen owns the Personal / workspace / Unsorted view. */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-            SPACE
+            YOUR SHARED WORKSPACES
           </Text>
           <View
             style={[
@@ -256,54 +482,42 @@ export default function WorkspacesScreen() {
               { backgroundColor: colors.card, borderColor: colors.border },
             ]}
           >
-            <TouchableOpacity
-              style={styles.row}
-              onPress={() => selectWorkspace(null)}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: !activeWorkspace }}
-              accessibilityLabel="Use your personal space"
-              testID="select-space-personal"
-            >
-              <View style={styles.rowLeft}>
-                <Feather
-                  name="user"
-                  size={18}
-                  color={
-                    !activeWorkspace ? colors.primary : colors.mutedForeground
-                  }
-                />
-                <Text style={[styles.rowTitle, { color: colors.foreground }]}>
-                  Personal
-                </Text>
-              </View>
-              {!activeWorkspace && (
-                <Feather name="check" size={16} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-
             {isLoading && (
-              <View style={[styles.row, styles.rowBorder, { borderTopColor: colors.border }]}>
+              <View style={styles.row}>
                 <ActivityIndicator size="small" color={colors.mutedForeground} />
               </View>
             )}
 
-            {workspaces.map((workspace) => {
-              const selected = activeWorkspace?.id === workspace.id;
+            {!isLoading && workspaces.length === 0 && (
+              <View style={styles.row} testID="workspace-list-empty">
+                <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
+                  No shared workspaces yet. Create one below to pool knowledge
+                  with teammates.
+                </Text>
+              </View>
+            )}
+
+            {workspaces.map((workspace, index) => {
+              const open = activeWorkspace?.id === workspace.id;
               return (
                 <TouchableOpacity
                   key={workspace.id}
-                  style={[styles.row, styles.rowBorder, { borderTopColor: colors.border }]}
-                  onPress={() => selectWorkspace(workspace.id)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  accessibilityLabel={`Use shared workspace ${workspace.name}`}
+                  style={[
+                    styles.row,
+                    (isLoading || index > 0) && styles.rowBorder,
+                    (isLoading || index > 0) && { borderTopColor: colors.border },
+                  ]}
+                  onPress={() => setManagedId(open ? null : workspace.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: open }}
+                  accessibilityLabel={`Manage shared workspace ${workspace.name}`}
                   testID={`select-space-${workspace.id}`}
                 >
                   <View style={styles.rowLeft}>
                     <Feather
                       name="users"
                       size={18}
-                      color={selected ? colors.primary : colors.mutedForeground}
+                      color={open ? colors.primary : colors.mutedForeground}
                     />
                     <View style={{ flexShrink: 1 }}>
                       <Text
@@ -321,9 +535,11 @@ export default function WorkspacesScreen() {
                       </Text>
                     </View>
                   </View>
-                  {selected && (
-                    <Feather name="check" size={16} color={colors.primary} />
-                  )}
+                  <Feather
+                    name={open ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color={open ? colors.primary : colors.mutedForeground}
+                  />
                 </TouchableOpacity>
               );
             })}
@@ -453,6 +669,30 @@ export default function WorkspacesScreen() {
                         </View>
                         {isAdmin && (
                           <TouchableOpacity
+                            onPress={() => handleRoleChange(member)}
+                            disabled={updateMemberRole.isPending}
+                            hitSlop={10}
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                              member.role === "admin"
+                                ? isSelf
+                                  ? "Step down to member"
+                                  : `Make ${member.name || member.userId} a member`
+                                : `Make ${member.name || member.userId} an admin`
+                            }
+                            testID={`button-toggle-member-role-${member.userId}`}
+                          >
+                            <Feather
+                              name={
+                                member.role === "admin" ? "shield-off" : "shield"
+                              }
+                              size={16}
+                              color={colors.mutedForeground}
+                            />
+                          </TouchableOpacity>
+                        )}
+                        {isAdmin && (
+                          <TouchableOpacity
                             onPress={() => handleRemoveMember(member)}
                             disabled={removeMember.isPending}
                             hitSlop={10}
@@ -564,11 +804,110 @@ export default function WorkspacesScreen() {
               )}
             </View>
 
+            {/* Admin-only export policy */}
+            {isAdmin && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+                  SECURITY
+                </Text>
+                <View
+                  style={[
+                    styles.card,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                  ]}
+                  testID="section-workspace-security"
+                >
+                  <View style={styles.row}>
+                    <View style={styles.rowLeft}>
+                      <Feather
+                        name="lock"
+                        size={16}
+                        color={colors.mutedForeground}
+                      />
+                      <View style={{ flexShrink: 1 }}>
+                        <Text
+                          style={[styles.rowTitle, { color: colors.foreground }]}
+                        >
+                          Allow sensitive content in exports
+                        </Text>
+                        <Text
+                          style={[
+                            styles.rowMeta,
+                            { color: colors.mutedForeground },
+                          ]}
+                        >
+                          When off, locked items never leave this workspace:
+                          downloads exclude them and say how many were withheld.
+                        </Text>
+                      </View>
+                    </View>
+                    {settingsQuery.isLoading ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={colors.mutedForeground}
+                      />
+                    ) : settingsQuery.isError ? (
+                      <Text
+                        style={[styles.rowMeta, { color: colors.destructive }]}
+                      >
+                        Unavailable
+                      </Text>
+                    ) : (
+                      <Switch
+                        value={settingsQuery.data?.allowSensitiveExport === true}
+                        onValueChange={handlePolicyChange}
+                        disabled={updateSettings.isPending}
+                        accessibilityLabel="Allow sensitive content in exports"
+                        trackColor={{
+                          false: colors.accent,
+                          true: colors.primary,
+                        }}
+                        thumbColor={colors.background}
+                        testID="switch-allow-sensitive-export"
+                      />
+                    )}
+                  </View>
+                </View>
+              </View>
+            )}
+
             {/* Shared knowledge */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-                SHARED KNOWLEDGE
-              </Text>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+                  SHARED KNOWLEDGE
+                </Text>
+                <TouchableOpacity
+                  onPress={() => handleExport("brain")}
+                  disabled={exportingKind !== null}
+                  hitSlop={8}
+                  style={[styles.exportButton, { borderColor: colors.border }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Download this workspace's knowledge as Markdown"
+                  testID="button-export-workspace-brain"
+                >
+                  {exportingKind === "brain" ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={colors.mutedForeground}
+                    />
+                  ) : (
+                    <Feather
+                      name="download"
+                      size={13}
+                      color={colors.mutedForeground}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.exportButtonText,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    .md
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <View
                 style={[
                   styles.card,
@@ -588,53 +927,227 @@ export default function WorkspacesScreen() {
                 ) : clusters.length === 0 ? (
                   <View style={styles.row}>
                     <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
-                      Nothing shared yet. Chat while this workspace is selected
-                      and Venom will file what your team learns here.
+                      Nothing shared yet. Keep this workspace selected while
+                      you chat and Venom will file what your team learns here
+                      — answers already draw on all your spaces.
                     </Text>
                   </View>
                 ) : (
-                  clusters.map((cluster, index) => (
-                    <View
-                      key={cluster.id}
-                      style={[
-                        styles.row,
-                        index > 0 && styles.rowBorder,
-                        index > 0 && { borderTopColor: colors.border },
-                      ]}
-                      testID={`row-workspace-cluster-${cluster.id}`}
-                    >
-                      <View style={styles.rowLeft}>
-                        <Feather
-                          name="share-2"
-                          size={16}
-                          color={colors.mutedForeground}
-                        />
-                        <View style={{ flexShrink: 1 }}>
-                          <Text
-                            style={[styles.rowTitle, { color: colors.foreground }]}
-                            numberOfLines={1}
+                  clusters.map((cluster, index) => {
+                    const isLocked = cluster.sensitive === true;
+                    const isRestricted = cluster.adminOnly === true;
+                    const isExpanded = expandedClusterId === cluster.id;
+                    return (
+                      <View
+                        key={cluster.id}
+                        style={[
+                          index > 0 && styles.rowBorder,
+                          index > 0 && { borderTopColor: colors.border },
+                        ]}
+                        testID={`row-workspace-cluster-${cluster.id}`}
+                      >
+                        <View style={styles.row}>
+                          <TouchableOpacity
+                            style={styles.rowLeft}
+                            onPress={() =>
+                              setExpandedClusterId((current) =>
+                                current === cluster.id ? null : cluster.id,
+                              )
+                            }
+                            accessibilityRole="button"
+                            accessibilityLabel={`${cluster.label}. ${
+                              isExpanded ? "Hide" : "Show"
+                            } evidence.`}
+                            testID={`button-expand-cluster-${cluster.id}`}
                           >
-                            {cluster.label}
-                          </Text>
-                          <Text
-                            style={[styles.rowMeta, { color: colors.mutedForeground }]}
-                            numberOfLines={2}
+                            <Feather
+                              name={isLocked ? "lock" : "share-2"}
+                              size={16}
+                              color={
+                                isLocked
+                                  ? colors.foreground
+                                  : colors.mutedForeground
+                              }
+                            />
+                            <View style={{ flexShrink: 1 }}>
+                              <Text
+                                style={[
+                                  styles.rowTitle,
+                                  { color: colors.foreground },
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {cluster.label}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.rowMeta,
+                                  { color: colors.mutedForeground },
+                                ]}
+                                numberOfLines={2}
+                              >
+                                {isRestricted ? "ADMIN-ONLY · " : ""}
+                                {isLocked ? "SENSITIVE · " : ""}
+                                {cluster.summary}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => handleConceptLock(cluster)}
+                            disabled={conceptSensitivity.isPending}
+                            hitSlop={10}
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                              isLocked
+                                ? `Remove sensitivity lock from ${cluster.label}`
+                                : `Mark ${cluster.label} sensitive`
+                            }
+                            testID={`button-toggle-cluster-sensitivity-${cluster.id}`}
                           >
-                            {cluster.summary}
-                          </Text>
+                            <Feather
+                              name={isLocked ? "unlock" : "lock"}
+                              size={16}
+                              color={
+                                isLocked
+                                  ? colors.foreground
+                                  : colors.mutedForeground
+                              }
+                            />
+                          </TouchableOpacity>
+                          {isAdmin && (
+                            <TouchableOpacity
+                              onPress={() => handleConceptRestrict(cluster)}
+                              disabled={conceptRestriction.isPending}
+                              hitSlop={10}
+                              style={styles.rowActionSpacing}
+                              accessibilityRole="button"
+                              accessibilityLabel={
+                                isRestricted
+                                  ? `Remove the admin-only restriction from ${cluster.label}`
+                                  : `Restrict ${cluster.label} to admins`
+                              }
+                              testID={`button-toggle-cluster-restriction-${cluster.id}`}
+                            >
+                              <Feather
+                                name={isRestricted ? "shield-off" : "shield"}
+                                size={16}
+                                color={
+                                  isRestricted
+                                    ? colors.foreground
+                                    : colors.mutedForeground
+                                }
+                              />
+                            </TouchableOpacity>
+                          )}
                         </View>
+                        {isExpanded &&
+                          (cluster.sources ?? []).map((source) => {
+                            const evidenceLocked = source.sensitive === true;
+                            return (
+                              <View
+                                key={`${cluster.id}-${source.conversationId}`}
+                                style={[
+                                  styles.evidenceRow,
+                                  { borderTopColor: colors.border },
+                                ]}
+                                testID={`row-workspace-evidence-${cluster.id}-${source.conversationId}`}
+                              >
+                                <View style={{ flexShrink: 1, flexGrow: 1 }}>
+                                  <Text
+                                    style={[
+                                      styles.rowMeta,
+                                      { color: colors.foreground },
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {source.conversationTitle}
+                                  </Text>
+                                  <Text
+                                    style={[
+                                      styles.rowMeta,
+                                      { color: colors.mutedForeground },
+                                    ]}
+                                    numberOfLines={2}
+                                  >
+                                    {evidenceLocked ? "SENSITIVE · " : ""}
+                                    {source.excerpt}
+                                  </Text>
+                                </View>
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    handleEvidenceLock(
+                                      cluster,
+                                      source.conversationId,
+                                      !evidenceLocked,
+                                    )
+                                  }
+                                  disabled={evidenceSensitivity.isPending}
+                                  hitSlop={10}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={
+                                    evidenceLocked
+                                      ? `Remove sensitivity lock from evidence in ${source.conversationTitle}`
+                                      : `Mark evidence in ${source.conversationTitle} sensitive`
+                                  }
+                                  testID={`button-toggle-evidence-sensitivity-${cluster.id}-${source.conversationId}`}
+                                >
+                                  <Feather
+                                    name={evidenceLocked ? "unlock" : "lock"}
+                                    size={14}
+                                    color={
+                                      evidenceLocked
+                                        ? colors.foreground
+                                        : colors.mutedForeground
+                                    }
+                                  />
+                                </TouchableOpacity>
+                              </View>
+                            );
+                          })}
                       </View>
-                    </View>
-                  ))
+                    );
+                  })
                 )}
               </View>
             </View>
 
             {/* Shared procedures */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-                SHARED PROCEDURES
-              </Text>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+                  SHARED PROCEDURES
+                </Text>
+                <TouchableOpacity
+                  onPress={() => handleExport("sops")}
+                  disabled={exportingKind !== null}
+                  hitSlop={8}
+                  style={[styles.exportButton, { borderColor: colors.border }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Download this workspace's procedures as Markdown"
+                  testID="button-export-workspace-sops"
+                >
+                  {exportingKind === "sops" ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={colors.mutedForeground}
+                    />
+                  ) : (
+                    <Feather
+                      name="download"
+                      size={13}
+                      color={colors.mutedForeground}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.exportButtonText,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    .md
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <View
                 style={[
                   styles.card,
@@ -659,43 +1172,106 @@ export default function WorkspacesScreen() {
                     </Text>
                   </View>
                 ) : (
-                  sops.map((sop, index) => (
-                    <View
-                      key={sop.id}
-                      style={[
-                        styles.row,
-                        index > 0 && styles.rowBorder,
-                        index > 0 && { borderTopColor: colors.border },
-                      ]}
-                      testID={`row-workspace-sop-${sop.id}`}
-                    >
-                      <View style={styles.rowLeft}>
-                        <Feather
-                          name="file-text"
-                          size={16}
-                          color={colors.mutedForeground}
-                        />
-                        <View style={{ flexShrink: 1 }}>
-                          <Text
-                            style={[styles.rowTitle, { color: colors.foreground }]}
-                            numberOfLines={1}
-                          >
-                            {sop.title}
-                          </Text>
-                          <Text
-                            style={[styles.rowMeta, { color: colors.mutedForeground }]}
-                            numberOfLines={2}
-                          >
-                            {sop.lifecycle.toUpperCase()}
-                            {sop.activeRevisionNumber
-                              ? ` · v${sop.activeRevisionNumber}`
-                              : ""}{" "}
-                            · {sop.content.purpose}
-                          </Text>
+                  sops.map((sop, index) => {
+                    const isLocked = sop.sensitive === true;
+                    const isRestricted = sop.adminOnly === true;
+                    return (
+                      <View
+                        key={sop.id}
+                        style={[
+                          styles.row,
+                          index > 0 && styles.rowBorder,
+                          index > 0 && { borderTopColor: colors.border },
+                        ]}
+                        testID={`row-workspace-sop-${sop.id}`}
+                      >
+                        <View style={styles.rowLeft}>
+                          <Feather
+                            name={isLocked ? "lock" : "file-text"}
+                            size={16}
+                            color={
+                              isLocked
+                                ? colors.foreground
+                                : colors.mutedForeground
+                            }
+                          />
+                          <View style={{ flexShrink: 1 }}>
+                            <Text
+                              style={[
+                                styles.rowTitle,
+                                { color: colors.foreground },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {sop.title}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.rowMeta,
+                                { color: colors.mutedForeground },
+                              ]}
+                              numberOfLines={2}
+                            >
+                              {isRestricted ? "ADMIN-ONLY · " : ""}
+                              {isLocked ? "SENSITIVE · " : ""}
+                              {sop.lifecycle.toUpperCase()}
+                              {sop.activeRevisionNumber
+                                ? ` · v${sop.activeRevisionNumber}`
+                                : ""}{" "}
+                              · {sop.content.purpose}
+                            </Text>
+                          </View>
                         </View>
+                        <TouchableOpacity
+                          onPress={() => handleSopLock(sop.id, !isLocked)}
+                          disabled={sopSensitivity.isPending}
+                          hitSlop={10}
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            isLocked
+                              ? `Remove sensitivity lock from ${sop.title}`
+                              : `Mark ${sop.title} sensitive`
+                          }
+                          testID={`button-toggle-sop-sensitivity-${sop.id}`}
+                        >
+                          <Feather
+                            name={isLocked ? "unlock" : "lock"}
+                            size={16}
+                            color={
+                              isLocked
+                                ? colors.foreground
+                                : colors.mutedForeground
+                            }
+                          />
+                        </TouchableOpacity>
+                        {isAdmin && (
+                          <TouchableOpacity
+                            onPress={() => handleSopRestrict(sop.id, !isRestricted)}
+                            disabled={sopRestriction.isPending}
+                            hitSlop={10}
+                            style={styles.rowActionSpacing}
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                              isRestricted
+                                ? `Remove the admin-only restriction from ${sop.title}`
+                                : `Restrict ${sop.title} to admins`
+                            }
+                            testID={`button-toggle-sop-restriction-${sop.id}`}
+                          >
+                            <Feather
+                              name={isRestricted ? "shield-off" : "shield"}
+                              size={16}
+                              color={
+                                isRestricted
+                                  ? colors.foreground
+                                  : colors.mutedForeground
+                              }
+                            />
+                          </TouchableOpacity>
+                        )}
                       </View>
-                    </View>
-                  ))
+                    );
+                  })
                 )}
               </View>
             </View>
@@ -733,6 +1309,34 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     fontFamily: "Inter_600SemiBold",
   },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  exportButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  exportButtonText: {
+    fontSize: 10,
+    letterSpacing: 0.6,
+    fontFamily: "Inter_600SemiBold",
+  },
+  evidenceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginLeft: 44,
+    paddingRight: 16,
+    paddingVertical: 10,
+  },
   card: {
     borderWidth: 1,
     borderRadius: 12,
@@ -753,6 +1357,9 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  rowActionSpacing: {
+    marginLeft: 16,
   },
   rowBorder: {
     borderTopWidth: StyleSheet.hairlineWidth,

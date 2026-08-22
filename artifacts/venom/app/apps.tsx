@@ -8,12 +8,14 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,6 +27,12 @@ import {
   getGetVenomAppQueryKey,
   getListVenomAppsQueryKey,
   getGetVenomAppIterationContextQueryKey,
+  getGetVenomAppSharingQueryKey,
+  useGetVenomAppSharing,
+  useUpdateVenomAppSharing,
+  getGetVenomAppAiQueryKey,
+  useGetVenomAppAi,
+  useUpdateVenomAppAiSettings,
   useCompleteVenomAppImportUpload,
   useCreateVenomApp,
   useCreateVenomAppImport,
@@ -47,6 +55,12 @@ import {
   useRejectVenomBuildRun,
   useListVenomSops,
   VenomBuildTargetType,
+  useListVenomBuildTemplates,
+  getListVenomBuildTemplatesQueryKey,
+  useGetVenomBuildTemplate,
+  getGetVenomBuildTemplateQueryKey,
+  useUseVenomBuildTemplate,
+  type VenomBuildTemplatePrefill,
   getListVenomBuildRunsQueryKey,
   getGetVenomBuildRunQueryKey,
   type VenomBuildRunSummary,
@@ -69,6 +83,10 @@ import {
 import { Header } from "@/components/Header";
 import { useColors } from "@/hooks/useColors";
 import { useVenom } from "@/context/VenomContext";
+import {
+  claimFocusHandoff,
+  requestFocusHandoff,
+} from "@/lib/dialogFocusHandoff";
 
 const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024;
 
@@ -127,10 +145,83 @@ function OrganicIndicator({ color, size = 8 }: { color: string; size?: number })
 // -----------------------------------------
 // PORTFOLIO VIEW
 // -----------------------------------------
+// Where keyboard focus should land once the currently open portfolio dialog
+// has actually dismissed (and, on web, released its focus trap).
+type PortfolioDismissTarget =
+  | { kind: "create-button" }
+  | { kind: "app-card"; appId: string }
+  | { kind: "link-opener" }
+  | { kind: "improve-opener" }
+  // The improve dialog closed by handing off to the Builds tab; that view
+  // claims the cross-screen focus handoff itself, so dismiss does nothing.
+  | { kind: "builds-handoff" }
+  | { kind: "templates-opener" };
+
+type TemplateHandoff = {
+  templateId: string;
+  templateName: string;
+  appId: string;
+  prefill: VenomBuildTemplatePrefill;
+};
+
+type AppSharingState = {
+  appId: string;
+  enabled: boolean;
+  slug: string | null;
+  shareUrl: string | null;
+  embedUrl: string | null;
+  embedSnippet: string | null;
+  publicStatus: "live" | "unavailable";
+  liveIterationNumber: number | null;
+  livePublishedAt: string | null;
+};
+
+// The generated client resolves failed requests to their JSON error body, so
+// sharing reads are shape-checked before use.
+function readSharingState(data: unknown): data is AppSharingState {
+  if (typeof data !== "object" || data === null) return false;
+  const record = data as Record<string, unknown>;
+  return (
+    typeof record.appId === "string" &&
+    typeof record.enabled === "boolean" &&
+    (record.publicStatus === "live" || record.publicStatus === "unavailable")
+  );
+}
+
+type AppAiOverview = {
+  appId: string;
+  paused: boolean;
+  monthlyCapUsd: number | null;
+  safetyCapUsd: number;
+  credential: {
+    displayPrefix: string;
+    createdAt: string;
+    lastUsedAt: string | null;
+    delivered: boolean;
+  } | null;
+  usage: {
+    periodStart: string;
+    periodEnd: string;
+    costUsd: number;
+    requests: number;
+    promptTokens: number;
+    outputTokens: number;
+    hasEstimates: boolean;
+    models: {
+      modelId: string;
+      modelName: string;
+      costUsd: number;
+      requests: number;
+    }[];
+  };
+  ownerMonthUsd: number;
+};
 function PortfolioView({
   onIterationStarted,
+  onTemplateUsed,
 }: {
   onIterationStarted: (runId: string) => void;
+  onTemplateUsed: (handoff: TemplateHandoff) => void;
 }) {
   const colors = useColors();
   const queryClient = useQueryClient();
@@ -150,10 +241,20 @@ function PortfolioView({
   const [error, setError] = useState("");
   const lastAssetRef = useRef<DocumentPicker.DocumentPickerAsset | null>(null);
   const reducedMotion = useReducedMotion();
-  const createDialogAppear = useRef(new RNAnimated.Value(0)).current;
+  const dialogAppear = useRef(new RNAnimated.Value(0)).current;
   const createButtonRef = useRef<FocusableHandle | null>(null);
   const appCardRefs = useRef<Map<string, FocusableHandle>>(new Map());
-  const pendingCreateFocusRef = useRef<string | null>(null);
+  const linkOpenerRef = useRef<FocusableHandle | null>(null);
+  const improveActionRef = useRef<FocusableHandle | null>(null);
+  const bannerIterateRef = useRef<FocusableHandle | null>(null);
+  const improveOpenerRef = useRef<FocusableHandle | null>(null);
+  const templatesOpenerRef = useRef<FocusableHandle | null>(null);
+  const linkFirstOptionRef = useRef<FocusableHandle | null>(null);
+  const linkCloseRef = useRef<FocusableHandle | null>(null);
+  const pendingDismissFocusRef = useRef<PortfolioDismissTarget | null>(null);
+  const [focusedControlKey, setFocusedControlKey] = useState<string | null>(
+    null,
+  );
 
   const appsQuery = useListVenomApps();
   const detailQuery = useGetVenomApp(selectedAppId, {
@@ -171,6 +272,78 @@ function PortfolioView({
   const dismissSuggestion = useDismissVenomAppImprovementSuggestion();
   const createIteration = useCreateVenomAppIteration();
 
+  // Public sharing: the toggle is the kill switch, the slug-backed link is
+  // stable across disable/enable. Server owns slug + URL composition.
+  const [shareNotice, setShareNotice] = useState("");
+  const sharingKey = getGetVenomAppSharingQueryKey(selectedAppId);
+  const sharingQuery = useGetVenomAppSharing(selectedAppId, {
+    query: {
+      enabled: Boolean(selectedAppId),
+      queryKey: sharingKey,
+    },
+  });
+  const sharing = readSharingState(sharingQuery.data)
+    ? sharingQuery.data
+    : null;
+  const shareUrl = sharing?.enabled === true ? sharing.shareUrl : null;
+  const updateSharing = useUpdateVenomAppSharing({
+    mutation: {
+      onSuccess: (data) => {
+        if (readSharingState(data)) {
+          queryClient.setQueryData(sharingKey, data);
+          setShareNotice(data.enabled ? "Sharing is on" : "Sharing is off");
+        } else {
+          queryClient.invalidateQueries({ queryKey: sharingKey });
+        }
+      },
+      onError: () => setShareNotice("Couldn't update sharing"),
+    },
+  });
+  useEffect(() => {
+    if (!shareNotice) return;
+    const timer = setTimeout(() => setShareNotice(""), 3000);
+    return () => clearTimeout(timer);
+  }, [shareNotice]);
+  const copyShareLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await Clipboard.setStringAsync(shareUrl);
+      setShareNotice("Link copied");
+    } catch {
+      setShareNotice("Copy failed");
+    }
+  };
+
+  // Whitelabeled app AI: usage is read-only here and the switch is the
+  // instant pause. Cap editing and credential rotation live on desktop.
+  const [aiNotice, setAiNotice] = useState("");
+  const appAiKey = getGetVenomAppAiQueryKey(selectedAppId);
+  const appAiQuery = useGetVenomAppAi(selectedAppId, {
+    query: {
+      enabled: Boolean(selectedAppId),
+      queryKey: appAiKey,
+    },
+  });
+  const appAi = readAppAiOverview(appAiQuery.data) ? appAiQuery.data : null;
+  const updateAppAi = useUpdateVenomAppAiSettings({
+    mutation: {
+      onSuccess: (data) => {
+        if (readAppAiOverview(data)) {
+          queryClient.setQueryData(appAiKey, data);
+          setAiNotice(data.paused ? "App AI paused" : "App AI resumed");
+        } else {
+          queryClient.invalidateQueries({ queryKey: appAiKey });
+        }
+      },
+      onError: () => setAiNotice("Couldn't update app AI"),
+    },
+  });
+  useEffect(() => {
+    if (!aiNotice) return;
+    const timer = setTimeout(() => setAiNotice(""), 3000);
+    return () => clearTimeout(timer);
+  }, [aiNotice]);
+
   const [linkPickerVisible, setLinkPickerVisible] = useState(false);
   const [linkError, setLinkError] = useState("");
   const [improveVisible, setImproveVisible] = useState(false);
@@ -178,6 +351,10 @@ function PortfolioView({
   const [improveConstraints, setImproveConstraints] = useState("");
   const [improveError, setImproveError] = useState("");
   const [improveIdemKey, setImproveIdemKey] = useState("");
+  const [templatesVisible, setTemplatesVisible] = useState(false);
+  const [templateDetailId, setTemplateDetailId] = useState("");
+  const [templateAppName, setTemplateAppName] = useState("");
+  const [templateError, setTemplateError] = useState("");
   const [expandedTimelineAppId, setExpandedTimelineAppId] = useState("");
   const [olderTimelines, setOlderTimelines] = useState<
     Record<
@@ -238,6 +415,32 @@ function PortfolioView({
     },
   });
 
+  const templatesQuery = useListVenomBuildTemplates({
+    query: {
+      enabled: templatesVisible,
+      queryKey: getListVenomBuildTemplatesQueryKey(),
+    },
+  });
+  const templateDetailQuery = useGetVenomBuildTemplate(templateDetailId, {
+    query: {
+      enabled: Boolean(templateDetailId),
+      queryKey: getGetVenomBuildTemplateQueryKey(templateDetailId),
+    },
+  });
+  const useTemplate = useUseVenomBuildTemplate();
+
+  // The generated client resolves failed requests to their error body, so
+  // both reads are shape-guarded before rendering.
+  const templates = Array.isArray(templatesQuery.data)
+    ? templatesQuery.data
+    : [];
+  const templateDetail =
+    templateDetailId &&
+    templateDetailQuery.data &&
+    typeof templateDetailQuery.data.name === "string"
+      ? templateDetailQuery.data
+      : undefined;
+
   const detail = detailQuery.data;
 
   // Live detail refreshes (2s polling) can shift the capped embedded timeline
@@ -280,22 +483,36 @@ function PortfolioView({
     }
   };
 
-  // The dialog animates its own card because the modal container must not
+  // Each dialog animates its own card because the modal container must not
   // animate on web: an animated modal keeps its focus trap alive while it
   // fades out and strands keyboard focus (see the card editor in
-  // BoardWorkspace for the shared pattern).
+  // BoardWorkspace for the shared pattern). Only one portfolio dialog can be
+  // open at a time, so they share one appear value.
+  const anyDialogOpen =
+    isCreating || linkPickerVisible || improveVisible || templatesVisible;
   useEffect(() => {
-    if (!isCreating) return;
-    createDialogAppear.setValue(reducedMotion ? 1 : 0);
+    if (!anyDialogOpen) return;
+    dialogAppear.setValue(reducedMotion ? 1 : 0);
     if (reducedMotion) return;
-    const appearance = RNAnimated.timing(createDialogAppear, {
+    const appearance = RNAnimated.timing(dialogAppear, {
       toValue: 1,
       duration: 170,
       useNativeDriver: Platform.OS !== "web",
     });
     appearance.start();
     return () => appearance.stop();
-  }, [createDialogAppear, isCreating, reducedMotion]);
+  }, [anyDialogOpen, dialogAppear, reducedMotion]);
+
+  // The link picker has no autofocused input, so once it opens, place
+  // keyboard focus explicitly on its first actionable control.
+  useEffect(() => {
+    if (!linkPickerVisible || Platform.OS !== "web") return;
+    const frame = requestAnimationFrame(() => {
+      const target = linkFirstOptionRef.current ?? linkCloseRef.current;
+      target?.focus?.();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [linkPickerVisible]);
 
   const registerAppCard =
     (appId: string) => (node: FocusableHandle | null) => {
@@ -304,25 +521,89 @@ function PortfolioView({
     };
 
   const openCreateDialog = () => {
-    pendingCreateFocusRef.current = null;
+    pendingDismissFocusRef.current = null;
     setIsCreating(true);
   };
 
   const cancelCreateDialog = () => {
-    pendingCreateFocusRef.current = null;
+    pendingDismissFocusRef.current = { kind: "create-button" };
     setIsCreating(false);
   };
 
-  // Fires once the modal is actually gone (immediately on web) and its focus
-  // trap has released. Prefers the card of the app the dialog just created;
-  // the create button is the fallback that always exists.
-  const handleCreateDialogDismiss = () => {
-    const appId = pendingCreateFocusRef.current;
-    pendingCreateFocusRef.current = null;
-    const target =
-      (appId ? appCardRefs.current.get(appId) : undefined) ??
-      createButtonRef.current;
-    target?.focus?.();
+  const openLinkPicker = () => {
+    pendingDismissFocusRef.current = null;
+    setLinkError("");
+    setLinkPickerVisible(true);
+  };
+
+  const closeLinkPicker = () => {
+    pendingDismissFocusRef.current = { kind: "link-opener" };
+    setLinkPickerVisible(false);
+  };
+
+  const openTemplates = () => {
+    pendingDismissFocusRef.current = null;
+    setTemplateError("");
+    setTemplatesVisible(true);
+  };
+
+  const closeTemplates = () => {
+    pendingDismissFocusRef.current = { kind: "templates-opener" };
+    setTemplatesVisible(false);
+    setTemplateDetailId("");
+    setTemplateAppName("");
+    setTemplateError("");
+  };
+
+  // Using a template files the app right away, then hands the Builds tab a
+  // pre-filled request. The tab switch unmounts this view, so dismissal must
+  // not try to restore focus to a portfolio control.
+  const handleUseTemplate = async () => {
+    if (!templateDetailId || useTemplate.isPending) return;
+    setTemplateError("");
+    try {
+      const trimmed = templateAppName.trim();
+      const result = await useTemplate.mutateAsync({
+        templateId: templateDetailId,
+        data: trimmed ? { name: trimmed } : {},
+      });
+      await queryClient.invalidateQueries({
+        queryKey: getListVenomAppsQueryKey(),
+      });
+      pendingDismissFocusRef.current = { kind: "builds-handoff" };
+      setTemplatesVisible(false);
+      setTemplateDetailId("");
+      setTemplateAppName("");
+      onTemplateUsed({
+        templateId: result.templateId,
+        templateName: result.templateName,
+        appId: result.app.id,
+        prefill: result.prefill,
+      });
+    } catch (nextError) {
+      setTemplateError(errorMessage(nextError));
+    }
+  };
+
+  // Fires once whichever dialog was open is actually gone (immediately on
+  // web) and its focus trap has released. Hands keyboard focus to the item
+  // the dialog affected when it exists; the create button is the fallback
+  // that always exists.
+  const handleDialogDismiss = () => {
+    const target = pendingDismissFocusRef.current;
+    pendingDismissFocusRef.current = null;
+    if (target?.kind === "builds-handoff") return;
+    let handle: FocusableHandle | null | undefined;
+    if (target?.kind === "app-card") {
+      handle = appCardRefs.current.get(target.appId);
+    } else if (target?.kind === "link-opener") {
+      handle = linkOpenerRef.current;
+    } else if (target?.kind === "improve-opener") {
+      handle = improveOpenerRef.current ?? improveActionRef.current;
+    } else if (target?.kind === "templates-opener") {
+      handle = templatesOpenerRef.current;
+    }
+    (handle ?? createButtonRef.current)?.focus?.();
   };
 
   const handleCreate = async () => {
@@ -354,7 +635,7 @@ function PortfolioView({
       setPurpose("");
       setBrand("");
       setDeploymentUrl("");
-      pendingCreateFocusRef.current = created.id;
+      pendingDismissFocusRef.current = { kind: "app-card", appId: created.id };
       setIsCreating(false);
     } catch (nextError) {
       setError(errorMessage(nextError));
@@ -422,19 +703,29 @@ function PortfolioView({
     setLinkError("");
     try {
       await updateApp.mutateAsync({ appId: selectedAppId, data: { linkedProjectId } });
+      // The dialog stays up until the refreshed detail reflects the change,
+      // so dismissal hands focus back to the affected linked-project row's
+      // control in its settled state.
       await refresh(selectedAppId);
-      setLinkPickerVisible(false);
+      closeLinkPicker();
     } catch (nextError) {
       setLinkError(errorMessage(nextError));
     }
   };
 
-  const openImprove = () => {
+  const openImprove = (opener: FocusableHandle | null) => {
+    improveOpenerRef.current = opener;
+    pendingDismissFocusRef.current = null;
     setImproveInstruction("");
     setImproveConstraints("");
     setImproveError("");
     setImproveIdemKey(Crypto.randomUUID().replaceAll("-", "_"));
     setImproveVisible(true);
+  };
+
+  const closeImprove = () => {
+    pendingDismissFocusRef.current = { kind: "improve-opener" };
+    setImproveVisible(false);
   };
 
   const startIteration = async () => {
@@ -449,9 +740,14 @@ function PortfolioView({
           idempotencyKey: improveIdemKey,
         },
       });
+      pendingDismissFocusRef.current = { kind: "builds-handoff" };
       setImproveVisible(false);
       await queryClient.invalidateQueries({ queryKey: getListVenomBuildRunsQueryKey() });
       await refresh(selectedAppId);
+      // Success closes by switching to the Builds tab, which unmounts this
+      // view — the destination claims the handoff and focuses the new run's
+      // row once it renders. Requested last so the TTL covers the mount.
+      requestFocusHandoff("build-run");
       onIterationStarted(run.id);
     } catch (nextError) {
       setImproveError(errorMessage(nextError));
@@ -481,26 +777,56 @@ function PortfolioView({
         <View style={styles.headingCopy}>
           <Text style={[styles.title, { color: colors.foreground }]}>App Portfolio</Text>
         </View>
-        <TouchableOpacity
-          ref={(node: FocusableHandle | null) => {
-            createButtonRef.current = node;
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Create app record"
-          onPress={openCreateDialog}
-          onFocus={() => setCreateButtonFocused(true)}
-          onBlur={() => setCreateButtonFocused(false)}
-          style={[
-            styles.createButton,
-            { backgroundColor: colors.foreground },
-            createButtonFocused && {
-              borderWidth: 2,
-              borderColor: colors.background,
-            },
-          ]}
-        >
-          <Feather name="plus" color={colors.background} size={18} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <TouchableOpacity
+            ref={(node: FocusableHandle | null) => {
+              templatesOpenerRef.current = node;
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Start from a template"
+            onPress={openTemplates}
+            onFocus={() => setFocusedControlKey("templates-opener")}
+            onBlur={() =>
+              setFocusedControlKey((current) =>
+                current === "templates-opener" ? null : current,
+              )
+            }
+            style={[
+              styles.createButton,
+              {
+                backgroundColor: colors.card,
+                borderWidth: focusedControlKey === "templates-opener" ? 2 : 1,
+                borderColor:
+                  focusedControlKey === "templates-opener"
+                    ? colors.foreground
+                    : colors.border,
+              },
+            ]}
+            testID="button-open-templates"
+          >
+            <Feather name="grid" color={colors.foreground} size={18} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            ref={(node: FocusableHandle | null) => {
+              createButtonRef.current = node;
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Create app record"
+            onPress={openCreateDialog}
+            onFocus={() => setCreateButtonFocused(true)}
+            onBlur={() => setCreateButtonFocused(false)}
+            style={[
+              styles.createButton,
+              { backgroundColor: colors.foreground },
+              createButtonFocused && {
+                borderWidth: 2,
+                borderColor: colors.background,
+              },
+            ]}
+          >
+            <Feather name="plus" color={colors.background} size={18} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {appsQuery.isLoading ? (
@@ -577,6 +903,14 @@ function PortfolioView({
                 <View style={styles.detailCopy}>
                   <Text style={[styles.detailTitle, { color: colors.foreground }]}>{detail.app.name}</Text>
                   <Text style={[styles.detailMeta, { color: colors.mutedForeground }]}>{detail.app.brand} · {statusLabel(detail.app.status)}</Text>
+                  {detail.app.templateName ? (
+                    <Text
+                      style={[styles.detailMeta, { color: colors.mutedForeground, marginTop: 2 }]}
+                      testID="text-template-origin"
+                    >
+                      From the {detail.app.templateName} template
+                    </Text>
+                  ) : null}
                 </View>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close app detail" onPress={() => setSelectedAppId("")} hitSlop={12}>
                   <Feather name="x" size={20} color={colors.foreground} />
@@ -609,7 +943,27 @@ function PortfolioView({
                     Review first — nothing runs without your approval.
                   </Text>
                   <View style={styles.suggestionActions}>
-                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Review and start an iteration" onPress={openImprove} testID={`button-review-iterate-${detail.app.id}`}>
+                    <TouchableOpacity
+                      ref={(node: FocusableHandle | null) => {
+                        bannerIterateRef.current = node;
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Review and start an iteration"
+                      onPress={() => openImprove(bannerIterateRef.current)}
+                      onFocus={() => setFocusedControlKey("banner-iterate")}
+                      onBlur={() =>
+                        setFocusedControlKey((current) =>
+                          current === "banner-iterate" ? null : current,
+                        )
+                      }
+                      style={[
+                        styles.focusRingBase,
+                        focusedControlKey === "banner-iterate"
+                          ? { borderColor: colors.background }
+                          : null,
+                      ]}
+                      testID={`button-review-iterate-${detail.app.id}`}
+                    >
                       <Text style={[styles.actionText, { color: colors.background }]}>Review & iterate</Text>
                     </TouchableOpacity>
                     <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss suggestion" disabled={dismissSuggestion.isPending} onPress={dismissSignal} hitSlop={10} testID={`button-dismiss-suggestion-${detail.app.id}`}>
@@ -632,10 +986,29 @@ function PortfolioView({
 
               <View style={styles.actions}>
                 <TouchableOpacity
+                  ref={(node: FocusableHandle | null) => {
+                    improveActionRef.current = node;
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel={`Improve ${detail.app.name}`}
-                  onPress={openImprove}
-                  style={[styles.primaryAction, { backgroundColor: colors.foreground }]}
+                  onPress={() => openImprove(improveActionRef.current)}
+                  onFocus={() => setFocusedControlKey("improve-action")}
+                  onBlur={() =>
+                    setFocusedControlKey((current) =>
+                      current === "improve-action" ? null : current,
+                    )
+                  }
+                  style={[
+                    styles.primaryAction,
+                    { backgroundColor: colors.foreground },
+                    {
+                      borderWidth: 2,
+                      borderColor:
+                        focusedControlKey === "improve-action"
+                          ? colors.background
+                          : "transparent",
+                    },
+                  ]}
                   testID={`button-improve-app-${detail.app.id}`}
                 >
                   <Feather name="zap" size={16} color={colors.background} />
@@ -677,9 +1050,24 @@ function PortfolioView({
                   </Text>
                 </View>
                 <TouchableOpacity
+                  ref={(node: FocusableHandle | null) => {
+                    linkOpenerRef.current = node;
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel={detail.app.linkedProjectId ? "Change linked project" : "Link a project"}
-                  onPress={() => { setLinkError(""); setLinkPickerVisible(true); }}
+                  onPress={openLinkPicker}
+                  onFocus={() => setFocusedControlKey("link-opener")}
+                  onBlur={() =>
+                    setFocusedControlKey((current) =>
+                      current === "link-opener" ? null : current,
+                    )
+                  }
+                  style={[
+                    styles.focusRingBase,
+                    focusedControlKey === "link-opener"
+                      ? { borderColor: colors.foreground }
+                      : null,
+                  ]}
                   testID="button-open-link-picker"
                 >
                   <Text style={[styles.actionText, { color: colors.foreground }]}>
@@ -687,6 +1075,135 @@ function PortfolioView({
                   </Text>
                 </TouchableOpacity>
               </View>
+
+              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PUBLIC SHARING</Text>
+              <View style={[styles.versionRow, { borderColor: colors.border }]}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text
+                    style={[styles.versionTitle, { color: colors.foreground }]}
+                    testID={`text-sharing-status-${detail.app.id}`}
+                  >
+                    {!sharing
+                      ? sharingQuery.isLoading
+                        ? "Checking sharing…"
+                        : "Sharing unavailable"
+                      : sharing.enabled
+                        ? sharing.publicStatus === "live"
+                          ? sharing.liveIterationNumber
+                            ? `Anyone with the link · serving v${sharing.liveIterationNumber}`
+                            : "Anyone with the link"
+                          : "Link on · nothing live yet"
+                        : "Private"}
+                  </Text>
+                  <Text style={[styles.versionMeta, { color: colors.mutedForeground }]}>
+                    {sharing?.enabled
+                      ? sharing.publicStatus === "live"
+                        ? "The link always serves the published release."
+                        : "Visitors see a branded fallback until a release is published."
+                      : "Turn on to get a stable public link."}
+                  </Text>
+                </View>
+                <Switch
+                  value={sharing?.enabled === true}
+                  onValueChange={(next) =>
+                    updateSharing.mutate({
+                      appId: detail.app.id,
+                      data: { enabled: next },
+                    })
+                  }
+                  disabled={!sharing || updateSharing.isPending}
+                  accessibilityLabel="Enable public sharing"
+                  trackColor={{ false: colors.accent, true: colors.primary }}
+                  thumbColor={colors.background}
+                  testID={`switch-app-sharing-${detail.app.id}`}
+                />
+              </View>
+              {sharing?.enabled && shareUrl ? (
+                <View style={[styles.versionRow, { borderColor: colors.border }]}>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.versionMeta, { color: colors.foreground, flex: 1, paddingRight: 12 }]}
+                    testID={`text-share-url-${detail.app.id}`}
+                  >
+                    {shareUrl}
+                  </Text>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy share link"
+                    onPress={copyShareLink}
+                    hitSlop={8}
+                    testID={`button-copy-share-link-${detail.app.id}`}
+                  >
+                    <Text style={[styles.actionText, { color: colors.foreground }]}>Copy</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              {shareNotice ? (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={[styles.versionMeta, { color: colors.mutedForeground }]}
+                  testID={`text-share-notice-${detail.app.id}`}
+                >
+                  {shareNotice}
+                </Text>
+              ) : null}
+
+              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>APP AI</Text>
+              <View style={[styles.versionRow, { borderColor: colors.border }]}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text
+                    style={[styles.versionTitle, { color: colors.foreground }]}
+                    testID={`text-app-ai-usage-${detail.app.id}`}
+                  >
+                    {!appAi
+                      ? appAiQuery.isLoading
+                        ? "Checking AI usage…"
+                        : "AI usage unavailable"
+                      : `${formatUsd(appAi.usage.costUsd)} this month · ${appAi.usage.requests} request${appAi.usage.requests === 1 ? "" : "s"}`}
+                  </Text>
+                  <Text
+                    style={[styles.versionMeta, { color: colors.mutedForeground }]}
+                    testID={`text-app-ai-detail-${detail.app.id}`}
+                  >
+                    {!appAi
+                      ? "The app's AI runs through Venom — no provider keys."
+                      : appAi.paused
+                        ? "Paused — the app's AI requests are refused instantly."
+                        : `All your apps: ${formatUsd(appAi.ownerMonthUsd)} this month${
+                            appAi.monthlyCapUsd != null
+                              ? ` · cap ${formatUsd(appAi.monthlyCapUsd)}`
+                              : ""
+                          }`}
+                  </Text>
+                </View>
+                <Switch
+                  value={appAi ? !appAi.paused : false}
+                  onValueChange={(next) => {
+                    if (!appAi) return;
+                    updateAppAi.mutate({
+                      appId: detail.app.id,
+                      data: {
+                        paused: !next,
+                        monthlyCapUsd: appAi.monthlyCapUsd,
+                      },
+                    });
+                  }}
+                  disabled={!appAi || updateAppAi.isPending}
+                  accessibilityLabel="App AI enabled"
+                  trackColor={{ false: colors.accent, true: colors.primary }}
+                  thumbColor={colors.background}
+                  testID={`switch-app-ai-pause-${detail.app.id}`}
+                />
+              </View>
+              {aiNotice ? (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={[styles.versionMeta, { color: colors.mutedForeground }]}
+                  testID={`text-app-ai-notice-${detail.app.id}`}
+                >
+                  {aiNotice}
+                </Text>
+              ) : null}
 
               <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SOURCE HISTORY</Text>
               {detail.versions.length ? (
@@ -846,7 +1363,7 @@ function PortfolioView({
         // into the closing dialog. Close immediately there instead; the card
         // below animates its own entrance.
         animationType={Platform.OS === "web" ? "none" : "fade"}
-        onDismiss={handleCreateDialogDismiss}
+        onDismiss={handleDialogDismiss}
         onRequestClose={cancelCreateDialog}
       >
         <View style={styles.modalBackdrop}>
@@ -856,10 +1373,10 @@ function PortfolioView({
               styles.modalCard,
               { backgroundColor: colors.card },
               {
-                opacity: createDialogAppear,
+                opacity: dialogAppear,
                 transform: [
                   {
-                    translateY: createDialogAppear.interpolate({
+                    translateY: dialogAppear.interpolate({
                       inputRange: [0, 1],
                       outputRange: [10, 0],
                     }),
@@ -907,9 +1424,32 @@ function PortfolioView({
         </View>
       </Modal>
 
-      <Modal transparent visible={linkPickerVisible} animationType="fade" onRequestClose={() => setLinkPickerVisible(false)}>
+      <Modal
+        transparent
+        visible={linkPickerVisible}
+        animationType={Platform.OS === "web" ? "none" : "fade"}
+        onRequestClose={closeLinkPicker}
+        onDismiss={handleDialogDismiss}
+      >
         <View style={styles.modalBackdrop}>
-          <View accessibilityViewIsModal style={[styles.modalCard, { backgroundColor: colors.card }]}>
+          <RNAnimated.View
+            accessibilityViewIsModal
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>Knowledge context</Text>
             <Text style={[styles.emptyCopy, { color: colors.mutedForeground, textAlign: "left", marginBottom: 12 }]}>
               Link one of your projects so its Brain knowledge and sources feed this app's iterations.
@@ -919,17 +1459,40 @@ function PortfolioView({
                 No projects in this workspace yet. Create a project first, then link it here.
               </Text>
             ) : (
-              workspaceState.projects.map((project) => {
+              workspaceState.projects.map((project, projectIndex) => {
                 const checked = detail?.app.linkedProjectId === project.id;
                 return (
                   <TouchableOpacity
                     key={project.id}
+                    ref={
+                      projectIndex === 0
+                        ? (node: FocusableHandle | null) => {
+                            linkFirstOptionRef.current = node;
+                          }
+                        : undefined
+                    }
                     accessibilityRole="radio"
                     accessibilityState={{ checked }}
                     aria-checked={checked}
                     disabled={updateApp.isPending}
                     onPress={() => saveProjectLink(project.id)}
-                    style={[styles.versionRow, { borderColor: colors.border }]}
+                    onFocus={() => setFocusedControlKey(`link-option-${project.id}`)}
+                    onBlur={() =>
+                      setFocusedControlKey((current) =>
+                        current === `link-option-${project.id}` ? null : current,
+                      )
+                    }
+                    style={[
+                      styles.versionRow,
+                      {
+                        borderColor:
+                          focusedControlKey === `link-option-${project.id}`
+                            ? colors.foreground
+                            : colors.border,
+                        borderWidth:
+                          focusedControlKey === `link-option-${project.id}` ? 2 : 1,
+                      },
+                    ]}
                     testID={`option-link-project-${project.id}`}
                   >
                     <Text style={[styles.versionTitle, { color: colors.foreground }]}>{project.name}</Text>
@@ -943,6 +1506,18 @@ function PortfolioView({
                 accessibilityRole="button"
                 disabled={updateApp.isPending}
                 onPress={() => saveProjectLink(null)}
+                onFocus={() => setFocusedControlKey("link-unlink")}
+                onBlur={() =>
+                  setFocusedControlKey((current) =>
+                    current === "link-unlink" ? null : current,
+                  )
+                }
+                style={[
+                  styles.focusRingBase,
+                  focusedControlKey === "link-unlink"
+                    ? { borderColor: colors.foreground }
+                    : null,
+                ]}
                 testID="button-unlink-project"
               >
                 <Text style={[styles.actionText, { color: colors.foreground }]}>Remove link</Text>
@@ -952,17 +1527,247 @@ function PortfolioView({
               <Text accessibilityLiveRegion="assertive" style={[styles.error, { color: colors.destructive }]}>{linkError}</Text>
             ) : null}
             <View style={styles.modalActions}>
-              <TouchableOpacity accessibilityRole="button" onPress={() => setLinkPickerVisible(false)}>
+              <TouchableOpacity
+                ref={(node: FocusableHandle | null) => {
+                  linkCloseRef.current = node;
+                }}
+                accessibilityRole="button"
+                onPress={closeLinkPicker}
+                onFocus={() => setFocusedControlKey("link-close")}
+                onBlur={() =>
+                  setFocusedControlKey((current) =>
+                    current === "link-close" ? null : current,
+                  )
+                }
+                style={[
+                  styles.focusRingBase,
+                  focusedControlKey === "link-close"
+                    ? { borderColor: colors.foreground }
+                    : null,
+                ]}
+                testID="button-close-link-picker"
+              >
                 <Text style={[styles.cancel, { color: colors.mutedForeground }]}>{updateApp.isPending ? "Saving…" : "Close"}</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </RNAnimated.View>
         </View>
       </Modal>
 
-      <Modal transparent visible={improveVisible} animationType="slide" onRequestClose={() => setImproveVisible(false)}>
+      <Modal
+        transparent
+        visible={templatesVisible}
+        animationType={Platform.OS === "web" ? "none" : "slide"}
+        onRequestClose={closeTemplates}
+        onDismiss={handleDialogDismiss}
+      >
         <View style={styles.modalBackdrop}>
-          <View accessibilityViewIsModal style={[styles.modalCard, { backgroundColor: colors.card, maxHeight: "90%" }]}>
+          <RNAnimated.View
+            accessibilityViewIsModal
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card, maxHeight: "90%" },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {templateDetailId ? (
+              !templateDetail ? (
+                templateDetailQuery.isError || templateDetailQuery.isSuccess ? (
+                  <View style={{ gap: 12 }}>
+                    <Text style={[styles.emptyCopy, { color: colors.mutedForeground, textAlign: "left" }]}>
+                      This template is unavailable right now.
+                    </Text>
+                    <View style={styles.modalActions}>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        onPress={() => { setTemplateDetailId(""); setTemplateError(""); }}
+                        testID="button-back-templates"
+                      >
+                        <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Back</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <View accessible accessibilityLabel="Loading template" style={{ paddingVertical: 20 }}>
+                    <ActivityIndicator color={colors.foreground} />
+                  </View>
+                )
+              ) : (
+                <>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Back to all templates"
+                    onPress={() => { setTemplateDetailId(""); setTemplateError(""); }}
+                    style={{ marginBottom: 10 }}
+                    testID="button-back-templates"
+                  >
+                    <Text style={{ fontFamily: "Inter_500Medium", fontSize: 12, color: colors.mutedForeground }}>← All templates</Text>
+                  </TouchableOpacity>
+                  <Text
+                    style={[styles.modalTitle, { color: colors.foreground, marginBottom: 4 }]}
+                    testID="text-template-detail-name"
+                  >
+                    {templateDetail.name}
+                  </Text>
+                  <Text style={[styles.versionMeta, { color: colors.mutedForeground, marginBottom: 12 }]}>
+                    {templateDetail.category === "widget" ? "Widget" : "App"} · builds a {templateDetail.targetType.replace(/_/g, " ")}
+                  </Text>
+                  <ScrollView style={{ flexGrow: 0 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 12, paddingBottom: 8 }}>
+                    {templateDetail.previewSummary ? (
+                      <View>
+                        <Text style={[styles.versionTitle, { color: colors.foreground, marginBottom: 4 }]}>What this produces</Text>
+                        <Text style={[styles.purpose, { color: colors.mutedForeground }]}>{templateDetail.previewSummary}</Text>
+                      </View>
+                    ) : null}
+                    <View>
+                      <Text style={[styles.versionTitle, { color: colors.foreground, marginBottom: 4 }]}>Starting requirements</Text>
+                      <Text style={[styles.purpose, { color: colors.mutedForeground }]}>{templateDetail.requirements}</Text>
+                    </View>
+                    {(templateDetail.acceptanceChecks ?? []).length > 0 ? (
+                      <View>
+                        <Text style={[styles.versionTitle, { color: colors.foreground, marginBottom: 4 }]}>It should pass</Text>
+                        {(templateDetail.acceptanceChecks ?? []).map((check) => (
+                          <Text key={check} style={[styles.purpose, { color: colors.mutedForeground }]}>· {check}</Text>
+                        ))}
+                      </View>
+                    ) : null}
+                    {templateDetail.examplePackage ? (
+                      <Text style={[styles.versionMeta, { color: colors.mutedForeground }]}>
+                        Includes an example approved package Venom uses as reference.
+                      </Text>
+                    ) : null}
+                    {(templateDetail.networkImprovementCount ?? 0) > 0 ? (
+                      <Text
+                        style={[styles.versionMeta, { color: colors.mutedForeground }]}
+                        testID="text-template-network-note"
+                      >
+                        Learned from the network: {templateDetail.networkImprovementCount} improvement{templateDetail.networkImprovementCount === 1 ? "" : "s"} picked up anonymously from how builders refined their packages, applied automatically to new builds.
+                      </Text>
+                    ) : null}
+                    <TextInput
+                      accessibilityLabel="App name"
+                      maxLength={120}
+                      placeholder={`App name (default: ${templateDetail.targetName})`}
+                      placeholderTextColor={colors.mutedForeground}
+                      value={templateAppName}
+                      onChangeText={setTemplateAppName}
+                      style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background, marginBottom: 0 }]}
+                      testID="input-template-app-name"
+                    />
+                    {templateError ? (
+                      <Text accessibilityLiveRegion="assertive" style={[styles.error, { color: colors.destructive, marginTop: 0 }]}>{templateError}</Text>
+                    ) : null}
+                    <View style={[styles.modalActions, { marginTop: 4 }]}>
+                      <TouchableOpacity accessibilityRole="button" onPress={closeTemplates} testID="button-close-templates">
+                        <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        disabled={useTemplate.isPending}
+                        accessibilityState={{ disabled: useTemplate.isPending }}
+                        onPress={handleUseTemplate}
+                        style={[styles.saveButton, { backgroundColor: colors.foreground, opacity: useTemplate.isPending ? 0.45 : 1 }]}
+                        testID="button-use-template"
+                      >
+                        <Text style={[styles.saveText, { color: colors.background }]}>
+                          {useTemplate.isPending ? "Setting up..." : "Use this template"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </ScrollView>
+                </>
+              )
+            ) : (
+              <>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Start from a Template</Text>
+                <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 10, paddingBottom: 8 }}>
+                  {templatesQuery.isLoading ? (
+                    <View accessible accessibilityLabel="Loading templates" style={{ paddingVertical: 20 }}>
+                      <ActivityIndicator color={colors.foreground} />
+                    </View>
+                  ) : templates.length > 0 ? (
+                    templates.map((template) => (
+                      <TouchableOpacity
+                        key={template.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={`View the ${template.name} template`}
+                        onPress={() => {
+                          setTemplateError("");
+                          setTemplateAppName("");
+                          setTemplateDetailId(template.id);
+                        }}
+                        style={[styles.appCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                        testID={`row-template-${template.slug}`}
+                      >
+                        <View style={styles.cardTop}>
+                          <Text numberOfLines={1} style={[styles.appName, { color: colors.foreground }]}>{template.name}</Text>
+                          <Text style={[styles.status, { color: colors.mutedForeground }]}>{template.category}</Text>
+                        </View>
+                        <Text numberOfLines={2} style={[styles.purpose, { color: colors.mutedForeground }]}>{template.description}</Text>
+                      </TouchableOpacity>
+                    ))
+                  ) : templatesQuery.isError ? (
+                    <View style={{ paddingVertical: 12, gap: 8 }}>
+                      <Text style={[styles.emptyCopy, { color: colors.mutedForeground, textAlign: "left" }]}>
+                        Templates are unavailable right now.
+                      </Text>
+                      <TouchableOpacity accessibilityRole="button" onPress={() => templatesQuery.refetch()}>
+                        <Text style={[styles.actionText, { color: colors.foreground }]}>Try again</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <Text style={[styles.emptyCopy, { color: colors.mutedForeground, textAlign: "left", paddingVertical: 12 }]}>
+                      No templates are available yet.
+                    </Text>
+                  )}
+                  <View style={[styles.modalActions, { marginTop: 4 }]}>
+                    <TouchableOpacity accessibilityRole="button" onPress={closeTemplates} testID="button-close-templates">
+                      <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </>
+            )}
+          </RNAnimated.View>
+        </View>
+      </Modal>
+
+      <Modal
+        transparent
+        visible={improveVisible}
+        animationType={Platform.OS === "web" ? "none" : "slide"}
+        onRequestClose={closeImprove}
+        onDismiss={handleDialogDismiss}
+      >
+        <View style={styles.modalBackdrop}>
+          <RNAnimated.View
+            accessibilityViewIsModal
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card, maxHeight: "90%" },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>Improve {detail?.app.name ?? "this app"}</Text>
             <ScrollView style={{ flexGrow: 0 }} keyboardShouldPersistTaps="handled">
               {iterationContextQuery.isLoading || !iterationContext ? (
@@ -1008,6 +1813,7 @@ function PortfolioView({
                   )}
 
                   <TextInput
+                    autoFocus
                     accessibilityLabel="What should improve"
                     value={improveInstruction}
                     onChangeText={setImproveInstruction}
@@ -1038,7 +1844,23 @@ function PortfolioView({
               <Text accessibilityLiveRegion="assertive" style={[styles.error, { color: colors.destructive, marginBottom: 8 }]}>{improveError}</Text>
             ) : null}
             <View style={styles.modalActions}>
-              <TouchableOpacity accessibilityRole="button" onPress={() => setImproveVisible(false)}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={closeImprove}
+                onFocus={() => setFocusedControlKey("improve-cancel")}
+                onBlur={() =>
+                  setFocusedControlKey((current) =>
+                    current === "improve-cancel" ? null : current,
+                  )
+                }
+                style={[
+                  styles.focusRingBase,
+                  focusedControlKey === "improve-cancel"
+                    ? { borderColor: colors.foreground }
+                    : null,
+                ]}
+                testID="button-cancel-iteration"
+              >
                 <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1054,7 +1876,7 @@ function PortfolioView({
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </RNAnimated.View>
         </View>
       </Modal>
     </View>
@@ -1063,16 +1885,42 @@ function PortfolioView({
 
 // -----------------------------------------
 // BUILD PACKAGES VIEW
+
+// Where keyboard focus should land once the currently open builds dialog has
+// actually dismissed (and, on web, released its focus trap).
+type BuildsDismissTarget =
+  | { kind: "create-button" }
+  | { kind: "run-row"; runId: string }
+  | { kind: "opener"; key: string };
 // -----------------------------------------
-function BuildRunRow({ run, onSelect, selected }: { run: VenomBuildRunSummary, onSelect: () => void, selected: boolean }) {
+function BuildRunRow({ run, onSelect, selected, cardRef }: { run: VenomBuildRunSummary, onSelect: () => void, selected: boolean, cardRef?: (node: FocusableHandle | null) => void }) {
   const colors = useColors();
+  const [focused, setFocused] = useState(false);
   return (
     <TouchableOpacity
+      ref={cardRef}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={`Build ${run.targetName}, type ${run.targetType}, status ${statusLabel(run.status)}`}
       onPress={onSelect}
-      style={[styles.appCard, { backgroundColor: selected ? colors.foreground : colors.card, borderColor: selected ? colors.foreground : colors.border }]}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={[
+        styles.appCard,
+        {
+          backgroundColor: selected ? colors.foreground : colors.card,
+          // Focus uses an inverted ring on the selected (filled) row so the
+          // indicator stays visible on either surface.
+          borderColor: focused
+            ? selected
+              ? colors.background
+              : colors.primary
+            : selected
+              ? colors.foreground
+              : colors.border,
+        },
+      ]}
+      testID={`card-build-run-${run.id}`}
     >
       <View style={styles.cardTop}>
         <Text style={[styles.appName, { color: selected ? colors.background : colors.foreground }]}>{run.targetName}</Text>
@@ -1095,25 +1943,62 @@ function BuildPackagesView({
   initialTargetType,
   initialTargetName,
   initialSelectedRunId,
+  initialTemplateHandoff,
 }: {
   initialDraftPrompt?: string;
   initialTargetType?: VenomBuildTargetType;
   initialTargetName?: string;
   initialSelectedRunId?: string;
+  initialTemplateHandoff?: TemplateHandoff | null;
 }) {
   const colors = useColors();
   const queryClient = useQueryClient();
   const { state } = useVenom();
 
   const [selectedRunId, setSelectedRunId] = useState(initialSelectedRunId || "");
-  const [isCreating, setIsCreating] = useState(Boolean(initialDraftPrompt));
+  const [isCreating, setIsCreating] = useState(
+    Boolean(initialDraftPrompt) || Boolean(initialTemplateHandoff),
+  );
+  // The template that pre-filled this create form; stamped onto the run it
+  // creates, then cleared so later manual runs start clean.
+  const [activeTemplate, setActiveTemplate] = useState<TemplateHandoff | null>(
+    initialTemplateHandoff ?? null,
+  );
 
-  const [targetType, setTargetType] = useState<VenomBuildTargetType>(initialTargetType || "app");
-  const [targetName, setTargetName] = useState(initialTargetName || "");
-  const [requirements, setRequirements] = useState(initialDraftPrompt || "");
-  const [constraints, setConstraints] = useState("");
-  const [brandDirection, setBrandDirection] = useState("");
-  const [selectedAppId, setSelectedAppId] = useState<string>("");
+  const reducedMotion = useReducedMotion();
+  const dialogAppear = useRef(new RNAnimated.Value(0)).current;
+  const createBuildButtonRef = useRef<FocusableHandle | null>(null);
+  const runRowRefs = useRef<Map<string, FocusableHandle>>(new Map());
+  const actionControlRefs = useRef<Map<string, FocusableHandle>>(new Map());
+  const pendingDismissFocusRef = useRef<BuildsDismissTarget | null>(null);
+  const approvalCancelRef = useRef<FocusableHandle | null>(null);
+  const [focusedControlKey, setFocusedControlKey] = useState<string | null>(
+    null,
+  );
+  // Cross-screen focus handoff: when the portfolio's improve dialog closes
+  // by switching to this tab, focus the new run's row once it renders.
+  const handoffRunIdRef = useRef(initialSelectedRunId || "");
+  const handoffDeadlineRef = useRef(0);
+  const [pendingHandoffRunId, setPendingHandoffRunId] = useState("");
+
+  const [targetType, setTargetType] = useState<VenomBuildTargetType>(
+    initialTemplateHandoff?.prefill.targetType || initialTargetType || "app",
+  );
+  const [targetName, setTargetName] = useState(
+    initialTemplateHandoff?.prefill.targetName || initialTargetName || "",
+  );
+  const [requirements, setRequirements] = useState(
+    initialTemplateHandoff?.prefill.requirements || initialDraftPrompt || "",
+  );
+  const [constraints, setConstraints] = useState(
+    initialTemplateHandoff?.prefill.constraints || "",
+  );
+  const [brandDirection, setBrandDirection] = useState(
+    initialTemplateHandoff?.prefill.brandDirection || "",
+  );
+  const [selectedAppId, setSelectedAppId] = useState<string>(
+    initialTemplateHandoff?.appId || "",
+  );
   const [selectedSourceVersionId, setSelectedSourceVersionId] = useState<string>("");
   const [selectedSops, setSelectedSops] = useState<Record<string, boolean>>({});
 
@@ -1194,6 +2079,174 @@ function BuildPackagesView({
   const publishProvisioningCandidate = usePublishProvisioningCandidate();
   const rollbackProvisioningRelease = useRollbackProvisioningRelease();
 
+  const anyDialogOpen =
+    isCreating ||
+    approvalModalVisible ||
+    rejectModalVisible ||
+    cancelModalVisible ||
+    provisionModalVisible ||
+    publishModalVisible ||
+    rollbackModalVisible ||
+    provisionCancelModalVisible;
+
+  // Each dialog animates its own card because the modal container must not
+  // animate on web: an animated modal keeps its focus trap alive while it
+  // fades out and strands keyboard focus. Only one builds dialog can be open
+  // at a time, so they share one appear value.
+  useEffect(() => {
+    if (!anyDialogOpen) return;
+    dialogAppear.setValue(reducedMotion ? 1 : 0);
+    if (reducedMotion) return;
+    const appearance = RNAnimated.timing(dialogAppear, {
+      toValue: 1,
+      duration: 170,
+      useNativeDriver: Platform.OS !== "web",
+    });
+    appearance.start();
+    return () => appearance.stop();
+  }, [anyDialogOpen, dialogAppear, reducedMotion]);
+
+  // The approval dialog has no input of its own, so once it opens, place
+  // keyboard focus explicitly on its safe (cancel) action.
+  useEffect(() => {
+    if (!approvalModalVisible || Platform.OS !== "web") return;
+    const frame = requestAnimationFrame(() => {
+      approvalCancelRef.current?.focus?.();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [approvalModalVisible]);
+
+  // Claim the improve dialog's cross-screen handoff once on mount; the row
+  // is focused by the effect below when the refreshed list renders it.
+  useEffect(() => {
+    if (!handoffRunIdRef.current) return;
+    if (!claimFocusHandoff("build-run")) return;
+    handoffDeadlineRef.current = Date.now() + 15_000;
+    setPendingHandoffRunId(handoffRunIdRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingHandoffRunId) return;
+    // A long-delayed arrival must not yank focus from a control the user has
+    // moved on to in the meantime. Wall-clock alone misreads a CPU-starved
+    // environment (a slow list fetch is not user movement), so give up only
+    // when keyboard focus has demonstrably landed somewhere else — the
+    // clock stays as a generous backstop where no active element is
+    // queryable.
+    const focusClaimedElsewhere =
+      Platform.OS === "web" &&
+      typeof document !== "undefined" &&
+      document.activeElement != null &&
+      document.activeElement !== document.body &&
+      document.activeElement !== document.documentElement;
+    if (focusClaimedElsewhere || Date.now() > handoffDeadlineRef.current) {
+      setPendingHandoffRunId("");
+      return;
+    }
+    const handle = runRowRefs.current.get(pendingHandoffRunId);
+    if (!handle) return; // row not rendered yet; retried when the list lands
+    setPendingHandoffRunId("");
+    // Focus synchronously: the row is already committed (its ref is
+    // registered). A requestAnimationFrame here loses a scheduler race — the
+    // setState above re-runs this effect, and whenever React's re-render
+    // commits before the browser's next frame, the cleanup cancels the
+    // pending frame and the focus never fires (the flake this replaced).
+    handle.focus?.();
+  }, [pendingHandoffRunId, runsQuery.data]);
+
+  const registerRunRow = (runId: string) => (node: FocusableHandle | null) => {
+    if (node) runRowRefs.current.set(runId, node);
+    else runRowRefs.current.delete(runId);
+  };
+
+  const registerActionControl =
+    (key: string) => (node: FocusableHandle | null) => {
+      if (node) actionControlRefs.current.set(key, node);
+      else actionControlRefs.current.delete(key);
+    };
+
+  const controlFocusHandlers = (key: string) => ({
+    onFocus: () => setFocusedControlKey(key),
+    onBlur: () =>
+      setFocusedControlKey((current) => (current === key ? null : current)),
+  });
+
+  // Fires once whichever dialog was open is actually gone (immediately on
+  // web) and its focus trap has released. Hands keyboard focus to the run
+  // row the dialog affected when it exists; openers can vanish when the
+  // action changed the run's status, so they fall back to the selected run's
+  // row, then to the create button that always exists.
+  const handleDialogDismiss = () => {
+    const target = pendingDismissFocusRef.current;
+    pendingDismissFocusRef.current = null;
+    let handle: FocusableHandle | null | undefined;
+    if (target?.kind === "run-row") {
+      handle = runRowRefs.current.get(target.runId);
+    } else if (target?.kind === "opener") {
+      handle =
+        actionControlRefs.current.get(target.key) ??
+        runRowRefs.current.get(selectedRunId);
+    }
+    (handle ?? createBuildButtonRef.current)?.focus?.();
+  };
+
+  const cancelCreateDialog = () => {
+    pendingDismissFocusRef.current = { kind: "create-button" };
+    setIsCreating(false);
+  };
+
+  const closeApprovalModal = () => {
+    pendingDismissFocusRef.current = { kind: "opener", key: "approve" };
+    setApprovalModalVisible(false);
+  };
+
+  const closeRejectModal = () => {
+    pendingDismissFocusRef.current = { kind: "opener", key: "reject" };
+    setRejectModalVisible(false);
+  };
+
+  const closeCancelModal = () => {
+    pendingDismissFocusRef.current = { kind: "opener", key: "cancel-build" };
+    setCancelModalVisible(false);
+  };
+
+  const closeProvisionModal = () => {
+    pendingDismissFocusRef.current = { kind: "opener", key: "provision" };
+    setProvisionModalVisible(false);
+  };
+
+  const closePublishModal = () => {
+    pendingDismissFocusRef.current = {
+      kind: "opener",
+      key: `publish-${activeReleaseId}`,
+    };
+    setPublishModalVisible(false);
+  };
+
+  const closeRollbackModal = () => {
+    pendingDismissFocusRef.current = {
+      kind: "opener",
+      key: `rollback-${activeReleaseId}`,
+    };
+    setRollbackModalVisible(false);
+  };
+
+  const closeProvisionCancelModal = () => {
+    pendingDismissFocusRef.current = {
+      kind: "opener",
+      key: "provision-cancel",
+    };
+    setProvisionCancelModalVisible(false);
+  };
+
+  // A template-born app starts with no source archive, so linked builds only
+  // require a version pick when the app actually has uploaded versions.
+  const sourceVersionBlocksSubmit =
+    selectedAppId !== "" &&
+    (!selectedAppDetailQuery.data ||
+      ((selectedAppDetailQuery.data.versions?.length ?? 0) > 0 &&
+        !selectedSourceVersionId));
+
   const handleCreate = async () => {
     if (!targetName.trim() || !requirements.trim()) return;
     setError("");
@@ -1211,11 +2264,14 @@ function BuildPackagesView({
           sourceVersionId: selectedSourceVersionId || null,
           projectId: state.activeProjectId || null,
           sopRevisionIds,
+          templateId: activeTemplate?.templateId || null,
           idempotencyKey: Crypto.randomUUID().replaceAll("-", "_"),
         }
       });
-      setIsCreating(false);
       setSelectedRunId(created.id);
+      // Keep the dialog up until the refreshed list contains the new run, so
+      // dismissal can hand keyboard focus to the created row rather than to
+      // a control that does not exist yet.
       await queryClient.invalidateQueries({ queryKey: getListVenomBuildRunsQueryKey() });
       setTargetName("");
       setRequirements("");
@@ -1224,6 +2280,9 @@ function BuildPackagesView({
       setSelectedAppId("");
       setSelectedSourceVersionId("");
       setSelectedSops({});
+      setActiveTemplate(null);
+      pendingDismissFocusRef.current = { kind: "run-row", runId: created.id };
+      setIsCreating(false);
       setActionStatus("Build package request created.");
     } catch (e) {
       setError(errorMessage(e));
@@ -1235,6 +2294,9 @@ function BuildPackagesView({
     setActionError("");
     try {
       await approveRun.mutateAsync({ buildRunId: selectedRunId, data: { revisionId: pendingRevisionId } });
+      // The approval changed the run's status, so its opener is about to
+      // disappear — hand focus to the affected run's row instead.
+      pendingDismissFocusRef.current = { kind: "run-row", runId: selectedRunId };
       setApprovalModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: getGetVenomBuildRunQueryKey(selectedRunId) });
       await queryClient.invalidateQueries({ queryKey: getListVenomBuildRunsQueryKey() });
@@ -1247,6 +2309,7 @@ function BuildPackagesView({
     setActionError("");
     try {
       await rejectRun.mutateAsync({ buildRunId: selectedRunId, data: { reason: reasonInput.trim() } });
+      pendingDismissFocusRef.current = { kind: "run-row", runId: selectedRunId };
       setRejectModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: getGetVenomBuildRunQueryKey(selectedRunId) });
       await queryClient.invalidateQueries({ queryKey: getListVenomBuildRunsQueryKey() });
@@ -1259,6 +2322,7 @@ function BuildPackagesView({
     setActionError("");
     try {
       await cancelRun.mutateAsync({ buildRunId: selectedRunId, data: { reason: reasonInput.trim() } });
+      pendingDismissFocusRef.current = { kind: "run-row", runId: selectedRunId };
       setCancelModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: getGetVenomBuildRunQueryKey(selectedRunId) });
       await queryClient.invalidateQueries({ queryKey: getListVenomBuildRunsQueryKey() });
@@ -1293,6 +2357,7 @@ function BuildPackagesView({
           deploymentIntent: "create_candidate"
         }
       });
+      pendingDismissFocusRef.current = { kind: "run-row", runId: selectedRunId };
       setProvisionModalVisible(false);
       setConfirmTargetInput("");
       setModalIdempotencyKey("");
@@ -1310,6 +2375,7 @@ function BuildPackagesView({
     setActionError("");
     try {
       const result = await cancelProvisioningRun.mutateAsync({ provisioningRunId: activeProvisioningRun.id, data: { reason: reasonInput.trim() } });
+      pendingDismissFocusRef.current = { kind: "run-row", runId: selectedRunId };
       setProvisionCancelModalVisible(false);
       setReasonInput("");
       await queryClient.invalidateQueries({ queryKey: getGetProvisioningRunQueryKey(activeProvisioningRun.id) });
@@ -1358,6 +2424,7 @@ function BuildPackagesView({
         }
       });
       if (result.status === "published") {
+        pendingDismissFocusRef.current = { kind: "run-row", runId: selectedRunId };
         setPublishModalVisible(false);
         setConfirmTargetInput("");
         setModalIdempotencyKey("");
@@ -1395,6 +2462,7 @@ function BuildPackagesView({
         }
       });
       if (result.status === "published") {
+        pendingDismissFocusRef.current = { kind: "run-row", runId: selectedRunId };
         setRollbackModalVisible(false);
         setConfirmTargetInput("");
         setModalIdempotencyKey("");
@@ -1429,10 +2497,21 @@ function BuildPackagesView({
           <Text style={[styles.title, { color: colors.foreground }]}>Build Packages</Text>
         </View>
         <TouchableOpacity
+          ref={(node: FocusableHandle | null) => {
+            createBuildButtonRef.current = node;
+          }}
           accessibilityRole="button"
           accessibilityLabel="Create Build Package"
           onPress={() => setIsCreating(true)}
-          style={[styles.createButton, { backgroundColor: colors.foreground }]}
+          {...controlFocusHandlers("create-build")}
+          style={[
+            styles.createButton,
+            { backgroundColor: colors.foreground },
+            focusedControlKey === "create-build"
+              ? { borderWidth: 2, borderColor: colors.background }
+              : null,
+          ]}
+          testID="button-create-build"
         >
           <Feather name="plus" color={colors.background} size={18} />
         </TouchableOpacity>
@@ -1443,7 +2522,7 @@ function BuildPackagesView({
       ) : runsQuery.data?.length ? (
         <View style={styles.list}>
           {runsQuery.data.map((run) => (
-            <BuildRunRow key={run.id} run={run} selected={selectedRunId === run.id} onSelect={() => setSelectedRunId(run.id)} />
+            <BuildRunRow key={run.id} run={run} selected={selectedRunId === run.id} onSelect={() => setSelectedRunId(run.id)} cardRef={registerRunRow(run.id)} />
           ))}
         </View>
       ) : (
@@ -1602,6 +2681,15 @@ function BuildPackagesView({
              </View>
            )}
 
+           {(currentRun.events ?? []).some((ev) => ev.eventType === "network_guidance") && (
+             <Text
+               style={[styles.versionMeta, { color: colors.mutedForeground, marginTop: 16 }]}
+               testID="text-network-guidance-note"
+             >
+               Network guidance applied: this draft used anonymous lessons from other builders of this template.
+             </Text>
+           )}
+
            {currentRun.events && currentRun.events.length > 0 && (
              <View style={{ marginTop: 24 }}>
                 <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 0 }]}>HISTORY</Text>
@@ -1619,19 +2707,41 @@ function BuildPackagesView({
              <View style={{ marginTop: 24 }}>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <TouchableOpacity
+                    ref={registerActionControl("approve")}
                     accessibilityRole="button"
                     accessibilityLabel="Approve this build package revision"
                     onPress={() => { setPendingRevisionId(currentRevision.id); setApprovalModalVisible(true); }}
-                    style={[styles.primaryAction, { backgroundColor: colors.foreground }]}
+                    {...controlFocusHandlers("approve")}
+                    style={[
+                      styles.primaryAction,
+                      { backgroundColor: colors.foreground },
+                      {
+                        borderWidth: 2,
+                        borderColor:
+                          focusedControlKey === "approve"
+                            ? colors.background
+                            : "transparent",
+                      },
+                    ]}
                   >
                     <Feather name="check" size={16} color={colors.background} />
                     <Text style={[styles.primaryActionText, { color: colors.background }]}>Approve Package</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
+                    ref={registerActionControl("reject")}
                     accessibilityRole="button"
                     accessibilityLabel="Reject this build package"
                     onPress={() => { setReasonInput(""); setActionError(""); setRejectModalVisible(true); }}
-                    style={[styles.secondaryAction, { borderColor: colors.border }]}
+                    {...controlFocusHandlers("reject")}
+                    style={[
+                      styles.secondaryAction,
+                      {
+                        borderColor:
+                          focusedControlKey === "reject"
+                            ? colors.primary
+                            : colors.border,
+                      },
+                    ]}
                   >
                     <Feather name="x" size={16} color={colors.foreground} />
                     <Text style={[styles.secondaryActionText, { color: colors.foreground }]}>Reject</Text>
@@ -1659,10 +2769,22 @@ function BuildPackagesView({
                 {["healthy", "degraded"].includes(capabilityQuery.data.health) && capabilityQuery.data.supportedTargetTypes?.includes(currentRun.targetType as any) && (
                   <View style={{ marginTop: 12 }}>
                     <TouchableOpacity
+                      ref={registerActionControl("provision")}
                       accessibilityRole="button"
                       accessibilityLabel="Provision Candidate"
                       onPress={() => { setConfirmTargetInput(""); setActionError(""); setModalIdempotencyKey(Crypto.randomUUID().replaceAll("-", "_")); setProvisionModalVisible(true); }}
-                      style={[styles.primaryAction, { backgroundColor: colors.foreground }]}
+                      {...controlFocusHandlers("provision")}
+                      style={[
+                        styles.primaryAction,
+                        { backgroundColor: colors.foreground },
+                        {
+                          borderWidth: 2,
+                          borderColor:
+                            focusedControlKey === "provision"
+                              ? colors.background
+                              : "transparent",
+                        },
+                      ]}
                     >
                       <Feather name="server" size={16} color={colors.background} />
                       <Text style={[styles.primaryActionText, { color: colors.background }]}>Provision Candidate</Text>
@@ -1712,9 +2834,21 @@ function BuildPackagesView({
 
                 {["queued", "checking_capability", "creating_project", "handing_off", "building", "testing"].includes(provRunDetail.status) && (
                    <TouchableOpacity
+                     ref={registerActionControl("provision-cancel")}
                      accessibilityRole="button"
                      onPress={() => { setReasonInput(""); setActionError(""); setProvisionCancelModalVisible(true); }}
-                     style={{ paddingVertical: 8, marginBottom: 12 }}
+                     {...controlFocusHandlers("provision-cancel")}
+                     style={{
+                       paddingVertical: 8,
+                       marginBottom: 12,
+                       borderRadius: 8,
+                       borderWidth: 2,
+                       borderColor:
+                         focusedControlKey === "provision-cancel"
+                           ? colors.foreground
+                           : "transparent",
+                     }}
+                     testID="button-open-provision-cancel"
                    >
                       <Text style={[styles.actionText, { color: colors.mutedForeground, textDecorationLine: 'none', textAlign: 'center' }]}>Cancel Provisioning</Text>
                    </TouchableOpacity>
@@ -1744,12 +2878,44 @@ function BuildPackagesView({
                               </TouchableOpacity>
                             )}
                             {release.status === "candidate" && capabilityQuery.data?.publishSupported && release.targetName && (
-                              <TouchableOpacity accessibilityRole="button" onPress={() => { setActiveReleaseId(release.id); setConfirmTargetInput(""); setActionError(""); setModalIdempotencyKey(Crypto.randomUUID().replaceAll("-", "_")); setPublishModalVisible(true); }} style={{ padding: 6, backgroundColor: colors.foreground, borderRadius: 4 }}>
+                              <TouchableOpacity
+                                ref={registerActionControl(`publish-${release.id}`)}
+                                accessibilityRole="button"
+                                onPress={() => { setActiveReleaseId(release.id); setConfirmTargetInput(""); setActionError(""); setModalIdempotencyKey(Crypto.randomUUID().replaceAll("-", "_")); setPublishModalVisible(true); }}
+                                {...controlFocusHandlers(`publish-${release.id}`)}
+                                style={{
+                                  padding: 6,
+                                  backgroundColor: colors.foreground,
+                                  borderRadius: 4,
+                                  borderWidth: 2,
+                                  borderColor:
+                                    focusedControlKey === `publish-${release.id}`
+                                      ? colors.background
+                                      : "transparent",
+                                }}
+                                testID={`button-publish-release-${release.id}`}
+                              >
                                  <Text style={{ color: colors.background, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>Publish</Text>
                               </TouchableOpacity>
                             )}
                             {release.status === "superseded" && capabilityQuery.data?.rollbackSupported && release.targetName && (
-                              <TouchableOpacity accessibilityRole="button" onPress={() => { setActiveReleaseId(release.id); setConfirmTargetInput(""); setActionError(""); setModalIdempotencyKey(Crypto.randomUUID().replaceAll("-", "_")); setRollbackModalVisible(true); }} style={{ padding: 6, backgroundColor: colors.secondary, borderRadius: 4 }}>
+                              <TouchableOpacity
+                                ref={registerActionControl(`rollback-${release.id}`)}
+                                accessibilityRole="button"
+                                onPress={() => { setActiveReleaseId(release.id); setConfirmTargetInput(""); setActionError(""); setModalIdempotencyKey(Crypto.randomUUID().replaceAll("-", "_")); setRollbackModalVisible(true); }}
+                                {...controlFocusHandlers(`rollback-${release.id}`)}
+                                style={{
+                                  padding: 6,
+                                  backgroundColor: colors.secondary,
+                                  borderRadius: 4,
+                                  borderWidth: 2,
+                                  borderColor:
+                                    focusedControlKey === `rollback-${release.id}`
+                                      ? colors.foreground
+                                      : "transparent",
+                                }}
+                                testID={`button-rollback-release-${release.id}`}
+                              >
                                  <Text style={{ color: colors.foreground, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>Rollback</Text>
                               </TouchableOpacity>
                             )}
@@ -1808,10 +2974,22 @@ function BuildPackagesView({
 
            {["queued", "preparing"].includes(currentRun.status) && (
              <TouchableOpacity
+               ref={registerActionControl("cancel-build")}
                accessibilityRole="button"
                accessibilityLabel="Cancel this build run"
                onPress={() => { setReasonInput(""); setActionError(""); setCancelModalVisible(true); }}
-               style={{ marginTop: 24, paddingVertical: 8 }}
+               {...controlFocusHandlers("cancel-build")}
+               style={{
+                 marginTop: 24,
+                 paddingVertical: 8,
+                 borderRadius: 8,
+                 borderWidth: 2,
+                 borderColor:
+                   focusedControlKey === "cancel-build"
+                     ? colors.foreground
+                     : "transparent",
+               }}
+               testID="button-open-cancel-build"
              >
                 <Text style={[styles.actionText, { color: colors.mutedForeground, textDecorationLine: 'none', textAlign: 'center' }]}>Cancel Build</Text>
              </TouchableOpacity>
@@ -1820,10 +2998,41 @@ function BuildPackagesView({
       )}
 
       {/* CREATE MODAL */}
-      <Modal transparent visible={isCreating} animationType="slide">
+      <Modal
+        transparent
+        visible={isCreating}
+        animationType={Platform.OS === "web" ? "none" : "slide"}
+        onRequestClose={cancelCreateDialog}
+        onDismiss={handleDialogDismiss}
+      >
         <View style={styles.modalBackdrop}>
-          <View accessibilityViewIsModal style={[styles.modalCard, { backgroundColor: colors.card, maxHeight: '90%' }]}>
+          <RNAnimated.View
+            accessibilityViewIsModal
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card, maxHeight: '90%' },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>New Build Package</Text>
+            {activeTemplate ? (
+              <Text
+                style={{ fontFamily: "Inter_500Medium", fontSize: 12, color: colors.mutedForeground, marginBottom: 10 }}
+                testID="banner-template-origin"
+              >
+                Started from the {activeTemplate.templateName} template — edit anything before generating.
+              </Text>
+            ) : null}
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, gap: 12 }}>
 
               <View>
@@ -1853,6 +3062,7 @@ function BuildPackagesView({
               </View>
 
               <TextInput
+                autoFocus
                 accessibilityLabel="Target Name"
                  maxLength={120}
                 placeholder="Target Name (e.g. Acme Web)"
@@ -1943,7 +3153,7 @@ function BuildPackagesView({
                   </ScrollView>
                 </View>
               ) : selectedAppId && selectedAppDetailQuery.data && selectedAppDetailQuery.data.versions.length === 0 ? (
-                <Text style={{ color: colors.destructive, fontSize: 12 }}>This app has no uploaded source versions.</Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>No source versions yet — the package will be drafted from the requirements alone.</Text>
               ) : null}
 
               {sopsQuery.data && sopsQuery.data.length > 0 && (
@@ -1973,52 +3183,128 @@ function BuildPackagesView({
               {error ? <Text accessibilityLiveRegion="assertive" style={[styles.error, { color: colors.foreground, marginTop: 0 }]}>{error}</Text> : null}
 
               <View style={[styles.modalActions, { marginTop: 12 }]}>
-                <TouchableOpacity accessibilityRole="button" onPress={() => setIsCreating(false)}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  onPress={cancelCreateDialog}
+                  {...controlFocusHandlers("create-cancel")}
+                  style={[
+                    styles.focusRingBase,
+                    focusedControlKey === "create-cancel"
+                      ? { borderColor: colors.foreground }
+                      : null,
+                  ]}
+                  testID="button-cancel-create-build"
+                >
                   <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   accessibilityRole="button"
-                  disabled={!targetName.trim() || !requirements.trim() || (selectedAppId !== "" && !selectedSourceVersionId) || createRun.isPending}
-                  accessibilityState={{ disabled: !targetName.trim() || !requirements.trim() || (selectedAppId !== "" && !selectedSourceVersionId) || createRun.isPending }}
+                  disabled={!targetName.trim() || !requirements.trim() || sourceVersionBlocksSubmit || createRun.isPending}
+                  accessibilityState={{ disabled: !targetName.trim() || !requirements.trim() || sourceVersionBlocksSubmit || createRun.isPending }}
                   onPress={handleCreate}
-                  style={[styles.saveButton, { backgroundColor: colors.foreground, opacity: !targetName.trim() || !requirements.trim() || (selectedAppId !== "" && !selectedSourceVersionId) ? 0.45 : 1 }]}
+                  style={[styles.saveButton, { backgroundColor: colors.foreground, opacity: !targetName.trim() || !requirements.trim() || sourceVersionBlocksSubmit ? 0.45 : 1 }]}
+                  testID="button-submit-create-build"
                 >
                   <Text style={[styles.saveText, { color: colors.background }]}>{createRun.isPending ? "Creating..." : "Create"}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
-          </View>
+          </RNAnimated.View>
         </View>
       </Modal>
 
       {/* APPROVAL MODAL */}
-      <Modal transparent visible={approvalModalVisible} animationType="fade">
+      <Modal
+        transparent
+        visible={approvalModalVisible}
+        animationType={Platform.OS === "web" ? "none" : "fade"}
+        onRequestClose={closeApprovalModal}
+        onDismiss={handleDialogDismiss}
+      >
         <View style={styles.modalBackdrop}>
-          <View accessibilityViewIsModal style={[styles.modalCard, { backgroundColor: colors.card }]} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+          <RNAnimated.View
+            accessibilityViewIsModal
+            accessibilityRole="alert"
+            accessibilityLiveRegion="assertive"
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>Approve Revision {currentRevision?.revisionNumber}</Text>
             <Text style={[styles.purpose, { color: colors.foreground, marginBottom: 20 }]}>
               Are you sure you want to approve this package revision? This will only make the package ready for a separate provisioning step. It does not execute, publish, or deploy anything.
             </Text>
             {actionError ? <Text accessibilityLiveRegion="assertive" style={[styles.error, { color: colors.destructive, marginBottom: 12 }]}>{actionError}</Text> : null}
             <View style={styles.modalActions}>
-              <TouchableOpacity accessibilityRole="button" onPress={() => setApprovalModalVisible(false)}>
+              <TouchableOpacity
+                ref={(node: FocusableHandle | null) => {
+                  approvalCancelRef.current = node;
+                }}
+                accessibilityRole="button"
+                onPress={closeApprovalModal}
+                {...controlFocusHandlers("approval-cancel")}
+                style={[
+                  styles.focusRingBase,
+                  focusedControlKey === "approval-cancel"
+                    ? { borderColor: colors.foreground }
+                    : null,
+                ]}
+                testID="button-cancel-approval"
+              >
                 <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity accessibilityRole="button" disabled={approveRun.isPending} accessibilityState={{ disabled: approveRun.isPending }} onPress={handleApprove} style={[styles.saveButton, { backgroundColor: colors.foreground }]}>
+              <TouchableOpacity accessibilityRole="button" disabled={approveRun.isPending} accessibilityState={{ disabled: approveRun.isPending }} onPress={handleApprove} style={[styles.saveButton, { backgroundColor: colors.foreground }]} testID="button-confirm-approve">
                 <Text style={[styles.saveText, { color: colors.background }]}>{approveRun.isPending ? "Approving..." : "Approve Package"}</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </RNAnimated.View>
         </View>
       </Modal>
 
       {/* REJECT MODAL */}
-      <Modal transparent visible={rejectModalVisible} animationType="fade">
+      <Modal
+        transparent
+        visible={rejectModalVisible}
+        animationType={Platform.OS === "web" ? "none" : "fade"}
+        onRequestClose={closeRejectModal}
+        onDismiss={handleDialogDismiss}
+      >
         <View style={styles.modalBackdrop}>
-          <View accessibilityViewIsModal style={[styles.modalCard, { backgroundColor: colors.card }]} accessibilityRole="alert">
+          <RNAnimated.View
+            accessibilityViewIsModal
+            accessibilityRole="alert"
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>Reject Package</Text>
             <Text style={[styles.purpose, { color: colors.foreground, marginBottom: 12 }]}>Provide a reason for rejection.</Text>
             <TextInput
+              autoFocus
               accessibilityLabel="Rejection Reason"
               placeholder="Reason..."
               placeholderTextColor={colors.mutedForeground}
@@ -2028,24 +3314,60 @@ function BuildPackagesView({
             />
             {actionError ? <Text accessibilityLiveRegion="assertive" style={[styles.error, { color: colors.destructive, marginBottom: 12 }]}>{actionError}</Text> : null}
             <View style={styles.modalActions}>
-              <TouchableOpacity accessibilityRole="button" onPress={() => setRejectModalVisible(false)}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={closeRejectModal}
+                {...controlFocusHandlers("reject-cancel")}
+                style={[
+                  styles.focusRingBase,
+                  focusedControlKey === "reject-cancel"
+                    ? { borderColor: colors.foreground }
+                    : null,
+                ]}
+                testID="button-cancel-reject"
+              >
                 <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity accessibilityRole="button" disabled={!reasonInput.trim() || rejectRun.isPending} accessibilityState={{ disabled: !reasonInput.trim() || rejectRun.isPending }} onPress={handleReject} style={[styles.saveButton, { backgroundColor: colors.foreground, opacity: !reasonInput.trim() ? 0.5 : 1 }]}>
                 <Text style={[styles.saveText, { color: colors.background }]}>{rejectRun.isPending ? "Rejecting..." : "Reject"}</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </RNAnimated.View>
         </View>
       </Modal>
 
       {/* CANCEL MODAL */}
-      <Modal transparent visible={cancelModalVisible} animationType="fade">
+      <Modal
+        transparent
+        visible={cancelModalVisible}
+        animationType={Platform.OS === "web" ? "none" : "fade"}
+        onRequestClose={closeCancelModal}
+        onDismiss={handleDialogDismiss}
+      >
         <View style={styles.modalBackdrop}>
-          <View accessibilityViewIsModal style={[styles.modalCard, { backgroundColor: colors.card }]} accessibilityRole="alert">
+          <RNAnimated.View
+            accessibilityViewIsModal
+            accessibilityRole="alert"
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>Cancel Build</Text>
             <Text style={[styles.purpose, { color: colors.foreground, marginBottom: 12 }]}>Provide a reason for cancellation.</Text>
             <TextInput
+              autoFocus
               accessibilityLabel="Cancellation Reason"
               placeholder="Reason..."
               placeholderTextColor={colors.mutedForeground}
@@ -2055,22 +3377,58 @@ function BuildPackagesView({
             />
             {actionError ? <Text accessibilityLiveRegion="assertive" style={[styles.error, { color: colors.destructive, marginBottom: 12 }]}>{actionError}</Text> : null}
             <View style={styles.modalActions}>
-              <TouchableOpacity accessibilityRole="button" onPress={() => setCancelModalVisible(false)}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={closeCancelModal}
+                {...controlFocusHandlers("cancel-build-back")}
+                style={[
+                  styles.focusRingBase,
+                  focusedControlKey === "cancel-build-back"
+                    ? { borderColor: colors.foreground }
+                    : null,
+                ]}
+                testID="button-back-cancel-build"
+              >
                 <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Back</Text>
               </TouchableOpacity>
               <TouchableOpacity accessibilityRole="button" disabled={!reasonInput.trim() || cancelRun.isPending} accessibilityState={{ disabled: !reasonInput.trim() || cancelRun.isPending }} onPress={handleCancel} style={[styles.saveButton, { backgroundColor: colors.foreground, opacity: !reasonInput.trim() ? 0.5 : 1 }]}>
                 <Text style={[styles.saveText, { color: colors.background }]}>{cancelRun.isPending ? "Cancelling..." : "Confirm Cancel"}</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </RNAnimated.View>
         </View>
       </Modal>
 
       {/* PROVISIONING CONFIRM MODAL */}
-      <Modal transparent visible={provisionModalVisible} animationType="fade">
+      <Modal
+        transparent
+        visible={provisionModalVisible}
+        animationType={Platform.OS === "web" ? "none" : "fade"}
+        onRequestClose={closeProvisionModal}
+        onDismiss={handleDialogDismiss}
+      >
         <View style={styles.modalBackdrop}>
           <ScrollView contentContainerStyle={{ padding: 20, flexGrow: 1, justifyContent: 'center' }}>
-            <View accessibilityViewIsModal style={[styles.modalCard, { backgroundColor: colors.card, width: '100%' }]} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+            <RNAnimated.View
+              accessibilityViewIsModal
+              accessibilityRole="alert"
+              accessibilityLiveRegion="assertive"
+              style={[
+                styles.modalCard,
+                { backgroundColor: colors.card, width: '100%' },
+                {
+                  opacity: dialogAppear,
+                  transform: [
+                    {
+                      translateY: dialogAppear.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [10, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
               <Text style={[styles.modalTitle, { color: colors.foreground }]}>Confirm Provisioning</Text>
 
               <Text style={[styles.purpose, { color: colors.foreground, marginBottom: 16 }]}>
@@ -2104,6 +3462,7 @@ function BuildPackagesView({
               </Text>
 
               <TextInput
+                autoFocus
                 accessibilityLabel="Confirm Target Name"
                 placeholder={currentRun?.targetName || ""}
                 placeholderTextColor={colors.mutedForeground}
@@ -2115,7 +3474,18 @@ function BuildPackagesView({
               {actionError ? <Text accessibilityLiveRegion="assertive" style={[styles.error, { color: colors.destructive, marginBottom: 12 }]}>{actionError}</Text> : null}
 
               <View style={styles.modalActions}>
-                <TouchableOpacity accessibilityRole="button" onPress={() => setProvisionModalVisible(false)}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  onPress={closeProvisionModal}
+                  {...controlFocusHandlers("provision-cancel-button")}
+                  style={[
+                    styles.focusRingBase,
+                    focusedControlKey === "provision-cancel-button"
+                      ? { borderColor: colors.foreground }
+                      : null,
+                  ]}
+                  testID="button-cancel-provision"
+                >
                   <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -2128,15 +3498,39 @@ function BuildPackagesView({
                   <Text style={[styles.saveText, { color: colors.background }]}>{provisionBuildRun.isPending ? "Provisioning..." : "Provision"}</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </RNAnimated.View>
           </ScrollView>
         </View>
       </Modal>
 
             {/* PUBLISH MODAL */}
-      <Modal transparent visible={publishModalVisible} animationType="fade">
+      <Modal
+        transparent
+        visible={publishModalVisible}
+        animationType={Platform.OS === "web" ? "none" : "fade"}
+        onRequestClose={closePublishModal}
+        onDismiss={handleDialogDismiss}
+      >
         <View style={styles.modalBackdrop}>
-          <View accessibilityViewIsModal style={[styles.modalCard, { backgroundColor: colors.card }]} accessibilityRole="alert">
+          <RNAnimated.View
+            accessibilityViewIsModal
+            accessibilityRole="alert"
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>Publish Candidate</Text>
             <Text style={[styles.purpose, { color: colors.foreground, marginBottom: 12 }]}>
               This will publish the candidate live. The previous deployment will be preserved on failure.
@@ -2146,6 +3540,7 @@ function BuildPackagesView({
               })()}" to confirm.
             </Text>
             <TextInput
+              autoFocus
               accessibilityLabel="Confirm Target Name to Publish"
               placeholder={(() => {
                 const activeRelease = releases.find(r => r.id === activeReleaseId);
@@ -2158,7 +3553,18 @@ function BuildPackagesView({
             />
             {actionError ? <Text accessibilityLiveRegion="assertive" style={[styles.error, { color: colors.destructive, marginBottom: 12 }]}>{actionError}</Text> : null}
             <View style={styles.modalActions}>
-              <TouchableOpacity accessibilityRole="button" onPress={() => setPublishModalVisible(false)}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={closePublishModal}
+                {...controlFocusHandlers("publish-cancel")}
+                style={[
+                  styles.focusRingBase,
+                  focusedControlKey === "publish-cancel"
+                    ? { borderColor: colors.foreground }
+                    : null,
+                ]}
+                testID="button-cancel-publish"
+              >
                 <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity accessibilityRole="button" disabled={confirmTargetInput !== (() => {
@@ -2174,14 +3580,38 @@ function BuildPackagesView({
                 <Text style={[styles.saveText, { color: colors.background }]}>{publishProvisioningCandidate.isPending ? "Publishing..." : "Publish Live"}</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </RNAnimated.View>
         </View>
       </Modal>
 
       {/* ROLLBACK MODAL */}
-      <Modal transparent visible={rollbackModalVisible} animationType="fade">
+      <Modal
+        transparent
+        visible={rollbackModalVisible}
+        animationType={Platform.OS === "web" ? "none" : "fade"}
+        onRequestClose={closeRollbackModal}
+        onDismiss={handleDialogDismiss}
+      >
         <View style={styles.modalBackdrop}>
-          <View accessibilityViewIsModal style={[styles.modalCard, { backgroundColor: colors.card }]} accessibilityRole="alert">
+          <RNAnimated.View
+            accessibilityViewIsModal
+            accessibilityRole="alert"
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>Rollback Release</Text>
             <Text style={[styles.purpose, { color: colors.foreground, marginBottom: 12 }]}>
               This will roll back the live deployment to a previous state. Type "{(() => {
@@ -2190,6 +3620,7 @@ function BuildPackagesView({
               })()}" to confirm.
             </Text>
             <TextInput
+              autoFocus
               accessibilityLabel="Confirm Target Name to Rollback"
               placeholder={(() => {
                 const activeRelease = releases.find(r => r.id === activeReleaseId);
@@ -2202,7 +3633,18 @@ function BuildPackagesView({
             />
             {actionError ? <Text accessibilityLiveRegion="assertive" style={[styles.error, { color: colors.destructive, marginBottom: 12 }]}>{actionError}</Text> : null}
             <View style={styles.modalActions}>
-              <TouchableOpacity accessibilityRole="button" onPress={() => setRollbackModalVisible(false)}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={closeRollbackModal}
+                {...controlFocusHandlers("rollback-cancel")}
+                style={[
+                  styles.focusRingBase,
+                  focusedControlKey === "rollback-cancel"
+                    ? { borderColor: colors.foreground }
+                    : null,
+                ]}
+                testID="button-cancel-rollback"
+              >
                 <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity accessibilityRole="button" disabled={confirmTargetInput !== (() => {
@@ -2218,17 +3660,42 @@ function BuildPackagesView({
                 <Text style={[styles.saveText, { color: colors.background }]}>{rollbackProvisioningRelease.isPending ? "Rolling back..." : "Confirm Rollback"}</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </RNAnimated.View>
         </View>
       </Modal>
 
       {/* CANCEL PROVISIONING MODAL */}
-      <Modal transparent visible={provisionCancelModalVisible} animationType="fade">
+      <Modal
+        transparent
+        visible={provisionCancelModalVisible}
+        animationType={Platform.OS === "web" ? "none" : "fade"}
+        onRequestClose={closeProvisionCancelModal}
+        onDismiss={handleDialogDismiss}
+      >
         <View style={styles.modalBackdrop}>
-          <View accessibilityViewIsModal style={[styles.modalCard, { backgroundColor: colors.card }]} accessibilityRole="alert">
+          <RNAnimated.View
+            accessibilityViewIsModal
+            accessibilityRole="alert"
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card },
+              {
+                opacity: dialogAppear,
+                transform: [
+                  {
+                    translateY: dialogAppear.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>Cancel Provisioning</Text>
             <Text style={[styles.purpose, { color: colors.foreground, marginBottom: 12 }]}>Provide a reason for cancellation.</Text>
             <TextInput
+              autoFocus
               accessibilityLabel="Cancellation Reason"
               placeholder="Reason..."
               placeholderTextColor={colors.mutedForeground}
@@ -2238,14 +3705,25 @@ function BuildPackagesView({
             />
             {actionError ? <Text accessibilityLiveRegion="assertive" style={[styles.error, { color: colors.destructive, marginBottom: 12 }]}>{actionError}</Text> : null}
             <View style={styles.modalActions}>
-              <TouchableOpacity accessibilityRole="button" onPress={() => setProvisionCancelModalVisible(false)}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={closeProvisionCancelModal}
+                {...controlFocusHandlers("provision-cancel-back")}
+                style={[
+                  styles.focusRingBase,
+                  focusedControlKey === "provision-cancel-back"
+                    ? { borderColor: colors.foreground }
+                    : null,
+                ]}
+                testID="button-back-provision-cancel"
+              >
                 <Text style={[styles.cancel, { color: colors.mutedForeground }]}>Back</Text>
               </TouchableOpacity>
               <TouchableOpacity accessibilityRole="button" disabled={!reasonInput.trim() || cancelProvisioningRun.isPending} accessibilityState={{ disabled: !reasonInput.trim() || cancelProvisioningRun.isPending }} onPress={handleCancelProvisioning} style={[styles.saveButton, { backgroundColor: colors.foreground, opacity: !reasonInput.trim() ? 0.5 : 1 }]}>
                 <Text style={[styles.saveText, { color: colors.background }]}>{cancelProvisioningRun.isPending ? "Cancelling..." : "Confirm Cancel"}</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </RNAnimated.View>
         </View>
       </Modal>
     </View>
@@ -2267,6 +3745,7 @@ export default function AppsScreen() {
     : undefined;
   const [tab, setTab] = useState<"builds" | "portfolio">(params.draftPrompt ? "builds" : "portfolio");
   const [handoffRunId, setHandoffRunId] = useState("");
+  const [templateHandoff, setTemplateHandoff] = useState<TemplateHandoff | null>(null);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -2288,6 +3767,10 @@ export default function AppsScreen() {
               setHandoffRunId(runId);
               setTab("builds");
             }}
+            onTemplateUsed={(handoff) => {
+              setTemplateHandoff(handoff);
+              setTab("builds");
+            }}
           />
         ) : (
           <BuildPackagesView
@@ -2295,6 +3778,7 @@ export default function AppsScreen() {
             initialTargetType={initialTargetType}
             initialTargetName={params.targetName}
             initialSelectedRunId={handoffRunId}
+            initialTemplateHandoff={templateHandoff}
           />
         )}
       </ScrollView>
@@ -2534,4 +4018,26 @@ const styles = StyleSheet.create({
   cancel: { fontFamily: "Inter_500Medium", fontSize: 14 },
   saveButton: { borderRadius: 10, paddingHorizontal: 19, paddingVertical: 12 },
   saveText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  // Transparent-border base for text-style controls so a visible focus ring
+  // can appear without shifting layout when keyboard focus lands on them.
+  focusRingBase: { borderColor: "transparent", borderRadius: 8, borderWidth: 2 },
 });
+
+function formatUsd(value: number): string {
+  if (value === 0) return "$0.00";
+  if (value < 0.01) return "< $0.01";
+  return `$${value.toFixed(2)}`;
+}
+
+function readAppAiOverview(data: unknown): data is AppAiOverview {
+  if (typeof data !== "object" || data === null) return false;
+  const record = data as Record<string, unknown>;
+  if (typeof record.appId !== "string" || typeof record.paused !== "boolean")
+    return false;
+  const usage = record.usage;
+  return (
+    typeof usage === "object" &&
+    usage !== null &&
+    typeof (usage as Record<string, unknown>).costUsd === "number"
+  );
+}
