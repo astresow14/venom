@@ -13,17 +13,26 @@
  * No audio is ever stored; the transcript survives only as a bounded preview.
  */
 
-import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { venomVoiceDecisionsTable } from "@workspace/db/schema";
 import { logger } from "./logger";
+import {
+  VOICE_DECISION_MAX_AGE_DAYS,
+  VOICE_DECISION_MAX_ROWS_PER_USER,
+  VOICE_DECISION_PREVIEW_CHARS,
+  VOICE_DECISION_REPORT_MAX_ROWS,
+  type StoredVoiceDecision,
+} from "./venom-voice-decision-report";
 
-/** Newest rows kept per user; older ones are pruned on the next insert. */
-export const VOICE_DECISION_MAX_ROWS_PER_USER = 500;
-/** Rows older than this are pruned regardless of the per-user cap. */
-export const VOICE_DECISION_MAX_AGE_DAYS = 90;
-/** Longest transcript snippet a row may carry. */
-export const VOICE_DECISION_PREVIEW_CHARS = 280;
+// The log policy constants live in the pure report module so read-side code
+// never has to import the db client; persistence-side callers keep this
+// import path via the re-export.
+export {
+  VOICE_DECISION_MAX_AGE_DAYS,
+  VOICE_DECISION_MAX_ROWS_PER_USER,
+  VOICE_DECISION_PREVIEW_CHARS,
+};
 
 export type VoiceDecisionRecord = {
   id: string;
@@ -52,6 +61,13 @@ export type VoiceDecisionStore = {
     decisionId: string,
     outcome: VoiceDecisionOutcome,
   ): Promise<{ recorded: boolean }>;
+  /**
+   * The user's decision rows created at or after `since`, oldest first.
+   * Reads newest-first under a hard cap (VOICE_DECISION_REPORT_MAX_ROWS) so
+   * a prune-lagged user can never balloon a report, then returns the page
+   * ascending so exports are stable, append-friendly training files.
+   */
+  listForUser(userId: string, since: Date): Promise<StoredVoiceDecision[]>;
 };
 
 /** The moment before which rows have outlived their retention. */
@@ -190,5 +206,37 @@ export const voiceDecisionStore: VoiceDecisionStore = {
       )
       .returning({ id: venomVoiceDecisionsTable.id });
     return { recorded: updated.length > 0 };
+  },
+
+  async listForUser(userId, since) {
+    const rows = await db
+      .select({
+        id: venomVoiceDecisionsTable.id,
+        decision: venomVoiceDecisionsTable.decision,
+        windDown: venomVoiceDecisionsTable.windDown,
+        source: venomVoiceDecisionsTable.source,
+        talkativeness: venomVoiceDecisionsTable.talkativeness,
+        transcriptPreview: venomVoiceDecisionsTable.transcriptPreview,
+        transcriptChars: venomVoiceDecisionsTable.transcriptChars,
+        signals: venomVoiceDecisionsTable.signals,
+        outcome: venomVoiceDecisionsTable.outcome,
+        outcomeAt: venomVoiceDecisionsTable.outcomeAt,
+        createdAt: venomVoiceDecisionsTable.createdAt,
+      })
+      .from(venomVoiceDecisionsTable)
+      .where(
+        and(
+          eq(venomVoiceDecisionsTable.userId, userId),
+          gte(venomVoiceDecisionsTable.createdAt, since),
+        ),
+      )
+      // Newest first so the hard cap keeps the most recent evidence …
+      .orderBy(
+        sql`${venomVoiceDecisionsTable.createdAt} desc`,
+        sql`${venomVoiceDecisionsTable.id} desc`,
+      )
+      .limit(VOICE_DECISION_REPORT_MAX_ROWS);
+    // … then oldest first for stable, append-friendly reading order.
+    return rows.reverse();
   },
 };

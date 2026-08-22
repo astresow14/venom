@@ -7,6 +7,11 @@
  * treats that response as an event, not an error to retry: evict cached
  * workspace content and fall back to the personal tier.
  *
+ * Admin-only endpoints refuse members who lack the admin role with a
+ * different code (`workspace_admin_required`). That one deliberately does
+ * NOT match here: an admin demoted mid-session keeps their membership, so
+ * their device must never evict the workspace as if they were removed.
+ *
  * This module is deliberately dependency-free (structural error check instead
  * of an `instanceof ApiError` import) so the QueryClient in the entry chunk
  * can use it without dragging the API client along.

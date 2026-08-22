@@ -522,6 +522,55 @@ test("schedule labels explain when the next unattended update lands", () => {
     ),
     "Daily updates · last update failed",
   );
+
+  // The server checked but kept the old snapshot because nothing changed:
+  // the card names the check instead of looking stalled.
+  assert.equal(
+    describeSourceSchedule(
+      websiteSource({
+        syncedAt,
+        schedule: {
+          cadence: "daily",
+          updatedAt: 1,
+          lastAttemptAt: syncedTime + 3 * 86_400_000,
+        },
+      }),
+      syncedTime + 3 * 86_400_000 + 2 * 3_600_000,
+    ),
+    "Daily updates · checked 2h ago · next in 22h",
+  );
+  // An applied sync stamps syncedAt and lastAttemptAt together, so the plain
+  // pacing label keeps standing in for "checked just now".
+  assert.equal(
+    describeSourceSchedule(
+      websiteSource({
+        syncedAt,
+        schedule: {
+          cadence: "daily",
+          updatedAt: 1,
+          lastAttemptAt: syncedTime + 30_000,
+        },
+      }),
+      syncedTime + 3_600_000,
+    ),
+    "Daily updates · next in 23h",
+  );
+  // Overdue with a stale check: honest about both when the server last
+  // looked and that the next look is late.
+  assert.equal(
+    describeSourceSchedule(
+      websiteSource({
+        syncedAt,
+        schedule: {
+          cadence: "daily",
+          updatedAt: 1,
+          lastAttemptAt: syncedTime + 86_400_000,
+        },
+      }),
+      syncedTime + 3 * 86_400_000,
+    ),
+    "Daily updates · checked 2d ago · due now",
+  );
 });
 
 test("a schedule set on one device survives a merge with a device that has not seen it", () => {

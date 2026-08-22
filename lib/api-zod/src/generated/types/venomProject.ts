@@ -40,4 +40,12 @@ export interface VenomProject {
   boardStages: VenomKanbanStage[];
   /** @maxItems 40 */
   fieldDefinitions: VenomKanbanField[];
+  /**
+     * Present when the project is shared with a company. On the sharer's device it marks their own project as company-shared; on other members' devices it marks the local mirror.
+     * @minLength 1
+     * @maxLength 64
+     */
+  orgId?: string;
+  /** True when this project entry is a local mirror of a project another member shared with the company, rather than a project this account created. */
+  orgMirror?: boolean;
 }

@@ -10,4 +10,10 @@ import type { VenomChatMessageRole } from './venomChatMessageRole';
 export interface VenomChatMessage {
   role: VenomChatMessageRole;
   content: string;
+  /**
+     * Ids of ready chat files attached to this message. The server re-verifies ownership against the file store; unknown or foreign ids are ignored rather than rejected.
+     * @maxItems 5
+     * @items.pattern ^[A-Za-z0-9-]{1,64}$
+     */
+  attachmentIds?: string[];
 }

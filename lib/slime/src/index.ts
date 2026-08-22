@@ -54,6 +54,21 @@ export {
 } from "./emphasis";
 
 export {
+  createSlimeBloom,
+  type SlimeBloom,
+  type SlimeBloomStepOptions,
+} from "./bloom";
+
+export {
+  SLIME_MOMENTUM_DAMPING,
+  SLIME_MOMENTUM_MAX_LAG,
+  SLIME_MOMENTUM_STIFFNESS,
+  createSlimeMomentum,
+  type SlimeMomentum,
+  type SlimeMomentumStepOptions,
+} from "./momentum";
+
+export {
   deriveSatelliteNodes,
   layoutIslands,
   satelliteCountFor,

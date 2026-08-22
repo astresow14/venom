@@ -23,6 +23,7 @@ const loadBrain = () => import("@/pages/workspace/brain");
 const loadTasks = () => import("@/pages/workspace/tasks");
 const loadApps = () => import("@/pages/workspace/apps/index");
 const loadAppDetail = () => import("@/pages/workspace/apps/[id]");
+const loadTemplates = () => import("@/pages/workspace/templates");
 
 const loadBuildNew = () => import("@/pages/workspace/builds/new");
 const loadBuildDetail = () => import("@/pages/workspace/builds/[id]");
@@ -30,6 +31,12 @@ const loadSops = () => import("@/pages/workspace/sops/index");
 const loadSopDetail = () => import("@/pages/workspace/sops/[id]");
 
 const loadNotifications = () => import("@/pages/workspace/notifications/index");
+
+const loadCompany = () => import("@/pages/workspace/company");
+// Canon is a super-admin-only surface: lazy like the rest, but deliberately
+// left out of the WORKSPACE_LOADERS prefetch group — for almost every
+// account the chunk would be dead weight.
+const loadCanon = () => import("@/pages/workspace/canon");
 const ChatPage = lazy(loadChat);
 const FeedPage = lazy(loadFeed);
 const ThreadDetailPage = lazy(loadThreadDetail);
@@ -37,6 +44,7 @@ const BrainPage = lazy(loadBrain);
 const TasksPage = lazy(loadTasks);
 const AppsPage = lazy(loadApps);
 const AppDetailPage = lazy(loadAppDetail);
+const TemplatesPage = lazy(loadTemplates);
 
 const BuildNewPage = lazy(loadBuildNew);
 const BuildDetailPage = lazy(loadBuildDetail);
@@ -44,12 +52,16 @@ const SopsPage = lazy(loadSops);
 const SopDetailPage = lazy(loadSopDetail);
 
 const NotificationsPage = lazy(loadNotifications);
+
+const CompanyPage = lazy(loadCompany);
+const CanonPage = lazy(loadCanon);
 const WORKSPACE_LOADERS = [
   loadChat,
   loadFeed,
   loadThreadDetail,
   loadTasks,
   loadApps,
+  loadTemplates,
   loadSops,
   loadBrain,
   loadAppDetail,
@@ -57,6 +69,7 @@ const WORKSPACE_LOADERS = [
   loadBuildDetail,
   loadSopDetail,
   loadNotifications,
+  loadCompany,
 ] as const;
 
 /**
@@ -106,11 +119,14 @@ function WorkspacePages() {
             <Route path="/workspace/tasks" component={TasksPage} />
             <Route path="/workspace/apps" component={AppsPage} />
             <Route path="/workspace/apps/:id" component={AppDetailPage} />
+            <Route path="/workspace/templates" component={TemplatesPage} />
             <Route path="/workspace/builds/new" component={BuildNewPage} />
             <Route path="/workspace/builds/:id" component={BuildDetailPage} />
             <Route path="/workspace/sops" component={SopsPage} />
             <Route path="/workspace/sops/:id" component={SopDetailPage} />
             <Route path="/workspace/notifications" component={NotificationsPage} />
+            <Route path="/workspace/company" component={CompanyPage} />
+            <Route path="/workspace/canon" component={CanonPage} />
             <Route component={NotFound} />
           </Switch>
         </Suspense>

@@ -1,0 +1,72 @@
+name: Venom Desktop Bundle Budget
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect Venom Desktop changes
+    runs-on: ubuntu-latest
+    outputs:
+      desktop: ${{ steps.filter.outputs.changed }}
+    steps:
+      # A checkout must come first so the local composite action below can be
+      # resolved from the workspace; the action re-checks-out at the depth the
+      # event actually needs.
+      - uses: actions/checkout@v4
+
+      # Owns the event-conditional fetch depth and the merge_group base/head
+      # wiring; this workflow only supplies its filter list.
+      - id: filter
+        uses: ./.github/actions/detect-changes
+        with:
+          name: desktop
+          filters: |
+            desktop:
+              - "artifacts/venom-desktop/**"
+              - "lib/api-client-react/**"
+              - "lib/api-spec/**"
+              - "lib/slime/**"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - "tsconfig.base.json"
+              - ".github/workflows/venom-desktop-bundle-budget.yml"
+              - ".github/actions/detect-changes/**"
+
+  bundle-budget:
+    name: Critical-path JS budget
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Builds the desktop app with production settings, then fails if the
+      # landing route's critical-path JavaScript (entry + modulepreload chunks)
+      # exceeds artifacts/venom-desktop/bundle-budget.json. The failure output
+      # names the chunk and the modules that grew. Deliberate growth is
+      # accepted by running update:bundle-budget and committing the new budget.
+      - name: Build and check critical-path JS budget
+        run: pnpm --filter @workspace/venom-desktop run check:bundle-budget

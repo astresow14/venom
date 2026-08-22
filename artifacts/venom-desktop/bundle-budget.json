@@ -1,0 +1,228 @@
+{
+  "note": [
+    "Gzip budgets for the JavaScript users must download before venom-desktop",
+    "can render, enforced by scripts/check-bundle-budget.mjs after every",
+    "production build.",
+    "\"chunks\" is the landing critical path: the entry chunk plus every",
+    "modulepreload chunk in the built index.html — what every visitor fetches",
+    "before anything renders.",
+    "\"workspaceGroup\" is what signed-in users additionally download before",
+    "their first useful screen: the workspace-routes chunk plus its static",
+    "import closure, excluding chunks already budgeted on the critical path.",
+    "Budgets are the measured size plus 10% headroom, rounded up to 1 KiB.",
+    "To accept deliberate growth, run",
+    "`pnpm --filter @workspace/venom-desktop run update:bundle-budget`",
+    "and commit this file. Never widen it to silence a failure you cannot explain."
+  ],
+  "generatedAt": "2026-08-22T14:17:29.602Z",
+  "totalGzipBaselineBytes": 171499,
+  "totalGzipBudgetBytes": 189440,
+  "chunks": {
+    "entry": {
+      "file": "assets/index-C_7AtFZ1.js",
+      "rawBaselineBytes": 96459,
+      "gzipBaselineBytes": 35447,
+      "gzipBudgetBytes": 39936
+    },
+    "vendor-react": {
+      "file": "assets/vendor-react-CSziK9lZ.js",
+      "rawBaselineBytes": 186438,
+      "gzipBaselineBytes": 58745,
+      "gzipBudgetBytes": 65536
+    },
+    "vendor-clerk": {
+      "file": "assets/vendor-clerk-Db7rvAnO.js",
+      "rawBaselineBytes": 125314,
+      "gzipBaselineBytes": 33086,
+      "gzipBudgetBytes": 36864
+    },
+    "vendor-motion": {
+      "file": "assets/vendor-motion-DwMip4Ix.js",
+      "rawBaselineBytes": 133732,
+      "gzipBaselineBytes": 44221,
+      "gzipBudgetBytes": 49152
+    }
+  },
+  "composition": {
+    "entry": {
+      "npm:@radix-ui/react-toast": 27495,
+      "npm:@floating-ui/core": 27058,
+      "npm:@floating-ui/dom": 26088,
+      "npm:@radix-ui/react-collection": 17678,
+      "npm:wouter": 16749,
+      "npm:@radix-ui/react-dismissable-layer": 14589,
+      "npm:@radix-ui/react-tooltip": 13654,
+      "npm:@radix-ui/react-popper": 11075,
+      "npm:@floating-ui/react-dom": 9953,
+      "npm:@floating-ui/utils": 9380,
+      "src/App.tsx": 8285,
+      "npm:@radix-ui/react-presence": 6436,
+      "npm:@radix-ui/react-slot": 6026,
+      "src/components/venom-mark.tsx": 5318,
+      "npm:@radix-ui/react-context": 4220,
+      "src/components/ui/toast.tsx": 3651,
+      "npm:@radix-ui/react-use-controllable-state": 3510,
+      "npm:lucide-react": 3195,
+      "src/hooks/use-toast.ts": 2671,
+      "npm:use-sync-external-store": 2650,
+      "npm:class-variance-authority": 2365,
+      "src/components/error-boundary.tsx": 1975,
+      "virtual:vite/preload-helper.js": 1877,
+      "npm:@radix-ui/primitive": 1868,
+      "src/components/route-fallback.tsx": 1287,
+      "npm:@radix-ui/react-use-size": 1265,
+      "virtual:vite/modulepreload-polyfill.js": 1168,
+      "src/components/theme-provider.tsx": 1165,
+      "npm:@radix-ui/react-compose-refs": 1107,
+      "npm:@radix-ui/react-primitive": 1051,
+      "npm:regexparam": 904,
+      "npm:@radix-ui/react-use-effect-event": 874,
+      "npm:@radix-ui/react-visually-hidden": 847,
+      "src/components/ui/tooltip.tsx": 816,
+      "src/lib/prefetch-routes.ts": 788,
+      "src/components/ui/toaster.tsx": 764,
+      "npm:@radix-ui/react-portal": 695,
+      "src/lib/workspace-access.ts": 593,
+      "npm:@tanstack/react-query": 572,
+      "npm:@radix-ui/react-use-callback-ref": 432,
+      "src/main.tsx": 376,
+      "src/lib/mark-size.ts": 374,
+      "npm:clsx": 362,
+      "npm:@radix-ui/react-use-layout-effect": 116,
+      "src/lib/cx.ts": 51,
+      "src/index.css": 0,
+      "index.html": 0
+    },
+    "vendor-react": {
+      "npm:react-dom": 539758,
+      "npm:react": 20230,
+      "npm:scheduler": 11420,
+      "virtual:commonjsHelpers.js": 879
+    },
+    "vendor-clerk": {
+      "npm:@clerk/react": 114948,
+      "npm:@tanstack/query-core": 77838,
+      "npm:@clerk/shared": 63684,
+      "npm:@clerk/themes": 6382,
+      "npm:dequal": 1902
+    },
+    "vendor-motion": {
+      "npm:motion-dom": 293868,
+      "npm:framer-motion": 126630,
+      "npm:motion-utils": 7394
+    }
+  },
+  "workspaceGroup": {
+    "totalGzipBaselineBytes": 77806,
+    "totalGzipBudgetBytes": 86016,
+    "chunks": {
+      "workspace-routes": {
+        "file": "assets/workspace-routes-F-gXwTLv.js",
+        "rawBaselineBytes": 232971,
+        "gzipBaselineBytes": 63922,
+        "gzipBudgetBytes": 70656
+      },
+      "utils": {
+        "file": "assets/utils-aWm1VVdu.js",
+        "rawBaselineBytes": 27218,
+        "gzipBaselineBytes": 8551,
+        "gzipBudgetBytes": 10240
+      },
+      "button": {
+        "file": "assets/button-DhXqQPm7.js",
+        "rawBaselineBytes": 2001,
+        "gzipBaselineBytes": 977,
+        "gzipBudgetBytes": 2048
+      },
+      "venom-wordmark": {
+        "file": "assets/venom-wordmark-DHQjC1vK.js",
+        "rawBaselineBytes": 8290,
+        "gzipBaselineBytes": 3563,
+        "gzipBudgetBytes": 4096
+      },
+      "not-found": {
+        "file": "assets/not-found-XVrtCgnR.js",
+        "rawBaselineBytes": 1873,
+        "gzipBaselineBytes": 793,
+        "gzipBudgetBytes": 1024
+      }
+    },
+    "composition": {
+      "workspace-routes": {
+        "lib/api-client-react/src/generated/api.ts": 109618,
+        "npm:@radix-ui/react-select": 51470,
+        "src/components/layout/Shell.tsx": 40806,
+        "src/lib/workspaceState.ts": 33718,
+        "src/context/VenomWorkspaceContext.tsx": 32723,
+        "npm:@radix-ui/react-scroll-area": 32551,
+        "src/components/workspace/shared/WorkspaceMembersDialog.tsx": 19690,
+        "npm:react-remove-scroll": 15115,
+        "npm:lucide-react": 14576,
+        "npm:@radix-ui/react-dialog": 12002,
+        "src/components/workspace/UsageDialog.tsx": 10308,
+        "src/lib/boardState.ts": 9778,
+        "npm:@radix-ui/react-checkbox": 9585,
+        "npm:@radix-ui/react-focus-scope": 8976,
+        "npm:@radix-ui/react-switch": 8604,
+        "lib/api-client-react/src/custom-fetch.ts": 7230,
+        "lib/venom-workspace-merge/src/index.ts": 7124,
+        "src/components/workspace/sops/ProjectSopsDialog.tsx": 7106,
+        "src/components/workspace/shared/WorkspaceManager.tsx": 6629,
+        "lib/venom-workspace-merge/src/projectRestore.ts": 6583,
+        "src/components/workspace/NetworkContributionDialog.tsx": 6425,
+        "npm:@tanstack/react-query": 6114,
+        "src/routes/workspace-routes.tsx": 5753,
+        "src/lib/blend.ts": 5508,
+        "npm:aria-hidden": 5359,
+        "npm:@radix-ui/react-alert-dialog": 5089,
+        "src/components/workspace/VoicePreferencesDialog.tsx": 4958,
+        "src/components/ui/select.tsx": 4840,
+        "src/components/workspace/CreateProjectDialog.tsx": 4535,
+        "npm:react-remove-scroll-bar": 4479,
+        "src/components/workspace/shared/CreateWorkspaceDialog.tsx": 4433,
+        "lib/venom-workspace-merge/src/clusterPlacement.ts": 3743,
+        "npm:use-callback-ref": 3384,
+        "src/components/ui/dialog.tsx": 3292,
+        "src/components/ui/sheet.tsx": 3261,
+        "src/components/ui/alert-dialog.tsx": 3226,
+        "lib/venom-workspace-merge/src/boardStages.ts": 3085,
+        "npm:use-sidecar": 2904,
+        "lib/knowledge-text/src/index.ts": 2410,
+        "npm:react-style-singleton": 2335,
+        "npm:tslib": 2189,
+        "src/context/shared-workspace.tsx": 1788,
+        "npm:@radix-ui/react-focus-guards": 1333,
+        "src/components/ui/scroll-area.tsx": 1203,
+        "src/components/ui/switch.tsx": 942,
+        "src/lib/projectLifecycle.ts": 896,
+        "src/components/ui/checkbox.tsx": 799,
+        "src/components/ui/input.tsx": 655,
+        "npm:@radix-ui/react-id": 527,
+        "src/lib/voice/voiceCopy.ts": 518,
+        "npm:@radix-ui/react-use-previous": 479,
+        "npm:@radix-ui/react-direction": 373,
+        "src/components/ui/skeleton.tsx": 286,
+        "npm:@radix-ui/number": 262,
+        "npm:get-nonce": 145,
+        "src/lib/as-list.ts": 70,
+        "src/lib/ui-test.ts": 25
+      },
+      "utils": {
+        "npm:tailwind-merge": 102185,
+        "src/lib/utils.ts": 58
+      },
+      "button": {
+        "npm:lucide-react": 1839,
+        "src/components/ui/button.tsx": 1420
+      },
+      "venom-wordmark": {
+        "src/components/venom-wordmark.tsx": 8390
+      },
+      "not-found": {
+        "src/components/ui/card.tsx": 1609,
+        "src/pages/not-found.tsx": 842,
+        "npm:lucide-react": 469
+      }
+    }
+  }
+}

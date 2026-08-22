@@ -1,5 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mockKnowledgeExtraction } from './support/chat-stream';
+import {
+  capturedChatRequestBodies,
+  mockKnowledgeExtraction,
+  mockStagedChatStream,
+} from './support/chat-stream';
 
 const DESKTOP = { width: 1280, height: 860 };
 
@@ -126,6 +130,7 @@ async function mockDeliberationAvailability(page: Page) {
       body: JSON.stringify({
         available: true,
         mode: 'multi-model',
+        distinctModels: true,
         voices: [
           { voiceId: 'direct', name: 'First take', tagline: 'Head-on' },
           { voiceId: 'skeptic', name: 'Skeptic', tagline: 'Risks' },
@@ -139,61 +144,14 @@ async function mockDeliberationAvailability(page: Page) {
 /**
  * Streams scripted SSE rounds from inside the page so in-progress debate UI
  * stays on screen long enough to assert. Each /api/venom/respond call
- * consumes the next round; request bodies are recorded on window for
- * interjection assertions.
+ * consumes the next round; request bodies are recorded for interjection
+ * assertions and read back with `capturedChatRequestBodies`.
  */
 async function mockDebateRounds(
   page: Page,
   rounds: Array<Array<[number, unknown]>>,
 ) {
-  await page.addInitScript((scriptedRounds: Array<Array<[number, unknown]>>) => {
-    const captured: string[] = [];
-    (window as unknown as { __debateBodies: string[] }).__debateBodies = captured;
-    let call = 0;
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ): Promise<Response> => {
-      const url =
-        typeof input === 'string'
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
-      if (!url.includes('/api/venom/respond')) {
-        return originalFetch(input as RequestInfo, init);
-      }
-      captured.push(String(init?.body ?? ''));
-      const events = scriptedRounds[Math.min(call, scriptedRounds.length - 1)];
-      call += 1;
-      const encoder = new TextEncoder();
-      const signal = init?.signal ?? null;
-      const stream = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          for (const [delay, payload] of events) {
-            await new Promise((resolve) => setTimeout(resolve, delay));
-            if (signal?.aborted) {
-              try {
-                controller.close();
-              } catch {
-                /* already closed */
-              }
-              return;
-            }
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify(payload)}\n\n`),
-            );
-          }
-          controller.close();
-        },
-      });
-      return new Response(stream, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      });
-    }) as typeof window.fetch;
-  }, rounds);
+  await mockStagedChatStream(page, rounds, { captureRequestBodies: true });
 }
 
 async function openChat(page: Page) {
@@ -217,7 +175,8 @@ test('debate round: named turns stream into the thread, one voice fails, citatio
   await seedEnabledModels(page);
   await mockModels(page);
   await mockDeliberationAvailability(page);
-  await mockKnowledgeExtraction(page);
+  const extraction = { bodies: [] as unknown[] };
+  await mockKnowledgeExtraction(page, extraction);
   await mockDebateRounds(page, [
     [
       [0, metaEvent(4)],
@@ -285,12 +244,15 @@ test('debate round: named turns stream into the thread, one voice fails, citatio
   ]);
   await openChat(page);
 
-  // Switch to Debate; the pad shows the three real models at the corners.
+  // Switch to Debate; the pad lives in the models & voices popup and seats
+  // the three real models at the corners.
   await page.getByTestId('mode-option-debate').click();
   await expect(page.getByTestId('mode-option-debate')).toHaveAttribute(
     'aria-checked',
     'true',
   );
+  await page.getByTestId('button-open-voices').click();
+  await expect(page.getByTestId('dialog-model-voices')).toBeVisible();
   await expect(page.getByTestId('blend-pad')).toBeVisible();
   await expect(page.getByTestId('blend-weight-venom-gpt')).toContainText('33%');
   await expect(page.getByTestId('blend-weight-venom-claude')).toContainText('33%');
@@ -301,6 +263,10 @@ test('debate round: named turns stream into the thread, one voice fails, citatio
   await expect(page.getByTestId('blend-weight-venom-gpt')).toContainText('70%');
   await page.keyboard.press('Home');
   await expect(page.getByTestId('blend-weight-venom-gpt')).toContainText('33%');
+
+  // Done closes the popup; the round itself is driven from the composer.
+  await page.getByTestId('button-model-voices-done').click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   const composer = page.getByTestId('input-message');
   await composer.fill('Should we ship the migration?');
@@ -367,13 +333,43 @@ test('debate round: named turns stream into the thread, one voice fails, citatio
     ]);
 
   // The request carried the debate mode and the blend weights.
-  const bodies = await page.evaluate(
-    () => (window as unknown as { __debateBodies: string[] }).__debateBodies,
-  );
+  const bodies = await capturedChatRequestBodies(page);
   const request = JSON.parse(bodies[0]);
   expect(request.mode).toBe('debate');
   expect(request.blend).toHaveLength(3);
   expect(request.blend[0].id).toBe('venom-gpt');
+
+  // The settled round feeds the Brain exactly once: the closing turn — the
+  // voice given the final word — is mined as the answer, alongside the
+  // user's question. The sparring before it never reaches the extractor.
+  await expect.poll(() => extraction.bodies.length).toBe(1);
+  const extractionBody = extraction.bodies[0] as {
+    messages: Array<{ role: string; content: string }>;
+  };
+  const extractedAssistants = extractionBody.messages.filter(
+    (message) => message.role === 'assistant',
+  );
+  expect(extractedAssistants).toHaveLength(1);
+  expect(extractedAssistants[0].content).toContain(
+    'Closing: stage behind a flag, then ship.',
+  );
+  expect(
+    extractionBody.messages.some((message) =>
+      message.content.includes('Opening: ship it now.'),
+    ),
+  ).toBe(false);
+  expect(
+    extractionBody.messages.some((message) =>
+      message.content.includes('staging first'),
+    ),
+  ).toBe(false);
+  expect(
+    extractionBody.messages.some(
+      (message) =>
+        message.role === 'user' &&
+        message.content.includes('Should we ship the migration?'),
+    ),
+  ).toBe(true);
 
   // Mode stays remembered for the conversation.
   await expect(page.getByTestId('mode-option-debate')).toHaveAttribute(
@@ -392,7 +388,8 @@ test('one enabled model with a full server catalog debates as personas with mapp
   await seedEnabledModels(page, ['venom-gpt']);
   await mockModels(page);
   await mockDeliberationAvailability(page);
-  await mockKnowledgeExtraction(page);
+  const extraction = { bodies: [] as unknown[] };
+  await mockKnowledgeExtraction(page, extraction);
   const personaTurn = (
     index: number,
     voiceId: string,
@@ -456,6 +453,7 @@ test('one enabled model with a full server catalog debates as personas with mapp
   await openChat(page);
 
   await page.getByTestId('mode-option-debate').click();
+  await page.getByTestId('button-open-voices').click();
   await expect(page.getByTestId('blend-pad')).toBeVisible();
 
   // Persona corners, not the two disabled models.
@@ -463,11 +461,16 @@ test('one enabled model with a full server catalog debates as personas with mapp
   await expect(page.getByTestId('blend-weight-skeptic')).toContainText('33%');
   await expect(page.getByTestId('blend-weight-evidence')).toContainText('33%');
   await expect(page.getByTestId('blend-pad')).not.toContainText('Venom Claude');
+  // Too few usable models to seat real debaters — the popup says why.
+  await expect(page.getByTestId('text-voices-limited')).toBeVisible();
 
   // Favor the second corner (Skeptic) via the keyboard path.
   await page.getByTestId('blend-pin').focus();
   await page.keyboard.press('2');
   await expect(page.getByTestId('blend-weight-skeptic')).toContainText('70%');
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   const composer = page.getByTestId('input-message');
   await composer.fill('Do we ship this week?');
@@ -484,9 +487,7 @@ test('one enabled model with a full server catalog debates as personas with mapp
 
   // The request carried persona corner ids with the skeptic favored — the
   // exact contract the server planner honors.
-  const bodies = await page.evaluate(
-    () => (window as unknown as { __debateBodies: string[] }).__debateBodies,
-  );
+  const bodies = await capturedChatRequestBodies(page);
   const request = JSON.parse(bodies[0]);
   expect(request.mode).toBe('debate');
   expect(request.modelId).toBe('venom-gpt');
@@ -501,6 +502,17 @@ test('one enabled model with a full server catalog debates as personas with mapp
     blend.every((entry) => entry.weight <= skeptic.weight),
   ).toBe(true);
   expect(skeptic.weight).toBeGreaterThan(0.5);
+
+  // Persona debates settle the same way: the closing take is absorbed.
+  await expect.poll(() => extraction.bodies.length).toBe(1);
+  const extractionBody = extraction.bodies[0] as {
+    messages: Array<{ role: string; content: string }>;
+  };
+  const extractedAssistants = extractionBody.messages.filter(
+    (message) => message.role === 'assistant',
+  );
+  expect(extractedAssistants).toHaveLength(1);
+  expect(extractedAssistants[0].content).toContain('Then the flag is the test.');
 });
 
 test('interjection joins the thread and the next turns see it; stop ends the round cleanly', async ({
@@ -509,7 +521,8 @@ test('interjection joins the thread and the next turns see it; stop ends the rou
   await seedEnabledModels(page);
   await mockModels(page);
   await mockDeliberationAvailability(page);
-  await mockKnowledgeExtraction(page);
+  const extraction = { bodies: [] as unknown[] };
+  await mockKnowledgeExtraction(page, extraction);
   const slowTurn = (
     index: number,
     voice: (typeof DEBATE_ROSTER)[number],
@@ -595,9 +608,7 @@ test('interjection joins the thread and the next turns see it; stop ends the rou
   );
 
   // The second request's context included the interjection.
-  const bodies = await page.evaluate(
-    () => (window as unknown as { __debateBodies: string[] }).__debateBodies,
-  );
+  const bodies = await capturedChatRequestBodies(page);
   expect(bodies.length).toBeGreaterThanOrEqual(2);
   const secondRequest = JSON.parse(bodies[bodies.length - 1]);
   const roles = secondRequest.messages.map((m: { role: string }) => m.role);
@@ -621,4 +632,10 @@ test('interjection joins the thread and the next turns see it; stop ends the rou
     page.getByTestId('message-assistant').filter({ hasText: 'Then we descope' }),
   ).toHaveCount(0);
   await expect(composer).toBeEnabled();
+
+  // Neither round settled — the first restarted for the interjection, the
+  // second was stopped before its closing turn landed — so nothing reached
+  // the Brain.
+  await page.waitForTimeout(300);
+  expect(extraction.bodies).toHaveLength(0);
 });

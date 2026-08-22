@@ -20,8 +20,13 @@ fails.
 
 - Wrap every list query result at the point it is read. `asList` in
   `artifacts/venom-desktop/src/lib/as-list.ts` is the blunt tool; the richer
-  `resolveAppPortfolioState` in `lib/appPortfolio.ts` is for pages that need to
-  distinguish "empty" from "broken response" in the UI.
+  state resolvers (`resolveAppPortfolioState` in `lib/appPortfolio.ts`,
+  `resolveSop*State` in `lib/sopLibrary.ts`) are for pages that need to
+  distinguish "empty" from "broken response" in the UI and offer in-place retry.
+- Record-shaped detail payloads (`{ sop, revisions, assignments }`-style) crash
+  the same way through property reads and spreads, not just `.map`. Normalize
+  the whole record before any effect seeds local draft state from it — a seed
+  effect that runs on the raw payload throws before render guards can help.
 - Guard nested fields too, not just the top-level payload — a paged endpoint's
   `.community` / `.items` are absent on the error body.
 - Do **not** blanket-default to `[]` where the code distinguishes "still

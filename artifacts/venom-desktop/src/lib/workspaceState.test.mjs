@@ -7,9 +7,14 @@ import { messageCitationSegments } from './messageCitations.ts';
 import {
   ARCHIVED_CITATION_LIMIT,
   availableTaskStatuses,
+  captureProjectRestoreSnapshot,
   createDefaultState,
   createDefaultModelPreferences,
   createDefaultVoicePreferences,
+  createEmptyTombstones,
+  deleteProjectFromState,
+  fileConversationToProjectInState,
+  mergeArchivedCitations,
   mergeModelPreferences,
   mergeVoicePreferences,
   mergeWorkspaceStates,
@@ -17,6 +22,8 @@ import {
   normalizeVoicePreferences,
   normalizeWorkspaceState,
   prepareWorkspaceStateForSave,
+  PROJECT_RESTORE_WINDOW_MS,
+  restoreProjectFromSnapshot,
   stageIdForTaskStatus,
 } from './workspaceState.ts';
 
@@ -187,7 +194,18 @@ test('normalization resolves board invariants enforced by the API', () => {
     [0, 1],
   );
   assert.deepEqual(normalized.projects[0].fieldDefinitions, []);
-  assert.equal(normalized.projects[0].boardStages.length, 2);
+  // Duplicate-named stages are kept and renamed (the rule shared with the
+  // phone app via @workspace/venom-workspace-merge), never dropped: dropping
+  // silently deleted a column the other device still showed. The renamed
+  // board still satisfies the API's name-uniqueness gate asserted above.
+  assert.deepEqual(
+    normalized.projects[0].boardStages.map((stage) => [stage.id, stage.name]),
+    [
+      ['done', 'Done'],
+      ['todo-a', 'To Do'],
+      ['todo-b', 'to do (2)'],
+    ],
+  );
 });
 
 test('workspace merges preserve task, stage, and field tombstones', () => {
@@ -589,6 +607,88 @@ test('mergeModelPreferences falls back to cloud when device is undefined', () =>
   assert.equal(merged.defaultModelId, 'venom-gemini');
 });
 
+// ---- selectionPolicy (account-level auto model choice) ----
+
+test('normalizeModelPreferences keeps valid selection policies verbatim', () => {
+  for (const policy of ['manual', 'auto-cheapest', 'auto-max-power']) {
+    const prefs = normalizeModelPreferences({
+      enabledModelIds: ['venom-gpt'],
+      defaultModelId: 'venom-gpt',
+      activeModelId: 'venom-gpt',
+      selectionPolicy: policy,
+      updatedAt: 5,
+    });
+    assert.equal(prefs.selectionPolicy, policy);
+  }
+});
+
+test('normalizeModelPreferences drops unknown selection policies', () => {
+  for (const bad of ['cheapest', 'AUTO-CHEAPEST', 42, {}, null]) {
+    const prefs = normalizeModelPreferences({
+      enabledModelIds: ['venom-gpt'],
+      defaultModelId: 'venom-gpt',
+      activeModelId: 'venom-gpt',
+      selectionPolicy: bad,
+      updatedAt: 5,
+    });
+    assert.equal('selectionPolicy' in prefs, false);
+  }
+  // Absent stays absent — legacy snapshots are untouched.
+  const legacy = normalizeModelPreferences({
+    enabledModelIds: ['venom-gpt'],
+    defaultModelId: 'venom-gpt',
+    activeModelId: 'venom-gpt',
+    updatedAt: 5,
+  });
+  assert.equal('selectionPolicy' in legacy, false);
+});
+
+test('mergeModelPreferences carries the policy with the winning block', () => {
+  const cloud = {
+    enabledModelIds: ['venom-gpt'],
+    defaultModelId: 'venom-gpt',
+    activeModelId: 'venom-gpt',
+    selectionPolicy: 'auto-cheapest',
+    updatedAt: 200,
+  };
+  const device = {
+    enabledModelIds: ['venom-claude'],
+    defaultModelId: 'venom-claude',
+    activeModelId: 'venom-claude',
+    updatedAt: 100,
+  };
+  // Cloud wins: its policy arrives with it.
+  assert.equal(mergeModelPreferences(cloud, device).selectionPolicy, 'auto-cheapest');
+  // Device wins on a newer write: switching back to manual sticks even
+  // against an older cloud block that carried an auto policy.
+  const deviceManual = { ...device, selectionPolicy: 'manual', updatedAt: 300 };
+  assert.equal(mergeModelPreferences(cloud, deviceManual).selectionPolicy, 'manual');
+});
+
+test('mergeWorkspaceStates round-trips the selection policy', () => {
+  const cloud = {
+    ...createDefaultState(),
+    modelPreferences: {
+      enabledModelIds: ['venom-gpt'],
+      defaultModelId: 'venom-gpt',
+      activeModelId: 'venom-gpt',
+      selectionPolicy: 'auto-max-power',
+      updatedAt: 20,
+    },
+  };
+  const device = {
+    ...createDefaultState(),
+    modelPreferences: {
+      enabledModelIds: ['venom-claude'],
+      defaultModelId: 'venom-claude',
+      activeModelId: 'venom-claude',
+      updatedAt: 10,
+    },
+  };
+  const merged = mergeWorkspaceStates(cloud, device);
+  assert.equal(merged.modelPreferences?.selectionPolicy, 'auto-max-power');
+});
+
 test('createDefaultState includes modelPreferences', () => {
   const state = createDefaultState();
   assert.ok(state.modelPreferences, 'modelPreferences should be present');
@@ -917,6 +1017,72 @@ test('merge keeps the preference block with the newer modeUpdatedAt', () => {
   assert.equal(conv.responseMode, 'verify');
   assert.deepEqual(conv.blend.corners, ['a', 'b', 'c']);
   assert.equal(conv.modeUpdatedAt, 200);
+});
+
+test('message attachment stamps and thumbnails survive the cross-device merge', () => {
+  const imageStamp = {
+    id: 'file-img',
+    name: 'pixel.png',
+    contentType: 'image/png',
+    size: 68,
+    kind: 'upload',
+    // Image stamps carry a tiny data-URL thumbnail; it must ride the sync.
+    thumbnail: 'data:image/jpeg;base64,dGh1bWI=',
+  };
+  const documentStamp = {
+    id: 'file-doc',
+    name: 'venom-brief.pdf',
+    contentType: 'application/pdf',
+    size: 900,
+    kind: 'generated',
+  };
+  const cloud = stateWithConversation(
+    conversationWith(
+      {},
+      {
+        updatedAt: 200,
+        messages: [
+          {
+            id: 'cloud-message',
+            role: 'user',
+            content: 'look at this',
+            createdAt: 10,
+            status: 'sent',
+            attachments: [imageStamp],
+          },
+        ],
+      },
+    ),
+  );
+  const device = stateWithConversation(
+    conversationWith(
+      {},
+      {
+        updatedAt: 300,
+        messages: [
+          {
+            id: 'device-message',
+            role: 'assistant',
+            content: 'here you go',
+            createdAt: 20,
+            status: 'sent',
+            attachments: [documentStamp],
+          },
+        ],
+      },
+    ),
+  );
+
+  const merged = mergeWorkspaceStates(cloud, device);
+  const conv = merged.conversations.find((item) => item.id === 'conv-prefs');
+  assert.deepEqual(
+    conv.messages.find((item) => item.id === 'cloud-message').attachments,
+    [imageStamp],
+  );
+  assert.deepEqual(
+    conv.messages.find((item) => item.id === 'device-message').attachments,
+    [documentStamp],
+  );
 });
 
 test('merge tie on modeUpdatedAt keeps the device preference block', () => {
@@ -1270,4 +1436,957 @@ test('a stale archive pile cannot regrow the desktop merge or evict cited eviden
     merged.archivedCitations.map((entry) => entry.id),
     ['cite_needed'],
   );
+});
+
+test('desktop cap eviction keeps cited entries ahead of newer uncited ones', () => {
+  // Mirrors the mobile eviction test: the eviction order must stay identical
+  // across the two apps or their syncs would flip-flop over which entries
+  // survive the cap.
+  const cited = [archivedCitation('cite_named_by_answer', 1)];
+  const uncited = Array.from(
+    { length: ARCHIVED_CITATION_LIMIT + 10 },
+    (_, index) => archivedCitation(`cite_uncited_${index}`, 100 + index),
+  );
+
+  const merged = mergeArchivedCitations(
+    (citationId) => citationId === 'cite_named_by_answer',
+    uncited,
+    cited,
+  );
+
+  assert.equal(merged.length, ARCHIVED_CITATION_LIMIT);
+  // The cited entry is the oldest of all yet survives, at the tail of the
+  // newest-first ordering; the oldest uncited entries are evicted instead.
+  assert.equal(merged[merged.length - 1].id, 'cite_named_by_answer');
+  assert.ok(!merged.some((entry) => entry.id === 'cite_uncited_0'));
+  assert.ok(merged.some((entry) => entry.id === 'cite_uncited_11'));
+  const retiredTimes = merged.map((entry) => entry.retiredAt);
+  assert.deepEqual(
+    retiredTimes,
+    [...retiredTimes].sort((left, right) => right - left),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Project deletion (mirrors mobile VenomContext.deleteProject)
+// ---------------------------------------------------------------------------
+
+const DELETE_NOW = 1_755_600_000_000;
+
+function deletionProject(id, name, updatedAt) {
+  return {
+    id,
+    name,
+    description: 'Fixture project',
+    accent: '#e5e5e5',
+    sourceCount: 0,
+    updatedAt,
+    boardStages: [
+      {
+        id: `stage_todo_${id}`,
+        name: 'To Do',
+        position: 0,
+        isDone: false,
+        updatedAt,
+      },
+      {
+        id: `stage_done_${id}`,
+        name: 'Done',
+        position: 1,
+        isDone: true,
+        updatedAt,
+      },
+    ],
+    fieldDefinitions: [
+      {
+        id: `field_owner_${id}`,
+        name: 'Owner',
+        type: 'text',
+        options: [],
+        position: 0,
+        updatedAt,
+      },
+    ],
+    tasks: [
+      {
+        id: `task_one_${id}`,
+        title: 'First task',
+        stageId: `stage_todo_${id}`,
+        position: 0,
+        createdAt: updatedAt,
+        updatedAt,
+        values: {},
+      },
+    ],
+  };
+}
+
+function deletionConversation(id, projectId, updatedAt, content) {
+  return {
+    id,
+    title: `${id} title`,
+    projectId,
+    updatedAt,
+    messages: [
+      {
+        id: `msg_${id}`,
+        role: 'assistant',
+        content,
+        createdAt: updatedAt,
+        status: 'sent',
+      },
+    ],
+  };
+}
+
+function deletionCluster(id, projectId, lastUpdatedAt) {
+  return {
+    id,
+    projectId,
+    label: `${id} label`,
+    category: 'core',
+    strength: 0.6,
+    x: 0,
+    y: 0,
+    links: [],
+    description: 'Fixture cluster',
+    summary: 'Fixture cluster',
+    mentionCount: 1,
+    lastUpdatedAt,
+    sources: [],
+  };
+}
+
+function deletionSource(id, projectId, syncedAtMs) {
+  return {
+    id,
+    projectId,
+    provider: 'github',
+    name: `${id} name`,
+    url: `https://example.com/${id}`,
+    status: 'connected',
+    syncedAt: new Date(syncedAtMs).toISOString(),
+    summary: 'Fixture source',
+    context: 'Fixture source',
+    citations: [],
+    clusters: [],
+  };
+}
+
+function threeProjectState() {
+  return {
+    projects: [
+      deletionProject('proj_alpha', 'Alpha', DELETE_NOW - 5_000),
+      deletionProject('proj_beta', 'Beta', DELETE_NOW - 2_000),
+      deletionProject('proj_gamma', 'Gamma', DELETE_NOW - 3_000),
+    ],
+    conversations: [
+      deletionConversation(
+        'conv_alpha',
+        'proj_alpha',
+        DELETE_NOW - 5_000,
+        'Only alpha cites [source:cite_alpha].',
+      ),
+      deletionConversation(
+        'conv_beta',
+        'proj_beta',
+        DELETE_NOW - 2_000,
+        'Beta cites [source:cite_beta].',
+      ),
+      deletionConversation(
+        'conv_unfiled',
+        null,
+        DELETE_NOW - 1_000,
+        'No markers here.',
+      ),
+    ],
+    clusters: [
+      deletionCluster('cl_alpha', 'proj_alpha', DELETE_NOW - 5_000),
+      deletionCluster('cl_beta', 'proj_beta', DELETE_NOW - 2_000),
+      deletionCluster('cl_unfiled', null, DELETE_NOW - 1_000),
+    ],
+    sources: [
+      deletionSource('src_alpha', 'proj_alpha', DELETE_NOW - 5_000),
+      deletionSource('src_beta', 'proj_beta', DELETE_NOW - 2_000),
+    ],
+    archivedCitations: [
+      archivedCitation('cite_alpha', DELETE_NOW - 4_000),
+      archivedCitation('cite_beta', DELETE_NOW - 4_000),
+    ],
+    activeProjectId: 'proj_alpha',
+    activeConversationId: 'conv_alpha',
+    tombstones: createEmptyTombstones(),
+    modelPreferences: createDefaultModelPreferences(),
+    voicePreferences: createDefaultVoicePreferences(),
+  };
+}
+
+const deletionGenerateId = (prefix) => `${prefix}_fresh`;
+
+test('deleting the active project lands on the most recently updated remaining project and tombstones every removed record', () => {
+  const next = deleteProjectFromState({
+    state: threeProjectState(),
+    projectId: 'proj_alpha',
+    deletedAt: DELETE_NOW,
+    generateId: deletionGenerateId,
+  });
+
+  assert.deepEqual(
+    next.projects.map((project) => project.id),
+    ['proj_beta', 'proj_gamma'],
+  );
+  assert.equal(next.activeProjectId, 'proj_beta');
+  assert.deepEqual(
+    next.conversations.map((conversation) => conversation.id),
+    ['conv_beta', 'conv_unfiled'],
+  );
+  assert.equal(next.activeConversationId, null);
+  assert.deepEqual(
+    next.clusters.map((cluster) => cluster.id),
+    ['cl_beta', 'cl_unfiled'],
+  );
+  assert.deepEqual(
+    next.sources.map((source) => source.id),
+    ['src_beta'],
+  );
+  // Evidence only alpha's answers cited leaves the archive with the project.
+  assert.deepEqual(
+    next.archivedCitations.map((entry) => entry.id),
+    ['cite_beta'],
+  );
+
+  // Same tombstones the phone writes, all stamped with the deletion time.
+  const tombstones = next.tombstones;
+  assert.deepEqual(tombstones.projects, [
+    { id: 'proj_alpha', deletedAt: DELETE_NOW },
+  ]);
+  assert.deepEqual(
+    tombstones.tasks.map((marker) => marker.id),
+    ['task_one_proj_alpha'],
+  );
+  assert.deepEqual(
+    tombstones.conversations.map((marker) => marker.id),
+    ['conv_alpha'],
+  );
+  assert.deepEqual(
+    tombstones.messages.map((marker) => marker.id),
+    ['msg_conv_alpha'],
+  );
+  assert.deepEqual(
+    tombstones.clusters.map((marker) => marker.id),
+    ['cl_alpha'],
+  );
+  assert.deepEqual(
+    tombstones.stages.map((marker) => marker.id).sort(),
+    ['stage_done_proj_alpha', 'stage_todo_proj_alpha'],
+  );
+  assert.deepEqual(
+    tombstones.fields.map((marker) => marker.id),
+    ['field_owner_proj_alpha'],
+  );
+  assert.deepEqual(
+    tombstones.sources.map((marker) => marker.id),
+    ['src_alpha'],
+  );
+  for (const collection of Object.values(tombstones)) {
+    for (const marker of collection) {
+      assert.equal(marker.deletedAt, DELETE_NOW);
+    }
+  }
+});
+
+test('deleting a background project keeps the active workspace and conversation in place', () => {
+  const state = {
+    ...threeProjectState(),
+    activeProjectId: 'proj_gamma',
+    activeConversationId: 'conv_unfiled',
+  };
+  const next = deleteProjectFromState({
+    state,
+    projectId: 'proj_beta',
+    deletedAt: DELETE_NOW,
+    generateId: deletionGenerateId,
+  });
+
+  assert.deepEqual(
+    next.projects.map((project) => project.id),
+    ['proj_alpha', 'proj_gamma'],
+  );
+  assert.equal(next.activeProjectId, 'proj_gamma');
+  assert.equal(next.activeConversationId, 'conv_unfiled');
+  assert.equal(
+    next.tombstones.projects.some((marker) => marker.id === 'proj_beta'),
+    true,
+  );
+});
+
+test('deleting the last project seeds a fresh fallback workspace under a new id', () => {
+  const state = {
+    ...threeProjectState(),
+    projects: [deletionProject('proj_solo', 'Solo', DELETE_NOW - 1_000)],
+    conversations: [
+      deletionConversation(
+        'conv_solo',
+        'proj_solo',
+        DELETE_NOW - 1_000,
+        'Solo notes.',
+      ),
+    ],
+    clusters: [],
+    sources: [],
+    archivedCitations: [],
+    activeProjectId: 'proj_solo',
+    activeConversationId: 'conv_solo',
+  };
+  const next = deleteProjectFromState({
+    state,
+    projectId: 'proj_solo',
+    deletedAt: DELETE_NOW,
+    generateId: deletionGenerateId,
+  });
+
+  assert.equal(next.projects.length, 1);
+  const fallback = next.projects[0];
+  // A fresh id keeps the deleted project's tombstone authoritative in sync.
+  assert.equal(fallback.id, 'proj_fresh');
+  assert.equal(fallback.name, 'General');
+  assert.equal(fallback.updatedAt, DELETE_NOW);
+  assert.equal(fallback.boardStages.length, 3);
+  assert.deepEqual(fallback.tasks, []);
+  assert.equal(next.activeProjectId, 'proj_fresh');
+  assert.equal(next.activeConversationId, null);
+  assert.equal(next.conversations.length, 0);
+  assert.equal(
+    next.tombstones.projects.some((marker) => marker.id === 'proj_solo'),
+    true,
+  );
+});
+
+test('a deleted project cannot resurrect through a cross-device merge', () => {
+  const staleCloud = threeProjectState();
+  const afterDelete = deleteProjectFromState({
+    state: threeProjectState(),
+    projectId: 'proj_alpha',
+    deletedAt: DELETE_NOW,
+    generateId: deletionGenerateId,
+  });
+
+  for (const merged of [
+    mergeWorkspaceStates(staleCloud, afterDelete),
+    mergeWorkspaceStates(afterDelete, staleCloud),
+  ]) {
+    assert.deepEqual(
+      merged.projects.map((project) => project.id).sort(),
+      ['proj_beta', 'proj_gamma'],
+    );
+    assert.equal(
+      merged.conversations.some((conversation) => conversation.id === 'conv_alpha'),
+      false,
+    );
+    assert.equal(
+      merged.clusters.some((cluster) => cluster.id === 'cl_alpha'),
+      false,
+    );
+    assert.equal(
+      merged.sources.some((source) => source.id === 'src_alpha'),
+      false,
+    );
+    assert.equal(
+      merged.archivedCitations.some((entry) => entry.id === 'cite_alpha'),
+      false,
+    );
+    // The tombstone itself survives the merge so a third device drops it too.
+    assert.equal(
+      merged.tombstones.projects.some(
+        (marker) => marker.id === 'proj_alpha' && marker.deletedAt === DELETE_NOW,
+      ),
+      true,
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Undo delete: snapshot capture + fresh-id restore (shared with the phone via
+// @workspace/venom-workspace-merge). The tombstones a delete writes stay dead
+// forever; undo rebuilds the content as NEW entities, mirroring how deleting
+// the last project seeds its fallback workspace under a fresh id.
+// ---------------------------------------------------------------------------
+
+const RESTORE_AT = DELETE_NOW + 6_000;
+
+// Restores mint many ids per prefix, so the single-value deletionGenerateId
+// would collide; this factory counts.
+const restoreIdFactory = () => {
+  let counter = 0;
+  return (prefix) => `${prefix}_r${(counter += 1)}`;
+};
+
+function lastProjectState() {
+  return {
+    ...threeProjectState(),
+    projects: [deletionProject('proj_solo', 'Solo', DELETE_NOW - 1_000)],
+    conversations: [
+      deletionConversation(
+        'conv_solo',
+        'proj_solo',
+        DELETE_NOW - 1_000,
+        'Solo notes.',
+      ),
+    ],
+    clusters: [],
+    sources: [],
+    archivedCitations: [],
+    activeProjectId: 'proj_solo',
+    activeConversationId: 'conv_solo',
+  };
+}
+
+test('capture mirrors exactly what the delete removes, nothing the delete keeps', () => {
+  const snapshot = captureProjectRestoreSnapshot(
+    threeProjectState(),
+    'proj_alpha',
+    DELETE_NOW,
+  );
+
+  assert.equal(snapshot.project.id, 'proj_alpha');
+  assert.deepEqual(
+    snapshot.conversations.map((conversation) => conversation.id),
+    ['conv_alpha'],
+  );
+  assert.deepEqual(
+    snapshot.clusters.map((cluster) => cluster.id),
+    ['cl_alpha'],
+  );
+  assert.deepEqual(
+    snapshot.sources.map((source) => source.id),
+    ['src_alpha'],
+  );
+  // cite_beta stays cited by a surviving conversation, so the delete keeps it
+  // in the archive and the capture leaves it alone.
+  assert.deepEqual(
+    snapshot.archivedCitations.map((entry) => entry.id),
+    ['cite_alpha'],
+  );
+  assert.equal(snapshot.deletedAt, DELETE_NOW);
+  assert.equal(snapshot.wasLastProject, false);
+
+  // Unknown project — nothing to capture, nothing to offer undo for.
+  assert.equal(
+    captureProjectRestoreSnapshot(threeProjectState(), 'proj_missing', DELETE_NOW),
+    null,
+  );
+
+  // The undo window is a short beat, not a persistence layer.
+  assert.ok(PROJECT_RESTORE_WINDOW_MS >= 5_000);
+  assert.ok(PROJECT_RESTORE_WINDOW_MS <= 60_000);
+});
+
+test('undo rebuilds the deleted project under fresh ids and remaps every cross-reference', () => {
+  const before = threeProjectState();
+  // Enrich alpha so every remap path is exercised: field values keyed by
+  // definition id (plus a dangling key), linked clusters, and embedded
+  // knowledge evidence pointing at alpha's conversation and message.
+  before.projects[0].tasks[0].values = {
+    field_owner_proj_alpha: 'Dana',
+    field_ghost: 'points at an already-deleted definition',
+  };
+  before.clusters = [
+    {
+      ...deletionCluster('cl_alpha', 'proj_alpha', DELETE_NOW - 5_000),
+      links: ['cl_alpha_two'],
+      sources: [
+        {
+          conversationId: 'conv_alpha',
+          projectId: 'proj_alpha',
+          conversationTitle: 'conv_alpha title',
+          messageIds: ['msg_conv_alpha'],
+          excerpt: 'Only alpha cites [source:cite_alpha].',
+          updatedAt: DELETE_NOW - 5_000,
+        },
+      ],
+    },
+    deletionCluster('cl_alpha_two', 'proj_alpha', DELETE_NOW - 4_500),
+    ...threeProjectState().clusters.filter(
+      (cluster) => cluster.projectId !== 'proj_alpha',
+    ),
+  ];
+
+  const snapshot = captureProjectRestoreSnapshot(before, 'proj_alpha', DELETE_NOW);
+  const afterDelete = deleteProjectFromState({
+    state: before,
+    projectId: 'proj_alpha',
+    deletedAt: DELETE_NOW,
+    generateId: deletionGenerateId,
+  });
+
+  const { state: restored, projectId } = restoreProjectFromSnapshot({
+    state: afterDelete,
+    snapshot,
+    restoredAt: RESTORE_AT,
+    generateId: restoreIdFactory(),
+  });
+
+  // The delete's tombstones are untouched — the old ids stay dead everywhere.
+  assert.equal(restored.tombstones, afterDelete.tombstones);
+  assert.notEqual(projectId, 'proj_alpha');
+
+  const project = restored.projects.find((entry) => entry.id === projectId);
+  assert.ok(project);
+  assert.equal(project.name, 'Alpha');
+  assert.equal(project.updatedAt, RESTORE_AT);
+
+  const restoredConversation = restored.conversations.find(
+    (conversation) => conversation.projectId === projectId,
+  );
+  const restoredClusters = restored.clusters.filter(
+    (cluster) => cluster.projectId === projectId,
+  );
+  const restoredSource = restored.sources.find(
+    (source) => source.projectId === projectId,
+  );
+  assert.ok(restoredConversation);
+  assert.equal(restoredClusters.length, 2);
+  assert.ok(restoredSource);
+
+  // Every restored id is fresh: none of them appears in any tombstone.
+  const deadIds = new Set(
+    Object.values(restored.tombstones).flatMap((collection) =>
+      collection.map((marker) => marker.id),
+    ),
+  );
+  for (const id of [
+    project.id,
+    ...project.boardStages.map((stage) => stage.id),
+    ...project.fieldDefinitions.map((field) => field.id),
+    ...project.tasks.map((task) => task.id),
+    restoredConversation.id,
+    ...restoredConversation.messages.map((message) => message.id),
+    ...restoredClusters.map((cluster) => cluster.id),
+    restoredSource.id,
+  ]) {
+    assert.equal(deadIds.has(id), false, `${id} must not be tombstoned`);
+  }
+
+  // Cross-references land on the fresh ids.
+  const todoStage = project.boardStages.find((stage) => stage.name === 'To Do');
+  assert.equal(project.tasks[0].stageId, todoStage.id);
+  const ownerField = project.fieldDefinitions.find(
+    (field) => field.name === 'Owner',
+  );
+  // Values re-key onto the restored definition; dangling keys stay dead.
+  assert.deepEqual(project.tasks[0].values, { [ownerField.id]: 'Dana' });
+
+  const alphaCluster = restoredClusters.find(
+    (cluster) => cluster.label === 'cl_alpha label',
+  );
+  const alphaTwoCluster = restoredClusters.find(
+    (cluster) => cluster.label === 'cl_alpha_two label',
+  );
+  assert.deepEqual(alphaCluster.links, [alphaTwoCluster.id]);
+  assert.deepEqual(alphaCluster.sources[0].conversationId, restoredConversation.id);
+  assert.deepEqual(alphaCluster.sources[0].messageIds, [
+    restoredConversation.messages[0].id,
+  ]);
+  assert.equal(alphaCluster.sources[0].projectId, projectId);
+
+  // Message content is verbatim — inline citation markers included — and the
+  // archived evidence the delete pruned is back under its original id, so the
+  // marker resolves again (citation ids are never tombstoned).
+  assert.equal(
+    restoredConversation.messages[0].content,
+    'Only alpha cites [source:cite_alpha].',
+  );
+  assert.equal(
+    restored.archivedCitations.some((entry) => entry.id === 'cite_alpha'),
+    true,
+  );
+
+  // The restored workspace becomes active, on its most recent conversation.
+  assert.equal(restored.activeProjectId, projectId);
+  assert.equal(restored.activeConversationId, restoredConversation.id);
+
+  // And the result is a state the app could save as-is.
+  assert.equal(prepareWorkspaceStateForSave(restored).success, true);
+});
+
+test('a restored project survives merging against a device that never saw the delete', () => {
+  const staleDevice = threeProjectState();
+  const before = threeProjectState();
+  const snapshot = captureProjectRestoreSnapshot(before, 'proj_alpha', DELETE_NOW);
+  const afterDelete = deleteProjectFromState({
+    state: before,
+    projectId: 'proj_alpha',
+    deletedAt: DELETE_NOW,
+    generateId: deletionGenerateId,
+  });
+  const { state: restored, projectId } = restoreProjectFromSnapshot({
+    state: afterDelete,
+    snapshot,
+    restoredAt: RESTORE_AT,
+    generateId: restoreIdFactory(),
+  });
+
+  for (const merged of [
+    mergeWorkspaceStates(staleDevice, restored),
+    mergeWorkspaceStates(restored, staleDevice),
+  ]) {
+    // The tombstoned ids stay dead in both merge orders…
+    assert.equal(
+      merged.projects.some((entry) => entry.id === 'proj_alpha'),
+      false,
+    );
+    assert.equal(
+      merged.conversations.some((entry) => entry.id === 'conv_alpha'),
+      false,
+    );
+    assert.equal(
+      merged.clusters.some((entry) => entry.id === 'cl_alpha'),
+      false,
+    );
+    assert.equal(
+      merged.sources.some((entry) => entry.id === 'src_alpha'),
+      false,
+    );
+    // …while the restored copy rides through as ordinary new work.
+    assert.equal(
+      merged.projects.some((entry) => entry.id === projectId),
+      true,
+    );
+    assert.equal(
+      merged.conversations.some(
+        (entry) => entry.projectId === projectId,
+      ),
+      true,
+    );
+    assert.equal(
+      merged.archivedCitations.some((entry) => entry.id === 'cite_alpha'),
+      true,
+    );
+    assert.equal(
+      merged.tombstones.projects.some(
+        (marker) => marker.id === 'proj_alpha' && marker.deletedAt === DELETE_NOW,
+      ),
+      true,
+    );
+  }
+});
+
+test('undoing a last-project delete removes the untouched fallback workspace with tombstones of its own', () => {
+  const before = lastProjectState();
+  const snapshot = captureProjectRestoreSnapshot(before, 'proj_solo', DELETE_NOW);
+  assert.equal(snapshot.wasLastProject, true);
+
+  const afterDelete = deleteProjectFromState({
+    state: before,
+    projectId: 'proj_solo',
+    deletedAt: DELETE_NOW,
+    generateId: deletionGenerateId,
+  });
+  const fallback = afterDelete.projects[0];
+
+  const { state: restored, projectId } = restoreProjectFromSnapshot({
+    state: afterDelete,
+    snapshot,
+    restoredAt: RESTORE_AT,
+    generateId: restoreIdFactory(),
+    fallbackProjectId: fallback.id,
+  });
+
+  // Only the restored copy remains, and the fallback's removal is tombstoned
+  // so devices that already synced the delete drop the fallback too.
+  assert.deepEqual(
+    restored.projects.map((entry) => entry.id),
+    [projectId],
+  );
+  assert.equal(
+    restored.tombstones.projects.some(
+      (marker) => marker.id === fallback.id && marker.deletedAt === RESTORE_AT,
+    ),
+    true,
+  );
+  for (const stage of fallback.boardStages) {
+    assert.equal(
+      restored.tombstones.stages.some((marker) => marker.id === stage.id),
+      true,
+    );
+  }
+  // The original delete's tombstone is untouched.
+  assert.equal(
+    restored.tombstones.projects.some(
+      (marker) => marker.id === 'proj_solo' && marker.deletedAt === DELETE_NOW,
+    ),
+    true,
+  );
+  assert.equal(restored.activeProjectId, projectId);
+});
+
+test('a fallback workspace the user already touched survives the undo', () => {
+  const before = lastProjectState();
+  const snapshot = captureProjectRestoreSnapshot(before, 'proj_solo', DELETE_NOW);
+  const afterDelete = deleteProjectFromState({
+    state: before,
+    projectId: 'proj_solo',
+    deletedAt: DELETE_NOW,
+    generateId: deletionGenerateId,
+  });
+  const fallback = afterDelete.projects[0];
+  // Any edit after the delete marks the fallback as the user's workspace.
+  const touched = {
+    ...afterDelete,
+    projects: afterDelete.projects.map((entry) =>
+      entry.id === fallback.id
+        ? { ...entry, updatedAt: DELETE_NOW + 1_000 }
+        : entry,
+    ),
+  };
+
+  const { state: restored, projectId } = restoreProjectFromSnapshot({
+    state: touched,
+    snapshot,
+    restoredAt: RESTORE_AT,
+    generateId: restoreIdFactory(),
+    fallbackProjectId: fallback.id,
+  });
+
+  assert.deepEqual(
+    restored.projects.map((entry) => entry.id).sort(),
+    [fallback.id, projectId].sort(),
+  );
+  assert.equal(
+    restored.tombstones.projects.some((marker) => marker.id === fallback.id),
+    false,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Stacked chat dots: normalize and merge must separate buried positions
+// ---------------------------------------------------------------------------
+
+const stackGap = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+function stackedFixtureState(clusters) {
+  return {
+    projects: [
+      {
+        id: 'shared',
+        name: 'Shared',
+        description: '',
+        accent: '#000000',
+        sourceCount: 0,
+        updatedAt: 10,
+        boardStages: [],
+        fieldDefinitions: [],
+        tasks: [],
+      },
+    ],
+    conversations: [
+      { id: 'shared-chat', title: 'Chat', projectId: 'shared', updatedAt: 10, messages: [] },
+    ],
+    clusters,
+    sources: [],
+    activeProjectId: 'shared',
+    activeConversationId: 'shared-chat',
+  };
+}
+
+function stackedCluster(id, x, y, lastUpdatedAt) {
+  return {
+    id,
+    projectId: 'shared',
+    label: `${id} label`,
+    category: 'topic',
+    strength: 0.6,
+    x,
+    y,
+    links: [],
+    description: `${id} description`,
+    summary: `${id} summary`,
+    mentionCount: 1,
+    lastUpdatedAt,
+    sources: [],
+  };
+}
+
+test('normalize separates chat clusters stored on top of each other', () => {
+  const normalized = normalizeWorkspaceState(
+    stackedFixtureState([
+      stackedCluster('cluster-a', 100, 100, 20),
+      stackedCluster('cluster-b', 100, 100, 30),
+    ]),
+  );
+  const a = normalized.clusters.find((entry) => entry.id === 'cluster-a');
+  const b = normalized.clusters.find((entry) => entry.id === 'cluster-b');
+  // Ascending-id priority keeps the first dot exactly where it was stored;
+  // the buried one lands on the same deterministic spot the phone computes
+  // (the shared rule pins 82,118 for a 100,100 stack).
+  assert.deepEqual({ x: a.x, y: a.y }, { x: 100, y: 100 });
+  assert.deepEqual({ x: b.x, y: b.y }, { x: 82, y: 118 });
+  // Repair never touches recency: coordinates converge on every device
+  // instead of winning cross-device merges.
+  assert.equal(a.lastUpdatedAt, 20);
+  assert.equal(b.lastUpdatedAt, 30);
+  assert.ok(stackGap(a, b) >= 12);
+});
+
+test('merging two devices separates dots that would bury each other', () => {
+  const cloud = stackedFixtureState([stackedCluster('cluster-a', 30, 30, 20)]);
+  const device = stackedFixtureState([stackedCluster('cluster-b', 31, 31, 30)]);
+
+  const merged = mergeWorkspaceStates(cloud, device);
+  assert.equal(merged.clusters.length, 2);
+  const a = merged.clusters.find((entry) => entry.id === 'cluster-a');
+  const b = merged.clusters.find((entry) => entry.id === 'cluster-b');
+  assert.deepEqual({ x: a.x, y: a.y }, { x: 30, y: 30 });
+  assert.ok(stackGap(a, b) >= 12);
+  assert.equal(a.lastUpdatedAt, 20);
+  assert.equal(b.lastUpdatedAt, 30);
+
+  const replay = mergeWorkspaceStates(cloud, device);
+  assert.deepEqual(
+    replay.clusters.map((entry) => ({ id: entry.id, x: entry.x, y: entry.y })),
+    merged.clusters.map((entry) => ({ id: entry.id, x: entry.x, y: entry.y })),
+  );
+});
+
+function strandedFilingFixture(strandedAt) {
+  const homeProject = {
+    id: 'proj_home',
+    name: 'Home',
+    description: '',
+    accent: '#000000',
+    sourceCount: 0,
+    updatedAt: 500,
+    tasks: [],
+  };
+  const stranded = {
+    id: 'conv_stranded',
+    title: 'Scratch notes',
+    projectId: null,
+    updatedAt: strandedAt,
+    messages: [
+      {
+        id: 'msg_stranded',
+        role: 'user',
+        content: 'Loose thought with no project',
+        createdAt: 500,
+        status: 'sent',
+      },
+    ],
+  };
+  const base = {
+    projects: [homeProject],
+    clusters: [],
+    sources: [],
+    activeProjectId: null,
+    activeConversationId: 'conv_stranded',
+    tombstones: createEmptyTombstones(),
+  };
+  return { stranded, base };
+}
+
+test('filing a stranded session survives the cross-device merge in both directions', () => {
+  // Filing (the real mutation, not a hand-built copy) rewrites projectId and
+  // stamps updatedAt through the normal synced write path; the
+  // newest-copy-wins conversation merge must therefore carry the new home
+  // instead of reviving the stranded project-less copy another device still
+  // holds.
+  const { stranded, base } = strandedFilingFixture(1_000);
+  const filedState = fileConversationToProjectInState(
+    { ...base, conversations: [stranded] },
+    'conv_stranded',
+    'proj_home',
+    2_000,
+  );
+  const filed = filedState.conversations.find((c) => c.id === 'conv_stranded');
+  assert.equal(filed?.projectId, 'proj_home');
+  assert.equal(filed?.updatedAt, 2_000);
+  // Filing lands the workspace on the session in its new home.
+  assert.equal(filedState.activeProjectId, 'proj_home');
+  assert.equal(filedState.activeConversationId, 'conv_stranded');
+
+  // This device filed the session; the cloud still holds the stranded copy.
+  const deviceFiled = mergeWorkspaceStates(
+    { ...base, conversations: [stranded] },
+    filedState,
+  );
+  assert.equal(
+    deviceFiled.conversations.find((c) => c.id === 'conv_stranded')?.projectId,
+    'proj_home',
+  );
+
+  // The filing arrives from the cloud; this device's copy is stale.
+  const cloudFiled = mergeWorkspaceStates(filedState, {
+    ...base,
+    conversations: [stranded],
+  });
+  const carried = cloudFiled.conversations.find(
+    (c) => c.id === 'conv_stranded',
+  );
+  assert.equal(carried?.projectId, 'proj_home');
+  // The words the filing was rescuing ride along untouched.
+  assert.deepEqual(
+    carried?.messages.map((m) => m.id),
+    ['msg_stranded'],
+  );
+});
+
+test('filing outruns a stranded copy stamped by a fast clock', () => {
+  // A stranded copy can arrive from a device whose clock ran ahead, so its
+  // updatedAt exceeds this device's Date.now(). The filing stamp must be
+  // strictly newer than the copy being filed — not merely the local time —
+  // or the newest-copy-wins merge resurrects projectId: null and strands
+  // the chat again.
+  const { stranded, base } = strandedFilingFixture(5_000);
+  const filedState = fileConversationToProjectInState(
+    { ...base, conversations: [stranded] },
+    'conv_stranded',
+    'proj_home',
+    1_000, // local clock is behind the stranded copy's stamp
+  );
+  const filed = filedState.conversations.find((c) => c.id === 'conv_stranded');
+  assert.equal(filed?.projectId, 'proj_home');
+  assert.equal(filed?.updatedAt, 5_001);
+
+  for (const merged of [
+    mergeWorkspaceStates({ ...base, conversations: [stranded] }, filedState),
+    mergeWorkspaceStates(filedState, { ...base, conversations: [stranded] }),
+  ]) {
+    assert.equal(
+      merged.conversations.find((c) => c.id === 'conv_stranded')?.projectId,
+      'proj_home',
+    );
+  }
+});
+
+test('filing refuses sessions that already have a home and projects that do not exist', () => {
+  // Filing is a recovery path for stranded sessions only; it must never
+  // re-home an already-filed conversation or point one at a missing project.
+  const { stranded, base } = strandedFilingFixture(1_000);
+  const alreadyFiled = { ...stranded, projectId: 'proj_home' };
+
+  const refusedRefile = fileConversationToProjectInState(
+    { ...base, conversations: [alreadyFiled] },
+    'conv_stranded',
+    'proj_home',
+    2_000,
+  );
+  assert.equal(
+    refusedRefile.conversations.find((c) => c.id === 'conv_stranded')
+      ?.updatedAt,
+    1_000,
+  );
+  assert.equal(refusedRefile.activeProjectId, null);
+
+  const refusedMissing = fileConversationToProjectInState(
+    { ...base, conversations: [stranded] },
+    'conv_stranded',
+    'proj_gone',
+    2_000,
+  );
+  assert.equal(
+    refusedMissing.conversations.find((c) => c.id === 'conv_stranded')
+      ?.projectId,
+    null,
+  );
+  assert.equal(refusedMissing.activeProjectId, null);
 });

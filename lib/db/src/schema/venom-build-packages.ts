@@ -83,6 +83,12 @@ export const venomBuildRunsTable = pgTable(
     // with baseline_unresolvable; it never silently starts fresh.
     baselineIterationId: uuid("baseline_iteration_id"),
     baselineRevisionId: uuid("baseline_revision_id"),
+    /**
+     * Template lineage pin (no destructive FK): the global template this
+     * run's request descends from — inherited from the pinned app when it
+     * has lineage, otherwise the explicit template the run started from.
+     */
+    templateId: uuid("template_id"),
     /** Bounded plain-language summary of data changes since the baseline. */
     changesSummary: text("changes_summary"),
     status: text("status").notNull().default("queued"),
@@ -133,6 +139,8 @@ export const venomBuildPackageRevisionsTable = pgTable(
     reason: text("reason").notNull(),
     package: jsonb("package").$type<VenomBuildPackageRecord>().notNull(),
     checksumSha256: text("checksum_sha256").notNull(),
+    /** Template lineage carried from the run at commit time (no FK). */
+    templateId: uuid("template_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

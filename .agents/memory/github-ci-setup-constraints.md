@@ -92,6 +92,38 @@ Browser suites that run without an API server must provide deterministic respons
 
 **How to apply:** audit route-level reads, stub them at the network boundary, and verify the suite without relying on a live backend.
 
+## Merge queues do not exist on user-owned repositories
+
+A queue can only be enabled on an organization-owned repository (public on any
+plan; private needs Enterprise Cloud). On a user-owned repo the rulesets API
+rejects the rule with `422 — Invalid rule 'merge_queue': ` and an **empty
+reason after the colon**. That empty reason is availability gating, not a
+parameter problem: the identical request with an ordinary rule type returns
+201, and no merge_queue parameter variant changes the answer. Classic branch
+protection has no queue field in the GraphQL schema, so there is no alternate
+path — nobody can enable a queue on such a repo, API or UI.
+
+**Why:** sequencing queue verification work on "admin rights + credentials"
+wastes the whole plan when ownership, not permission, is the gate.
+
+**How to apply:** probe availability first with a throwaway-branch ruleset
+create (cheap, reversible, invisible to main); treat the empty-reason 422 as
+"move to an org or drop the queue plan", and only then sequence credential and
+workflow-sync work.
+
+## The connector can administer rulesets it cannot push workflows for
+
+The Replit GitHub connector's classic `repo` scope plus the owner's admin bit
+covers the repository rulesets API (create/update/delete) and the GraphQL
+merge-queue mutations, while still refusing `.github/workflows/**` pushes
+(no `workflow` scope).
+
+**Why:** branch-rule automation does not have to wait for the workflow-capable
+credential; only workflow file content does.
+
+**How to apply:** route ruleset and enforcement changes through the connector
+credential; reserve the app/PAT for pushes that touch workflow files.
+
 ## Only a GitHub App avoids an expiring credential for workflow pushes
 
 Pushing `.github/workflows/**` needs workflow write, which the connector will
@@ -112,3 +144,17 @@ call `/user`. A fine-grained PAT reports no `x-oauth-scopes` and has no cheap
 probe for the workflows permission, so treat it as "maybe" and let the push be
 the test; `/user` does return `github-authentication-token-expiration`, which is
 enough to warn before a stored token lapses.
+
+## A private-key fingerprint is not a GitHub App credential
+
+`GITHUB_APP_ID` must be the numeric App ID and `GITHUB_APP_PRIVATE_KEY` must be
+the complete PEM private-key file. A value formatted like `SHA256:...` is merely
+the fingerprint GitHub displays beside a generated key, and cannot mint an
+installation token.
+
+**Why:** a fingerprint can be mistaken for the value to save, leaving workflow
+changes indefinitely held back even though the app and its key appear to exist.
+
+**How to apply:** validate the inputs before diagnosing repository permissions:
+reject fingerprint-shaped values, confirm the App ID is numeric, then mint a
+token and inspect its `permissions.workflows` value before attempting a sync.

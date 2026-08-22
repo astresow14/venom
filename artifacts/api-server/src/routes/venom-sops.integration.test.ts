@@ -58,10 +58,15 @@ async function ensureSopTestSchema(): Promise<void> {
       content jsonb NOT NULL,
       active_revision_id uuid,
       active_revision_number integer,
+      sensitive boolean NOT NULL DEFAULT false,
       archived_at timestamptz,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     )
+  `);
+  await db.execute(sql`
+    ALTER TABLE venom_sops
+      ADD COLUMN IF NOT EXISTS sensitive boolean NOT NULL DEFAULT false
   `);
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS venom_sops_owner_updated_idx

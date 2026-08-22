@@ -26,6 +26,10 @@ import type {
   VoiceDecisionRecord,
   VoiceDecisionOutcome,
 } from "../lib/venom-voice-decision-store";
+import {
+  voiceRestraintThresholds,
+  type StoredVoiceDecision,
+} from "../lib/venom-voice-decision-report";
 import { MAX_API_JSON_BODY_BYTES } from "./venom-workspace-router";
 
 const USER_ID = "user_voiceTester";
@@ -55,6 +59,10 @@ type HarnessOptions = {
   failOutcomeRecord?: boolean;
   /** What the fake store answers for recordOutcome. Default: recorded. */
   outcomeRecorded?: boolean;
+  /** What the fake store's listForUser returns. Default: no rows. */
+  decisionRows?: StoredVoiceDecision[];
+  /** Makes the fake store's listForUser reject. */
+  failDecisionList?: boolean;
 };
 
 type Harness = {
@@ -71,6 +79,7 @@ type Harness = {
       decisionId: string;
       outcome: VoiceDecisionOutcome;
     }>;
+    decisionListRequests: Array<{ userId: string; since: Date }>;
   };
 };
 
@@ -82,6 +91,7 @@ async function startHarness(options: HarnessOptions = {}): Promise<Harness> {
     judged: [],
     decisionsRecorded: [],
     outcomesRecorded: [],
+    decisionListRequests: [],
   };
 
   const audioModule: VenomVoiceAudioModule = {
@@ -146,6 +156,13 @@ async function startHarness(options: HarnessOptions = {}): Promise<Harness> {
           }
           calls.outcomesRecorded.push({ userId, decisionId, outcome });
           return { recorded: options.outcomeRecorded ?? true };
+        },
+        async listForUser(userId, since) {
+          if (options.failDecisionList) {
+            throw new Error("decision store is down");
+          }
+          calls.decisionListRequests.push({ userId, since });
+          return options.decisionRows ?? [];
         },
       },
     }),
@@ -915,6 +932,371 @@ test("speak enforces the preset id against the full catalog", async () => {
       "nova",
       "shimmer",
     ]);
+  } finally {
+    await harness.close();
+  }
+});
+
+// ── Decision evidence reports ────────────────────────────────────────────────
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Exact key set (and order) of one JSONL training line. */
+const TRAINING_RECORD_KEYS = [
+  "id",
+  "createdAt",
+  "talkativeness",
+  "decision",
+  "windDown",
+  "source",
+  "signals",
+  "transcriptPreview",
+  "transcriptChars",
+  "outcome",
+  "outcomeAt",
+  "outcomeLatencyMs",
+];
+
+function storedDecision(
+  overrides: Partial<StoredVoiceDecision> & { id: string },
+): StoredVoiceDecision {
+  return {
+    decision: "silent",
+    windDown: false,
+    source: "heuristic",
+    talkativeness: "balanced",
+    transcriptPreview: "okay yeah",
+    transcriptChars: 9,
+    signals: { backchannel: true },
+    outcome: null,
+    outcomeAt: null,
+    createdAt: new Date(Date.now() - 60_000),
+    ...overrides,
+  };
+}
+
+test("decision reports require auth", async () => {
+  const harness = await startHarness({ userId: null });
+  try {
+    const summary = await fetch(
+      `${harness.baseUrl}/venom/voice/decisions/summary`,
+    );
+    assert.equal(summary.status, 401);
+    const exported = await fetch(
+      `${harness.baseUrl}/venom/voice/decisions/export`,
+    );
+    assert.equal(exported.status, 401);
+  } finally {
+    await harness.close();
+  }
+});
+
+test("summary aggregates decisions x outcomes x talkativeness", async () => {
+  const settledAt = new Date();
+  const rows = [
+    storedDecision({
+      id: "r1",
+      outcome: "user_followed_up",
+      outcomeAt: settledAt,
+    }),
+    storedDecision({ id: "r2", outcome: "stayed_quiet", outcomeAt: settledAt }),
+    storedDecision({ id: "r3" }),
+    storedDecision({
+      id: "r4",
+      decision: "respond",
+      talkativeness: "chatty",
+      source: "model",
+      outcome: "reply_interrupted",
+      outcomeAt: settledAt,
+    }),
+    storedDecision({
+      id: "r5",
+      decision: "respond",
+      talkativeness: "chatty",
+      source: "fallback",
+      outcome: "reply_completed",
+      outcomeAt: settledAt,
+    }),
+    storedDecision({
+      id: "r6",
+      decision: "acknowledge",
+      windDown: true,
+      outcome: "wound_down",
+      outcomeAt: settledAt,
+    }),
+  ];
+  const harness = await startHarness({ decisionRows: rows });
+  try {
+    const before = Date.now();
+    const response = await fetch(
+      `${harness.baseUrl}/venom/voice/decisions/summary`,
+    );
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as Record<string, any>;
+
+    assert.equal(body.windowDays, 30);
+    assert.equal(body.overall.decisions, 6);
+    assert.equal(body.overall.withOutcome, 5);
+    assert.equal(body.overall.outcomeCoverage, 0.8333);
+    assert.deepEqual(body.overall.decisionCounts, {
+      respond: 2,
+      acknowledge: 1,
+      silent: 3,
+    });
+    assert.deepEqual(body.overall.sourceCounts, {
+      heuristic: 4,
+      model: 1,
+      fallback: 1,
+    });
+    assert.equal(body.overall.windDownFlagged, 1);
+    assert.deepEqual(body.overall.quietRegret, {
+      settled: 2,
+      hits: 1,
+      rate: 0.5,
+    });
+    assert.deepEqual(body.overall.spokenInterruption, {
+      settled: 2,
+      hits: 1,
+      rate: 0.5,
+    });
+    assert.deepEqual(body.overall.windDownClean, {
+      settled: 1,
+      hits: 1,
+      rate: 1,
+    });
+
+    assert.deepEqual(
+      body.byTalkativeness.map(
+        (entry: { talkativeness: string }) => entry.talkativeness,
+      ),
+      ["chatty", "balanced"],
+      "canonical talkativeness order, observed levels only",
+    );
+    const chatty = body.byTalkativeness[0].rates;
+    assert.equal(chatty.decisions, 2);
+    assert.deepEqual(chatty.spokenInterruption, {
+      settled: 2,
+      hits: 1,
+      rate: 0.5,
+    });
+    assert.deepEqual(chatty.quietRegret, { settled: 0, hits: 0, rate: null });
+    const balanced = body.byTalkativeness[1].rates;
+    assert.equal(balanced.decisions, 4);
+    assert.deepEqual(balanced.quietRegret, { settled: 2, hits: 1, rate: 0.5 });
+    assert.deepEqual(balanced.windDownClean, { settled: 1, hits: 1, rate: 1 });
+
+    assert.deepEqual(body.cells, [
+      {
+        talkativeness: "chatty",
+        decision: "respond",
+        windDown: false,
+        source: "model",
+        outcome: "reply_interrupted",
+        count: 1,
+      },
+      {
+        talkativeness: "chatty",
+        decision: "respond",
+        windDown: false,
+        source: "fallback",
+        outcome: "reply_completed",
+        count: 1,
+      },
+      {
+        talkativeness: "balanced",
+        decision: "acknowledge",
+        windDown: true,
+        source: "heuristic",
+        outcome: "wound_down",
+        count: 1,
+      },
+      {
+        talkativeness: "balanced",
+        decision: "silent",
+        windDown: false,
+        source: "heuristic",
+        outcome: "user_followed_up",
+        count: 1,
+      },
+      {
+        talkativeness: "balanced",
+        decision: "silent",
+        windDown: false,
+        source: "heuristic",
+        outcome: "stayed_quiet",
+        count: 1,
+      },
+      {
+        talkativeness: "balanced",
+        decision: "silent",
+        windDown: false,
+        source: "heuristic",
+        outcome: "pending",
+        count: 1,
+      },
+    ]);
+
+    assert.deepEqual(
+      body.thresholds,
+      voiceRestraintThresholds(),
+      "the summary echoes the thresholds in force",
+    );
+
+    // The read hit the caller's own rows over the default 30-day window.
+    assert.equal(harness.calls.decisionListRequests.length, 1);
+    const request = harness.calls.decisionListRequests[0]!;
+    assert.equal(request.userId, USER_ID);
+    assert.ok(
+      Math.abs(request.since.getTime() - (before - 30 * DAY_MS)) < 10_000,
+    );
+    assert.equal(body.since, request.since.toISOString());
+  } finally {
+    await harness.close();
+  }
+});
+
+test("summary honors and validates the windowDays parameter", async () => {
+  const harness = await startHarness();
+  try {
+    const response = await fetch(
+      `${harness.baseUrl}/venom/voice/decisions/summary?windowDays=7`,
+    );
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as { windowDays: number };
+    assert.equal(body.windowDays, 7);
+    const request = harness.calls.decisionListRequests[0]!;
+    assert.ok(
+      Math.abs(request.since.getTime() - (Date.now() - 7 * DAY_MS)) < 10_000,
+    );
+
+    for (const bad of ["0", "91", "2.5", "abc"]) {
+      const rejected = await fetch(
+        `${harness.baseUrl}/venom/voice/decisions/summary?windowDays=${bad}`,
+      );
+      assert.equal(rejected.status, 400, `windowDays=${bad} must be rejected`);
+    }
+    assert.equal(
+      harness.calls.decisionListRequests.length,
+      1,
+      "rejected requests never touch the store",
+    );
+  } finally {
+    await harness.close();
+  }
+});
+
+test("export streams the caller's rows as training JSONL", async () => {
+  const decidedAt = new Date("2026-08-01T12:00:00.000Z");
+  const rows = [
+    storedDecision({
+      id: "e1",
+      decision: "respond",
+      source: "model",
+      talkativeness: "chatty",
+      transcriptPreview: "how do I wire the panel safely",
+      transcriptChars: 30,
+      signals: { wordCount: 7, directQuestion: true },
+      outcome: "reply_completed",
+      createdAt: decidedAt,
+      outcomeAt: new Date(decidedAt.getTime() + 8_000),
+    }),
+    storedDecision({
+      id: "e2",
+      createdAt: new Date(decidedAt.getTime() + 60_000),
+    }),
+  ];
+  const harness = await startHarness({ decisionRows: rows });
+  try {
+    const response = await fetch(
+      `${harness.baseUrl}/venom/voice/decisions/export`,
+    );
+    assert.equal(response.status, 200);
+    assert.match(
+      response.headers.get("content-type") ?? "",
+      /text\/plain/,
+    );
+    assert.match(
+      response.headers.get("content-disposition") ?? "",
+      /attachment; filename="venom-voice-decisions-\d{4}-\d{2}-\d{2}\.jsonl"/,
+    );
+
+    const body = await response.text();
+    assert.ok(body.endsWith("\n"), "JSONL is newline-terminated");
+    const lines = body.trimEnd().split("\n");
+    assert.equal(lines.length, 2);
+
+    const first = JSON.parse(lines[0]!) as Record<string, unknown>;
+    assert.deepEqual(Object.keys(first), TRAINING_RECORD_KEYS);
+    assert.equal(first.id, "e1");
+    assert.equal(first.createdAt, "2026-08-01T12:00:00.000Z");
+    assert.equal(first.outcomeLatencyMs, 8000);
+    assert.deepEqual(first.signals, { wordCount: 7, directQuestion: true });
+
+    const second = JSON.parse(lines[1]!) as Record<string, unknown>;
+    assert.equal(second.outcome, null);
+    assert.equal(second.outcomeAt, null);
+    assert.equal(second.outcomeLatencyMs, null);
+
+    assert.ok(
+      !body.includes(USER_ID),
+      "training lines never carry the user id",
+    );
+
+    // Default export window is the full retention period.
+    const request = harness.calls.decisionListRequests[0]!;
+    assert.ok(
+      Math.abs(request.since.getTime() - (Date.now() - 90 * DAY_MS)) < 10_000,
+    );
+  } finally {
+    await harness.close();
+  }
+});
+
+test("export with no rows is an empty file, not an error", async () => {
+  const harness = await startHarness();
+  try {
+    const response = await fetch(
+      `${harness.baseUrl}/venom/voice/decisions/export`,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), "");
+  } finally {
+    await harness.close();
+  }
+});
+
+test("reports fail loudly when the decision store cannot be read", async () => {
+  const harness = await startHarness({ failDecisionList: true });
+  try {
+    const summary = await fetch(
+      `${harness.baseUrl}/venom/voice/decisions/summary`,
+    );
+    assert.equal(summary.status, 500);
+    const summaryBody = (await summary.json()) as { error?: string };
+    assert.ok(summaryBody.error, "summary failure is explicit");
+    const exported = await fetch(
+      `${harness.baseUrl}/venom/voice/decisions/export`,
+    );
+    assert.equal(exported.status, 500);
+  } finally {
+    await harness.close();
+  }
+});
+
+test("summary and export share one report rate limit", async () => {
+  const harness = await startHarness();
+  try {
+    for (let i = 0; i < 30; i += 1) {
+      const ok = await fetch(
+        `${harness.baseUrl}/venom/voice/decisions/export`,
+      );
+      assert.equal(ok.status, 200, `request ${i + 1} still within the limit`);
+    }
+    const limited = await fetch(
+      `${harness.baseUrl}/venom/voice/decisions/summary`,
+    );
+    assert.equal(limited.status, 429);
+    assert.ok(limited.headers.get("retry-after"));
   } finally {
     await harness.close();
   }

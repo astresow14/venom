@@ -40,4 +40,5 @@ export interface VenomBuildRequestSnapshot {
      * @nullable
      */
   changesSummary: string | null;
+  templateId: Uuid | null;
 }

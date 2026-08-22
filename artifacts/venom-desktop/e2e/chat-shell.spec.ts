@@ -1,5 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mockChatFailure, mockChatStream } from './support/chat-stream';
+import {
+  mockChatFailure,
+  mockChatStream,
+  mockKnowledgeExtraction,
+  mockStagedChatStream,
+  STUB_MODEL,
+} from './support/chat-stream';
 
 const DESKTOP = { width: 1280, height: 860 };
 const PHONE = { width: 390, height: 740 };
@@ -113,6 +119,93 @@ test.describe('wide screens', () => {
     await expect(page.getByTestId('message-assistant').last()).toContainText(
       'Recovered answer.',
     );
+  });
+
+  test('holds the mid-answer states while a reply arrives in stages', async ({
+    page,
+  }) => {
+    await mockKnowledgeExtraction(page);
+    await mockStagedChatStream(page, [
+      [
+        // Pre-token pause: long enough to assert the placeholder states.
+        [700, { content: 'Streaming takes ' }],
+        [250, { content: 'a moment ' }],
+        [250, { content: 'to finish.' }],
+        // Long tail before completion keeps the mid-stream window open.
+        [900, STUB_MODEL],
+        [100, { done: true }],
+      ],
+    ]);
+    await openChat(page);
+
+    const composer = page.getByTestId('input-message');
+    const send = page.getByTestId('button-send');
+
+    await composer.fill('Walk me through it slowly.');
+    await composer.press('Enter');
+
+    // Before the first token: a "Thinking…" placeholder, and a composer
+    // that refuses further input until the reply lands.
+    const thinking = page.getByTestId('status-thinking');
+    await expect(thinking).toBeVisible();
+    await expect(composer).toBeDisabled();
+    await expect(send).toBeDisabled();
+
+    // First tokens: the placeholder yields to text with a caret, and the
+    // composer stays locked while the answer is still arriving.
+    const reply = page.getByTestId('message-assistant');
+    await expect(reply).toContainText('Streaming takes');
+    await expect(thinking).toHaveCount(0);
+    await expect(page.getByTestId('status-caret')).toBeVisible();
+    await expect(composer).toBeDisabled();
+
+    // Completion: the full answer, no caret, and the composer editable
+    // again — typing re-arms the send button.
+    await expect(reply).toContainText('Streaming takes a moment to finish.');
+    await expect(page.getByTestId('status-caret')).toHaveCount(0);
+    await expect(composer).toBeEnabled();
+    await composer.fill('Follow-up question');
+    await expect(send).toBeEnabled();
+  });
+
+  test('a stream that dies mid-answer surfaces the inline error, and retry does not keep the half reply', async ({
+    page,
+  }) => {
+    await mockKnowledgeExtraction(page);
+    await mockStagedChatStream(page, [
+      [
+        // The stream closes after a partial answer, without `{done: true}`.
+        [200, { content: 'Half an answer that never' }],
+      ],
+      [
+        [150, { content: 'Recovered after the stall.' }],
+        [100, STUB_MODEL],
+        [100, { done: true }],
+      ],
+    ]);
+    await openChat(page);
+
+    const composer = page.getByTestId('input-message');
+    await composer.fill('Will this stall?');
+    await composer.press('Enter');
+
+    // The stalled turn surfaces the inline error alongside the partial
+    // text instead of quietly saving half a reply.
+    const error = page.getByTestId('alert-stream-error');
+    await expect(error).toBeVisible();
+    await expect(error).toContainText('ended before completion');
+    await expect(page.getByTestId('message-assistant')).toContainText(
+      'Half an answer',
+    );
+
+    // Retry replays the turn; the recovered answer replaces the fragment.
+    await page.getByTestId('button-retry').click();
+    await expect(page.getByTestId('alert-stream-error')).toHaveCount(0);
+    const replies = page.getByTestId('message-assistant');
+    await expect(replies).toHaveCount(1);
+    await expect(replies).toContainText('Recovered after the stall.');
+    await expect(replies).not.toContainText('Half an answer');
+    await expect(composer).toBeEnabled();
   });
 
   test('starter prompts fill the composer and mention the project', async ({

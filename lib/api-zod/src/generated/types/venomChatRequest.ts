@@ -6,11 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AttestedSourceSnapshot } from './attestedSourceSnapshot';
-import type { Uuid } from './uuid';
 import type { VenomBlendWeight } from './venomBlendWeight';
 import type { VenomChatMessage } from './venomChatMessage';
 import type { VenomModelId } from './venomModelId';
 import type { VenomResponseMode } from './venomResponseMode';
+import type { VenomVoiceModelPick } from './venomVoiceModelPick';
 
 export interface VenomChatRequest {
   /**
@@ -25,7 +25,6 @@ export interface VenomChatRequest {
      * @maxLength 160
      */
   projectId: string;
-  workspaceId?: Uuid;
   modelId?: VenomModelId;
   /**
      * @maxItems 200
@@ -42,4 +41,9 @@ export interface VenomChatRequest {
      * @maxItems 3
      */
   blend?: VenomBlendWeight[];
+  /**
+     * Explicit per-voice model choices for verify mode: which model plays First take, Skeptic, and Evidence. Voices left out keep automatic assignment, and a pick naming a model that is currently unusable falls back to automatic assignment for that voice. First take and Skeptic must land on different LLM providers — a model can't argue itself — while Evidence is neutral and may share. Debate corners are chosen through `blend` entry ids instead. Ignored in talk mode.
+     * @maxItems 3
+     */
+  voiceModels?: VenomVoiceModelPick[];
 }

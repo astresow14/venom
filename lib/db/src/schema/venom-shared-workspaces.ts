@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   pgTable,
   primaryKey,
@@ -29,6 +30,15 @@ export const venomSharedWorkspacesTable = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
     createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
+    /**
+     * Export policy: when false, items marked sensitive never leave the
+     * workspace through an export — the server excludes them and states how
+     * many were withheld. Safe default is true (export allowed) so existing
+     * workspaces keep today's behavior until an admin tightens it.
+     */
+    allowSensitiveExport: boolean("allow_sensitive_export")
+      .notNull()
+      .default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

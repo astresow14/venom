@@ -2,11 +2,15 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
 import {
+  getGetSharedWorkspaceSettingsQueryKey,
   getListSharedWorkspaceMembersQueryKey,
   getListSharedWorkspacesQueryKey,
   useAddSharedWorkspaceMember,
+  useGetSharedWorkspaceSettings,
   useListSharedWorkspaceMembers,
   useRemoveSharedWorkspaceMember,
+  useUpdateSharedWorkspaceMemberRole,
+  useUpdateSharedWorkspaceSettings,
   type SharedWorkspace,
   type SharedWorkspaceMember,
 } from "@workspace/api-client-react";
@@ -27,17 +31,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { useSharedWorkspace } from "@/context/shared-workspace";
 import { asList } from "@/lib/as-list";
 import { cn } from "@/lib/utils";
-import { Check, Copy, Loader2, ShieldCheck, UserPlus, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Loader2,
+  Lock,
+  ShieldCheck,
+  UserPlus,
+  X,
+} from "lucide-react";
 
 /**
  * Member management for a shared workspace. Everyone can see who is in and
- * their roles; only admins get the add and remove controls. Removal is what
- * makes revocation real: from the removed person's next request the server
- * answers 403 and their cached workspace content is evicted.
+ * their roles; only admins get the add, remove, and role controls. Role
+ * changes happen in place — nobody is removed, so access never lapses.
+ * Removal is what makes revocation real: from the removed person's next
+ * request the server answers 403 and their cached workspace content is
+ * evicted.
  */
 export default function WorkspaceMembersDialog({
   workspace,
@@ -51,7 +65,6 @@ export default function WorkspaceMembersDialog({
   const { user } = useUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { selectWorkspace } = useSharedWorkspace();
 
   const [newMemberId, setNewMemberId] = useState("");
   const [newMemberRole, setNewMemberRole] = useState<"member" | "admin">(
@@ -84,6 +97,93 @@ export default function WorkspaceMembersDialog({
 
   const addMember = useAddSharedWorkspaceMember();
   const removeMember = useRemoveSharedWorkspaceMember();
+  const updateMemberRole = useUpdateSharedWorkspaceMemberRole();
+
+  const handleRoleChange = (
+    member: SharedWorkspaceMember,
+    nextRole: "member" | "admin",
+  ) => {
+    if (nextRole === member.role || updateMemberRole.isPending) return;
+    const changingSelf = member.userId === myUserId;
+
+    updateMemberRole.mutate(
+      {
+        workspaceId: workspace.id,
+        memberUserId: member.userId,
+        data: { role: nextRole },
+      },
+      {
+        onSuccess: async (updated) => {
+          // The caller's own role also rides the workspace list.
+          await invalidateMembership();
+          toast({
+            title:
+              updated.role === "admin" ? "Promoted to admin" : "Now a member",
+            description: changingSelf
+              ? updated.role === "admin"
+                ? "You can manage members and settings."
+                : "You stepped down without leaving the workspace."
+              : "No removal involved — their access never lapsed.",
+          });
+        },
+        onError: (error: unknown) => {
+          const status = (error as { status?: number })?.status;
+          toast({
+            title: "Could not change the role",
+            description:
+              status === 409
+                ? "A workspace needs at least one admin. Promote someone else first."
+                : status === 404
+                  ? "They are no longer a member."
+                  : status === 403
+                    ? "Only admins can change roles."
+                    : "Try again in a moment.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  // The export policy is a security setting: the server only serves and
+  // accepts it for admins, so the query stays off for everyone else.
+  const settingsQuery = useGetSharedWorkspaceSettings(workspace.id, {
+    query: {
+      queryKey: getGetSharedWorkspaceSettingsQueryKey(workspace.id),
+      enabled: open && isAdmin,
+    },
+  });
+  const updateSettings = useUpdateSharedWorkspaceSettings();
+  const allowSensitiveExport = settingsQuery.data?.allowSensitiveExport;
+
+  const handlePolicyChange = (nextAllow: boolean) => {
+    if (updateSettings.isPending) return;
+    updateSettings.mutate(
+      { workspaceId: workspace.id, data: { allowSensitiveExport: nextAllow } },
+      {
+        onSuccess: async (settings) => {
+          await queryClient.invalidateQueries({
+            queryKey: getGetSharedWorkspaceSettingsQueryKey(workspace.id),
+          });
+          toast({
+            title: settings.allowSensitiveExport
+              ? "Sensitive exports allowed"
+              : "Sensitive exports blocked",
+            description: settings.allowSensitiveExport
+              ? "Downloads may include items marked sensitive."
+              : "Locked items stay inside this workspace; downloads state what was withheld.",
+          });
+        },
+        onError: () => {
+          toast({
+            title: "Could not update the policy",
+            description: "Try again in a moment.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
 
   const handleAdd = (event: React.FormEvent) => {
     event.preventDefault();
@@ -130,14 +230,13 @@ export default function WorkspaceMembersDialog({
       {
         onSuccess: async () => {
           if (removingSelf) {
-            selectWorkspace(null);
             onOpenChange(false);
             await queryClient.invalidateQueries({
               queryKey: getListSharedWorkspacesQueryKey(),
             });
             toast({
               title: "You left the workspace",
-              description: "Back in your personal space.",
+              description: "Its shared knowledge is no longer available here.",
             });
             return;
           }
@@ -235,19 +334,59 @@ export default function WorkspaceMembersDialog({
                         </div>
                       )}
                     </div>
-                    <span
-                      className={cn(
-                        "flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold",
-                        member.role === "admin"
-                          ? "bg-foreground text-background"
-                          : "border border-border/60 text-muted-foreground",
-                      )}
-                    >
-                      {member.role === "admin" && (
-                        <ShieldCheck className="h-3 w-3" aria-hidden="true" />
-                      )}
-                      {member.role}
-                    </span>
+                    {isAdmin ? (
+                      <Select
+                        value={member.role}
+                        onValueChange={(value) =>
+                          handleRoleChange(
+                            member,
+                            value === "admin" ? "admin" : "member",
+                          )
+                        }
+                        disabled={updateMemberRole.isPending}
+                      >
+                        <SelectTrigger
+                          className={cn(
+                            "h-7 w-[104px] shrink-0 rounded-full border-border/60 px-2.5 text-[10px] font-semibold focus-visible:ring-1 focus-visible:ring-foreground",
+                            member.role === "admin"
+                              ? "bg-foreground text-background"
+                              : "bg-transparent text-muted-foreground",
+                          )}
+                          aria-label={`Change role for ${member.name || member.userId}`}
+                          data-testid={`select-member-role-${member.userId}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-lg border-border/60 bg-background shadow-lift">
+                          <SelectItem
+                            value="member"
+                            className="text-xs font-medium"
+                          >
+                            Member
+                          </SelectItem>
+                          <SelectItem
+                            value="admin"
+                            className="text-xs font-medium"
+                          >
+                            Admin
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span
+                        className={cn(
+                          "flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold",
+                          member.role === "admin"
+                            ? "bg-foreground text-background"
+                            : "border border-border/60 text-muted-foreground",
+                        )}
+                      >
+                        {member.role === "admin" && (
+                          <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                        )}
+                        {member.role}
+                      </span>
+                    )}
                     {isAdmin && (
                       <Button
                         type="button"
@@ -325,6 +464,44 @@ export default function WorkspaceMembersDialog({
                 </Button>
               </div>
             </form>
+          )}
+
+          {isAdmin && (
+            <div
+              className="mt-5 border-t border-border/60 pt-5"
+              data-testid="section-workspace-security"
+            >
+              <div className="flex items-center gap-2 text-[10px] font-medium text-muted-foreground">
+                <Lock className="h-3 w-3" aria-hidden="true" />
+                Security
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-foreground/[0.03] px-3 py-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">
+                    Allow sensitive content in exports
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    When off, items marked sensitive never leave this workspace:
+                    downloads exclude them and say how many were withheld.
+                  </p>
+                </div>
+                {settingsQuery.isLoading ? (
+                  <Skeleton className="h-6 w-11 shrink-0 rounded-full" />
+                ) : settingsQuery.isError ? (
+                  <span className="shrink-0 text-xs text-destructive">
+                    Unavailable
+                  </span>
+                ) : (
+                  <Switch
+                    checked={allowSensitiveExport === true}
+                    onCheckedChange={handlePolicyChange}
+                    disabled={updateSettings.isPending}
+                    aria-label="Allow sensitive content in exports"
+                    data-testid="switch-allow-sensitive-export"
+                  />
+                )}
+              </div>
+            </div>
           )}
 
           {myUserId && (

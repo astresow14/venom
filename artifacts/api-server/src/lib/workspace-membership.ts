@@ -33,6 +33,25 @@ export function workspaceAccessDeniedBody(): {
   };
 }
 
+export const WORKSPACE_ADMIN_REQUIRED_CODE = "workspace_admin_required";
+
+/**
+ * Refusal for callers who ARE members but lack the admin role. Deliberately
+ * distinct from `workspaceAccessDeniedBody`: clients key cache eviction on
+ * the access-denied code alone, so an admin demoted mid-session gets this
+ * from admin-only endpoints instead of being treated as kicked out. Members
+ * already know they are members, so the distinction leaks nothing.
+ */
+export function workspaceAdminRequiredBody(): {
+  error: string;
+  code: typeof WORKSPACE_ADMIN_REQUIRED_CODE;
+} {
+  return {
+    error: "Only a workspace admin can do this.",
+    code: WORKSPACE_ADMIN_REQUIRED_CODE,
+  };
+}
+
 const UUID_PATTERN =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -54,6 +73,38 @@ export type SharedWorkspaceMembership = {
   workspaceName: string;
   role: VenomSharedWorkspaceRole;
 };
+
+/**
+ * Every shared workspace the caller belongs to RIGHT NOW, for assembling
+ * user-centric chat context. Reads the live membership table per call, so a
+ * removed member's very next request simply no longer lists that workspace —
+ * the same revocation guarantee as the single-workspace check below.
+ */
+export async function listSharedWorkspaceMemberships(
+  clerkUserId: string,
+): Promise<SharedWorkspaceMembership[]> {
+  const rows = await db
+    .select({
+      workspaceId: venomSharedWorkspaceMembersTable.workspaceId,
+      role: venomSharedWorkspaceMembersTable.role,
+      workspaceName: venomSharedWorkspacesTable.name,
+    })
+    .from(venomSharedWorkspaceMembersTable)
+    .innerJoin(
+      venomSharedWorkspacesTable,
+      eq(
+        venomSharedWorkspaceMembersTable.workspaceId,
+        venomSharedWorkspacesTable.id,
+      ),
+    )
+    .where(eq(venomSharedWorkspaceMembersTable.clerkUserId, clerkUserId))
+    .orderBy(venomSharedWorkspacesTable.name, venomSharedWorkspacesTable.id);
+  return rows.map((row) => ({
+    workspaceId: row.workspaceId,
+    workspaceName: row.workspaceName,
+    role: row.role,
+  }));
+}
 
 /**
  * Resolve the caller's CURRENT membership in a workspace, or null when the

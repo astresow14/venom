@@ -7,7 +7,9 @@
  * - Every workspace-scoped route re-checks the caller's CURRENT membership;
  *   a removed member is denied (403 workspace_access_denied) on their next
  *   request, which is also the client's signal to evict cached content.
- * - Only admins add or remove members. The last admin can never be removed.
+ * - Only admins add members, remove members, or change a member's role.
+ *   Role changes happen in place — membership (and therefore access) never
+ *   lapses. The last admin can never be removed or demoted.
  * - Workspace content is served exclusively from these authenticated
  *   endpoints; it never rides the per-user sync snapshot.
  */
@@ -23,8 +25,11 @@ import {
   CreateSharedWorkspaceSopBody,
   CreateSharedWorkspaceSopParams,
   CreateSharedWorkspaceSopResponse,
+  ExportSharedWorkspaceMarkdownParams,
   GetSharedWorkspaceKnowledgeParams,
   GetSharedWorkspaceKnowledgeResponse,
+  GetSharedWorkspaceSettingsParams,
+  GetSharedWorkspaceSettingsResponse,
   ListSharedWorkspaceMembersParams,
   ListSharedWorkspaceMembersResponse,
   ListSharedWorkspaceSopsParams,
@@ -34,6 +39,27 @@ import {
   PublishSharedWorkspaceSopResponse,
   RemoveSharedWorkspaceMemberParams,
   RemoveSharedWorkspaceMemberResponse,
+  SetSharedWorkspaceConceptRestrictionBody,
+  SetSharedWorkspaceConceptRestrictionParams,
+  SetSharedWorkspaceConceptRestrictionResponse,
+  SetSharedWorkspaceConceptSensitivityBody,
+  SetSharedWorkspaceConceptSensitivityParams,
+  SetSharedWorkspaceConceptSensitivityResponse,
+  SetSharedWorkspaceEvidenceSensitivityBody,
+  SetSharedWorkspaceEvidenceSensitivityParams,
+  SetSharedWorkspaceEvidenceSensitivityResponse,
+  SetSharedWorkspaceSopRestrictionBody,
+  SetSharedWorkspaceSopRestrictionParams,
+  SetSharedWorkspaceSopRestrictionResponse,
+  SetSharedWorkspaceSopSensitivityBody,
+  SetSharedWorkspaceSopSensitivityParams,
+  SetSharedWorkspaceSopSensitivityResponse,
+  UpdateSharedWorkspaceMemberRoleBody,
+  UpdateSharedWorkspaceMemberRoleParams,
+  UpdateSharedWorkspaceMemberRoleResponse,
+  UpdateSharedWorkspaceSettingsBody,
+  UpdateSharedWorkspaceSettingsParams,
+  UpdateSharedWorkspaceSettingsResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -51,13 +77,23 @@ import { checkSopContentSafety, flattenSopContent } from "../lib/sop-content-saf
 import {
   getSharedWorkspaceMembership,
   workspaceAccessDeniedBody,
+  workspaceAdminRequiredBody,
   workspaceSopOwnerKey,
   type SharedWorkspaceMembership,
 } from "../lib/workspace-membership";
 import {
+  loadOntologyConcept,
   loadOntologyConcepts,
+  setOntologyConceptRestriction,
+  setOntologyConceptSensitivity,
+  setOntologyEvidenceSensitivity,
   workspaceOwner,
 } from "../lib/venom-ontology-store";
+import {
+  exportFileName,
+  knowledgeMarkdown,
+  sopsMarkdown,
+} from "../lib/venom-markdown-export";
 
 const router: IRouter = Router();
 
@@ -216,9 +252,35 @@ function workspaceSopPayload(sop: VenomSop) {
     content: sop.content,
     activeRevisionId: sop.activeRevisionId ?? null,
     activeRevisionNumber: sop.activeRevisionNumber ?? null,
+    sensitive: sop.sensitive === true,
+    // Only admin responses ever carry a true value: restricted SOPs are
+    // filtered out of member reads before this payload is built.
+    adminOnly: sop.adminOnly === true,
     createdAt: sop.createdAt,
     updatedAt: sop.updatedAt,
   };
+}
+
+/**
+ * Admin gate for member management and the security-settings routes.
+ * Members without the admin role get `workspace_admin_required` —
+ * deliberately NOT the access-denied code, which clients treat as
+ * membership loss and answer with full cache eviction. A demotion must
+ * never feel like removal. Non-members never reach the role check:
+ * `requireMembership` already denied them with the opaque body.
+ */
+async function requireAdminMembership(
+  req: Request,
+  res: Parameters<Parameters<IRouter["get"]>[1]>[1],
+  workspaceId: string,
+): Promise<SharedWorkspaceMembership | null> {
+  const membership = await requireMembership(req, res, workspaceId);
+  if (!membership) return null;
+  if (membership.role !== "admin") {
+    res.status(403).json(workspaceAdminRequiredBody());
+    return null;
+  }
+  return membership;
 }
 
 // ---------------------------------------------------------------------------
@@ -384,16 +446,12 @@ router.post(
       res.status(403).json(workspaceAccessDeniedBody());
       return;
     }
-    const membership = await requireMembership(
+    const membership = await requireAdminMembership(
       req,
       res,
       params.data.workspaceId,
     );
     if (!membership) return;
-    if (membership.role !== "admin") {
-      res.status(403).json(workspaceAccessDeniedBody());
-      return;
-    }
 
     const parsed = AddSharedWorkspaceMemberBody.safeParse(req.body);
     if (!parsed.success) {
@@ -474,6 +532,164 @@ router.post(
 );
 
 // ---------------------------------------------------------------------------
+// PATCH /venom/workspaces/:workspaceId/members/:memberUserId — admins only
+// Changes a member's role in place: no removal, so the member's access and
+// device caches never lapse. Demoting the last admin is refused with the
+// same 409 rule the remove path enforces.
+// ---------------------------------------------------------------------------
+router.patch(
+  "/venom/workspaces/:workspaceId/members/:memberUserId",
+  async (req, res): Promise<void> => {
+    const params = UpdateSharedWorkspaceMemberRoleParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireAdminMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+
+    const parsed = UpdateSharedWorkspaceMemberRoleBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid role payload" });
+      return;
+    }
+    const nextRole: VenomSharedWorkspaceRole = parsed.data.role;
+
+    const actorUserId = userIdFor(req);
+    if (!actorUserId) {
+      // Unreachable after requireAdminMembership; kept for type safety.
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+
+    const targetUserId = params.data.memberUserId;
+    const result = await db.transaction(async (tx) => {
+      // Serialize admin-set mutations per workspace: without this, two
+      // concurrent demotions/removals could each read an admin count of
+      // two, both commit, and strand the workspace with zero admins.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${membership.workspaceId}))`,
+      );
+      // The admin gate ran before this transaction; the caller can have
+      // been demoted or removed while parked at the lock. Re-check the
+      // acting account under the same serialization before mutating.
+      const [actor] = await tx
+        .select({ role: venomSharedWorkspaceMembersTable.role })
+        .from(venomSharedWorkspaceMembersTable)
+        .where(
+          and(
+            eq(
+              venomSharedWorkspaceMembersTable.workspaceId,
+              membership.workspaceId,
+            ),
+            eq(venomSharedWorkspaceMembersTable.clerkUserId, actorUserId),
+          ),
+        )
+        .limit(1);
+      if (!actor) {
+        return { status: 403 as const, stillMember: false };
+      }
+      if (actor.role !== "admin") {
+        return { status: 403 as const, stillMember: true };
+      }
+      const [target] = await tx
+        .select()
+        .from(venomSharedWorkspaceMembersTable)
+        .where(
+          and(
+            eq(
+              venomSharedWorkspaceMembersTable.workspaceId,
+              membership.workspaceId,
+            ),
+            eq(venomSharedWorkspaceMembersTable.clerkUserId, targetUserId),
+          ),
+        )
+        .limit(1);
+      if (!target) return { status: 404 as const };
+
+      if (target.role === "admin" && nextRole !== "admin") {
+        const [{ count: adminCount }] = await tx
+          .select({ count: sql<number>`COUNT(*)::int` })
+          .from(venomSharedWorkspaceMembersTable)
+          .where(
+            and(
+              eq(
+                venomSharedWorkspaceMembersTable.workspaceId,
+                membership.workspaceId,
+              ),
+              eq(venomSharedWorkspaceMembersTable.role, "admin"),
+            ),
+          );
+        if (adminCount <= 1) return { status: 409 as const };
+      }
+
+      const [updated] = await tx
+        .update(venomSharedWorkspaceMembersTable)
+        .set({ role: nextRole })
+        .where(
+          and(
+            eq(
+              venomSharedWorkspaceMembersTable.workspaceId,
+              membership.workspaceId,
+            ),
+            eq(venomSharedWorkspaceMembersTable.clerkUserId, targetUserId),
+          ),
+        )
+        .returning();
+      return { status: 200 as const, member: updated };
+    });
+
+    if (result.status === 403) {
+      res
+        .status(403)
+        .json(
+          result.stillMember
+            ? workspaceAdminRequiredBody()
+            : workspaceAccessDeniedBody(),
+        );
+      return;
+    }
+    if (result.status === 404) {
+      res.status(404).json({ error: "That account is not a member" });
+      return;
+    }
+    if (result.status === 409) {
+      res.status(409).json({ error: "The last admin cannot be demoted" });
+      return;
+    }
+
+    // Names are cosmetic; a role change must not depend on the directory.
+    let name: string | null = null;
+    try {
+      const names = await userDirectory.getUsers([result.member.clerkUserId]);
+      name = names.get(result.member.clerkUserId) ?? null;
+    } catch (error) {
+      req.log.warn(
+        { err: error },
+        "Shared workspace member name lookup failed",
+      );
+    }
+
+    req.log.info(
+      { sharedWorkspaceId: membership.workspaceId, memberRole: nextRole },
+      "Shared workspace member role updated",
+    );
+    res.json(
+      UpdateSharedWorkspaceMemberRoleResponse.parse({
+        userId: result.member.clerkUserId,
+        role: result.member.role,
+        name,
+        addedAt: result.member.addedAt,
+      }),
+    );
+  },
+);
+
+// ---------------------------------------------------------------------------
 // DELETE /venom/workspaces/:workspaceId/members/:memberUserId — admins only
 // ---------------------------------------------------------------------------
 router.delete(
@@ -484,19 +700,50 @@ router.delete(
       res.status(403).json(workspaceAccessDeniedBody());
       return;
     }
-    const membership = await requireMembership(
+    const membership = await requireAdminMembership(
       req,
       res,
       params.data.workspaceId,
     );
     if (!membership) return;
-    if (membership.role !== "admin") {
-      res.status(403).json(workspaceAccessDeniedBody());
+
+    const actorUserId = userIdFor(req);
+    if (!actorUserId) {
+      // Unreachable after requireAdminMembership; kept for type safety.
+      res.status(401).json({ error: "Authentication required" });
       return;
     }
 
     const targetUserId = params.data.memberUserId;
     const removed = await db.transaction(async (tx) => {
+      // Serialized with the role-change transaction (see the PATCH route):
+      // concurrent admin-removing mutations must re-read the admin count
+      // one at a time or two "last admins" could both leave.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${membership.workspaceId}))`,
+      );
+      // The admin gate ran before this transaction; re-check the acting
+      // account under the lock so a just-demoted or just-removed admin
+      // cannot complete an already-authorized removal.
+      const [actor] = await tx
+        .select({ role: venomSharedWorkspaceMembersTable.role })
+        .from(venomSharedWorkspaceMembersTable)
+        .where(
+          and(
+            eq(
+              venomSharedWorkspaceMembersTable.workspaceId,
+              membership.workspaceId,
+            ),
+            eq(venomSharedWorkspaceMembersTable.clerkUserId, actorUserId),
+          ),
+        )
+        .limit(1);
+      if (!actor) {
+        return { status: 403 as const, stillMember: false };
+      }
+      if (actor.role !== "admin") {
+        return { status: 403 as const, stillMember: true };
+      }
       const [target] = await tx
         .select()
         .from(venomSharedWorkspaceMembersTable)
@@ -542,6 +789,16 @@ router.delete(
       return { status: 200 as const };
     });
 
+    if (removed.status === 403) {
+      res
+        .status(403)
+        .json(
+          removed.stillMember
+            ? workspaceAdminRequiredBody()
+            : workspaceAccessDeniedBody(),
+        );
+      return;
+    }
     if (removed.status === 404) {
       res.status(404).json({ error: "That account is not a member" });
       return;
@@ -586,7 +843,17 @@ router.get(
     const concepts = await loadOntologyConcepts(
       workspaceOwner(membership.workspaceId),
     );
-    const clusters = [...concepts].sort(
+    // Admin-only clusters are dropped server-side for members, the same
+    // per-request pattern as the membership check itself: a member's
+    // response never contains the restricted record at all. Unsorted is an
+    // author-private personal state — workspace rows never carry it, but if
+    // one ever slipped through a write path it must not surface here.
+    const visible = (
+      membership.role === "admin"
+        ? concepts
+        : concepts.filter((concept) => concept.adminOnly !== true)
+    ).filter((concept) => concept.unsorted !== true);
+    const clusters = [...visible].sort(
       (a, b) => b.strength - a.strength || b.lastUpdatedAt - a.lastUpdatedAt,
     );
     res.json(GetSharedWorkspaceKnowledgeResponse.parse({ clusters }));
@@ -628,9 +895,16 @@ router.get(
       .select()
       .from(venomSopsTable)
       .where(
-        eq(
-          venomSopsTable.clerkUserId,
-          workspaceSopOwnerKey(membership.workspaceId),
+        and(
+          eq(
+            venomSopsTable.clerkUserId,
+            workspaceSopOwnerKey(membership.workspaceId),
+          ),
+          // Admin-only SOPs are filtered server-side for members, per
+          // request, exactly like the membership check.
+          ...(membership.role === "admin"
+            ? []
+            : [eq(venomSopsTable.adminOnly, false)]),
         ),
       )
       .orderBy(desc(venomSopsTable.updatedAt))
@@ -725,7 +999,9 @@ router.post(
         ),
       )
       .limit(1);
-    if (!sop) {
+    // A restricted SOP simply does not exist for members — the same 404 an
+    // unknown id gets, so the response leaks nothing about it.
+    if (!sop || (sop.adminOnly && membership.role !== "admin")) {
       res.status(404).json({ error: "SOP not found" });
       return;
     }
@@ -829,6 +1105,486 @@ router.post(
         publishedAt: revision.publishedAt,
       }),
     );
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Workspace security settings (admins only)
+// ---------------------------------------------------------------------------
+
+router.get(
+  "/venom/workspaces/:workspaceId/settings",
+  async (req, res): Promise<void> => {
+    const params = GetSharedWorkspaceSettingsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireAdminMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+
+    const [workspace] = await db
+      .select({
+        allowSensitiveExport: venomSharedWorkspacesTable.allowSensitiveExport,
+      })
+      .from(venomSharedWorkspacesTable)
+      .where(eq(venomSharedWorkspacesTable.id, membership.workspaceId))
+      .limit(1);
+    if (!workspace) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    res.json(
+      GetSharedWorkspaceSettingsResponse.parse({
+        allowSensitiveExport: workspace.allowSensitiveExport,
+      }),
+    );
+  },
+);
+
+router.put(
+  "/venom/workspaces/:workspaceId/settings",
+  async (req, res): Promise<void> => {
+    const params = UpdateSharedWorkspaceSettingsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireAdminMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+
+    const parsed = UpdateSharedWorkspaceSettingsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid settings payload" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(venomSharedWorkspacesTable)
+      .set({ allowSensitiveExport: parsed.data.allowSensitiveExport })
+      .where(eq(venomSharedWorkspacesTable.id, membership.workspaceId))
+      .returning({
+        allowSensitiveExport: venomSharedWorkspacesTable.allowSensitiveExport,
+      });
+    if (!updated) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+
+    req.log.info(
+      {
+        sharedWorkspaceId: membership.workspaceId,
+        allowSensitiveExport: updated.allowSensitiveExport,
+      },
+      "Workspace export policy updated",
+    );
+    res.json(
+      UpdateSharedWorkspaceSettingsResponse.parse({
+        allowSensitiveExport: updated.allowSensitiveExport,
+      }),
+    );
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Sensitivity locks (any member may lock or unlock)
+// ---------------------------------------------------------------------------
+
+router.patch(
+  "/venom/workspaces/:workspaceId/knowledge/:conceptId/sensitivity",
+  async (req, res): Promise<void> => {
+    const params = SetSharedWorkspaceConceptSensitivityParams.safeParse(
+      req.params,
+    );
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+
+    const parsed = SetSharedWorkspaceConceptSensitivityBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid sensitivity payload" });
+      return;
+    }
+
+    const owner = workspaceOwner(membership.workspaceId);
+    // A restricted cluster simply does not exist for members — the same 404
+    // an unknown id gets, so a member can neither see nor relabel it.
+    const existing = await loadOntologyConcept(owner, params.data.conceptId);
+    if (
+      !existing ||
+      (existing.adminOnly === true && membership.role !== "admin")
+    ) {
+      res.status(404).json({ error: "Knowledge cluster not found" });
+      return;
+    }
+    const changed = await setOntologyConceptSensitivity(
+      owner,
+      params.data.conceptId,
+      parsed.data.sensitive,
+    );
+    const cluster = changed
+      ? await loadOntologyConcept(owner, params.data.conceptId)
+      : null;
+    if (!cluster) {
+      res.status(404).json({ error: "Knowledge cluster not found" });
+      return;
+    }
+
+    req.log.info(
+      {
+        sharedWorkspaceId: membership.workspaceId,
+        conceptId: params.data.conceptId,
+        sensitive: parsed.data.sensitive,
+      },
+      "Workspace knowledge sensitivity updated",
+    );
+    res.json(SetSharedWorkspaceConceptSensitivityResponse.parse(cluster));
+  },
+);
+
+router.patch(
+  "/venom/workspaces/:workspaceId/knowledge/:conceptId/evidence/:conversationId/sensitivity",
+  async (req, res): Promise<void> => {
+    const params = SetSharedWorkspaceEvidenceSensitivityParams.safeParse(
+      req.params,
+    );
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+
+    const parsed = SetSharedWorkspaceEvidenceSensitivityBody.safeParse(
+      req.body,
+    );
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid sensitivity payload" });
+      return;
+    }
+
+    const owner = workspaceOwner(membership.workspaceId);
+    // Evidence rides its cluster: restricted for members means the whole
+    // cluster (evidence included) does not exist for them.
+    const existing = await loadOntologyConcept(owner, params.data.conceptId);
+    if (
+      !existing ||
+      (existing.adminOnly === true && membership.role !== "admin")
+    ) {
+      res.status(404).json({ error: "Evidence entry not found" });
+      return;
+    }
+    const changed = await setOntologyEvidenceSensitivity(
+      owner,
+      params.data.conceptId,
+      params.data.conversationId,
+      parsed.data.sensitive,
+    );
+    const cluster = changed
+      ? await loadOntologyConcept(owner, params.data.conceptId)
+      : null;
+    if (!cluster) {
+      res.status(404).json({ error: "Evidence entry not found" });
+      return;
+    }
+
+    req.log.info(
+      {
+        sharedWorkspaceId: membership.workspaceId,
+        conceptId: params.data.conceptId,
+        conversationId: params.data.conversationId,
+        sensitive: parsed.data.sensitive,
+      },
+      "Workspace evidence sensitivity updated",
+    );
+    res.json(SetSharedWorkspaceEvidenceSensitivityResponse.parse(cluster));
+  },
+);
+
+router.patch(
+  "/venom/workspaces/:workspaceId/sops/:sopId/sensitivity",
+  async (req, res): Promise<void> => {
+    const params = SetSharedWorkspaceSopSensitivityParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+
+    const parsed = SetSharedWorkspaceSopSensitivityBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid sensitivity payload" });
+      return;
+    }
+
+    // Deliberately no updatedAt bump: a lock is metadata about the SOP, not
+    // an edit, so it must not reshuffle recency-ordered lists. The column
+    // carries an $onUpdate default that fires whenever it is omitted from
+    // set(), so it is pinned to its current value explicitly. For members
+    // the WHERE clause also skips restricted SOPs, so those fall into the
+    // same 404 as an unknown id.
+    const [updated] = await db
+      .update(venomSopsTable)
+      .set({
+        sensitive: parsed.data.sensitive,
+        updatedAt: sql`${venomSopsTable.updatedAt}`,
+      })
+      .where(
+        and(
+          eq(venomSopsTable.id, params.data.sopId),
+          eq(
+            venomSopsTable.clerkUserId,
+            workspaceSopOwnerKey(membership.workspaceId),
+          ),
+          ...(membership.role === "admin"
+            ? []
+            : [eq(venomSopsTable.adminOnly, false)]),
+        ),
+      )
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "SOP not found" });
+      return;
+    }
+
+    req.log.info(
+      {
+        sharedWorkspaceId: membership.workspaceId,
+        sopId: updated.id,
+        sensitive: parsed.data.sensitive,
+      },
+      "Workspace SOP sensitivity updated",
+    );
+    res.json(
+      SetSharedWorkspaceSopSensitivityResponse.parse(
+        workspaceSopPayload(updated),
+      ),
+    );
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Admin-only restrictions (only admins may set or clear; restricted items
+// never reach non-admin members through any read, chat, or export path)
+// ---------------------------------------------------------------------------
+
+router.patch(
+  "/venom/workspaces/:workspaceId/knowledge/:conceptId/restriction",
+  async (req, res): Promise<void> => {
+    const params = SetSharedWorkspaceConceptRestrictionParams.safeParse(
+      req.params,
+    );
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireAdminMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+
+    const parsed = SetSharedWorkspaceConceptRestrictionBody.safeParse(
+      req.body,
+    );
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid restriction payload" });
+      return;
+    }
+
+    const owner = workspaceOwner(membership.workspaceId);
+    const changed = await setOntologyConceptRestriction(
+      owner,
+      params.data.conceptId,
+      parsed.data.adminOnly,
+    );
+    const cluster = changed
+      ? await loadOntologyConcept(owner, params.data.conceptId)
+      : null;
+    if (!cluster) {
+      res.status(404).json({ error: "Knowledge cluster not found" });
+      return;
+    }
+
+    req.log.info(
+      {
+        sharedWorkspaceId: membership.workspaceId,
+        conceptId: params.data.conceptId,
+        adminOnly: parsed.data.adminOnly,
+      },
+      "Workspace knowledge restriction updated",
+    );
+    res.json(SetSharedWorkspaceConceptRestrictionResponse.parse(cluster));
+  },
+);
+
+router.patch(
+  "/venom/workspaces/:workspaceId/sops/:sopId/restriction",
+  async (req, res): Promise<void> => {
+    const params = SetSharedWorkspaceSopRestrictionParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireAdminMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+
+    const parsed = SetSharedWorkspaceSopRestrictionBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid restriction payload" });
+      return;
+    }
+
+    // Same contract as the sensitivity lock: metadata, not an edit, so no
+    // updatedAt bump and no reshuffling of recency-ordered lists. updatedAt
+    // is pinned explicitly because its $onUpdate default fires whenever the
+    // column is omitted from set().
+    const [updated] = await db
+      .update(venomSopsTable)
+      .set({
+        adminOnly: parsed.data.adminOnly,
+        updatedAt: sql`${venomSopsTable.updatedAt}`,
+      })
+      .where(
+        and(
+          eq(venomSopsTable.id, params.data.sopId),
+          eq(
+            venomSopsTable.clerkUserId,
+            workspaceSopOwnerKey(membership.workspaceId),
+          ),
+        ),
+      )
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "SOP not found" });
+      return;
+    }
+
+    req.log.info(
+      {
+        sharedWorkspaceId: membership.workspaceId,
+        sopId: updated.id,
+        adminOnly: parsed.data.adminOnly,
+      },
+      "Workspace SOP restriction updated",
+    );
+    res.json(
+      SetSharedWorkspaceSopRestrictionResponse.parse(
+        workspaceSopPayload(updated),
+      ),
+    );
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /venom/workspaces/:workspaceId/export/:kind — markdown download
+// (members only; the workspace's export policy is enforced right here)
+// ---------------------------------------------------------------------------
+
+router.get(
+  "/venom/workspaces/:workspaceId/export/:kind",
+  async (req, res): Promise<void> => {
+    const params = ExportSharedWorkspaceMarkdownParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+    const membership = await requireMembership(
+      req,
+      res,
+      params.data.workspaceId,
+    );
+    if (!membership) return;
+
+    const [workspace] = await db
+      .select({
+        name: venomSharedWorkspacesTable.name,
+        allowSensitiveExport: venomSharedWorkspacesTable.allowSensitiveExport,
+      })
+      .from(venomSharedWorkspacesTable)
+      .where(eq(venomSharedWorkspacesTable.id, membership.workspaceId))
+      .limit(1);
+    if (!workspace) {
+      res.status(403).json(workspaceAccessDeniedBody());
+      return;
+    }
+
+    const options = {
+      scopeTitle: `Workspace "${workspace.name}"`,
+      allowSensitive: workspace.allowSensitiveExport,
+      // Admin-only items leave the workspace only in an admin's export;
+      // a member's file states how many were withheld.
+      includeRestricted: membership.role === "admin",
+    };
+    let result;
+    if (params.data.kind === "brain") {
+      const clusters = await loadOntologyConcepts(
+        workspaceOwner(membership.workspaceId),
+      );
+      result = knowledgeMarkdown(clusters, options);
+    } else {
+      const sops = await db
+        .select()
+        .from(venomSopsTable)
+        .where(
+          eq(
+            venomSopsTable.clerkUserId,
+            workspaceSopOwnerKey(membership.workspaceId),
+          ),
+        )
+        .orderBy(desc(venomSopsTable.updatedAt))
+        .limit(500);
+      result = sopsMarkdown(
+        sops.filter((sop) => sop.lifecycle !== "archived"),
+        options,
+      );
+    }
+
+    req.log.info(
+      {
+        sharedWorkspaceId: membership.workspaceId,
+        exportKind: params.data.kind,
+        withheldCount: result.withheldCount,
+        restrictedWithheldCount: result.restrictedWithheldCount,
+        allowSensitiveExport: workspace.allowSensitiveExport,
+      },
+      "Workspace markdown export generated",
+    );
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${exportFileName(workspace.name, params.data.kind)}"`,
+    );
+    res.send(result.markdown);
   },
 );
 

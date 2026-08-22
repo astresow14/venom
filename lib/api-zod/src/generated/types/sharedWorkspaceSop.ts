@@ -34,6 +34,10 @@ export interface SharedWorkspaceSop {
      * @nullable
      */
   activeRevisionNumber: number | null;
+  /** Sensitivity lock. Any member may set or clear it; locked SOPs stay visible inside the workspace but are withheld from exports when the workspace's export policy forbids sensitive content leaving. */
+  sensitive?: boolean;
+  /** Admin-only restriction. Set only by workspace admins through the restriction endpoint. Restricted SOPs are filtered out of member reads, member chat context, and member exports server-side, so a non-admin response never carries one — when this flag is true, the reader is an admin. */
+  adminOnly?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

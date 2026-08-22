@@ -1,11 +1,12 @@
 /**
- * VoiceModeOverlay.tsx — full-screen hands-free voice conversation.
+ * VoiceModeOverlay.tsx — full-screen tap-to-talk voice conversation.
  *
  * Launched from the chat composer's mic button. Always the symbiote's own
  * near-black room regardless of theme: black mass orb center stage, a quiet
  * status word, the live transcript below, and a voice picker sheet. Tap the
- * orb to interrupt while it's thinking/speaking; the loop resumes listening
- * by itself after every reply.
+ * orb once to start a recording and once more to send it. While a reply is
+ * playing, tapping the orb stops it; voice never begins another recording
+ * until the user asks it to.
  *
  * Failure states (mic denied, voice not configured, dropped connection) each
  * explain themselves and offer "Try again" / "Back to text" — voice mode
@@ -68,8 +69,10 @@ function statusLine(
   switch (phase) {
     case "connecting":
       return "waking up…";
+    case "idle":
+      return "tap to talk";
     case "listening":
-      return userSpeaking ? "go on — listening" : "listening";
+      return userSpeaking ? "recording" : "recording — tap to send";
     case "transcribing":
       return "got it…";
     case "thinking":
@@ -116,6 +119,7 @@ export function VoiceModeOverlay({
     begin,
     end,
     interrupt,
+    toggleRecording,
     retry,
   } = voice;
 
@@ -180,12 +184,27 @@ export function VoiceModeOverlay({
     return () => clearTimeout(timer);
   }, [transcript, liveAssistantText, liveUserText]);
 
-  const orbPressable = phase === "speaking" || phase === "thinking";
+  const orbPressable =
+    phase === "idle" ||
+    phase === "listening" ||
+    phase === "speaking" ||
+    phase === "thinking";
   const orbLabel =
-    phase === "speaking" || phase === "thinking"
-      ? "Interrupt and take your turn"
-      : statusLine(phase, activePreset?.name ?? null, userSpeaking) ||
-        "Voice mode";
+    phase === "listening"
+      ? "Stop recording and send"
+      : phase === "speaking" || phase === "thinking"
+        ? "Stop reply"
+        : phase === "idle"
+          ? "Start recording"
+          : statusLine(phase, activePreset?.name ?? null, userSpeaking) ||
+            "Voice mode";
+  const handleOrbPress = () => {
+    if (phase === "listening" || phase === "idle") {
+      void toggleRecording();
+    } else if (phase === "speaking" || phase === "thinking") {
+      interrupt();
+    }
+  };
 
   const showLiveAssistant =
     liveAssistantText.length > 0 &&
@@ -283,7 +302,7 @@ export function VoiceModeOverlay({
           <View style={styles.stage}>
             <TouchableOpacity
               activeOpacity={orbPressable ? 0.7 : 1}
-              onPress={orbPressable ? interrupt : undefined}
+              onPress={orbPressable ? handleOrbPress : undefined}
               disabled={!orbPressable}
               accessibilityRole="button"
               accessibilityLabel={orbLabel}
@@ -298,8 +317,14 @@ export function VoiceModeOverlay({
             <Text style={styles.status} testID="voice-status">
               {statusLine(phase, activePreset?.name ?? null, userSpeaking)}
             </Text>
+            {phase === "idle" && (
+              <Text style={styles.hint}>tap the mass to talk</Text>
+            )}
+            {phase === "listening" && (
+              <Text style={styles.hint}>tap again when you’re done</Text>
+            )}
             {phase === "speaking" && (
-              <Text style={styles.hint}>tap the mass to jump in</Text>
+              <Text style={styles.hint}>tap the mass to stop the reply</Text>
             )}
             {notice && (
               <Text style={styles.notice} testID="voice-notice">

@@ -51,4 +51,10 @@ export interface VenomKnowledgeCluster {
   lastUpdatedAt: number;
   /** @maxItems 8 */
   sources: VenomKnowledgeSource[];
+  /** Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace's export policy forbids sensitive content leaving. */
+  sensitive?: boolean;
+  /** Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin. */
+  adminOnly?: boolean;
+  /** Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author's own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand. */
+  unsorted?: boolean;
 }

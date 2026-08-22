@@ -11,6 +11,8 @@
  *  - POST /venom/voice/speak            → text → SSE stream of base64 PCM16 chunks
  *  - POST /venom/voice/decide           → respond / acknowledge / stay silent
  *  - POST /venom/voice/decision-outcome → what actually happened next
+ *  - GET  /venom/voice/decisions/summary → decisions × outcomes × talkativeness evidence
+ *  - GET  /venom/voice/decisions/export  → the same log as JSONL training data
  *
  * When the OpenAI integration env vars are absent, voice endpoints answer
  * 503 with code "voice_unavailable" so clients can fall back to text chat.
@@ -25,6 +27,8 @@ import { randomUUID } from "node:crypto";
 import { getAuth } from "@clerk/express";
 import {
   DecideVenomVoiceTurnBody,
+  ExportVenomVoiceDecisionsQueryParams,
+  GetVenomVoiceDecisionSummaryQueryParams,
   ReportVenomVoiceDecisionOutcomeBody,
   SpeakVenomVoiceBody,
   TranscribeVenomVoiceBody,
@@ -50,6 +54,16 @@ import type {
   VoiceDecisionOutcome,
   VoiceDecisionStore,
 } from "../lib/venom-voice-decision-store";
+import {
+  summarizeVoiceDecisions,
+  voiceDecisionExportJsonl,
+} from "../lib/venom-voice-decision-report";
+import {
+  usageFromCompletion,
+  VOICE_FLAT_COST_MICROS,
+  VOICE_USAGE_ALIAS,
+} from "../lib/venom-usage-pricing";
+import type { RecordVenomUsageInput } from "../lib/venom-usage-store";
 
 /** Subset of the audio module the routes rely on (injectable for tests). */
 export type VenomVoiceAudioModule = {
@@ -83,6 +97,8 @@ export type VenomVoiceRouterOptions = {
   judgeTurn?: (input: VoiceJudgeInput) => Promise<VoiceJudgeVerdict | null>;
   /** Decision/outcome persistence; overridden in tests. */
   decisionStore?: VoiceDecisionStore;
+  /** Usage-ledger sink; overridden in tests. Must never throw. */
+  recordUsage?: (input: RecordVenomUsageInput) => void;
 };
 
 const TRANSCRIBE_RATE_LIMIT_WINDOW_MS = 60_000;
@@ -93,6 +109,9 @@ const DECIDE_RATE_LIMIT_WINDOW_MS = 60_000;
 const DECIDE_RATE_LIMIT_MAX = 40;
 const OUTCOME_RATE_LIMIT_WINDOW_MS = 60_000;
 const OUTCOME_RATE_LIMIT_MAX = 80;
+const REPORT_RATE_LIMIT_WINDOW_MS = 60_000;
+const REPORT_RATE_LIMIT_MAX = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 /** Hard cap on decoded utterance audio (bytes). ~4 MB ≈ >60s of opus. */
 const MAX_DECODED_AUDIO_BYTES = 4 * 1024 * 1024;
 const SPEAK_TIMEOUT_MS = 60_000;
@@ -206,6 +225,10 @@ export function createVenomVoiceRouter(
     OUTCOME_RATE_LIMIT_WINDOW_MS,
     OUTCOME_RATE_LIMIT_MAX,
   );
+  const reportLimiter = createRateLimiter(
+    REPORT_RATE_LIMIT_WINDOW_MS,
+    REPORT_RATE_LIMIT_MAX,
+  );
 
   // Decision persistence is loaded lazily for the same reason as the audio
   // module: its import pulls in the database client, which route tests and
@@ -224,6 +247,19 @@ export function createVenomVoiceRouter(
     }
     return decisionStorePromise;
   };
+
+  // Usage metering shares the decision store's lazy-import rule: pulling the
+  // ledger in eagerly would drag the database client into db-less tests. A
+  // failed import degrades to "serve but don't meter" — never to a failure.
+  const recordUsage =
+    options.recordUsage ??
+    ((input: RecordVenomUsageInput): void => {
+      import("../lib/venom-usage-store")
+        .then((mod) => mod.recordVenomUsage(input))
+        .catch(() => {
+          // Metering must never break a voice request.
+        });
+    });
 
   // Default judge: one cheap JSON completion with a short leash. Anything
   // that isn't a clean verdict — env missing, timeout, malformed reply —
@@ -256,6 +292,20 @@ export function createVenomVoiceRouter(
         ],
       });
       const content = completion.choices[0]?.message?.content;
+      // The tokens are spent whether or not the verdict parses.
+      try {
+        input.onUsage?.(
+          usageFromCompletion(completion.usage, {
+            promptChars:
+              VOICE_JUDGE_SYSTEM_PROMPT.length +
+              recent.length +
+              Math.min(input.transcript.length, 600),
+            outputChars: content?.length ?? 0,
+          }),
+        );
+      } catch {
+        // Metering must never break a decision.
+      }
       return content ? parseJudgeVerdict(content) : null;
     });
 
@@ -351,6 +401,18 @@ export function createVenomVoiceRouter(
             "Transcription",
           );
         }
+        // Audio legs are metered as a flat per-request estimate: providers
+        // bill transcription by the minute, and Venom deliberately does not
+        // track audio duration. Tokens stay zero; the flat cost carries it.
+        recordUsage({
+          userId,
+          modelAlias: VOICE_USAGE_ALIAS,
+          callKind: "voice_transcribe",
+          promptTokens: 0,
+          outputTokens: 0,
+          estimated: true,
+          costMicros: VOICE_FLAT_COST_MICROS.voice_transcribe,
+        });
         res.json({ text: (text ?? "").slice(0, 8000) });
       } catch (error) {
         // Never include audio payloads in logs — size only.
@@ -443,6 +505,21 @@ export function createVenomVoiceRouter(
           res.write(`data: ${JSON.stringify({ audio: chunk })}\n\n`);
         }
       }
+      if (sentAudio) {
+        // Flat per-request estimate, same reasoning as transcription: TTS is
+        // billed by audio length, which Venom does not measure. Recorded only
+        // when synthesis actually produced audio — including partial streams
+        // cut by a disconnect, which were still paid for.
+        recordUsage({
+          userId,
+          modelAlias: VOICE_USAGE_ALIAS,
+          callKind: "voice_speak",
+          promptTokens: 0,
+          outputTokens: 0,
+          estimated: true,
+          costMicros: VOICE_FLAT_COST_MICROS.voice_speak,
+        });
+      }
       if (!disconnected && !res.writableEnded) {
         if (!sentAudio) {
           res.write(
@@ -501,6 +578,7 @@ export function createVenomVoiceRouter(
     const recentTurns = parsed.data.recentTurns ?? [];
     const talkativeness = normalizeTalkativeness(parsed.data.talkativeness);
 
+    const startedAt = Date.now();
     const signals = extractVoiceTurnSignals(transcript, recentTurns);
     const heuristic = decideFromHeuristics(signals, talkativeness);
 
@@ -508,8 +586,10 @@ export function createVenomVoiceRouter(
     let windDown = heuristic.windDown;
     let source: "heuristic" | "model" | "fallback" = "heuristic";
 
+    let judgeMs: number | null = null;
     if (!heuristic.confident) {
       // Ambiguous turn: give the lightweight judge one short-leashed shot.
+      const judgeStartedAt = Date.now();
       let verdict: VoiceJudgeVerdict | null = null;
       try {
         verdict = await withTimeout(
@@ -518,6 +598,15 @@ export function createVenomVoiceRouter(
             recentTurns,
             talkativeness,
             heuristicDecision: heuristic.decision,
+            onUsage: (usage) =>
+              recordUsage({
+                userId,
+                modelAlias: "venom-gpt",
+                callKind: "voice_judge",
+                promptTokens: usage.promptTokens,
+                outputTokens: usage.outputTokens,
+                estimated: usage.estimated,
+              }),
           }),
           JUDGE_TIMEOUT_MS,
           "Voice turn judgment",
@@ -528,6 +617,7 @@ export function createVenomVoiceRouter(
           error instanceof Error ? error.message : error,
         );
       }
+      judgeMs = Date.now() - judgeStartedAt;
       if (verdict) {
         decision = verdict.decision;
         // A full reply followed by an auto-close would feel broken; wind-down
@@ -598,6 +688,15 @@ export function createVenomVoiceRouter(
       }),
     ]);
 
+    // One compact line per spoken turn: this route sits in the gap before
+    // Venom starts talking, so its p50/p95 must be measurable from logs
+    // alone. Timings and enums only — never transcript content.
+    console.info(
+      `Venom voice decide: source=${source} decision=${decision} windDown=${windDown} durable=${durable} totalMs=${Date.now() - startedAt}${
+        judgeMs === null ? "" : ` judgeMs=${judgeMs}`
+      }`,
+    );
+
     res.json({
       ...(durable ? { decisionId } : {}),
       decision,
@@ -646,6 +745,105 @@ export function createVenomVoiceRouter(
           error instanceof Error ? error.message : error,
         );
         res.status(500).json({ error: "The outcome could not be recorded." });
+      }
+    },
+  );
+
+  // ── Decision evidence: summary report ─────────────────────────────────────
+  // Unlike decide/outcome, these two read paths fail loudly: an evidence
+  // report served from a broken store would quietly tune thresholds on
+  // nothing, so a store failure is a 500, never an empty 200.
+
+  router.get(
+    "/venom/voice/decisions/summary",
+    async (req, res): Promise<void> => {
+      const userId = resolveUserId(req);
+      if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const rate = reportLimiter.take(userId);
+      if (!rate.ok) {
+        res.setHeader("Retry-After", rate.retryAfterSeconds);
+        res.status(429).json({
+          error: "Too many voice requests. Give it a moment.",
+        });
+        return;
+      }
+
+      const parsed = GetVenomVoiceDecisionSummaryQueryParams.safeParse(
+        req.query,
+      );
+      if (!parsed.success) {
+        res.status(400).json({ error: "Invalid report request" });
+        return;
+      }
+      const windowDays = parsed.data.windowDays ?? 30;
+      const since = new Date(Date.now() - windowDays * DAY_MS);
+
+      try {
+        const store = await loadDecisionStore();
+        const rows = await store.listForUser(userId, since);
+        res.json(summarizeVoiceDecisions(rows, { windowDays, since }));
+      } catch (error) {
+        console.error(
+          "Venom voice decision summary failed:",
+          error instanceof Error ? error.message : error,
+        );
+        res.status(500).json({ error: "The decision log could not be read." });
+      }
+    },
+  );
+
+  // ── Decision evidence: JSONL training export ─────────────────────────────
+
+  router.get(
+    "/venom/voice/decisions/export",
+    async (req, res): Promise<void> => {
+      const userId = resolveUserId(req);
+      if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const rate = reportLimiter.take(userId);
+      if (!rate.ok) {
+        res.setHeader("Retry-After", rate.retryAfterSeconds);
+        res.status(429).json({
+          error: "Too many voice requests. Give it a moment.",
+        });
+        return;
+      }
+
+      const parsed = ExportVenomVoiceDecisionsQueryParams.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Invalid export request" });
+        return;
+      }
+      const windowDays = parsed.data.windowDays ?? 90;
+      const since = new Date(Date.now() - windowDays * DAY_MS);
+
+      try {
+        const store = await loadDecisionStore();
+        const rows = await store.listForUser(userId, since);
+        // text/plain (not application/x-ndjson): the generated clients parse
+        // text/* bodies into the string the OpenAPI contract promises; an
+        // unrecognized media type would surface as a mistyped Blob instead.
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="venom-voice-decisions-${new Date()
+            .toISOString()
+            .slice(0, 10)}.jsonl"`,
+        );
+        res.send(voiceDecisionExportJsonl(rows));
+      } catch (error) {
+        console.error(
+          "Venom voice decision export failed:",
+          error instanceof Error ? error.message : error,
+        );
+        res.status(500).json({ error: "The decision log could not be read." });
       }
     },
   );

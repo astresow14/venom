@@ -20,6 +20,19 @@ to a tier whose cost matches the last configuration that stayed responsive
 under SwiftShader. Unknown/empty labels count as hardware — a false positive
 strips the visual for capable machines.
 
+**Compile is not the whale:** SwiftShader compiles+links all four slime tiers
+cold in ~200ms (measured per-tier in fresh contexts). The seconds-long GL
+specs are paying **per-frame rasterization** — cost scales with tier density ×
+buffer area, and specs that wait for N frames pay N × frame cost. So budget
+levers are: pin a cheaper rich tier when the assertion only needs "a rich tier
+sheds/pins" (medium proves what full proves), keep frame-count waits minimal,
+shrink pinned capture fractions, and skip mounting GL entirely for specs that
+never assert the goo. Don't chase shader-cache warming — it saves ~nothing.
+
+**Suite-wide boot cost:** creating a SwiftShader context + first compile per
+page load is small but nonzero; mounting the GL layer lazily (first activation
+of the hosting tab) removes it from every test that never opens that tab.
+
 **Zero-capacity trap:** GLSL ES 1.00 forbids zero-sized arrays. A tier that
 sets some population to 0 must omit that uniform array and its loop from the
 generated source; emitting `uDrops[0]` fails compilation and the host's

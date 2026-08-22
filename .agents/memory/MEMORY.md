@@ -1,49 +1,43 @@
 - [Knowledge extraction contracts](knowledge-extraction-contracts.md) — JSON-only model output still needs server-side normalization, source checks, and schema validation.
-- [Orval generated normalization](orval-generated-eof.md) — regenerate after OpenAPI merges; the two generated client copies drift independently; hooks need an explicit queryKey.
+- [Orval generated normalization](orval-generated-eof.md) — regenerate after OpenAPI merges; copies drift; hooks need explicit queryKey; response numerics are type: number; downloads use text/* media types.
 - [Workspace dependency lock ownership](workspace-dependency-lock-ownership.md) — root package callbacks cannot repair a child package’s pnpm importer; regenerate the workspace lock after scoped manifest changes.
 - [Mobile workspace paging](mobile-workspace-paging.md) — keep workspace screens mounted and isolated; RN Web scroll paging can expose adjacent screens at artifact widths.
 - [API server TypeScript test bundling](api-server-ts-test-bundling.md) — esbuild-CJS route tests into ./dist, NODE_ENV=test; the aggregate suite is provider-hermetic: DATABASE_URL + dead-end OpenAI placeholders suffice.
 - [Playwright on Replit Nix](playwright-on-replit-nix.md) — downloaded Chromium still needs explicit Nix runtime libraries before browser validation can launch.
-- [Workspace sync identity boundaries](workspace-sync-identity-boundaries.md) — bind saves to the initiating account; never let a later session authorize stale work.
-- [Expo Worklets under pnpm](expo-worklets-pnpm.md) — own the matching Babel preset, clear Metro caches, and verify served Worklets metadata after Babel changes.
-- [Durable draft cleanup](durable-draft-cleanup.md) — serialize draft autosaves with success cleanup so an in-flight write cannot resurrect filed content.
-- [React Native Web checked state](react-native-web-checked-state.md) — mirror checkbox/radio state to web ARIA; accessibilityState alone may not update the browser tree.
-- [React Native Web modal focus handoff](rn-web-modal-focus.md) — an animated modal's trap holds focus while it closes and can strand it; hand focus back explicitly on dismiss.
-- [React Native Web keyboard events](react-native-web-keyboard-events.md) — raw key handlers on touchables may be filtered; verify the rendered DOM behavior in a browser.
-- [Venom workspace schema extensions](venom-workspace-schema-extensions.md) — new synced fields must be optional, bounded, normalized, and listed in the cross-device merge or they vanish.
-- [Venom signed-in restore merge](venom-restore-merge.md) — merge the device's own snapshot into the cloud restore, scoped to cloud projects, or unsynced work vanishes on reload.
-- [Venom chat follows the selected project](venom-conversation-project-scope.md) — switching project moves the session; a message is filed under the project on screen.
 - [Venom source tombstone semantics](venom-source-tombstone-semantics.md) — a replaced entity is retired for good; only plain deletions may lose to a newer incoming timestamp.
 - [Venom citation markers](venom-citation-markers.md) — resolve inline source markers when rendering, never strip them at write time; labels are the one exception.
-- [Venom archive merge prune](venom-archive-merge-prune.md) — sync merges recompute the retired-citation archive (cited && not live, prune before cap); never union, keep local prunes and merge in lockstep.
+- [Venom archive merge prune](venom-archive-merge-prune.md) — recompute cited && not live, prune before cap; cap evicts uncited-first in both apps in lockstep; never union.
 - [Venom connected-source refresh](venom-source-refresh.md) — refresh replays the original connect request; deterministic source ids make in-place replacement safe.
 - [Expo browser testing route](expo-brain-testing-route.md) — the interactive tester can render desktop even at the Expo origin; verify mobile via its Playwright suite or screenshots.
-- [GitHub CI setup constraints](github-ci-setup-constraints.md) — workflow writes need explicit capability; observe real check identities before enforcing rules.
+- [GitHub CI setup constraints](github-ci-setup-constraints.md) — workflow writes need explicit capability; merge queues are org-gated (probe availability first); observe real check identities.
 - [Venom Desktop UI-test mode](venom-desktop-ui-test-mode.md) — account-gated features need the placeholder id, browser tests must stub every API the page calls, and fetches stay live (not gated) in test mode.
 - [Venom UI-test workspace seeding](venom-ui-test-workspace-seeding.md) — seed scoped local storage in one init script; mobile hydrates async, so wait for a seeded-only signal.
-- [Project-references stale dist](workspace-project-references-dist.md) — consumers typecheck against a lib's gitignored dist; rebuild with tsc -b before believing "no exported member".
+- [Venom mobile UI-test boot](venom-ui-test-boot.md) — UI-test boots past the Clerk gate, defers GL to first Brain activation, and non-goo brain specs ride slimeTier=off; never gate render on isLoaded.
+- [Project-references stale dist](workspace-project-references-dist.md) — consumers typecheck against gitignored dist; prebuild with tsc -b --force (lib-root tsbuildinfo survives dist deletion and no-ops plain -b).
 - [expo-gl GLView surface sizing](expo-gl-web-surface.md) — on web the drawing buffer is 1x1 at context creation; measure it every frame or the shader silently draws nothing.
 - [Screen-space SDF overlay](screen-space-sdf-overlay.md) — march orthographically in the host's own pixel space and consume already-projected positions instead of rebuilding its camera.
 - [Browser layout assertions](browser-layout-assertions.md) — emulate safe-area insets over CDP, prove emulation modes applied, and find the element that truly scrolls.
 - [Expo web first paint](expo-web-first-paint.md) — single-output Expo dev uses public/index.html for pre-React paint; +html does not change that SPA template.
 - [Untracked uploads reach history](untracked-uploads-reach-history.md) — deleting an untracked file leaves no diff; automatic `add --all` checkpoints can still commit it, and a rebase brings it back.
 - [Repo-wide git from package scripts](git-commands-from-package-scripts.md) — pnpm runs scripts inside the package, so path-walking git commands need an explicit `-C <repoRoot>` or they scan one package and still exit 0.
-- [Venom desktop code splitting](venom-desktop-code-splitting.md) — entry placeholders stay CSS-only, manualChunks lists entry-reachable vendors only, router flags live in leaf modules.
+- [Venom desktop code splitting](venom-desktop-code-splitting.md) — CSS-only entry placeholders; entry vendors only in manualChunks; entry code uses cx() never cn(); budget gates critical path + workspace group.
 - [Approved build-package boundary](approved-build-package-boundary.md) — generation ends at immutable human approval; provisioning stays separate, and source pins survive deletion.
 - [Venom Desktop design language](venom-desktop-design-language.md) — the written contract's location, and why "blocky" is four things, not just radius.
 - [Generated client error bodies](generated-client-error-bodies.md) — failed requests resolve to the error body, so typed arrays arrive as objects and `.map` crashes the page.
-- [Knowledge map projection and layering](brain-map-projection-and-layering.md) — depth-sorted nodes need `isolate`; the projection must orbit its own centroid and fit the viewport.
+- [Knowledge map projection and layering](brain-map-projection-and-layering.md) — nodes need `isolate`; orbit the centroid, fit the viewport; e2e opens clusters via Brain search, not node taps.
 - [Managed AI provider provisioning](managed-ai-provider-provisioning.md) — only OpenAI is provisionable here; the callback for Anthropic/Gemini/OpenRouter is absent, so retrying cannot help.
 - [Venom stepped auth errors](venom-auth-step-errors.md) — Clerk field errors outlive step switches; show them only on the step that owns the fields.
 - [Venom brand render points](venom-brand-components.md) — draw the brand only via the shared mark/wordmark components; rebrands swap internals, not call sites.
 - [Venom ontology store](venom-ontology-store.md) — knowledge lives in owner-scoped tables, not the blob; absorb only after the revision-checked save, and every write path must reuse the same merge.
-- [Venom shared workspace tier](venom-shared-workspace-tier.md) — shared content rides membership-checked APIs only, never the sync snapshot; one 403 code drives client-wide cache eviction.
+- [Venom org tenancy](venom-org-tenancy.md) — managed Clerk rejects org APIs; companies are first-party tables, org filing returns filedScope and clients never file org work locally.
+- [Clerk getToken in effect deps](clerk-gettoken-effect-deps.md) — getToken identity churns per render; fetch effects must read it via a ref or they loop/re-poll.
+- [Venom shared workspace tier](venom-shared-workspace-tier.md) — membership-checked APIs only, never the sync snapshot; one 403 code drives cache eviction; admin-only items vanish for members server-side.
 - [Generated react-query hook options](generated-hooks-options.md) — passing `{ query: {...} }` to a generated hook requires the generated key getter, or cache identity silently splits.
 - [Venom evidence attribution](venom-evidence-attribution.md) — stamps are server-assigned and re-verified after awaits; client snapshots get foreign stamps nulled; legacy nulls default to owner at read time.
 - [Venom improvement signals](venom-improvement-signals.md) — computed on read against max(lastIteration, dismissal); newer data resurfaces by design, and dismissal fixtures must sit between baseline and dismissal.
-- [Drizzle correlated subqueries](drizzle-correlated-subqueries.md) — raw sql scalar subqueries can silently drop correlation; use a grouped second query and assert exact counts.
+- [Drizzle raw-sql pitfalls](drizzle-correlated-subqueries.md) — raw scalar subqueries drop correlation (grouped second query instead); `= ANY(${jsArray})` throws 42809 — use inArray.
 - [Venom deliberation SSE protocol](venom-deliberation-protocol.md) — the voice/stage/final event contract across server and both clients, and why voice chunks must precede the content branch.
-- [Venom provider availability vs account health](venom-provider-availability.md) — env-available models can still be billing-dead and fail every call with a fast 400; smoke script first, it's not a code bug.
+- [Venom provider availability vs account health](venom-provider-availability.md) — billing-dead keys flip a passive per-process accountHealth overlay: warned catalog, planning skips, non-retryable provider_account error; smoke script verifies.
 - [Venom bonded persona](venom-bonded-persona.md) — persona is server-composed, host-derived text is data never instructions, and the factual core survives every bond level.
 - [Composite lib dist types](workspace-composite-dts.md) — dependents typecheck against dist d.ts while runtime uses src; missing-export errors mean `tsc -b <pkg> --force`, not broken code.
 - [Live two-client sync checks](live-two-client-sync-harness.md) — Backend-API users + 424242 client trust beat headless CAPTCHA; a ~700ms PUT 400 loop means schema-enum fixture drift.
@@ -51,20 +45,68 @@
 - [Post-rebase derived state](post-rebase-derived-state.md) — after any rebase, even a "clean" one: regenerate clients, rebuild lib dist, push schema, reinstall, typecheck touched packages, restart servers.
 - [Scrawl brand vector pipeline](scrawl-brand-vector-pipeline.md) — trace generated tag art locally with npm potrace; Quiver 504s on multi-letter tags and rejects data-URL vectorization.
 - [react-native-svg web ARIA](rn-svg-web-aria.md) — use accessibilityRole/Label on Svg, never bare `accessible`; web forwards it to the DOM as an invalid attribute.
-- [Venom hands-free voice loop](venom-voice-loop.md) — session effects key on visibility with begin/end refs; chunker extends past short sentences; live bubbles hand off to the transcript.
-- [Venom voice restraint](venom-voice-restraint.md) — decide fails open to respond; silence has no UI; wind-down closers must stay pending so wound_down can record.
-- [ShellExec background servers](shellexec-background-servers.md) — detached servers die with the invocation; use workflows or one bounded run with a log file.
+- [Venom hands-free voice loop](venom-voice-loop.md) — begin/end via refs; chunker extends past short sentences; barge-in ducks the shared detector against playback level instead of muting the mic.
+- [Venom voice desktop parity](venom-voice-desktop-parity.md) — pure voice modules are duplicated per app behind one audio-adapter seam; mirror edits, and e2e drives the harness adapter via window events.
+- [Venom voice restraint](venom-voice-restraint.md) — decide fails open to respond; slow decides overlap a held reply behind hold gates; silence has no UI; wind-down closers stay pending.
+- [ShellExec background servers](shellexec-background-servers.md) — detached servers die with the invocation; use workflows or a bounded run with a log file; bracket pgrep polls or they self-match.
 - [Validation port collisions](validation-port-collisions.md) — a stale suite (e.g. the boot-run test workflow) can hold Playwright's webServer port; clear it before re-running completion validation.
+- [Validation parallel writers](validation-parallel-writers.md) — suites run concurrently: a gate must not rewrite shared files (worktree-isolate it); filtered pnpm run skips missing scripts silently.
 - [Venom mobile e2e harness](venom-mobile-e2e-harness.md) — run specs through the package Playwright config; its webServer wires the required EXPO_PUBLIC env, hand-rolled expo start throws at load.
-- [Venom mobile feed surface](venom-mobile-feed-surface.md) — the Feed tab mounts CommunityBriefing; FeedWorkspace in index.tsx is unmounted dead code, so feed UI belongs in the briefing.
-- [Shared dev DB vs background workers](shared-dev-db-test-isolation.md) — the dev server’s rescue workers claim rows tests just created; age-gate rescue claims, in-test stubs cannot stop another process.
-- [Software GL raster budget](software-gl-raster-budget.md) — headless Chromium is SwiftShader at ~1fps on dense shaders; tier by renderer label, not uniform budget, or every browser test freezes.
+- [Venom mobile feed surface](venom-mobile-feed-surface.md) — the Feed tab mounts CommunityBriefing; FeedWorkspace (components/feed/) is unmounted dead code, so feed UI belongs in the briefing.
+- [Venom chat modules](venom-chat-modules.md) — chat is composed modules; per-mode SSE handlers are the seam, and their consume/fall-through order is behavior-critical.
+- [Shared dev DB vs background workers](shared-dev-db-test-isolation.md) — age-gate rescue claims (stubs can't stop another process); rescue tests inject a future clock, never backdate fixtures.
+- [Software GL raster budget](software-gl-raster-budget.md) — SwiftShader freezes on dense shaders: tier by renderer label; per-frame raster is the cost, compile is ~free — budget frames, not caches.
 - [Expo web bundle warm-up for e2e](expo-web-bundle-warm-e2e.md) — webServer readiness beats Metro's first compile; warm the bundle in globalSetup, and never pkill by broad pattern.
 - [Venom scheduled-sync claims](venom-scheduled-sync-claims.md) — the server worker owns due syncs now; clients only display claim state, and both apps' merges must still carry claims.
 - [Stale sibling specs after merges](stale-specs-after-merges.md) — an unrelated suite failing validation may assert behavior a fresh merge deliberately removed; align the spec, don't debug your diff.
-- [Server-owned scheduled sync](venom-scheduled-sync-worker.md) — claim-first CAS re-pacing is the dedup fence; the worker rewrites only state.sources and mirrors client pacing on purpose.
-- [Semantic merge route mangling](semantic-merge-route-mangling.md) — auto-merged rebases can swap schemas/bodies across similar routes with zero markers; audit anchors against both parents and splice from the owning parent.
-- [Headless Clerk credential e2e](clerk-headless-credential-e2e.md) — testing token kills server captcha only; pin client captchaBypass or sign-up stalls on Turnstile; passwords ≥15 chars.
+- [Server-owned scheduled sync](venom-scheduled-sync-worker.md) — claim-first CAS is the dedup fence; measure the due backlog before draining under an adaptive bounded budget; pending lastError never skips.
+- [Semantic merge route mangling](semantic-merge-route-mangling.md) — rebases shred route AND test files with zero markers; a later merge may already hold the repair; sibling branch tips carry the same mangling.
+- [Headless Clerk credential e2e](clerk-headless-credential-e2e.md) — testing token + captchaBypass pin (custom flows too); ≥15-char passwords; merge-gating step with fingerprint sweep; screen-one password ≠ password step.
 - [expo-gl web GLView crash](expo-gl-web-glview-crash.md) — probe WebGL before mounting GLView on web or the whole app blanks; prove GL fallbacks with lost-aware draw/link counters.
-- [Slime adaptive quality](slime-adaptive-quality.md) — rAF pacing needs trimmed means (vsync bimodality); goo captures must pin slimeScale or SwiftShader sheds to the blur floor.
+- [Slime adaptive quality](slime-adaptive-quality.md) — rAF pacing needs trimmed means; captures pin slimeScale; never baseline a pre-shed telemetry snapshot — assert bufferFraction end-state.
+- [Slime display-time modules](venom-slime-display-modules.md) — pipeline order momentum→emphasis→life; modules infer motion from the node stream, pass through at rest, drop absent ids, frozen = rigid/instant.
 - [Playwright suite filtering](playwright-suite-filtering.md) — `pnpm run test:web -- <files>` silently runs the whole suite; filter with `pnpm exec playwright test <files>` from the package dir.
+- [Venom desktop first paint](venom-desktop-first-paint.md) — fonts self-hosted, FCP is Clerk-gated (judge by first-paint); every scanner-visible file ships CSS, so dead components weigh the sheet.
+- [RN nested scroll targets](rn-nested-scroll-targets.md) — onLayout y is parent-relative; sum per-level offsets to land on a nested row, and fall back to the card when the deep id is stale.
+- [Sync failure indicators](sync-failure-indicators.md) — status cycles error→syncing→error during retries; arm unsaved-work UI on failure only, sustain through syncing, clear on synced.
+- [Mirror snapshot sync](venom-mirror-snapshot-sync.md) — GitHub gets tree snapshots, never repl history; workflow paths pin to base sans credential; token-shaped fixtures must be assembled at runtime.
+- [CI PR-gate budget](venom-ci-pr-gate-budget.md) — the mirror's 15-min required jobs are fixed until a workflow credential; the suite is CPU-bound, so CI runs the mobile project only.
+- [CI paths-filter dep coverage](ci-paths-filter-dep-coverage.md) — skip-filters must list every workspace lib an app depends on; a dep added without a filter entry merges untested.
+- [Typecheck validation gap](typecheck-validation-gap.md) — no validation workflow runs tsc and type-stripped tests pass anyway; run package typechecks yourself; re-export blocks don't import.
+- [Venom signed-out auth e2e](venom-signed-out-auth-e2e.md) — auth screens need the venomUiTest=false opt-out; CI=1 Metro doesn't watch files, so prove mutations reached the served bundle.
+- [Reassigned task already merged](reassigned-task-already-merged.md) — a prior interrupted session may have merged the work (Replit-Task-Id trailer); git log -S first, then verify instead of re-implementing.
+- [Venom markdown exports](venom-markdown-exports.md) — filename logic mirrored in three places; generated client returns the body string (headers invisible); withholding is stated inside the document, never filtered client-side.
+- [Venom chat file exchange](venom-chat-file-exchange.md) — file events ride the respond stream and fail open after content; one voice authors files; raw fetch for bytes; pdf-lib is WinAnsi-only; images = handshake + latest-message vision, honest no-vision notes; transcribe sniffs container.
+- [Venom live release anchoring](venom-live-release-anchoring.md) — liveReleaseId moves only in publish/rollback transactions; iterations keep shipped-as stamps; divergence computed at read; baselines are latest-or-live only.
+- [Venom debate settlement](venom-debate-settlement.md) — the Brain absorbs only a cleanly-ended round's closing turn; speaker-attributed turns are filtered from every extraction window.
+- [WebGL still-frame assertions](webgl-still-frame-assertions.md) — rAF-timed readPixels beats preserveDrawingBuffer; assert an alpha-coverage band and prove the pinned tier compiled.
+- [Workspace sync identity boundaries](workspace-sync-identity-boundaries.md) — bind saves to the initiating account; never let a later session authorize stale work.
+- [Expo Worklets under pnpm](expo-worklets-pnpm.md) — own the matching Babel preset, clear Metro caches, and verify served Worklets metadata after Babel changes.
+- [Durable draft cleanup](durable-draft-cleanup.md) — serialize draft autosaves with success cleanup so an in-flight write cannot resurrect filed content.
+- [React Native Web ARIA state](react-native-web-checked-state.md) — mirror checked AND expanded state to explicit aria-* props; accessibilityState.expanded never reaches the DOM.
+- [React Native Web modal focus handoff](rn-web-modal-focus.md) — an animated modal's trap holds focus while it closes and can strand it; hand focus back explicitly on dismiss.
+- [React Native Web keyboard events](react-native-web-keyboard-events.md) — raw key handlers on touchables may be filtered; verify the rendered DOM behavior in a browser.
+- [Venom workspace schema extensions](venom-workspace-schema-extensions.md) — new synced fields must be optional, bounded, normalized, and listed in the cross-device merge or they vanish.
+- [Venom shared merge-rules lib](venom-shared-merge-lib.md) — deletion/tombstone/source/claim/board-stage rules live in one workspace lib; apps re-export, identity+parity tests guard; server copy still separate.
+- [Venom map placement](venom-map-placement.md) — synced positions: integer-only placement/repair on every load+merge path in both apps, never touch lastUpdatedAt; server mirror guarded by pinned fixtures.
+- [Venom signed-in restore merge](venom-restore-merge.md) — merge the device's own snapshot into the cloud restore, scoped to cloud projects, or unsynced work vanishes on reload.
+- [Venom chat follows the selected project](venom-conversation-project-scope.md) — switching project moves the session; messages and in-flight turn UI stay on the chat that asked.
+- [Venom pan-gesture surfaces](venom-pan-gestures.md) — commit from event pageX/Y (gesture.moveX is 0 pre-move); refuse termination or the pager steals drags; queue points that beat measureInWindow.
+- [tsx entry subprocess tests](tsx-entry-subprocess-tests.md) — e2e-test scripts whose main() runs on import: node --import resolved-tsx + fetch-stub preload; bare "tsx" won't resolve from a /tmp cwd.
+- [SSE test stream cleanup](sse-test-stream-cleanup.md) — abort every opened stream in finally; a leaked SSE connection turns any assertion failure into a silent server.close hang that eats the validation budget.
+- [Venom master ontology](venom-master-ontology.md) — anonymous cross-tenant tiers (concepts + template lessons): one consent boundary, ≥3-tenant threshold, retroactive opt-out, reference-data-only reads.
+- [SSE server test teardown](sse-server-test-teardown.md) — client abort can leave loopback SSE sockets open; closeAllConnections in test teardown or the runner wedges silently and masks real failures.
+- [Completion review stale base](completion-review-stale-base.md) — a rejection for "bundled" changes may be merged sibling work; verify with git diff main-repl/main..HEAD, never revert, re-review fresh.
+- [Effect rAF cancel race](effect-raf-cancel-race.md) — setState + rAF-with-cancel-cleanup in one effect silently drops the action under load; act synchronously, verify with repeat-each.
+- [Radix dialog reopen race](radix-dialog-reopen-race.md) — a trigger click during the exit animation is swallowed; specs must wait for role=dialog count 0 before reopening.
+- [Radix controlled dialog focus return](radix-controlled-dialog-focus.md) — trigger-less controlled dialogs drop focus to body on close; capture the opener and restore it in onCloseAutoFocus.
+- [Venom project undo](venom-project-undo-restore.md) — undo never argues with tombstones: the delete commits, restore rebuilds under fresh ids via the shared capture/restore pair.
+- [Venom user-centric chat context](venom-user-centric-chat-context.md) — chat spans personal + all memberships server-side; selection only files/SOPs/boards; active scope fails hard, others drop soft.
+- [Venom model selection policy](venom-model-selection-policy.md) — server-resolved manual/auto policy; auto plans from the whole healthy catalog and suppresses explicit picks; ranks stay server-private ($-tier only).
+- [Venom usage metering](venom-usage-metering.md) — new AI call sites must wire onUsage/recordVenomUsage themselves or go silently unmetered; micro-dollars server-side, dollars + branded names out.
+- [Venom canon teaching tier](venom-canon-tier.md) — server-designated super admins author global canon; opaque denial, teach flow fails open to chat, prompts get bounded reference envelopes only.
+- [Venom app AI gateway](venom-app-ai-gateway.md) — credentials only via the provider boundary; alias-only surface; one canonical app-AI ledger; caps enforce by reservation + per-app locks, never read-then-act.
+- [Drizzle seed array typing](drizzle-seed-array-typing.md) — type literal seed rows with typeof table.$inferInsert; drizzle-zod insert types widen enum-ish text columns.
+- [Venom knowledge auto-sort](venom-knowledge-auto-sort.md) — server classifies at extraction; only visibility-narrowing moves are automatic, every personal-store exit is accept-gated suggestion.
+- [Venom mobile Brain surfaces](venom-mobile-brain-surfaces.md) — the Brain tab (KnowledgeWorkspace) and the /knowledge route are separate surfaces; cluster-visibility rules must hold on both.
+- [Metro image-size security compatibility](metro-image-size-security.md) — Metro requires a callable path-or-buffer image reader; keep its bounded local shim until a safe compatible upstream release exists.

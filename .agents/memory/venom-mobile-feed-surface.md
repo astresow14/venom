@@ -1,9 +1,9 @@
 ---
 name: Venom mobile feed surface
-description: The mobile Feed tab renders CommunityBriefing; FeedWorkspace in index.tsx is unmounted dead code
+description: The mobile Feed tab renders CommunityBriefing; FeedWorkspace (components/feed/) is unmounted dead code
 ---
 
-The mobile Feed tab mounts `CommunityBriefing`; the `FeedWorkspace` component inside `app/index.tsx` is dead code left from a feed redesign and never renders.
+The mobile Feed tab mounts `CommunityBriefing`; the `FeedWorkspace` component (now `components/feed/FeedWorkspace.tsx`, formerly inline in `app/index.tsx`) is dead code left from a feed redesign and never renders — it is deliberately not imported anywhere.
 
 **Why:** Feed UI added to the dead component typechecks and reads as complete but never appears at runtime; only exercising the live tab exposes the miss.
 

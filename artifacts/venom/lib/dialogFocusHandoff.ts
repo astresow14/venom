@@ -12,9 +12,14 @@
  * expire quickly so an unclaimed handoff (for example when the navigation
  * never happened) cannot yank focus during an unrelated visit later.
  */
-export type FocusHandoffTarget = "project-switcher";
+export type FocusHandoffTarget = "project-switcher" | "build-run";
 
-const HANDOFF_TTL_MS = 3000;
+// The claim happens on the destination view's very next mount commit — the
+// navigation that follows a request is programmatic, with no user action in
+// between — so the TTL only guards a navigation that never happened. It must
+// therefore outlast a CPU-starved commit (loaded CI containers stretch one
+// past 3s) while staying far below human-scale "unrelated later visit" time.
+const HANDOFF_TTL_MS = 10_000;
 
 let pending: { target: FocusHandoffTarget; requestedAt: number } | null = null;
 

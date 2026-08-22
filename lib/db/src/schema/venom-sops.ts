@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   integer,
   jsonb,
@@ -35,6 +36,19 @@ export const venomSopsTable = pgTable(
     content: jsonb("content").$type<VenomSopContentRecord>().notNull(),
     activeRevisionId: uuid("active_revision_id"),
     activeRevisionNumber: integer("active_revision_number"),
+    /**
+     * Sensitivity lock. Meaningful on workspace-tier SOPs (owner key
+     * "workspace:<uuid>"): locked SOPs are excluded from exports when the
+     * workspace's export policy forbids sensitive content leaving.
+     */
+    sensitive: boolean("sensitive").notNull().default(false),
+    /**
+     * Admin-only restriction. Meaningful on workspace-tier SOPs: restricted
+     * SOPs are visible only to workspace admins — filtered out of member
+     * reads, member chat context, and member exports on the server. Only
+     * admins may set or clear it.
+     */
+    adminOnly: boolean("admin_only").notNull().default(false),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

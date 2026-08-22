@@ -11,6 +11,7 @@
 import { Router, type IRouter } from "express";
 import { getAuth } from "@clerk/express";
 import { resolveVenomIdentity } from "../lib/venom-identity";
+import { isSuperAdmin } from "../lib/venom-super-admins";
 
 const router: IRouter = Router();
 
@@ -22,8 +23,15 @@ router.get("/venom/identity", async (req, res): Promise<void> => {
   }
 
   try {
-    const identity = await resolveVenomIdentity(auth.userId);
-    res.json(identity);
+    // The super admin flag rides the identity record clients already fetch.
+    // It is derived from the durable designation table on every request —
+    // the server re-verifies the role separately for each privileged call,
+    // so this flag only ever gates what the UI offers to show.
+    const [identity, superAdmin] = await Promise.all([
+      resolveVenomIdentity(auth.userId),
+      isSuperAdmin(auth.userId),
+    ]);
+    res.json({ ...identity, superAdmin });
   } catch (error) {
     // Only storage failures reach here (auth-provider failures degrade to
     // a stale or all-null identity inside the resolver, without logging).

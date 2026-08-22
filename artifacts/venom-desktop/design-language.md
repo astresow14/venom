@@ -53,6 +53,13 @@ Rules:
 - **Scale.** The wordmark holds down to roughly 24px tall; below that use
   the V mark alone (favicon-size surfaces). Don't letter-space, stretch,
   recolour, or redraw the marks per surface.
+- **Motion.** Marks rest still. Sanctioned exceptions: the route-fallback
+  pulse, and the one-time draw-on reveal on the landing hero
+  (`src/components/venom-wordmark-reveal.tsx`; mobile auth brand row has a
+  wipe counterpart). A reveal plays once on mount (~1s, ease-out, no loop),
+  stays monochrome (mask/clip only — no glows, fades to colour, or echoes),
+  reserves the mark's final size, and renders the finished mark immediately
+  under `prefers-reduced-motion`.
 
 ## Typography
 

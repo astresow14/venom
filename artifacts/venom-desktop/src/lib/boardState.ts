@@ -1,11 +1,22 @@
 import type {
   VenomKanbanField,
   VenomKanbanFieldType,
-  VenomKanbanStage,
   VenomProject,
   VenomTask,
   VenomTaskStatus,
 } from '@workspace/api-client-react';
+import {
+  createDefaultBoardStages,
+  normalizeBoardStages,
+} from '@workspace/venom-workspace-merge';
+
+// Stage rules are shared with the phone app via @workspace/venom-workspace-merge
+// so the two normalizers cannot drift: a drifted desktop copy used to silently
+// drop duplicate-named columns the phone still showed, and the board
+// flip-flopped through sync forever. Re-exported (from the imported bindings,
+// which the code below also calls) for existing call sites and the cross-app
+// identity tests in workspaceMergeRules.test.mjs.
+export { createDefaultBoardStages, normalizeBoardStages };
 
 export type BoardValue = string | number | boolean;
 
@@ -42,103 +53,6 @@ export function isValidBoardDate(value: string) {
     date.getUTCMonth() === month - 1 &&
     date.getUTCDate() === day
   );
-}
-
-function stableProjectSuffix(projectId: string) {
-  let hash = 2166136261;
-  for (const character of projectId) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
-}
-
-export function createDefaultBoardStages(
-  projectId: string,
-  updatedAt: number,
-): VenomKanbanStage[] {
-  const suffix = stableProjectSuffix(projectId);
-  return [
-    {
-      id: `stage_todo_${suffix}`,
-      name: 'To Do',
-      position: 0,
-      isDone: false,
-      updatedAt,
-    },
-    {
-      id: `stage_active_${suffix}`,
-      name: 'Active',
-      position: 1,
-      isDone: false,
-      updatedAt,
-    },
-    {
-      id: `stage_done_${suffix}`,
-      name: 'Done',
-      position: 2,
-      isDone: true,
-      updatedAt,
-    },
-  ];
-}
-
-function normalizeStages(
-  projectId: string,
-  value: unknown,
-  projectUpdatedAt: number,
-) {
-  const seenIds = new Set<string>();
-  const seenNames = new Set<string>();
-  const stages = Array.isArray(value)
-    ? value.flatMap((candidate, index): VenomKanbanStage[] => {
-        if (!isRecord(candidate)) return [];
-        const id = boundedText(candidate.id, 120);
-        const name = boundedText(candidate.name, 80);
-        const normalizedName = name.toLocaleLowerCase();
-        if (
-          !id ||
-          !name ||
-          seenIds.has(id) ||
-          seenNames.has(normalizedName)
-        ) {
-          return [];
-        }
-        seenIds.add(id);
-        seenNames.add(normalizedName);
-        return [
-          {
-            id,
-            name,
-            position: finiteTimestamp(candidate.position, index),
-            isDone: candidate.isDone === true,
-            updatedAt: finiteTimestamp(candidate.updatedAt, projectUpdatedAt),
-          },
-        ];
-      })
-    : [];
-
-  const available =
-    stages.length > 0
-      ? stages
-      : createDefaultBoardStages(projectId, projectUpdatedAt);
-  const ordered = available
-    .sort(
-      (left, right) =>
-        left.position - right.position || left.id.localeCompare(right.id),
-    )
-    .map((stage, position) => ({ ...stage, position }));
-  if (!ordered.some((stage) => stage.isDone)) {
-    ordered[ordered.length - 1] = {
-      ...ordered[ordered.length - 1],
-      isDone: true,
-      updatedAt: Math.max(
-        ordered[ordered.length - 1].updatedAt,
-        projectUpdatedAt,
-      ),
-    };
-  }
-  return ordered;
 }
 
 function normalizeFields(value: unknown, projectUpdatedAt: number) {
@@ -221,7 +135,7 @@ export function normalizeBoardValue(
 
 export function normalizeProjectBoard(project: VenomProject): VenomProject {
   const projectUpdatedAt = finiteTimestamp(project.updatedAt, Date.now());
-  const boardStages = normalizeStages(
+  const boardStages = normalizeBoardStages(
     project.id,
     (project as unknown as Record<string, unknown>).boardStages,
     projectUpdatedAt,

@@ -15,6 +15,12 @@ export const RATE_LIMITS: Record<string, { windowMs: number; max: number }> = {
   reply_post: { windowMs: 60_000, max: 10 },
   vote: { windowMs: 60_000, max: 30 },
   report: { windowMs: 60_000, max: 3 },
+  /**
+   * Public, unauthenticated share-link resolution — keyed by caller IP, not
+   * Clerk user id. Generous: legitimate embeds refetch rarely, but the
+   * endpoint hits the database and must not be a free enumeration oracle.
+   */
+  app_share_resolve: { windowMs: 60_000, max: 240 },
 };
 
 /**

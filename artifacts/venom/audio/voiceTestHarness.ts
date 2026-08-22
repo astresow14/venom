@@ -5,8 +5,9 @@
  * UI-test mode the voice loop runs against this adapter. Tests drive capture
  * through window events and read playback activity from a window-scoped log:
  *
- *   window.dispatchEvent(new CustomEvent('venom-voice:utterance',
- *     { detail: { durationMs: 1200 } }))          → speech-start + utterance
+ *   Voice mode's record button calls finish()     → speech-start + utterance
+ *   (window).__venomVoiceNextUtterance = { durationMs: 100 }
+ *                                              → makes the next finish short
  *   window.dispatchEvent(new Event('venom-voice:deny-mic'))
  *     or set (window).__venomVoiceDenyMic = true  → permission_denied
  *   (window).__venomVoiceHoldPlayback = true      → 'finished' waits for
@@ -28,6 +29,7 @@ type HarnessWindow = typeof globalThis & {
   __venomVoiceDenyMic?: boolean;
   __venomVoiceUnsupported?: boolean;
   __venomVoiceHoldPlayback?: boolean;
+  __venomVoiceNextUtterance?: { audioBase64?: string; durationMs?: number };
   __venomVoiceCaptureState?: 'idle' | 'listening' | 'paused' | 'stopped';
   __venomVoicePlaybackLog?: {
     begun: Array<{ sampleRate: number }>;
@@ -65,11 +67,15 @@ function createTestCapture(
     harnessWindow.__venomVoiceCaptureState = state;
   };
 
-  const onUtterance = (event: Event) => {
-    if (!running || paused) return;
-    const detail = (event as CustomEvent).detail as
-      | { audioBase64?: string; durationMs?: number }
-      | undefined;
+  const emitUtterance = (event?: Event, allowPaused = false) => {
+    if (!running || (paused && !allowPaused)) return;
+    const detail =
+      (event
+        ? ((event as CustomEvent).detail as
+            | { audioBase64?: string; durationMs?: number }
+            | undefined)
+        : undefined) ?? harnessWindow.__venomVoiceNextUtterance;
+    harnessWindow.__venomVoiceNextUtterance = undefined;
     onEvent({ type: 'speech-start' });
     onEvent({
       type: 'utterance',
@@ -103,6 +109,10 @@ function createTestCapture(
     });
   };
 
+  // Creating the adapter is enough for a test to observe that voice is ready;
+  // a real microphone is not acquired until the first tap.
+  setState('idle');
+
   return {
     async start() {
       if (harnessWindow.__venomVoiceDenyMic) {
@@ -117,7 +127,7 @@ function createTestCapture(
       running = true;
       paused = false;
       setState('listening');
-      addEventListener('venom-voice:utterance', onUtterance);
+      addEventListener('venom-voice:utterance', emitUtterance);
       addEventListener('venom-voice:speech-start', onSpeechStart);
       addEventListener('venom-voice:level', onLevel);
       addEventListener('venom-voice:deny-mic', onDeny);
@@ -127,16 +137,25 @@ function createTestCapture(
       paused = true;
       setState('paused');
     },
+    finish() {
+      if (!running || paused) return;
+      // Match browser and native adapters: a completed recording is paused
+      // before its utterance is delivered to the conversation loop.
+      paused = true;
+      setState('paused');
+      emitUtterance(undefined, true);
+    },
     resume() {
       if (!running) return;
       paused = false;
       setState('listening');
     },
+    setDucking() {},
     stop() {
       running = false;
       paused = false;
       setState('stopped');
-      removeEventListener('venom-voice:utterance', onUtterance);
+      removeEventListener('venom-voice:utterance', emitUtterance);
       removeEventListener('venom-voice:speech-start', onSpeechStart);
       removeEventListener('venom-voice:level', onLevel);
       removeEventListener('venom-voice:deny-mic', onDeny);

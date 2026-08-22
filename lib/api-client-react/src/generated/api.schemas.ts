@@ -35,6 +35,11 @@ export const VenomAppSourceType = {
   zip: 'zip',
 } as const;
 
+/**
+ * @pattern ^[0-9a-fA-F-]{36}$
+ */
+export type Uuid = string;
+
 export interface VenomAppImprovementSignal {
   since: string;
   /** @minimum 0 */
@@ -100,7 +105,17 @@ export interface VenomApp {
   linkedProjectName: string | null;
   /** @minimum 0 */
   latestIterationNumber: number;
+  liveReleaseId: Uuid | null;
+  liveIterationNumber: number | null;
+  /** @nullable */
+  livePublishedAt: string | null;
   improvementSignal: VenomAppImprovementSignal | null;
+  templateId: Uuid | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  templateName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -280,11 +295,6 @@ export interface VenomDeploymentLink {
   createdAt: string;
 }
 
-/**
- * @pattern ^[0-9a-fA-F-]{36}$
- */
-export type Uuid = string;
-
 export type ProvisioningReleaseStatus = typeof ProvisioningReleaseStatus[keyof typeof ProvisioningReleaseStatus];
 
 
@@ -377,6 +387,8 @@ export interface VenomAppIteration {
      */
   changesSummary: string | null;
   baselineIterationNumber: number | null;
+  releaseId: Uuid | null;
+  isLive: boolean;
   /**
      * @minLength 1
      * @maxLength 200
@@ -490,6 +502,23 @@ export interface VenomAppIterationChanges {
   summary: string;
 }
 
+export interface VenomAppLiveRelease {
+  releaseId: Uuid;
+  iterationId: Uuid | null;
+  iterationNumber: number | null;
+  /**
+     * @maxLength 160
+     * @nullable
+     */
+  packageTitle: string | null;
+  /** @nullable */
+  publishedAt: string | null;
+  restoredByRollback: boolean;
+  resolvable: boolean;
+  baselineSelectable: boolean;
+  changes: VenomAppIterationChanges | null;
+}
+
 export type VenomAppIterationContextLinkedProject = {
   /**
      * @minLength 1
@@ -526,6 +555,16 @@ export type VenomAppIterationContextSuggestedSopsItem = {
   title: string;
 };
 
+export type VenomAppIterationContextDivergence = typeof VenomAppIterationContextDivergence[keyof typeof VenomAppIterationContextDivergence] | null;
+
+
+export const VenomAppIterationContextDivergence = {
+  in_sync: 'in_sync',
+  live_behind: 'live_behind',
+  live_ahead: 'live_ahead',
+  live_unversioned: 'live_unversioned',
+} as const;
+
 export type VenomAppIterationContextBlockedReason = typeof VenomAppIterationContextBlockedReason[keyof typeof VenomAppIterationContextBlockedReason] | null;
 
 
@@ -547,6 +586,8 @@ export interface VenomAppIterationContext {
   /** @maxItems 20 */
   suggestedSops: VenomAppIterationContextSuggestedSopsItem[];
   changes: VenomAppIterationChanges | null;
+  live: VenomAppLiveRelease | null;
+  divergence: VenomAppIterationContextDivergence;
   canIterate: boolean;
   blockedReason: VenomAppIterationContextBlockedReason;
 }
@@ -567,6 +608,7 @@ export interface VenomAppIterationInput {
      * @pattern ^[A-Za-z0-9_-]+$
      */
   idempotencyKey: string;
+  baselineIterationId?: Uuid;
 }
 
 export interface VenomImportInput {
@@ -645,6 +687,8 @@ export interface VenomBuildRunInput {
   projectId: string | null;
   /** @maxItems 20 */
   sopRevisionIds: Uuid[];
+  /** Optional template lineage for runs that started from a global template. When the run is pinned to an app that already carries template lineage, the app's lineage wins. */
+  templateId?: Uuid | null;
   /**
      * @minLength 16
      * @maxLength 120
@@ -685,6 +729,7 @@ export interface VenomBuildRequestSnapshot {
      * @nullable
      */
   changesSummary: string | null;
+  templateId: Uuid | null;
 }
 
 export interface VenomBuildSourceReference {
@@ -839,6 +884,7 @@ export type VenomBuildRunEventEventType = typeof VenomBuildRunEventEventType[key
 export const VenomBuildRunEventEventType = {
   queued: 'queued',
   preparing: 'preparing',
+  network_guidance: 'network_guidance',
   review_required: 'review_required',
   revised: 'revised',
   approved: 'approved',
@@ -886,6 +932,7 @@ export interface VenomBuildRunSummary {
   /** @minimum 0 */
   currentRevisionNumber: number;
   approvedRevisionId: Uuid | null;
+  templateId: Uuid | null;
   /**
      * @maxLength 240
      * @nullable
@@ -921,6 +968,163 @@ export type VenomBuildRun = VenomBuildRunSummary & ({
   /** @nullable */
   completedAt: string | null;
 });
+
+export type VenomBuildTemplateCategory = typeof VenomBuildTemplateCategory[keyof typeof VenomBuildTemplateCategory];
+
+
+export const VenomBuildTemplateCategory = {
+  app: 'app',
+  widget: 'widget',
+} as const;
+
+export type VenomBuildTemplateStatus = typeof VenomBuildTemplateStatus[keyof typeof VenomBuildTemplateStatus];
+
+
+export const VenomBuildTemplateStatus = {
+  active: 'active',
+  retired: 'retired',
+} as const;
+
+export interface VenomBuildTemplateSummary {
+  id: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  slug: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  category: VenomBuildTemplateCategory;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  description: string;
+  targetType: VenomBuildTargetType;
+  hasExamplePackage: boolean;
+  updatedAt: string;
+}
+
+export type VenomBuildTemplate = VenomBuildTemplateSummary & ({
+  /** @maxLength 2000 */
+  previewSummary: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  targetName: string;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  requirements: string;
+  /** @maxLength 4000 */
+  constraints: string;
+  /** @maxLength 3000 */
+  brandDirection: string;
+  /**
+     * @maxItems 40
+     * @items.minLength 1
+     * @items.maxLength 800
+     */
+  acceptanceChecks: string[];
+  examplePackage: VenomBuildPackage | null;
+  status: VenomBuildTemplateStatus;
+  /**
+     * How many concept-level lessons this template has learned from the anonymous builder network (opted-in accounts only, each lesson seen across several distinct accounts). A plain count — never tenant traces.
+     * @minimum 0
+     */
+  networkImprovementCount: number;
+});
+
+/**
+ * Ready-to-edit build-run form values derived from a template.
+ */
+export interface VenomBuildTemplatePrefill {
+  targetType: VenomBuildTargetType;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  targetName: string;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  requirements: string;
+  /** @maxLength 4000 */
+  constraints: string;
+  /** @maxLength 3000 */
+  brandDirection: string;
+}
+
+export interface VenomBuildTemplateUseInput {
+  /**
+     * Optional app name override; defaults to the template's target name.
+     * @minLength 1
+     * @maxLength 120
+     */
+  name?: string;
+}
+
+export interface VenomBuildTemplateUseResult {
+  app: VenomApp;
+  templateId: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  templateName: string;
+  prefill: VenomBuildTemplatePrefill;
+}
+
+export interface VenomBuildTemplateUpsert {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  category: VenomBuildTemplateCategory;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  description: string;
+  /** @maxLength 2000 */
+  previewSummary?: string;
+  targetType: VenomBuildTargetType;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  targetName: string;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  requirements: string;
+  /** @maxLength 4000 */
+  constraints?: string;
+  /** @maxLength 3000 */
+  brandDirection?: string;
+  /**
+     * @maxItems 40
+     * @items.minLength 1
+     * @items.maxLength 800
+     */
+  acceptanceChecks?: string[];
+  examplePackage?: VenomBuildPackage | null;
+  status?: VenomBuildTemplateStatus;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  sortOrder?: number;
+}
 
 export interface VenomBuildCancellationInput {
   /**
@@ -965,6 +1169,12 @@ export const VenomChatMessageRole = {
 export interface VenomChatMessage {
   role: VenomChatMessageRole;
   content: string;
+  /**
+     * Ids of ready chat files attached to this message. The server re-verifies ownership against the file store; unknown or foreign ids are ignored rather than rejected.
+     * @maxItems 5
+     * @items.pattern ^[A-Za-z0-9-]{1,64}$
+     */
+  attachmentIds?: string[];
 }
 
 export type VenomModelId = typeof VenomModelId[keyof typeof VenomModelId];
@@ -1075,6 +1285,23 @@ export interface VenomBlendWeight {
   weight: number;
 }
 
+export type VenomVoiceModelPickVoiceId = typeof VenomVoiceModelPickVoiceId[keyof typeof VenomVoiceModelPickVoiceId];
+
+
+export const VenomVoiceModelPickVoiceId = {
+  direct: 'direct',
+  skeptic: 'skeptic',
+  evidence: 'evidence',
+} as const;
+
+/**
+ * Assigns one deliberation voice to a specific managed model. Opposing voices must run on different LLM providers; the server rejects picks that would make a model argue itself.
+ */
+export interface VenomVoiceModelPick {
+  voiceId: VenomVoiceModelPickVoiceId;
+  modelId: VenomModelId;
+}
+
 export interface VenomChatRequest {
   /**
      * @minItems 1
@@ -1088,7 +1315,6 @@ export interface VenomChatRequest {
      * @maxLength 160
      */
   projectId: string;
-  workspaceId?: Uuid;
   modelId?: VenomModelId;
   /**
      * @maxItems 200
@@ -1105,6 +1331,121 @@ export interface VenomChatRequest {
      * @maxItems 3
      */
   blend?: VenomBlendWeight[];
+  /**
+     * Explicit per-voice model choices for verify mode: which model plays First take, Skeptic, and Evidence. Voices left out keep automatic assignment, and a pick naming a model that is currently unusable falls back to automatic assignment for that voice. First take and Skeptic must land on different LLM providers — a model can't argue itself — while Evidence is neutral and may share. Debate corners are chosen through `blend` entry ids instead. Ignored in talk mode.
+     * @maxItems 3
+     */
+  voiceModels?: VenomVoiceModelPick[];
+}
+
+/**
+ * upload = host gave Venom a file; generated = Venom authored it.
+ */
+export type VenomChatFileKind = typeof VenomChatFileKind[keyof typeof VenomChatFileKind];
+
+
+export const VenomChatFileKind = {
+  upload: 'upload',
+  generated: 'generated',
+} as const;
+
+export type VenomChatFileStatus = typeof VenomChatFileStatus[keyof typeof VenomChatFileStatus];
+
+
+export const VenomChatFileStatus = {
+  pending: 'pending',
+  ready: 'ready',
+} as const;
+
+/**
+ * A file exchanged through chat — uploaded by the host or generated by Venom. Extracted text never leaves the server; clients fetch the original bytes through the owner-checked download route.
+ */
+export interface VenomChatFile {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  contentType: string;
+  /**
+     * @minimum 0
+     * @maximum 10485760
+     */
+  size: number;
+  kind: VenomChatFileKind;
+  status: VenomChatFileStatus;
+  /** Whether readable text was extracted for model context. */
+  textExtracted: boolean;
+  /** @minimum 0 */
+  createdAt: number;
+}
+
+export interface VenomChatFileUploadRequest {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  contentType: string;
+  /**
+     * @minimum 1
+     * @maximum 10485760
+     */
+  size: number;
+}
+
+export interface VenomChatFileUploadTicket {
+  file: VenomChatFile;
+  /** @maxLength 8192 */
+  uploadUrl: string;
+  maxBytes: 10485760;
+}
+
+/**
+ * Compact attachment stamp carried on a chat message. The id resolves to a VenomChatFile; display metadata is denormalized so history renders without a lookup. Attachment stamps ride the synced workspace blob, so they must stay tiny.
+ */
+export interface VenomMessageAttachment {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  contentType: string;
+  /**
+     * @minimum 0
+     * @maximum 10485760
+     */
+  size: number;
+  kind: VenomChatFileKind;
+  /**
+     * Tiny inline preview (JPEG/PNG/WEBP data URL) for image attachments, generated client-side at attach time. Bounded hard because stamps ride the synced workspace blob; full image bytes never sync.
+     * @minLength 1
+     * @maxLength 24000
+     * @pattern ^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$
+     */
+  thumbnail?: string;
 }
 
 export type VenomVoiceId = typeof VenomVoiceId[keyof typeof VenomVoiceId];
@@ -1158,6 +1499,29 @@ export const VenomManagedModelFamily = {
   Grok: 'Grok',
 } as const;
 
+/**
+ * Account-level health observed on live provider calls. "unfunded" means the credential is configured but the account behind it cannot pay for replies (billing-class failures), so the model is available yet not plainly Ready. Absent means no such evidence.
+ */
+export type VenomManagedModelAccountHealth = typeof VenomManagedModelAccountHealth[keyof typeof VenomManagedModelAccountHealth];
+
+
+export const VenomManagedModelAccountHealth = {
+  ok: 'ok',
+  unfunded: 'unfunded',
+} as const;
+
+/**
+ * Coarse relative running cost of a managed model, for comparing models against each other only. Deliberately never a price, currency amount, or provider SKU.
+ */
+export type VenomModelCostTier = typeof VenomModelCostTier[keyof typeof VenomModelCostTier];
+
+
+export const VenomModelCostTier = {
+  $: '$',
+  $$: '$$',
+  $$$: '$$$',
+} as const;
+
 export interface VenomManagedModel {
   id: VenomModelId;
   provider: VenomManagedModelProvider;
@@ -1178,7 +1542,22 @@ export interface VenomManagedModel {
      * @maxLength 160
      */
   availabilityText: string;
+  /** Account-level health observed on live provider calls. "unfunded" means the credential is configured but the account behind it cannot pay for replies (billing-class failures), so the model is available yet not plainly Ready. Absent means no such evidence. */
+  accountHealth?: VenomManagedModelAccountHealth;
+  costTier?: VenomModelCostTier;
 }
+
+/**
+ * Account-level model selection policy. "manual" (and absent) keeps the user's explicit model picks exactly as before. In the auto modes the server chooses the serving models on every request — cheapest healthy models for "auto-cheapest", the most capable for "auto-max-power" — and keeps that choice current as availability and account health change.
+ */
+export type VenomModelSelectionPolicy = typeof VenomModelSelectionPolicy[keyof typeof VenomModelSelectionPolicy];
+
+
+export const VenomModelSelectionPolicy = {
+  manual: 'manual',
+  'auto-cheapest': 'auto-cheapest',
+  'auto-max-power': 'auto-max-power',
+} as const;
 
 export interface VenomModelPreferences {
   /**
@@ -1188,6 +1567,7 @@ export interface VenomModelPreferences {
   enabledModelIds: VenomModelId[];
   defaultModelId: VenomModelId;
   activeModelId: VenomModelId;
+  selectionPolicy?: VenomModelSelectionPolicy;
   /** @minimum 0 */
   updatedAt: number;
 }
@@ -1368,6 +1748,207 @@ export interface VenomVoiceDecisionOutcomeResult {
   recorded: boolean;
 }
 
+/**
+ * A proportion together with the sample it was computed from. "settled" counts only decisions whose outcome landed in one of the two buckets being compared; "hits" is how many landed in the tracked bucket. rate is hits/settled, or null when nothing has settled yet — no data is never reported as 0%.
+ */
+export interface VenomVoiceOutcomeRate {
+  /** @minimum 0 */
+  settled: number;
+  /** @minimum 0 */
+  hits: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     * @nullable
+     */
+  rate: number | null;
+}
+
+export type VenomVoiceDecisionRateBlockDecisionCounts = {
+  /** @minimum 0 */
+  respond: number;
+  /** @minimum 0 */
+  acknowledge: number;
+  /** @minimum 0 */
+  silent: number;
+};
+
+export type VenomVoiceDecisionRateBlockSourceCounts = {
+  /** @minimum 0 */
+  heuristic: number;
+  /** @minimum 0 */
+  model: number;
+  /** @minimum 0 */
+  fallback: number;
+};
+
+/**
+ * Decision/outcome evidence for one slice of the log. quietRegret reads silent non-wind-down decisions (re-ask within the follow-up window vs stayed quiet); spokenInterruption reads respond/acknowledge non-wind- down decisions (reply interrupted vs completed); windDownClean reads wind-down-flagged decisions (session eased closed vs the user re-engaging).
+ */
+export interface VenomVoiceDecisionRateBlock {
+  /** @minimum 0 */
+  decisions: number;
+  /** @minimum 0 */
+  withOutcome: number;
+  /**
+     * Share of decisions whose outcome was reported; 0 when the slice is empty.
+     * @minimum 0
+     * @maximum 1
+     */
+  outcomeCoverage: number;
+  decisionCounts: VenomVoiceDecisionRateBlockDecisionCounts;
+  sourceCounts: VenomVoiceDecisionRateBlockSourceCounts;
+  /** @minimum 0 */
+  windDownFlagged: number;
+  quietRegret: VenomVoiceOutcomeRate;
+  spokenInterruption: VenomVoiceOutcomeRate;
+  windDownClean: VenomVoiceOutcomeRate;
+}
+
+export interface VenomVoiceTalkativenessRates {
+  /**
+     * chatty, balanced, or reserved (unrecognized historical values pass through verbatim).
+     * @minLength 1
+     * @maxLength 32
+     */
+  talkativeness: string;
+  rates: VenomVoiceDecisionRateBlock;
+}
+
+/**
+ * One observed talkativeness x decision x outcome combination and how often it occurred. windDown and source ride along so goodbye cells and judge-made cells can be read separately; outcome is "pending" for decisions still awaiting their outcome report.
+ */
+export interface VenomVoiceDecisionCell {
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  talkativeness: string;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  decision: string;
+  windDown: boolean;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  source: string;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  outcome: string;
+  /** @minimum 1 */
+  count: number;
+}
+
+/**
+ * The heuristic thresholds in force when the summary was generated (named constants in venom-voice-restraint.ts and the decision store), echoed so aggregate numbers are always read against the rules that produced them.
+ */
+export interface VenomVoiceRestraintThresholds {
+  /** @minimum 1 */
+  longUtteranceWords: number;
+  /** @minimum 1 */
+  backchannelMaxWords: number;
+  /** @minimum 1 */
+  shortGratitudeMaxWords: number;
+  /** @minimum 1 */
+  botAnswerMaxWords: number;
+  /** @minimum 1 */
+  shortTurnMaxWords: number;
+  /** @minimum 0 */
+  windDownTrailingShortTurns: number;
+  /** @minimum 1 */
+  retentionDays: number;
+  /** @minimum 1 */
+  maxRowsPerUser: number;
+  /** @minimum 1 */
+  transcriptPreviewChars: number;
+}
+
+export interface VenomVoiceDecisionSummary {
+  /**
+     * @minimum 1
+     * @maximum 90
+     */
+  windowDays: number;
+  /** Decisions created at or after this moment were aggregated. */
+  since: string;
+  generatedAt: string;
+  overall: VenomVoiceDecisionRateBlock;
+  /** @maxItems 12 */
+  byTalkativeness: VenomVoiceTalkativenessRates[];
+  /**
+     * Decisions x outcomes x talkativeness counts, deterministic order, observed combinations only.
+     * @maxItems 400
+     */
+  cells: VenomVoiceDecisionCell[];
+  thresholds: VenomVoiceRestraintThresholds;
+}
+
+export interface VenomUsageTotals {
+  /**
+     * Dollars, rounded to micro-dollar precision.
+     * @minimum 0
+     */
+  costUsd: number;
+  /** @minimum 0 */
+  requests: number;
+  /** @minimum 0 */
+  promptTokens: number;
+  /** @minimum 0 */
+  outputTokens: number;
+}
+
+export interface VenomUsageDay {
+  date: string;
+  /** @minimum 0 */
+  costUsd: number;
+  /** @minimum 0 */
+  requests: number;
+}
+
+export interface VenomUsageModelBreakdown {
+  /**
+     * Venom-branded model alias — never a provider SKU.
+     * @maxLength 80
+     */
+  modelId: string;
+  /** @maxLength 120 */
+  modelName: string;
+  /** @minimum 0 */
+  costUsd: number;
+  /** @minimum 0 */
+  requests: number;
+  /** @minimum 0 */
+  promptTokens: number;
+  /** @minimum 0 */
+  outputTokens: number;
+  hasEstimates: boolean;
+}
+
+export interface VenomUsageSummary {
+  /** First day of the summarized period (UTC), inclusive. */
+  periodStart: string;
+  /** End day of the summarized period (UTC), exclusive. */
+  periodEnd: string;
+  totals: VenomUsageTotals;
+  /** True when any entry in the period is a flagged estimate rather than provider-reported usage (interrupted streams, providers that omit usage metadata, and voice audio legs). */
+  hasEstimates: boolean;
+  /**
+     * Per-day spend, oldest first; days without usage are omitted.
+     * @maxItems 31
+     */
+  daily: VenomUsageDay[];
+  /**
+     * Per-model breakdown under Venom-branded names, highest spend first.
+     * @maxItems 40
+     */
+  models: VenomUsageModelBreakdown[];
+}
+
 export interface KnowledgeConversation {
   /**
      * @minLength 1
@@ -1415,9 +1996,8 @@ export interface KnowledgeExtractionInput {
      * @maxItems 48
      */
   messages: KnowledgeMessage[];
-  /** When true, the server files the extracted insights into the signed-in user's ontology store and returns the touched concepts in `filed`. Clients that omit this keep filing locally. */
+  /** When true, the server files the extracted insights into the signed-in user's ontology store and returns the touched concepts in `filed`. The server decides scope per cluster (personal, a workspace the caller belongs to, or the private Unsorted holding area); clients no longer pick a destination. Clients that omit this keep filing locally. */
   file?: boolean;
-  workspaceId?: Uuid;
 }
 
 export interface KnowledgeCandidate {
@@ -1494,6 +2074,8 @@ export interface VenomKnowledgeSource {
      * @nullable
      */
   capturedAt?: number | null;
+  /** Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace's export policy forbids sensitive content leaving. */
+  sensitive?: boolean;
 }
 
 export interface VenomKnowledgeCluster {
@@ -1540,6 +2122,57 @@ export interface VenomKnowledgeCluster {
   lastUpdatedAt: number;
   /** @maxItems 8 */
   sources: VenomKnowledgeSource[];
+  /** Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace's export policy forbids sensitive content leaving. */
+  sensitive?: boolean;
+  /** Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin. */
+  adminOnly?: boolean;
+  /** Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author's own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand. */
+  unsorted?: boolean;
+}
+
+export type VenomFiledScopeOwnerType = typeof VenomFiledScopeOwnerType[keyof typeof VenomFiledScopeOwnerType];
+
+
+export const VenomFiledScopeOwnerType = {
+  user: 'user',
+  org: 'org',
+} as const;
+
+/**
+ * Where server-side filing landed. Conversations in company-shared projects file into that company's Brain; everything else stays in the personal ontology. When ownerType is "org" the concepts in `filed` belong to the company layer and must not be merged into the caller's personal clusters.
+ */
+export interface VenomFiledScope {
+  ownerType: VenomFiledScopeOwnerType;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  orgId?: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  orgName?: string;
+}
+
+export interface VenomWorkspaceFiling {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  noticeId: string;
+  workspaceId: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  workspaceName: string;
+  /**
+     * @maxItems 8
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  labels: string[];
 }
 
 export interface KnowledgeExtraction {
@@ -1550,7 +2183,264 @@ export interface KnowledgeExtraction {
      * @maxItems 80
      */
   filed?: VenomKnowledgeCluster[];
-  filedWorkspaceId?: Uuid;
+  filedScope?: VenomFiledScope;
+  /**
+     * Workspaces the extraction auto-filed clusters into, one entry per workspace, each carrying the ledger row id that lets the author undo the filing. The clusters themselves are not returned: workspace records never merge into personal state.
+     * @maxItems 8
+     */
+  workspaceFilings?: VenomWorkspaceFiling[];
+}
+
+export type VenomKnowledgeMoveNoticeKind = typeof VenomKnowledgeMoveNoticeKind[keyof typeof VenomKnowledgeMoveNoticeKind];
+
+
+export const VenomKnowledgeMoveNoticeKind = {
+  auto_file: 'auto_file',
+  refile: 'refile',
+} as const;
+
+export type VenomKnowledgeMoveNoticeStatus = typeof VenomKnowledgeMoveNoticeStatus[keyof typeof VenomKnowledgeMoveNoticeStatus];
+
+
+export const VenomKnowledgeMoveNoticeStatus = {
+  active: 'active',
+  undone: 'undone',
+} as const;
+
+export type VenomKnowledgeMoveNoticeDirection = typeof VenomKnowledgeMoveNoticeDirection[keyof typeof VenomKnowledgeMoveNoticeDirection];
+
+
+export const VenomKnowledgeMoveNoticeDirection = {
+  unsorted_to_workspace: 'unsorted_to_workspace',
+  workspace_to_personal: 'workspace_to_personal',
+} as const;
+
+/**
+ * One automatic filing decision, kept author-private. `auto_file` rows come from extraction filing straight into a workspace; `refile` rows come from the re-filing pass, with `direction` telling which way the concept moved.
+ */
+export interface VenomKnowledgeMoveNotice {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  id: string;
+  kind: VenomKnowledgeMoveNoticeKind;
+  status: VenomKnowledgeMoveNoticeStatus;
+  direction?: VenomKnowledgeMoveNoticeDirection;
+  /**
+     * @maxLength 64
+     * @nullable
+     */
+  workspaceId?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  workspaceName?: string | null;
+  /**
+     * @maxItems 8
+     * @items.minLength 1
+     * @items.maxLength 64
+     */
+  labels: string[];
+  /** @minimum 0 */
+  createdAt: number;
+}
+
+/**
+ * A pending personal-to-workspace sharing suggestion. Nothing moves until the author accepts; accepting widens visibility to the workspace's members.
+ */
+export interface VenomKnowledgeSuggestion {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  id: string;
+  workspaceId: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  workspaceName: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  conceptId: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  label: string;
+  /** @minimum 0 */
+  createdAt: number;
+}
+
+export interface VenomKnowledgeMoves {
+  /** @maxItems 20 */
+  notices: VenomKnowledgeMoveNotice[];
+  /** @maxItems 20 */
+  suggestions: VenomKnowledgeSuggestion[];
+}
+
+export interface VenomKnowledgeMoveUndo {
+  /**
+     * Personal-store records the undo created or restored (for auto-file undos these carry `unsorted: true`). Empty when the undo only touched workspace stores.
+     * @maxItems 80
+     */
+  restored: VenomKnowledgeCluster[];
+}
+
+export interface VenomKnowledgeMoveResult {
+  workspaceId: Uuid;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  workspaceName: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  conceptId: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  movedConceptId: string;
+  merged: boolean;
+}
+
+export interface VenomKnowledgeSuggestionDismissal {
+  dismissed: boolean;
+}
+
+export interface VenomUnsortedMoveInput {
+  workspaceId: Uuid;
+}
+
+export interface VenomMasterContribution {
+  enabled: boolean;
+}
+
+export interface UpdateVenomMasterContributionInput {
+  enabled: boolean;
+}
+
+/**
+ * An aggregate concept in the anonymous master ontology. Carries a label, a category, and a normalized prevalence weight only; it exists only once the concept was seen across the minimum number of distinct accounts or companies, and never carries names, excerpts, or per-contributor traces.
+ */
+export interface VenomMasterConcept {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  label: string;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  category: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  strength: number;
+  x: number;
+  y: number;
+}
+
+export interface VenomMasterLink {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  a: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  b: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  strength: number;
+}
+
+export interface VenomMasterBrain {
+  /** @maxItems 300 */
+  concepts: VenomMasterConcept[];
+  /** @maxItems 900 */
+  links: VenomMasterLink[];
+}
+
+export interface VenomMasterSuggestion {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  label: string;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  category: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  strength: number;
+  /**
+     * @maxItems 3
+     * @items.minLength 1
+     * @items.maxLength 200
+     */
+  relatedToLabels: string[];
+}
+
+export interface VenomMasterSuggestionList {
+  /** @maxItems 8 */
+  suggestions: VenomMasterSuggestion[];
+}
+
+export interface DismissVenomMasterSuggestionInput {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  label: string;
+}
+
+export interface VenomMasterSuggestionDismissal {
+  dismissed: boolean;
+}
+
+export interface ApplyVenomMasterSuggestionInput {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  label: string;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  orgId?: string;
+}
+
+export interface VenomMasterSuggestionApplied {
+  filedScope: VenomFiledScope;
+  /**
+     * Present for personal filings only. Company concepts stay in the company layer and are never mirrored into personal clusters.
+     * @maxItems 80
+     */
+  filed?: VenomKnowledgeCluster[];
 }
 
 export interface VenomOntologySearchResult {
@@ -1638,6 +2528,541 @@ export interface VenomIdentity {
      * @nullable
      */
   provider: string | null;
+  /** Whether this account holds the platform super admin role. Derived server-side from the durable designation table on every request — never from a client claim — and re-verified on the server for every privileged call, so this flag only ever gates what the UI offers to show. */
+  superAdmin: boolean;
+}
+
+export type VenomCanonAccessErrorCode = typeof VenomCanonAccessErrorCode[keyof typeof VenomCanonAccessErrorCode];
+
+
+export const VenomCanonAccessErrorCode = {
+  canon_access_denied: 'canon_access_denied',
+} as const;
+
+export interface VenomCanonAccessError {
+  error: string;
+  code: VenomCanonAccessErrorCode;
+}
+
+/**
+ * A distilled teaching awaiting confirmation. Nothing is stored until the super admin commits it.
+ */
+export interface VenomCanonDraft {
+  /**
+     * @minLength 1
+     * @maxLength 48
+     */
+  domain: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  title: string;
+  /**
+     * @minItems 1
+     * @maxItems 12
+     * @items.minLength 1
+     * @items.maxLength 360
+     */
+  principles: string[];
+}
+
+export type VenomCanonTeachingStatus = typeof VenomCanonTeachingStatus[keyof typeof VenomCanonTeachingStatus];
+
+
+export const VenomCanonTeachingStatus = {
+  active: 'active',
+  retired: 'retired',
+} as const;
+
+export interface VenomCanonTeaching {
+  /**
+     * @minLength 1
+     * @maxLength 60
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 48
+     */
+  domain: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  title: string;
+  /**
+     * @minItems 1
+     * @maxItems 12
+     * @items.minLength 1
+     * @items.maxLength 360
+     */
+  principles: string[];
+  status: VenomCanonTeachingStatus;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  taughtByUserId: string;
+  /**
+     * Display label for the admin who taught it.
+     * @maxLength 200
+     * @nullable
+     */
+  taughtByName: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  conversationTitle: string | null;
+  taughtAt: string;
+  updatedAt: string;
+}
+
+export interface ProposeVenomCanonTeachingInput {
+  /**
+     * The super admin's chat message, verbatim.
+     * @minLength 1
+     * @maxLength 20000
+     */
+  message: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  conversationId?: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  conversationTitle?: string;
+}
+
+/**
+ * teachIntent=false means the message reads as ordinary chat and the client must fall back to a normal turn; the draft is present exactly when teachIntent is true.
+ */
+export interface ProposeVenomCanonTeachingResult {
+  teachIntent: boolean;
+  draft?: VenomCanonDraft;
+}
+
+export interface CommitVenomCanonTeachingInput {
+  /**
+     * @minLength 1
+     * @maxLength 48
+     */
+  domain: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  title: string;
+  /**
+     * @minItems 1
+     * @maxItems 12
+     * @items.minLength 1
+     * @items.maxLength 360
+     */
+  principles: string[];
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  conversationId?: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  conversationTitle?: string;
+}
+
+export interface VenomCanonCommitResult {
+  teaching: VenomCanonTeaching;
+  /**
+     * Venom's in-voice confirmation line for the chat thread.
+     * @minLength 1
+     * @maxLength 500
+     */
+  acknowledgment: string;
+}
+
+export type UpdateVenomCanonTeachingInputStatus = typeof UpdateVenomCanonTeachingInputStatus[keyof typeof UpdateVenomCanonTeachingInputStatus];
+
+
+export const UpdateVenomCanonTeachingInputStatus = {
+  active: 'active',
+  retired: 'retired',
+} as const;
+
+/**
+ * At least one field must be present.
+ */
+export interface UpdateVenomCanonTeachingInput {
+  /**
+     * @minLength 1
+     * @maxLength 48
+     */
+  domain?: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  title?: string;
+  /**
+     * @minItems 1
+     * @maxItems 12
+     * @items.minLength 1
+     * @items.maxLength 360
+     */
+  principles?: string[];
+  status?: UpdateVenomCanonTeachingInputStatus;
+}
+
+export interface VenomCanonAdmin {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  userId: string;
+  /**
+     * Display label from the identity record, if known.
+     * @maxLength 200
+     * @nullable
+     */
+  name: string | null;
+  /**
+     * Null for the bootstrap designation.
+     * @maxLength 120
+     * @nullable
+     */
+  grantedByUserId: string | null;
+  grantedAt: string;
+}
+
+export interface GrantVenomCanonAdminInput {
+  /**
+     * Auth-provider account id to designate.
+     * @minLength 1
+     * @maxLength 120
+     */
+  userId: string;
+}
+
+export type VenomOrgRole = typeof VenomOrgRole[keyof typeof VenomOrgRole];
+
+
+export const VenomOrgRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface VenomOrg {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  role: VenomOrgRole;
+  /** @minimum 1 */
+  memberCount: number;
+  /** @minimum 0 */
+  createdAt: number;
+}
+
+export interface VenomOrgInviteForMe {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  orgId: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  orgName: string;
+  /**
+     * @minLength 3
+     * @maxLength 320
+     */
+  email: string;
+  role: VenomOrgRole;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  invitedByName: string;
+  /** @minimum 0 */
+  createdAt: number;
+}
+
+export interface VenomOrgDirectory {
+  /** @maxItems 50 */
+  orgs: VenomOrg[];
+  /** @maxItems 50 */
+  invites: VenomOrgInviteForMe[];
+}
+
+export interface CreateVenomOrgInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+}
+
+export interface VenomOrgMember {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  userId: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /**
+     * @maxLength 320
+     * @nullable
+     */
+  email?: string | null;
+  role: VenomOrgRole;
+  isSelf: boolean;
+}
+
+export interface VenomOrgPendingInvite {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  id: string;
+  /**
+     * @minLength 3
+     * @maxLength 320
+     */
+  email: string;
+  role: VenomOrgRole;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  invitedByName: string;
+  /** @minimum 0 */
+  createdAt: number;
+}
+
+export interface VenomOrgMemberDirectory {
+  /** @maxItems 500 */
+  members: VenomOrgMember[];
+  /** @maxItems 200 */
+  invites: VenomOrgPendingInvite[];
+}
+
+export interface InviteVenomOrgMemberInput {
+  /**
+     * @minLength 3
+     * @maxLength 320
+     */
+  email: string;
+  role?: VenomOrgRole;
+}
+
+export type InviteVenomOrgMemberResultStatus = typeof InviteVenomOrgMemberResultStatus[keyof typeof InviteVenomOrgMemberResultStatus];
+
+
+export const InviteVenomOrgMemberResultStatus = {
+  added: 'added',
+  invited: 'invited',
+} as const;
+
+export interface InviteVenomOrgMemberResult {
+  status: InviteVenomOrgMemberResultStatus;
+  member?: VenomOrgMember;
+  invite?: VenomOrgPendingInvite;
+}
+
+export interface VenomOrgSharedProject {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  projectId: string;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  orgId: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /** @maxLength 1000 */
+  description: string;
+  /** @maxLength 32 */
+  accent: string;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  sharedByUserId: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  sharedByName: string;
+  /** @minimum 0 */
+  sharedAt: number;
+  /** @minimum 0 */
+  updatedAt: number;
+}
+
+export interface VenomOrgProjectList {
+  /** @maxItems 200 */
+  projects: VenomOrgSharedProject[];
+}
+
+export interface ShareVenomOrgProjectInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /** @maxLength 1000 */
+  description?: string;
+  /** @maxLength 32 */
+  accent?: string;
+}
+
+export type VenomOrgSourceProvider = typeof VenomOrgSourceProvider[keyof typeof VenomOrgSourceProvider];
+
+
+export const VenomOrgSourceProvider = {
+  github: 'github',
+  website: 'website',
+} as const;
+
+export interface VenomOrgSource {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  orgId: string;
+  provider: VenomOrgSourceProvider;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  name: string;
+  /** @maxLength 2048 */
+  url: string;
+  /** @maxLength 1000 */
+  summary: string;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  context: string;
+  /**
+     * @minItems 1
+     * @maxItems 50
+     */
+  citations: SourceCitation[];
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  connectedByUserId: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  connectedByName: string;
+  /** @minimum 0 */
+  syncedAt: number;
+}
+
+export interface VenomOrgSourceList {
+  /** @maxItems 100 */
+  sources: VenomOrgSource[];
+}
+
+export type VenomOrgAuditEntryAction = typeof VenomOrgAuditEntryAction[keyof typeof VenomOrgAuditEntryAction];
+
+
+export const VenomOrgAuditEntryAction = {
+  promoted: 'promoted',
+} as const;
+
+export interface VenomOrgAuditEntry {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  id: string;
+  action: VenomOrgAuditEntryAction;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  conceptId: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  conceptLabel: string;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  actorUserId: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  actorName: string;
+  /** @minimum 0 */
+  createdAt: number;
+}
+
+export interface VenomOrgBrain {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  orgId: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  orgName: string;
+  /** @maxItems 1000 */
+  concepts: VenomKnowledgeCluster[];
+  /** @maxItems 50 */
+  audit: VenomOrgAuditEntry[];
+}
+
+export interface PromoteVenomConceptInput {
+  concept: VenomKnowledgeCluster;
+}
+
+export interface PromoteVenomConceptResult {
+  concept: VenomKnowledgeCluster;
 }
 
 export interface VenomNoteInput {
@@ -1928,6 +3353,14 @@ export interface VenomProject {
   boardStages: VenomKanbanStage[];
   /** @maxItems 40 */
   fieldDefinitions: VenomKanbanField[];
+  /**
+     * Present when the project is shared with a company. On the sharer's device it marks their own project as company-shared; on other members' devices it marks the local mirror.
+     * @minLength 1
+     * @maxLength 64
+     */
+  orgId?: string;
+  /** True when this project entry is a local mirror of a project another member shared with the company, rather than a project this account created. */
+  orgMirror?: boolean;
 }
 
 export type VenomDeliberationTakeStatus = typeof VenomDeliberationTakeStatus[keyof typeof VenomDeliberationTakeStatus];
@@ -2014,6 +3447,11 @@ export interface VenomMessage {
      * @maxLength 80
      */
   speakerName?: string;
+  /**
+     * Files carried by this message — uploads on user turns, generated files on assistant turns. Optional, so older clients and existing history remain valid.
+     * @maxItems 5
+     */
+  attachments?: VenomMessageAttachment[];
 }
 
 /**
@@ -2059,10 +3497,27 @@ export interface VenomConversation {
   responseMode?: VenomResponseMode;
   blend?: VenomConversationBlend;
   /**
-     * When the response mode or blend last changed on any device; the newer block wins in cross-device merges.
+     * When the response mode, blend, or voice picks last changed on any device; the newer block wins in cross-device merges.
      * @minimum 0
      */
   modeUpdatedAt?: number;
+  /**
+     * Per-conversation verify voice assignments. Part of the response-mode preference block: it merges on modeUpdatedAt with mode and blend so a pick made on one device survives another device's snapshot merge.
+     * @maxItems 3
+     */
+  voiceModels?: VenomVoiceModelPick[];
+}
+
+/**
+ * A conversation served from the synced workspace snapshot for read-only viewing. projectName is resolved against the snapshot's own project list because the requesting device may not hold the project either. Heavy per-message internals (deliberation transcripts) are omitted; the payload is the readable exchange.
+ */
+export interface VenomRemoteConversation {
+  conversation: VenomConversation;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  projectName: string | null;
 }
 
 export interface VenomDeletionMarker {
@@ -2154,6 +3609,146 @@ export interface VenomWorkspaceSnapshot {
   updatedAt: string | null;
 }
 
+export type VenomAppSharingStatePublicStatus = typeof VenomAppSharingStatePublicStatus[keyof typeof VenomAppSharingStatePublicStatus];
+
+
+export const VenomAppSharingStatePublicStatus = {
+  live: 'live',
+  unavailable: 'unavailable',
+} as const;
+
+/**
+ * Owner-only view of an app's public sharing state. The slug is stable for the lifetime of the app: disabling sharing keeps it reserved so re-enabling restores the same link. shareUrl/embedUrl/embedSnippet are server-composed from the request origin and are null while sharing is disabled.
+ */
+export interface VenomAppSharingState {
+  appId: Uuid;
+  enabled: boolean;
+  /**
+     * @maxLength 60
+     * @nullable
+     */
+  slug: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  shareUrl: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  embedUrl: string | null;
+  /**
+     * @maxLength 4096
+     * @nullable
+     */
+  embedSnippet: string | null;
+  publicStatus: VenomAppSharingStatePublicStatus;
+  liveIterationNumber: number | null;
+  /** @nullable */
+  livePublishedAt: string | null;
+}
+
+export interface VenomAppSharingUpdate {
+  enabled: boolean;
+}
+
+/**
+ * Display-safe credential summary. The prefix identifies the key for the owner; the secret itself is only ever delivered into the provisioned app's secret storage.
+ */
+export interface VenomAppAiCredentialSummary {
+  /** @maxLength 20 */
+  displayPrefix: string;
+  createdAt: string;
+  /** @nullable */
+  lastUsedAt: string | null;
+  delivered: boolean;
+}
+
+export interface VenomAppAiModelUsage {
+  /** @maxLength 80 */
+  modelId: string;
+  /** @maxLength 120 */
+  modelName: string;
+  /** @minimum 0 */
+  costUsd: number;
+  /** @minimum 0 */
+  requests: number;
+}
+
+export interface VenomAppAiUsage {
+  periodStart: string;
+  periodEnd: string;
+  /** @minimum 0 */
+  costUsd: number;
+  /** @minimum 0 */
+  requests: number;
+  /** @minimum 0 */
+  promptTokens: number;
+  /** @minimum 0 */
+  outputTokens: number;
+  hasEstimates: boolean;
+  /** @maxItems 40 */
+  models: VenomAppAiModelUsage[];
+}
+
+/**
+ * Owner-only view of an app's whitelabeled AI: month-to-date usage from the canonical ledger, spend controls, and a summary of the gateway credential. Never contains the credential secret, provider names, or per-token rates — costs are aggregated dollars and models are Venom aliases only.
+ */
+export interface VenomAppAiOverview {
+  appId: Uuid;
+  paused: boolean;
+  monthlyCapUsd: number | null;
+  /** @minimum 0 */
+  safetyCapUsd: number;
+  credential: VenomAppAiCredentialSummary | null;
+  usage: VenomAppAiUsage;
+  /** @minimum 0 */
+  ownerMonthUsd: number;
+}
+
+/**
+ * Full settings write: both fields are explicit on every update. The cap is dollars per calendar month (UTC); null removes the owner cap while the global safety cap keeps applying.
+ */
+export interface VenomAppAiSettingsUpdate {
+  monthlyCapUsd: number | null;
+  paused: boolean;
+}
+
+export type VenomPublicAppShareStatus = typeof VenomPublicAppShareStatus[keyof typeof VenomPublicAppShareStatus];
+
+
+export const VenomPublicAppShareStatus = {
+  live: 'live',
+  unavailable: 'unavailable',
+} as const;
+
+export type VenomPublicAppShareViewMode = typeof VenomPublicAppShareViewMode[keyof typeof VenomPublicAppShareViewMode] | null;
+
+
+export const VenomPublicAppShareViewMode = {
+  frame: 'frame',
+  redirect: 'redirect',
+} as const;
+
+/**
+ * Public resolution of a share slug. Never contains owner identity, provider identifiers, or release internals. All unavailable states (unknown slug, sharing disabled, no healthy published release) are indistinguishable.
+ */
+export interface VenomPublicAppShare {
+  status: VenomPublicAppShareStatus;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  appName: string | null;
+  viewMode: VenomPublicAppShareViewMode;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  frameUrl: string | null;
+}
+
 export type VenomSopLifecycle = typeof VenomSopLifecycle[keyof typeof VenomSopLifecycle];
 
 
@@ -2234,11 +3829,16 @@ export interface SharedWorkspaceMemberInput {
   role?: SharedWorkspaceRole;
 }
 
+export interface SharedWorkspaceMemberRoleInput {
+  role: SharedWorkspaceRole;
+}
+
 export type SharedWorkspaceAccessErrorCode = typeof SharedWorkspaceAccessErrorCode[keyof typeof SharedWorkspaceAccessErrorCode];
 
 
 export const SharedWorkspaceAccessErrorCode = {
   workspace_access_denied: 'workspace_access_denied',
+  workspace_admin_required: 'workspace_admin_required',
 } as const;
 
 export interface SharedWorkspaceAccessError {
@@ -2313,8 +3913,25 @@ export interface SharedWorkspaceSop {
      * @nullable
      */
   activeRevisionNumber: number | null;
+  /** Sensitivity lock. Any member may set or clear it; locked SOPs stay visible inside the workspace but are withheld from exports when the workspace's export policy forbids sensitive content leaving. */
+  sensitive?: boolean;
+  /** Admin-only restriction. Set only by workspace admins through the restriction endpoint. Restricted SOPs are filtered out of member reads, member chat context, and member exports server-side, so a non-admin response never carries one — when this flag is true, the reader is an admin. */
+  adminOnly?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SharedWorkspaceSettings {
+  /** Export policy. True (the default) lets exports include items marked sensitive; false makes the server exclude them from every export and state how many were withheld. */
+  allowSensitiveExport: boolean;
+}
+
+export interface SensitivityUpdateInput {
+  sensitive: boolean;
+}
+
+export interface RestrictionUpdateInput {
+  adminOnly: boolean;
 }
 
 export interface VenomSop {
@@ -2597,6 +4214,53 @@ export interface CommunityNotificationUnreadCount {
 }
 
 export interface CommunityNotificationMarkAllResult {
+  /** @minimum 0 */
+  marked: number;
+}
+
+export type VenomSourceSyncAlertProvider = typeof VenomSourceSyncAlertProvider[keyof typeof VenomSourceSyncAlertProvider];
+
+
+export const VenomSourceSyncAlertProvider = {
+  github: 'github',
+  website: 'website',
+} as const;
+
+export interface VenomSourceSyncAlert {
+  /** @pattern ^[0-9a-fA-F-]{36}$ */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  sourceId: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  projectId: string;
+  provider: VenomSourceSyncAlertProvider;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  sourceName: string;
+  /** @minimum 1 */
+  consecutiveFailures: number;
+  /** @maxLength 300 */
+  lastError: string;
+  firstFailedAt: string;
+  lastFailedAt: string;
+  /** @nullable */
+  readAt: string | null;
+}
+
+export interface VenomSourceSyncAlertList {
+  /** @maxItems 100 */
+  alerts: VenomSourceSyncAlert[];
+}
+
+export interface VenomSourceSyncAlertMarkAllResult {
   /** @minimum 0 */
   marked: number;
 }
@@ -3069,6 +4733,24 @@ export interface ProvisioningRun {
   cancelRequested: boolean;
 }
 
+export type GetVenomVoiceDecisionSummaryParams = {
+/**
+ * How many days back to aggregate. Bounded by the 90-day retention cap; defaults to 30.
+ * @minimum 1
+ * @maximum 90
+ */
+windowDays?: number;
+};
+
+export type ExportVenomVoiceDecisionsParams = {
+/**
+ * How many days back to export. Bounded by the 90-day retention cap; defaults to 90 (everything retained).
+ * @minimum 1
+ * @maximum 90
+ */
+windowDays?: number;
+};
+
 export type SearchVenomOntologyParams = {
 /**
  * @minLength 1
@@ -3076,10 +4758,34 @@ export type SearchVenomOntologyParams = {
  */
 q: string;
 /**
+ * Company id. When present, searches that company's shared Brain instead of the personal ontology; the caller must be a member.
+ * @minLength 1
+ * @maxLength 64
+ */
+org?: string;
+/**
  * @minimum 1
  * @maximum 50
  */
 limit?: number;
+};
+
+export type GetVenomOntologyConceptParams = {
+/**
+ * Company id. When present, resolves the concept inside that company's shared Brain; the caller must be a member.
+ * @minLength 1
+ * @maxLength 64
+ */
+org?: string;
+};
+
+export type GetVenomMasterSuggestionsParams = {
+/**
+ * Company id. When present, suggestions are computed against that company's shared Brain; the caller must be a member.
+ * @minLength 1
+ * @maxLength 64
+ */
+org?: string;
 };
 
 export type SaveVenomWorkspace413 = {
@@ -3095,6 +4801,21 @@ export type RemoveSharedWorkspaceMember200 = {
      */
   removedUserId: string;
 };
+
+export type ExportVenomPersonalMarkdownParams = {
+/**
+ * Brain exports only. `sorted` limits the download to knowledge outside the Unsorted holding area; `unsorted` downloads just the Unsorted items. Omit for everything.
+ */
+scope?: ExportVenomPersonalMarkdownScope;
+};
+
+export type ExportVenomPersonalMarkdownScope = typeof ExportVenomPersonalMarkdownScope[keyof typeof ExportVenomPersonalMarkdownScope];
+
+
+export const ExportVenomPersonalMarkdownScope = {
+  sorted: 'sorted',
+  unsorted: 'unsorted',
+} as const;
 
 export type GetVenomAppTimelineParams = {
 /**
@@ -3197,4 +4918,3 @@ export type ListProvisioningRunsParams = {
 buildRunId?: Uuid;
 appId?: Uuid;
 };
-

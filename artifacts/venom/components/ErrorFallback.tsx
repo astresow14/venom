@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated as RNAnimated,
   Modal,
   Platform,
   Pressable,
@@ -8,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
@@ -18,11 +20,46 @@ export type ErrorFallbackProps = {
   resetError: () => void;
 };
 
+type FocusableHandle = { focus?: () => void };
+
 export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
 
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [detailsButtonFocused, setDetailsButtonFocused] = useState(false);
+  const [closeButtonFocused, setCloseButtonFocused] = useState(false);
+  const detailsButtonRef = useRef<FocusableHandle | null>(null);
+  const closeButtonRef = useRef<FocusableHandle | null>(null);
+  const modalAppear = useRef(new RNAnimated.Value(0)).current;
+
+  useEffect(() => {
+    if (!isModalVisible) return;
+    modalAppear.setValue(reducedMotion ? 1 : 0);
+    if (reducedMotion) return;
+    const animation = RNAnimated.timing(modalAppear, {
+      toValue: 1,
+      duration: 170,
+      useNativeDriver: Platform.OS !== 'web',
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [isModalVisible, modalAppear, reducedMotion]);
+
+  // The details dialog has no input of its own, so once it opens, move
+  // keyboard focus onto its close control explicitly.
+  useEffect(() => {
+    if (!isModalVisible || Platform.OS !== 'web') return;
+    const frame = requestAnimationFrame(() => {
+      closeButtonRef.current?.focus?.();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isModalVisible]);
+
+  const handleModalDismiss = () => {
+    detailsButtonRef.current?.focus?.();
+  };
 
   const handleRestart = async () => {
     try {
@@ -51,7 +88,10 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {__DEV__ ? (
         <Pressable
+          ref={detailsButtonRef as React.Ref<View>}
           onPress={() => setIsModalVisible(true)}
+          onFocus={() => setDetailsButtonFocused(true)}
+          onBlur={() => setDetailsButtonFocused(false)}
           accessibilityLabel="View error details"
           accessibilityRole="button"
           style={({ pressed }) => [
@@ -61,6 +101,9 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
               backgroundColor: colors.card,
               opacity: pressed ? 0.8 : 1,
             },
+            detailsButtonFocused
+              ? { borderWidth: 2, borderColor: colors.foreground }
+              : null,
           ]}
         >
           <Feather name="alert-circle" size={20} color={colors.foreground} />
@@ -98,15 +141,28 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
       {__DEV__ ? (
         <Modal
           visible={isModalVisible}
-          animationType="slide"
+          animationType={Platform.OS === 'web' ? 'none' : 'slide'}
           transparent={true}
           onRequestClose={() => setIsModalVisible(false)}
+          onDismiss={handleModalDismiss}
         >
           <View style={styles.modalOverlay}>
-            <View
+            <RNAnimated.View
+              accessibilityViewIsModal
               style={[
                 styles.modalContainer,
                 { backgroundColor: colors.background },
+                {
+                  opacity: modalAppear,
+                  transform: [
+                    {
+                      translateY: modalAppear.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [10, 0],
+                      }),
+                    },
+                  ],
+                },
               ]}
             >
               <View
@@ -119,12 +175,22 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
                   Error Details
                 </Text>
                 <Pressable
+                  ref={closeButtonRef as React.Ref<View>}
                   onPress={() => setIsModalVisible(false)}
+                  onFocus={() => setCloseButtonFocused(true)}
+                  onBlur={() => setCloseButtonFocused(false)}
                   accessibilityLabel="Close error details"
                   accessibilityRole="button"
                   style={({ pressed }) => [
                     styles.closeButton,
                     { opacity: pressed ? 0.6 : 1 },
+                    closeButtonFocused
+                      ? {
+                          borderWidth: 2,
+                          borderColor: colors.foreground,
+                          borderRadius: 8,
+                        }
+                      : null,
                   ]}
                 >
                   <Feather name="x" size={24} color={colors.foreground} />
@@ -159,7 +225,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
                   </Text>
                 </View>
               </ScrollView>
-            </View>
+            </RNAnimated.View>
           </View>
         </Modal>
       ) : null}

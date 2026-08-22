@@ -56,6 +56,7 @@ test("workflow paths are recognised by prefix, not by substring", () => {
   assert.ok(!isWorkflowPath(".github/workflows"));
   assert.ok(!isWorkflowPath(".github/dependabot.yml"));
   assert.ok(!isWorkflowPath("docs/.github/workflows/ci.yml"));
+  assert.ok(!isWorkflowPath("src/index.ts"));
 });
 
 test("pathsDiffering compares trees two-dot, from any working directory", () => {

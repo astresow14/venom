@@ -32,6 +32,7 @@ import {
   venomBuildPackageRevisionsTable,
   venomBuildRunEventsTable,
   venomBuildRunsTable,
+  venomBuildTemplatesTable,
   venomPortfolioAppIterationsTable,
   venomPortfolioAppsTable,
   venomPortfolioSourceVersionsTable,
@@ -47,6 +48,14 @@ import {
   buildPackageMarkdown,
   generateBuildPackage,
 } from "../lib/venom-build-package-generator";
+import { userTenant } from "../lib/venom-master-ontology";
+import {
+  contributeTemplateEditSignals,
+  deriveTemplateEditSignals,
+  getTemplateGuidance,
+  type TemplateGuidanceEntry,
+} from "../lib/venom-template-learning";
+import { recordVenomUsage } from "../lib/venom-usage-store";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -134,6 +143,23 @@ export function overrideVenomBuildRunSchedulerForTests(
   };
 }
 
+// Injectable generator so integration tests can drive the full
+// process → review → approve chain hermetically (no provider call).
+let generatePackageEffect = generateBuildPackage;
+
+export function overrideVenomBuildRunGeneratorForTests(
+  generator: typeof generateBuildPackage,
+): () => void {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("Build run generator overrides are available only in tests");
+  }
+  const previous = generatePackageEffect;
+  generatePackageEffect = generator;
+  return () => {
+    generatePackageEffect = previous;
+  };
+}
+
 function summaryPayload(run: VenomBuildRun) {
   return {
     id: run.id,
@@ -146,6 +172,7 @@ function summaryPayload(run: VenomBuildRun) {
     progress: run.progress,
     currentRevisionNumber: run.currentRevisionNumber,
     approvedRevisionId: run.approvedRevisionId,
+    templateId: run.templateId,
     failureMessage: run.failureMessage,
     cancelledReason: run.cancelledReason,
     createdAt: run.createdAt,
@@ -230,6 +257,7 @@ export async function runPayload(run: VenomBuildRun) {
       baselineIterationId: run.baselineIterationId,
       baselineRevisionId: run.baselineRevisionId,
       changesSummary: run.changesSummary,
+      templateId: run.templateId,
     },
     revisions: revisions.map(revisionPayload),
     events: events.map(eventPayload),
@@ -337,6 +365,10 @@ async function registerAppIterationInTransaction(
     runKind: run.runKind,
     baselineIterationId: run.baselineIterationId,
     baselineRevisionId: run.baselineRevisionId,
+    // Template lineage survives approval: the run's stamp carries into the
+    // durable iteration record so the learning loop can trace every
+    // approved version back to the template it started from.
+    templateId: run.templateId,
     reason: reason.slice(0, 1000),
     changesSummary: run.changesSummary,
     createdBy: userId,
@@ -355,6 +387,7 @@ function runMatchesCreateInput(
     sourceVersionId: string | null;
     projectId: string | null;
     sopRevisionIds: string[];
+    templateId?: string | null;
   },
 ): boolean {
   return (
@@ -368,7 +401,14 @@ function runMatchesCreateInput(
       existing.sourceVersionId === input.sourceVersionId) &&
     existing.projectId === input.projectId &&
     JSON.stringify(existing.sopRevisionIds) ===
-      JSON.stringify(input.sopRevisionIds)
+      JSON.stringify(input.sopRevisionIds) &&
+    // Lineage is compared only when the client asserted it AND the run is
+    // not app-pinned: for app-pinned runs the app's own lineage is
+    // authoritative, so the stamped value may legitimately differ from
+    // what the client sent.
+    (input.templateId == null ||
+      existing.appId !== null ||
+      existing.templateId === input.templateId)
   );
 }
 
@@ -560,6 +600,69 @@ async function processRun(userId: string, runId: string): Promise<void> {
         baselinePackage: compactBaselinePackage(baselineRevision.package),
       };
     }
+    // Template-derived runs promise the generator the template's curated
+    // material as bounded, untrusted reference data. Lineage must resolve:
+    // a stamped template that has vanished fails the run explicitly (same
+    // pinned-reference discipline as sources and SOPs) rather than
+    // silently generating without the promised context.
+    let templateContext: {
+      name: string;
+      category: string;
+      description: string;
+      requirementsSkeleton: string;
+      suggestedConstraints: string;
+      suggestedBrandDirection: string;
+      suggestedAcceptanceChecks: string[];
+      examplePackage: unknown;
+      networkGuidance: string[];
+    } | null = null;
+    if (run.templateId) {
+      const [template] = await db
+        .select()
+        .from(venomBuildTemplatesTable)
+        .where(eq(venomBuildTemplatesTable.id, run.templateId))
+        .limit(1);
+      if (!template) throw new PinnedReferenceError("template_not_found");
+      // Above-threshold lessons from other builders' edits to this
+      // template's packages. Read failures fail toward no influence — the
+      // run proceeds exactly as if the template had learned nothing.
+      let appliedGuidance: TemplateGuidanceEntry[] = [];
+      try {
+        appliedGuidance = await getTemplateGuidance(run.templateId);
+      } catch {
+        appliedGuidance = [];
+      }
+      templateContext = {
+        name: template.name.slice(0, 120),
+        category: template.category,
+        description: template.description.slice(0, 1000),
+        requirementsSkeleton: template.requirements.slice(0, 8000),
+        suggestedConstraints: template.constraints.slice(0, 4000),
+        suggestedBrandDirection: template.brandDirection.slice(0, 3000),
+        suggestedAcceptanceChecks: template.acceptanceChecks
+          .slice(0, 15)
+          .map((check) => check.slice(0, 800)),
+        examplePackage: template.examplePackage
+          ? compactBaselinePackage(template.examplePackage)
+          : null,
+        networkGuidance: appliedGuidance.map((entry) => entry.guidance),
+      };
+      if (appliedGuidance.length > 0) {
+        // Recorded before the generator call so it is observable per
+        // generation attempt which guidance that attempt saw.
+        await addEvent(
+          run,
+          "network_guidance",
+          "preparing",
+          25,
+          `Applied ${appliedGuidance.length} network lesson${
+            appliedGuidance.length === 1 ? "" : "s"
+          } from this template's builders: ${appliedGuidance
+            .map((entry) => entry.title)
+            .join("; ")}.`.slice(0, 240),
+        );
+      }
+    }
     const sourceReferences: VenomBuildSourceReference[] =
       references.app && references.sourceVersion
         ? [
@@ -592,7 +695,7 @@ async function processRun(userId: string, runId: string): Promise<void> {
       )
       .orderBy(desc(venomBuildPackageRevisionsTable.revisionNumber))
       .limit(1);
-    const generated = await generateBuildPackage(
+    const generated = await generatePackageEffect(
       {
         targetType: run.targetType,
         targetName: run.targetName,
@@ -633,8 +736,20 @@ async function processRun(userId: string, runId: string): Promise<void> {
         revisionInstruction: run.pendingRevisionInstruction,
         previousPackage: previousRevision?.package ?? null,
         baselineContext,
+        templateContext,
       },
       controller.signal,
+      // Package generation is a user-initiated AI call: charge the account
+      // that owns the run (SKU billed under the venom-gpt alias).
+      (usage) =>
+        recordVenomUsage({
+          userId,
+          modelAlias: "venom-gpt",
+          callKind: "build_package",
+          promptTokens: usage.promptTokens,
+          outputTokens: usage.outputTokens,
+          estimated: usage.estimated,
+        }),
     );
     const checksumSha256 = buildPackageChecksum(generated);
     const completedAt = new Date();
@@ -668,6 +783,9 @@ async function processRun(userId: string, runId: string): Promise<void> {
           reason: reason.slice(0, 1000),
           package: generated,
           checksumSha256,
+          // Lineage rides every committed revision so the learning loop
+          // can attribute generated packages to their template.
+          templateId: run.templateId,
         })
         .returning();
       const [updated] = await transaction
@@ -794,9 +912,12 @@ function scheduleRun(userId: string, runId: string): void {
 
 let scheduleRunEffect = scheduleRun;
 
-async function reconcileBuildRunQueue(userId?: string): Promise<void> {
+async function reconcileBuildRunQueue(
+  userId?: string,
+  now: number = Date.now(),
+): Promise<void> {
   await failStalePreparingRuns(userId);
-  const rescueCutoff = new Date(Date.now() - QUEUE_RESCUE_MIN_AGE_MS);
+  const rescueCutoff = new Date(now - QUEUE_RESCUE_MIN_AGE_MS);
   const queued = await db
     .select({
       id: venomBuildRunsTable.id,
@@ -842,8 +963,16 @@ export function startVenomBuildRunWorker(): void {
   workerReconcileTimer.unref?.();
 }
 
-export async function reconcileVenomBuildRunQueueForTests(): Promise<void> {
-  await reconcileBuildRunQueue();
+/**
+ * `now` lets a suite prove the rescue path with a *fresh* fixture: a future
+ * clock makes the row qualify as aged inside this invocation only, so the
+ * fixture is never backdated into the claim window of the dev server's own
+ * reconcile loop (both processes share one database).
+ */
+export async function reconcileVenomBuildRunQueueForTests(
+  now?: number,
+): Promise<void> {
+  await reconcileBuildRunQueue(undefined, now);
 }
 
 export async function processVenomBuildRunForTests(
@@ -863,6 +992,13 @@ export type CreateVenomBuildRunInput = {
   sourceVersionId: string | null;
   projectId: string | null;
   sopRevisionIds: string[];
+  /**
+   * Explicit template lineage for runs started from a global template.
+   * Optional so existing callers (and the iteration endpoint) are
+   * untouched; when the run is pinned to an app that carries lineage, the
+   * app's stamp wins over this value.
+   */
+  templateId?: string | null;
   idempotencyKey: string;
 };
 
@@ -920,6 +1056,23 @@ export async function createVenomBuildRunForUser(
   } catch {
     return { kind: "invalid_reference" };
   }
+  const explicitTemplateId = input.templateId ?? null;
+  if (explicitTemplateId) {
+    // Lineage must point at a real template row. Retired templates remain
+    // valid lineage targets (the catalog never hard-deletes), so status is
+    // deliberately not checked here.
+    const [template] = await db
+      .select({ id: venomBuildTemplatesTable.id })
+      .from(venomBuildTemplatesTable)
+      .where(eq(venomBuildTemplatesTable.id, explicitTemplateId))
+      .limit(1);
+    if (!template) return { kind: "invalid_reference" };
+  }
+  // An app created from a template already carries authoritative lineage;
+  // explicit input only matters for runs whose app has none (or no app).
+  const templateId = references.app
+    ? (references.app.templateId ?? explicitTemplateId)
+    : explicitTemplateId;
   const creation = await db.transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtext(${"venom-build:" + userId}))`,
@@ -984,6 +1137,7 @@ export async function createVenomBuildRunForUser(
         constraints: input.constraints.trim(),
         brandDirection: input.brandDirection.trim(),
         sopRevisionIds: input.sopRevisionIds,
+        templateId,
         runKind: resolvedExtras.runKind,
         baselineIterationId: resolvedExtras.baselineIterationId,
         baselineRevisionId: resolvedExtras.baselineRevisionId,
@@ -1478,6 +1632,66 @@ router.post(
     if (approved.kind === "conflict") {
       res.status(409).json({ error: "Build run is not awaiting approval" });
       return;
+    }
+    // Template learning rides after the commit so it can never fail (or
+    // roll back) the approval itself. It is a no-op unless this account
+    // has opted in to master-network contribution, and only closed-
+    // vocabulary concept keys cross the boundary — requirement text,
+    // instruction text, and identifying references have no path through.
+    if (approved.run.templateId) {
+      try {
+        const revisions = await db
+          .select({
+            id: venomBuildPackageRevisionsTable.id,
+            revisionNumber: venomBuildPackageRevisionsTable.revisionNumber,
+            reason: venomBuildPackageRevisionsTable.reason,
+            package: venomBuildPackageRevisionsTable.package,
+          })
+          .from(venomBuildPackageRevisionsTable)
+          .where(
+            and(
+              eq(venomBuildPackageRevisionsTable.runId, approved.run.id),
+              eq(venomBuildPackageRevisionsTable.clerkUserId, userId),
+            ),
+          )
+          .orderBy(venomBuildPackageRevisionsTable.revisionNumber);
+        const firstRevision = revisions.find(
+          (revision) => revision.revisionNumber === 1,
+        );
+        const approvedRevision = revisions.find(
+          (revision) => revision.id === parsed.data.revisionId,
+        );
+        const signalKeys = deriveTemplateEditSignals({
+          firstPackage: firstRevision?.package ?? null,
+          approvedPackage: approvedRevision?.package ?? null,
+          revisionInstructions: revisions
+            .filter(
+              (revision) =>
+                revision.revisionNumber > 1 &&
+                revision.reason !== "Regenerated package",
+            )
+            .map((revision) => revision.reason),
+          iterationInstruction:
+            approved.run.runKind === "app_iteration"
+              ? approved.run.requirements
+              : null,
+        });
+        await contributeTemplateEditSignals({
+          tenant: userTenant(userId),
+          templateId: approved.run.templateId,
+          signalKeys,
+        });
+      } catch (error) {
+        // Learning must never break an approval.
+        req.log.error(
+          {
+            operation: "venom_template_learning",
+            runId: approved.run.id,
+            errorName: error instanceof Error ? error.name : "UnknownError",
+          },
+          "Template edit-signal contribution failed",
+        );
+      }
     }
     req.log.info(
       {

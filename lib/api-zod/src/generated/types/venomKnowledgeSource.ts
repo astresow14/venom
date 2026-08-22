@@ -44,4 +44,6 @@ export interface VenomKnowledgeSource {
      * @nullable
      */
   capturedAt?: number | null;
+  /** Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace's export policy forbids sensitive content leaving. */
+  sensitive?: boolean;
 }

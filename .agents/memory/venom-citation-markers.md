@@ -24,3 +24,24 @@ the shared plain-text/segment renderer with the project's live citation map plus
 archived-citation map. Adding a surface without that lookup is the regression this guards
 against — cover it with a browser test that asserts the rendered text contains no
 `[source:` and does name the source.
+
+The display rulebook (marker grammar, segment parser, archived wording, flattening,
+knowledgeDisplayText) has one home: the shared workspace lib `@workspace/knowledge-text`,
+re-exported by both apps under their historical module paths and guarded by each app's
+`citationRules.test.mjs` reference-identity tests — change wording/parsing only in the lib.
+The phone-only refresh/remap machinery stays app-local, importing the lib's marker-pattern
+factory so the grammar cannot fork. Server copies (exports, knowledge extraction) remain
+separate on stored types, like the merge rules.
+
+## The citation jump is a two-client parity surface
+
+Cited answers on BOTH clients offer "open the evidence" chips that land on the cited
+source card — and on the exact quoted row when the jump carries a citation id. The jump
+semantics (a citation id only counts alongside its source; missing or cross-project
+targets explain themselves in a notice; leaving the view retires the markers and the
+scroll parked on them) are mirrored between the mobile knowledge screen and the desktop
+Brain sources view, each guarded by its own browser suite. Change this flow in one app
+only in lockstep with the other — sibling tasks have already landed one-sided improvements
+here (the notice's one-tap project switch shipped mobile-first), so diff the twin surface
+before and after editing it. Any action that mounts the jump target must also shed the
+user's source filter, or the parked scroll can never resolve.

@@ -12,6 +12,7 @@ export type VenomBuildRunEventEventType = typeof VenomBuildRunEventEventType[key
 export const VenomBuildRunEventEventType = {
   queued: 'queued',
   preparing: 'preparing',
+  network_guidance: 'network_guidance',
   review_required: 'review_required',
   revised: 'revised',
   approved: 'approved',

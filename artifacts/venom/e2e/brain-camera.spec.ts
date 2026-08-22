@@ -24,7 +24,10 @@ async function camera(map: Locator): Promise<Camera> {
 }
 
 async function openBrain(page: Page, fixture: 'sparse' | 'dense') {
-  await page.goto(`/?venomUiTest=true&brainFixture=${fixture}`);
+  // slimeTier=off: camera math never touches the goo layer, so skip its
+  // SwiftShader context + shader compile (the WebGL-unavailable fallback is
+  // a supported state with an identical map contract).
+  await page.goto(`/?venomUiTest=true&brainFixture=${fixture}&slimeTier=off`);
   const brainTab = page.getByRole('tab', { name: 'Open Brain workspace' });
   await brainTab.click();
   await expect(brainTab).toHaveAttribute('aria-selected', 'true');

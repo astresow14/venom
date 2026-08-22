@@ -25,8 +25,10 @@ export const nativeVoiceAudioAdapter: VoiceAudioAdapter = {
           message: 'Native voice audio is not available in a web build.',
         });
       },
+      finish() {},
       pause() {},
       resume() {},
+      setDucking() {},
       stop() {},
     };
   },

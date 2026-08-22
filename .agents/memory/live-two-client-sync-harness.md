@@ -27,6 +27,12 @@ under `scripts/live/` (not part of any CI suite).
 - `window.Clerk` is available on both the Expo web page and the desktop page;
   drive the classic clerk-js resource API via `page.evaluate`, then
   `Clerk.setActive({ session })`.
+- **The mobile "Verify this device" step is reproducible at will**: because
+  every fresh headless context is untrusted, driving the real sign-in form
+  (credentials → email-code step → `424242`) exercises the device-trust UI end
+  to end — no special account setup needed. UI-driven harness:
+  `scripts/live/sign-in-device-verification.mjs` (wrong code → "Incorrect
+  code" without a crash, Start over, keyboard-height layout assertions).
 
 ## Diagnostic signatures
 
@@ -50,6 +56,33 @@ under `scripts/live/` (not part of any CI suite).
   package `push` script) then an api-server restart fixes it. A long-running
   dev server can mask this — the breakage only appears once the workflow
   restarts onto the new code.
+
+## Two-ACCOUNT variant (shared workspaces)
+
+`scripts/live/shared-workspace-two-accounts.mjs` extends the pattern to two
+Backend-API accounts and three contexts (owner desktop, member mobile, member
+desktop) with knowledge **extraction left live** — only models/deliberation/
+respond are stubbed. Traps its first runs hit:
+
+- **Desktop Brain search rows are cross-project only** ("Beyond this map");
+  a concept already on the map never produces `brain-search-result-*`. Assert
+  map nodes via `getByLabel("Node: <label>")` instead. Mobile DOES render
+  `brain-search-result-*` rows for its map search.
+- **Bare `getByText` on RN Web matches hidden transcripts** on other tabs
+  (chat message text contains the filed label). Scope every text assertion to
+  a testid-prefixed locator.
+- **Close dialogs via their Close button, not Escape** — the members dialog
+  ignored a page-level Escape once (filed as its own task); clicking the
+  Radix Close control then waiting for `[role="dialog"]` hidden is reliable.
+- The desktop space switcher's personal option is the `__personal__`
+  sentinel, not an empty value.
+- The composer's Talk/Verify/Debate switch replaced the old deliberate
+  toggle; default Talk mode still extracts (only Debate skips filing), so
+  harnesses need no mode interaction at all.
+- Deterministic eviction: desktop = client-side nav to Brain (remount
+  refetch → 403 → toast); mobile = tap a cluster-sensitivity toggle on the
+  still-open workspaces screen (PATCH 403 → in-place notice). Full-page
+  reloads race the list refetch and can silently land on personal instead.
 
 **Why:** schema contract tests cover shapes, but only a live two-client run
 catches auth flows, save loops, and render-order traps; these three cost the

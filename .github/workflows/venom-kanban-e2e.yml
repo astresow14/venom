@@ -13,30 +13,48 @@ jobs:
     name: Detect Venom changes
     runs-on: ubuntu-latest
     outputs:
-      venom: ${{ steps.filter.outputs.venom }}
+      venom: ${{ steps.filter.outputs.changed }}
     steps:
+      # A checkout must come first so the local composite action below can be
+      # resolved from the workspace; the action re-checks-out at the depth the
+      # event actually needs.
       - uses: actions/checkout@v4
 
+      # Owns the event-conditional fetch depth and the merge_group base/head
+      # wiring; this workflow only supplies its filter list.
       - id: filter
-        uses: dorny/paths-filter@v3
+        uses: ./.github/actions/detect-changes
         with:
+          name: venom
           filters: |
             venom:
               - "artifacts/venom/**"
               - "lib/api-client-react/**"
               - "lib/api-spec/**"
+              - "lib/knowledge-text/**"
+              - "lib/slime/**"
+              - "lib/venom-workspace-merge/**"
               - "package.json"
               - "pnpm-lock.yaml"
               - "pnpm-workspace.yaml"
               - "tsconfig.base.json"
               - ".github/workflows/venom-kanban-e2e.yml"
+              - ".github/actions/detect-changes/**"
 
   kanban-regression:
     name: Kanban browser regression
     needs: changes
     if: needs.changes.outputs.venom == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Sized for the full spec list at BOTH viewport sizes (mobile-chromium +
+    # desktop-chromium in one Playwright run). Measured on these runners:
+    # the phone-size pass alone took 10-15 minutes (it was overrunning the
+    # old fixed 15-minute budget, which could not move while no credential
+    # could write workflow files), so two CPU-bound passes plus ~3-4 minutes
+    # of setup and retry headroom lands around 30-35; 45 leaves margin for
+    # runner variance. If this trips, the list reporter names the slow
+    # tests — read that before reaching for a bigger number.
+    timeout-minutes: 45
     env:
       CI: "true"
       VENOM_E2E_BASE_URL: http://127.0.0.1:22167
@@ -67,6 +85,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # The package's pure-logic suite (node --test, a couple of seconds). It
+      # needs no browser or Expo server, so it runs before the expensive E2E
+      # setup: a broken reducer or merge rule fails this required check fast.
+      - name: Run Venom unit tests
+        run: pnpm --filter @workspace/venom run test:unit
 
       - name: Install Playwright Chromium dependencies
         run: pnpm exec playwright install --with-deps chromium

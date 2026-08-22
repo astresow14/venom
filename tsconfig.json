@@ -10,6 +10,12 @@
       "path": "./lib/api-client-react"
     },
     {
+      "path": "./lib/venom-workspace-merge"
+    },
+    {
+      "path": "./lib/knowledge-text"
+    },
+    {
       "path": "./lib/api-zod"
     },
     {

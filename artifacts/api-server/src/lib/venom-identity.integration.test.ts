@@ -15,8 +15,10 @@ import {
   identityDisplayLabel,
   resolveVenomIdentities,
   resolveVenomIdentity,
+  sweepStaleVenomIdentities,
   VENOM_IDENTITY_BOUNDS,
   VENOM_IDENTITY_REFRESH_MS,
+  VENOM_IDENTITY_SWEEP_STALE_MS,
   type AuthProfile,
 } from "./venom-identity";
 
@@ -216,6 +218,141 @@ test("batch resolution refreshes only stale or missing identities", async () => 
   assert.equal(identities.get(freshId)?.displayName, "Fresh Person");
   assert.equal(identities.get(missingId)?.displayName, "Filled Person");
   assert.equal(identities.size, 2);
+});
+
+test("the retention sweep deletes upstream-deleted identities and keeps live ones", async () => {
+  // Fixture rows carry a current refreshedAt/createdAt so the live dev
+  // server's own sweep (real clock, real Clerk) never picks them up; they
+  // are stale only relative to this test's injected future clock.
+  const realNow = Date.now();
+  const sweepNow = realNow + VENOM_IDENTITY_SWEEP_STALE_MS + 60 * 60 * 1000;
+
+  const deletedId = freshUserId();
+  const liveId = freshUserId();
+  const freshId = freshUserId();
+  await db.insert(venomIdentitiesTable).values([
+    {
+      clerkUserId: deletedId,
+      displayName: "Gone Person",
+      email: "gone@example.com",
+      provider: "google",
+      refreshedAt: new Date(realNow),
+      createdAt: new Date(realNow),
+    },
+    {
+      clerkUserId: liveId,
+      displayName: "Old Live Name",
+      email: "live@example.com",
+      provider: "google",
+      refreshedAt: new Date(realNow),
+      createdAt: new Date(realNow),
+    },
+    {
+      // Recently refreshed relative to the injected clock: must be skipped.
+      clerkUserId: freshId,
+      displayName: "Fresh Person",
+      email: "fresh@example.com",
+      provider: "google",
+      refreshedAt: new Date(sweepNow - 1000),
+      createdAt: new Date(realNow),
+    },
+  ]);
+
+  const fetchedIds: string[] = [];
+  const fetchProfile = async (userId: string): Promise<AuthProfile> => {
+    fetchedIds.push(userId);
+    if (userId === deletedId) return null;
+    if (userId === liveId) {
+      return {
+        displayName: "Refreshed Live Name",
+        email: "live@example.com",
+        provider: "google",
+      };
+    }
+    // The shared dev database (and earlier tests in this file) may hold
+    // other rows that are stale relative to the future clock; failing
+    // their checks proves they are left untouched.
+    throw new Error("unknown user");
+  };
+
+  const result = await sweepStaleVenomIdentities({
+    fetchProfile,
+    now: sweepNow,
+  });
+
+  assert.equal(result.deleted, 1, "exactly the upstream-deleted row is gone");
+  assert.equal(result.refreshed, 1, "exactly the live row is re-verified");
+  assert.ok(result.scanned >= 2, "both stale fixtures are scanned");
+  assert.equal(
+    result.failed,
+    result.scanned - 2,
+    "every other scanned row failed its check and was left alone",
+  );
+  assert.ok(fetchedIds.includes(deletedId));
+  assert.ok(fetchedIds.includes(liveId));
+  assert.ok(
+    !fetchedIds.includes(freshId),
+    "recently refreshed rows are not re-verified",
+  );
+
+  const deletedRows = await db
+    .select()
+    .from(venomIdentitiesTable)
+    .where(eq(venomIdentitiesTable.clerkUserId, deletedId));
+  assert.equal(
+    deletedRows.length,
+    0,
+    "the deleted account's name and email are removed",
+  );
+
+  const [liveRow] = await db
+    .select()
+    .from(venomIdentitiesTable)
+    .where(eq(venomIdentitiesTable.clerkUserId, liveId));
+  assert.ok(liveRow, "the live account's row survives the sweep");
+  assert.equal(liveRow.displayName, "Refreshed Live Name");
+  assert.equal(
+    liveRow.refreshedAt.getTime(),
+    sweepNow,
+    "the surviving row is re-stamped so the next sweep skips it",
+  );
+
+  const [freshRow] = await db
+    .select()
+    .from(venomIdentitiesTable)
+    .where(eq(venomIdentitiesTable.clerkUserId, freshId));
+  assert.equal(freshRow?.displayName, "Fresh Person");
+});
+
+test("a failed auth-provider check leaves the identity row for the next sweep", async () => {
+  const realNow = Date.now();
+  const sweepNow = realNow + VENOM_IDENTITY_SWEEP_STALE_MS + 60 * 60 * 1000;
+  const userId = freshUserId();
+  await db.insert(venomIdentitiesTable).values({
+    clerkUserId: userId,
+    displayName: "Unreachable Person",
+    email: "unreachable@example.com",
+    provider: "google",
+    refreshedAt: new Date(realNow),
+    createdAt: new Date(realNow),
+  });
+
+  const result = await sweepStaleVenomIdentities({
+    fetchProfile: async () => {
+      throw new Error("auth provider unavailable");
+    },
+    now: sweepNow,
+  });
+
+  assert.ok(result.failed >= 1, "the unreachable row is counted as failed");
+  assert.equal(result.deleted, 0, "nothing is deleted without an explicit answer");
+
+  const [row] = await db
+    .select()
+    .from(venomIdentitiesTable)
+    .where(eq(venomIdentitiesTable.clerkUserId, userId));
+  assert.ok(row, "the row survives until the provider can be reached");
+  assert.equal(row.displayName, "Unreachable Person");
 });
 
 test("presentation helpers default legacy evidence to the owner", () => {

@@ -30,6 +30,7 @@ export interface VenomBuildRunSummary {
   /** @minimum 0 */
   currentRevisionNumber: number;
   approvedRevisionId: Uuid | null;
+  templateId: Uuid | null;
   /**
      * @maxLength 240
      * @nullable

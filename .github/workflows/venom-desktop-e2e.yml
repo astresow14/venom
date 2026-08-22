@@ -13,23 +13,33 @@ jobs:
     name: Detect Venom Desktop changes
     runs-on: ubuntu-latest
     outputs:
-      desktop: ${{ steps.filter.outputs.desktop }}
+      desktop: ${{ steps.filter.outputs.changed }}
     steps:
+      # A checkout must come first so the local composite action below can be
+      # resolved from the workspace; the action re-checks-out at the depth the
+      # event actually needs.
       - uses: actions/checkout@v4
 
+      # Owns the event-conditional fetch depth and the merge_group base/head
+      # wiring; this workflow only supplies its filter list.
       - id: filter
-        uses: dorny/paths-filter@v3
+        uses: ./.github/actions/detect-changes
         with:
+          name: desktop
           filters: |
             desktop:
               - "artifacts/venom-desktop/**"
               - "lib/api-client-react/**"
               - "lib/api-spec/**"
+              - "lib/knowledge-text/**"
+              - "lib/slime/**"
+              - "lib/venom-workspace-merge/**"
               - "package.json"
               - "pnpm-lock.yaml"
               - "pnpm-workspace.yaml"
               - "tsconfig.base.json"
               - ".github/workflows/venom-desktop-e2e.yml"
+              - ".github/actions/detect-changes/**"
 
   desktop-regression:
     name: Desktop workspace browser regression
@@ -64,6 +74,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # The package's pure-logic suite (node --test, a couple of seconds). It
+      # needs no browser, so it runs before the Playwright setup: a broken
+      # store or merge rule fails this required check fast.
+      - name: Run Venom Desktop unit tests
+        run: pnpm --filter @workspace/venom-desktop run test
 
       - name: Install Playwright Chromium dependencies
         run: pnpm exec playwright install --with-deps chromium

@@ -1,3 +1,4 @@
+import { lazy, Suspense, useMemo } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import {
   useGetVenomApp,
@@ -40,6 +41,13 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { asList } from "@/lib/as-list";
+import { hasActiveImportJob, resolveAppDetailState } from "@/lib/appPortfolio";
+import { isVenomBuildRunListRow } from "@/lib/buildRuns";
+import SharingPanel from "@/components/workspace/apps/sharing-panel";
+
+const AiUsagePanel = lazy(
+  () => import("@/components/workspace/apps/ai-usage-panel"),
+);
 import UploadVersionDialog from "@/components/workspace/apps/upload-version-dialog";
 import {
   EvolutionTimeline,
@@ -54,19 +62,28 @@ export default function AppDetailPage() {
   const appId = params?.id;
   const { toast } = useToast();
 
-  const { data: detail, isLoading, isError } = useGetVenomApp(appId!, {
+  const detailQuery = useGetVenomApp(appId!, {
     query: {
       enabled: !!appId,
       queryKey: getGetVenomAppQueryKey(appId!),
-      refetchInterval: (query) => {
-        // If there's an active job, refetch every 2 seconds
-        const activeJob = query.state.data?.importJobs?.some(
-          (j) => !["complete", "failed"].includes(j.status),
-        );
-        return activeJob ? 2000 : false;
-      },
+      // If there's an active job, refetch every 2 seconds. The callback sees
+      // the raw payload before the resolver runs, so it reads defensively.
+      refetchInterval: (query) =>
+        hasActiveImportJob(query.state.data) ? 2000 : false,
     },
   });
+  // The generated client resolves failed requests (401/5xx) to the JSON
+  // error body as data, so the record is validated before anything reads it
+  // — the same contract as the SOP detail page.
+  const detailState = useMemo(
+    () =>
+      resolveAppDetailState({
+        data: detailQuery.data,
+        isLoading: detailQuery.isLoading,
+        isError: detailQuery.isError,
+      }),
+    [detailQuery.data, detailQuery.isLoading, detailQuery.isError],
+  );
 
   const { data: buildRunsResponse } = useListVenomBuildRuns(
     { appId: appId! },
@@ -74,11 +91,11 @@ export default function AppDetailPage() {
       query: { enabled: !!appId, queryKey: getListVenomBuildRunsQueryKey({ appId: appId! }) },
     },
   );
-  const buildRuns = asList(buildRunsResponse);
+  const buildRuns = asList(buildRunsResponse).filter(isVenomBuildRunListRow);
 
   const deleteApp = useDeleteVenomApp();
 
-  if (isLoading) {
+  if (detailState.status === "loading") {
     return (
       <div className="p-8 max-w-5xl mx-auto w-full space-y-8">
         <Skeleton className="h-12 w-64 rounded-xl bg-muted/20" />
@@ -93,28 +110,48 @@ export default function AppDetailPage() {
     );
   }
 
-  if (isError || !detail) {
+  if (detailState.status === "error") {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+      <div
+        className="flex flex-col items-center justify-center h-full p-8 text-center"
+        role="alert"
+        data-testid="status-app-detail-error"
+      >
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
         <h2 className="text-xl font-semibold tracking-tight">
-          App Not Found
+          App unavailable
         </h2>
-        <p className="text-muted-foreground text-sm mt-2 mb-6">
-          This app record does not exist or belongs to another account.
+        <p className="text-muted-foreground text-sm mt-2 mb-6 max-w-md">
+          {detailState.reason === "malformed-response"
+            ? "This app record came back in an unexpected shape. It may have been removed, it may belong to another account, or the portfolio may be answering incorrectly."
+            : "We could not load this app. Try again in a moment."}
         </p>
-        <Link 
-          href="/workspace/apps"
-          className="inline-flex items-center justify-center whitespace-nowrap text-sm h-10 px-4 py-2 border border-border/60 rounded-md font-medium shadow-soft"
-          data-testid="link-return-matrix"
-        >
-          Return to Portfolio
-        </Link>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => {
+              void detailQuery.refetch();
+            }}
+            disabled={detailQuery.isFetching}
+            className="rounded-md font-medium border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
+            data-testid="button-retry-app-detail"
+          >
+            {detailQuery.isFetching ? "Retrying" : "Try again"}
+          </Button>
+          <Link 
+            href="/workspace/apps"
+            className="inline-flex items-center justify-center whitespace-nowrap text-sm h-10 px-4 py-2 border border-border/60 rounded-md font-medium shadow-soft"
+            data-testid="link-return-matrix"
+          >
+            Return to Portfolio
+          </Link>
+        </div>
       </div>
     );
   }
 
-  const { app, versions, importJobs, deploymentLinks, timeline } = detail;
+  const detail = detailState.detail;
+  const { app, versions, importJobs, timeline } = detail;
 
   const handleDelete = async () => {
     try {
@@ -148,11 +185,32 @@ export default function AppDetailPage() {
               <ArrowLeft className="mr-2 h-3 w-3 group-hover:-translate-x-1 transition-transform" />
                App portfolio
             </Link>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-3xl font-semibold tracking-tight text-foreground">
                 {app.name}
               </h1>
               <AppStatusBadge status={app.status} />
+              {app.liveReleaseId ? (
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full border border-foreground/30 bg-foreground/[0.04] px-2.5 py-1 text-[11px] font-semibold tracking-tight"
+                  title={
+                    app.livePublishedAt
+                      ? `Published ${new Date(app.livePublishedAt).toLocaleString()}`
+                      : undefined
+                  }
+                  data-testid={`badge-live-version-${app.id}`}
+                >
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-foreground animate-pulse"
+                    aria-hidden="true"
+                  />
+                  {app.liveIterationNumber != null
+                    ? app.latestIterationNumber > app.liveIterationNumber
+                      ? `Live v${app.liveIterationNumber} · newest v${app.latestIterationNumber}`
+                      : `Live v${app.liveIterationNumber}`
+                    : "Live"}
+                </span>
+              ) : null}
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               {app.brand} / {app.id.split("-")[0]}
@@ -281,7 +339,7 @@ export default function AppDetailPage() {
                     data-testid={`button-improve-app-${app.id}`}
                   >
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Improve This App
+                    Improve this app
                   </Button>
                 </ImproveAppDialog>
                 <Link
@@ -308,6 +366,12 @@ export default function AppDetailPage() {
                 </UploadVersionDialog>
               </div>
             </div>
+
+            <SharingPanel app={app} />
+
+            <Suspense fallback={null}>
+              <AiUsagePanel app={app} />
+            </Suspense>
 
             <KnowledgeContextCard app={app} />
 
@@ -349,6 +413,19 @@ export default function AppDetailPage() {
                     {app.purpose}
                   </dd>
                 </div>
+                {app.templateName && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground mb-1 font-medium">
+                      Template origin
+                    </dt>
+                    <dd
+                      className="font-medium normal-case tracking-normal"
+                      data-testid="text-template-origin"
+                    >
+                      {app.templateName}
+                    </dd>
+                  </div>
+                )}
                 <div>
                   <dt className="text-xs text-muted-foreground mb-1 font-medium">
                     Detected stack

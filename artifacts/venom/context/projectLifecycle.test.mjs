@@ -37,7 +37,7 @@ test("fallback workspace is a fresh usable default project", () => {
   const fallback = createFallbackWorkspaceProject("proj_next", 123);
 
   assert.equal(fallback.id, "proj_next");
-  assert.equal(fallback.name, "Global Workspace");
+  assert.equal(fallback.name, "General");
   assert.equal(fallback.updatedAt, 123);
   assert.deepEqual(fallback.tasks, []);
   assert.deepEqual(fallback.fieldDefinitions, []);

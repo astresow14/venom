@@ -1,27 +1,23 @@
 /**
- * ModelSelector – compact active-model picker in the chat composer.
+ * ModelSelector – compact active-model chip in the chat composer.
  *
- * Shows only enabled models. Tapping opens a small popover with the list.
- * Long-press / settings icon opens ModelLibraryDialog.
+ * Shows the active model's name. Both the chip and the settings icon open
+ * the combined models & voices dialog (ModelVoicesDialog, owned by the chat
+ * page); this component no longer carries a popup of its own.
  */
 
-import React, { useMemo, useState } from 'react';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
+import React, { useMemo } from 'react';
 import { ChevronDown, Settings2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useVenomWorkspace } from '@/context/venom-workspace';
-import { getGetVenomModelsQueryKey, useGetVenomModels, type VenomManagedModel } from '@workspace/api-client-react';
+import {
+  getGetVenomModelsQueryKey,
+  useGetVenomModels,
+  type VenomManagedModel,
+} from '@workspace/api-client-react';
 import { normalizeModelPreferences } from '@/lib/workspaceState';
-import { ModelLibraryDialog } from './ModelLibraryDialog';
 
-export function ModelSelector() {
-  const [open, setOpen] = useState(false);
-  const { state, setActiveModelId } = useVenomWorkspace();
+export function ModelSelector({ onOpen }: { onOpen: () => void }) {
+  const { state } = useVenomWorkspace();
 
   const prefs = useMemo(
     () => normalizeModelPreferences(state.modelPreferences),
@@ -48,7 +44,15 @@ export function ModelSelector() {
 
   // Active model metadata (may be null if models haven't loaded yet)
   const activeModel = modelMap.get(prefs.activeModelId);
-  const activeLabel = activeModel?.name ?? prefs.activeModelId;
+  // In auto policies the chip announces the handover instead of a model
+  // name — the server picks per reply, so no single name would be honest.
+  const selectionPolicy = prefs.selectionPolicy ?? 'manual';
+  const activeLabel =
+    selectionPolicy === 'auto-cheapest'
+      ? 'Auto — cheapest'
+      : selectionPolicy === 'auto-max-power'
+        ? 'Auto — max power'
+        : (activeModel?.name ?? prefs.activeModelId);
 
   // Only render if there are enabled models with metadata, else show nothing
   // (avoids UI flash before first fetch)
@@ -64,114 +68,31 @@ export function ModelSelector() {
     );
   }
 
-  if (enabledModels.length <= 1 && hasData) {
-    // Only one model – show label, still allow opening library
-    return (
-      <div className="flex items-center gap-1">
-        <span className="text-xs text-muted-foreground" data-testid="text-active-model">
-          {activeLabel}
-        </span>
-        <ModelLibraryDialog>
-          <button
-            type="button"
-            className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Manage models"
-            title="Manage models"
-          >
-            <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-        </ModelLibraryDialog>
-      </div>
-    );
-  }
-
   return (
     <div className="flex items-center gap-1">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              '-ml-1 flex items-center gap-1 rounded-md px-1 py-0.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              open
-                ? 'text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-            aria-label={`Active model: ${activeLabel}. Press to change.`}
-            aria-expanded={open}
-            aria-haspopup="listbox"
-          >
-            {activeLabel}
-            <ChevronDown
-              className={cn(
-                'h-3 w-3 transition-transform',
-                open && 'rotate-180',
-              )}
-            />
-          </button>
-        </PopoverTrigger>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="-ml-1 flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`Active model: ${activeLabel}. Open models and voices.`}
+        aria-haspopup="dialog"
+        data-testid="button-model-chip"
+      >
+        <span data-testid="text-active-model">{activeLabel}</span>
+        <ChevronDown className="h-3 w-3" aria-hidden="true" />
+      </button>
 
-        <PopoverContent
-          align="start"
-          sideOffset={8}
-          className="w-52 rounded-xl border border-border p-1 shadow-md"
-          role="listbox"
-          aria-label="Choose active model"
-        >
-          <div className="flex flex-col gap-0.5">
-            {enabledModels.map((model) => {
-              const isActive = prefs.activeModelId === model.id;
-              return (
-                <button
-                  key={model.id}
-                  type="button"
-                  role="option"
-                  aria-selected={isActive}
-                  onClick={() => {
-                    setActiveModelId(model.id);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    isActive
-                      ? 'bg-muted font-medium text-foreground'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  )}
-                >
-                  <span className="truncate">{model.name}</span>
-                  {isActive && (
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-foreground" aria-hidden="true" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-1 border-t border-border pt-1">
-            <ModelLibraryDialog>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => setOpen(false)}
-              >
-                <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
-                Manage models
-              </button>
-            </ModelLibraryDialog>
-          </div>
-        </PopoverContent>
-      </Popover>
-
-      <ModelLibraryDialog>
-        <button
-          type="button"
-          className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Manage models"
-          title="Manage models"
-        >
-          <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
-      </ModelLibraryDialog>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="Manage models and voices"
+        title="Manage models and voices"
+        aria-haspopup="dialog"
+        data-testid="button-manage-models"
+      >
+        <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
     </div>
   );
 }

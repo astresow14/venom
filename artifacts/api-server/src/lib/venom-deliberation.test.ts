@@ -7,6 +7,7 @@ import {
   createDisagreementSplitter,
   DELIBERATION_VOICES,
   DISAGREEMENT_MARKER,
+  InvalidVoiceAssignment,
   MAX_DISAGREEMENT_CHARS,
   MAX_DISAGREEMENTS,
   parseDisagreementNotes,
@@ -14,13 +15,18 @@ import {
   runDeliberation,
   withVoicePrompt,
 } from "./venom-deliberation";
-import { ProviderError, type VenomMessage } from "./venom-provider-adapters";
+import {
+  PROVIDER_ACCOUNT_ERROR_MESSAGE,
+  ProviderError,
+  type VenomMessage,
+} from "./venom-provider-adapters";
 import type { VenomManagedModel } from "./venom-models";
 
 function catalogEntry(
   id: VenomManagedModel["id"],
   name: string,
   available: boolean,
+  accountHealth?: VenomManagedModel["accountHealth"],
 ): VenomManagedModel {
   return {
     id,
@@ -30,6 +36,7 @@ function catalogEntry(
     summary: "",
     available,
     availabilityText: available ? "Ready" : "Not configured",
+    accountHealth,
   } as VenomManagedModel;
 }
 
@@ -185,6 +192,186 @@ test("availability reflects configured providers and lists the neutral roster", 
     SOLO_CATALOG.map((model) => ({ ...model, available: false })),
   );
   assert.equal(none.available, false);
+});
+
+test("planning skips alternates whose provider account cannot pay", () => {
+  const catalog = [
+    catalogEntry("venom-gpt", "Venom GPT", true),
+    catalogEntry("venom-claude", "Venom Claude", true, "unfunded"),
+    catalogEntry("venom-gemini", "Venom Gemini", true),
+    catalogEntry("venom-grok", "Venom Grok", false),
+  ];
+  const planned = planDeliberationVoices("venom-gpt", catalog);
+  // The billing-dead model never gets a voice — it would fail its take on
+  // every turn; the healthy alternate fills one seat and the anchor absorbs
+  // the rest.
+  assert.deepEqual(
+    planned.map((voice) => voice.modelId),
+    ["venom-gpt", "venom-gemini", "venom-gpt"],
+  );
+});
+
+// ── Per-voice model picks ───────────────────────────────────────────────────
+
+/** Like catalogEntry, but with an explicit provider for clash scenarios. */
+function providerEntry(
+  id: VenomManagedModel["id"],
+  name: string,
+  provider: VenomManagedModel["provider"],
+  available = true,
+  accountHealth?: VenomManagedModel["accountHealth"],
+): VenomManagedModel {
+  return { ...catalogEntry(id, name, available, accountHealth), provider };
+}
+
+/** The production shape: every model on its own provider, grok unconfigured. */
+const SPREAD_CATALOG = [
+  providerEntry("venom-gpt", "Venom GPT", "openai"),
+  providerEntry("venom-claude", "Venom Claude", "anthropic"),
+  providerEntry("venom-gemini", "Venom Gemini", "gemini"),
+  providerEntry("venom-grok", "Venom Grok", "openrouter", false),
+];
+
+test("explicit picks decide which model plays each voice; the last pick per voice wins", () => {
+  const planned = planDeliberationVoices("venom-gpt", SPREAD_CATALOG, [
+    { voiceId: "skeptic", modelId: "venom-claude" },
+    { voiceId: "skeptic", modelId: "venom-gemini" },
+    { voiceId: "evidence", modelId: "venom-claude" },
+  ]);
+  assert.deepEqual(
+    planned.map((voice) => [voice.id, voice.modelId]),
+    [
+      ["direct", "venom-gpt"],
+      ["skeptic", "venom-gemini"],
+      ["evidence", "venom-claude"],
+    ],
+  );
+});
+
+test("a model can't argue itself: the same model on First take and Skeptic is rejected", () => {
+  assert.throws(
+    () =>
+      planDeliberationVoices("venom-gpt", SPREAD_CATALOG, [
+        { voiceId: "direct", modelId: "venom-gpt" },
+        { voiceId: "skeptic", modelId: "venom-gpt" },
+      ]),
+    (error: unknown) =>
+      error instanceof InvalidVoiceAssignment &&
+      /Venom GPT can't argue itself/.test(error.message) &&
+      /Skeptic/.test(error.message),
+  );
+});
+
+test("two models fronting one provider are rejected by provider metadata, not id equality", () => {
+  const catalog = [
+    providerEntry("venom-gpt", "Venom GPT", "openai"),
+    providerEntry("venom-claude", "Venom Claude", "openai"),
+    providerEntry("venom-gemini", "Venom Gemini", "gemini"),
+    providerEntry("venom-grok", "Venom Grok", "openrouter", false),
+  ];
+  assert.throws(
+    () =>
+      planDeliberationVoices("venom-gpt", catalog, [
+        { voiceId: "direct", modelId: "venom-gpt" },
+        { voiceId: "skeptic", modelId: "venom-claude" },
+      ]),
+    (error: unknown) =>
+      error instanceof InvalidVoiceAssignment &&
+      /Venom GPT and Venom Claude both run on OpenAI/.test(error.message),
+  );
+});
+
+test("the argue-itself rule judges stated intent even when one pick is unusable", () => {
+  const catalog = [
+    providerEntry("venom-gpt", "Venom GPT", "openai"),
+    providerEntry("venom-claude", "Venom Claude", "openai", false),
+    providerEntry("venom-gemini", "Venom Gemini", "gemini"),
+    providerEntry("venom-grok", "Venom Grok", "openrouter", false),
+  ];
+  // The clash is rejected before the unusable pick falls back to auto, so
+  // the answer never depends on provider uptime.
+  assert.throws(
+    () =>
+      planDeliberationVoices("venom-gpt", catalog, [
+        { voiceId: "direct", modelId: "venom-gpt" },
+        { voiceId: "skeptic", modelId: "venom-claude" },
+      ]),
+    InvalidVoiceAssignment,
+  );
+});
+
+test("an unusable pick returns that one voice to automatic assignment", () => {
+  const planned = planDeliberationVoices("venom-gpt", SPREAD_CATALOG, [
+    { voiceId: "skeptic", modelId: "venom-grok" },
+  ]);
+  assert.deepEqual(
+    planned.map((voice) => voice.modelId),
+    ["venom-gpt", "venom-claude", "venom-gemini"],
+  );
+});
+
+test("evidence is neutral and may share a provider with an opposing voice", () => {
+  const planned = planDeliberationVoices("venom-gpt", SPREAD_CATALOG, [
+    { voiceId: "evidence", modelId: "venom-gpt" },
+  ]);
+  assert.deepEqual(
+    planned.map((voice) => [voice.id, voice.modelId]),
+    [
+      ["direct", "venom-gpt"],
+      ["skeptic", "venom-claude"],
+      ["evidence", "venom-gpt"],
+    ],
+  );
+});
+
+test("automatic assignment steers around an explicit pick's provider", () => {
+  // The skeptic takes the anchor's model, so the first take moves to another
+  // provider instead of arguing itself.
+  const planned = planDeliberationVoices("venom-gpt", SPREAD_CATALOG, [
+    { voiceId: "skeptic", modelId: "venom-gpt" },
+  ]);
+  assert.deepEqual(
+    planned.map((voice) => [voice.id, voice.modelId]),
+    [
+      ["direct", "venom-claude"],
+      ["skeptic", "venom-gpt"],
+      ["evidence", "venom-gemini"],
+    ],
+  );
+});
+
+test("too few providers: an explicit pick still runs, sharing as auto does today", () => {
+  const planned = planDeliberationVoices("venom-gpt", SOLO_CATALOG, [
+    { voiceId: "skeptic", modelId: "venom-gpt" },
+  ]);
+  // Only one usable model exists, so the voices share it — the argue-itself
+  // rule only rejects explicit opposing PAIRS, never the degraded fallback.
+  assert.deepEqual(
+    planned.map((voice) => voice.modelId),
+    ["venom-gpt", "venom-gpt", "venom-gpt"],
+  );
+});
+
+test("availability ignores models whose provider account cannot pay", () => {
+  const catalog = [
+    catalogEntry("venom-gpt", "Venom GPT", true),
+    catalogEntry("venom-claude", "Venom Claude", true, "unfunded"),
+    catalogEntry("venom-gemini", "Venom Gemini", false),
+    catalogEntry("venom-grok", "Venom Grok", false),
+  ];
+  const availability = buildDeliberationAvailability(catalog);
+  assert.equal(availability.available, true);
+  assert.equal(
+    availability.distinctModels,
+    false,
+    "a billing-dead model is not a genuinely distinct voice",
+  );
+
+  const allDead = buildDeliberationAvailability([
+    catalogEntry("venom-gpt", "Venom GPT", true, "unfunded"),
+    catalogEntry("venom-claude", "Venom Claude", false),
+  ]);
+  assert.equal(allDead.available, false);
 });
 
 // ── Prompts ─────────────────────────────────────────────────────────────────
@@ -433,4 +620,49 @@ test("the chat request contract accepts the opt-in flag and rejects junk", () =>
     SendVenomMessageBody.safeParse({ ...base, deliberate: "yes" }).success,
     false,
   );
+});
+
+// ── Billing-dead accounts ────────────────────────────────────────────────────
+
+function billingDeadError() {
+  return Object.assign(
+    new Error(
+      '400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}',
+    ),
+    { status: 400 },
+  );
+}
+
+test("a pass where every voice dies billing-class names the account problem", async () => {
+  const { outcome, calls } = collectRun({
+    direct: billingDeadError(),
+    skeptic: billingDeadError(),
+    evidence: billingDeadError(),
+  });
+  await assert.rejects(outcome, (error: unknown) => {
+    assert.ok(error instanceof ProviderError);
+    assert.equal(error.kind, "account_billing");
+    assert.equal(error.retryable, false);
+    assert.equal(error.message, PROVIDER_ACCOUNT_ERROR_MESSAGE);
+    // The provider's own wording never leaves the server.
+    assert.doesNotMatch(error.message, /credit balance|Anthropic/i);
+    return true;
+  });
+  // Billing failures are non-retryable: one provider call per voice, no burn.
+  assert.equal(calls.length, 3);
+});
+
+test("a mixed all-failed pass stays a generic retryable error", async () => {
+  const { outcome } = collectRun({
+    direct: billingDeadError(),
+    skeptic: Object.assign(new Error("boom"), { status: 500 }),
+    evidence: Object.assign(new Error("boom"), { status: 500 }),
+  });
+  await assert.rejects(outcome, (error: unknown) => {
+    assert.ok(error instanceof ProviderError);
+    assert.equal(error.kind, "generic");
+    assert.equal(error.retryable, true);
+    assert.match(error.message, /No deliberation voice completed a take/);
+    return true;
+  });
 });

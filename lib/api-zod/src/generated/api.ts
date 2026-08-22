@@ -7,6 +7,3465 @@
  */
 import * as zod from 'zod';
 
+// Literal helper constants hoisted by api-spec/scripts/hoist-literal-consts.mjs
+// so no schema declaration can reference one before it is initialized.
+export const sendVenomMessageBodyMessagesItemAttachmentIdsItemRegExp = new RegExp('^[A-Za-z0-9-]{1,64}$');
+export const sendVenomMessageBodyMessagesItemAttachmentIdsMax = 5;
+export const sendVenomMessageBodyMessagesMax = 24;
+export const sendVenomMessageBodyProjectContextMax = 8000;
+export const sendVenomMessageBodyProjectIdMax = 160;
+export const sendVenomMessageBodySourceCitationIdsItemRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const sendVenomMessageBodySourceCitationIdsMax = 200;
+export const sendVenomMessageBodySourceSnapshotsItemIdMax = 160;
+export const sendVenomMessageBodySourceSnapshotsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const sendVenomMessageBodySourceSnapshotsItemContextMax = 8000;
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemIdMax = 160;
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemTitleMax = 300;
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemUrlMax = 2048;
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemExcerptMax = 1000;
+export const sendVenomMessageBodySourceSnapshotsItemCitationsItemReferenceMax = 200;
+export const sendVenomMessageBodySourceSnapshotsItemCitationsMax = 50;
+export const sendVenomMessageBodySourceSnapshotsItemAttestationMax = 2048;
+export const sendVenomMessageBodySourceSnapshotsItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const sendVenomMessageBodySourceSnapshotsMax = 32;
+export const sendVenomMessageBodyBlendItemIdMax = 64;
+export const sendVenomMessageBodyBlendItemWeightMin = 0;
+export const sendVenomMessageBodyBlendItemWeightMax = 1;
+export const sendVenomMessageBodyBlendMax = 3;
+export const sendVenomMessageBodyVoiceModelsMax = 3;
+export const getVenomModelsResponseNameMax = 80;
+export const getVenomModelsResponseSummaryMax = 240;
+export const getVenomModelsResponseAvailabilityTextMax = 160;
+export const getVenomDeliberationResponseVoicesItemNameMax = 80;
+export const getVenomDeliberationResponseVoicesItemTaglineMax = 240;
+export const getVenomDeliberationResponseVoicesMax = 4;
+export const createVenomChatFileUploadBodyNameMax = 160;
+export const createVenomChatFileUploadBodyContentTypeMax = 100;
+export const createVenomChatFileUploadBodySizeMax = 10485760;
+export const createVenomChatFileUploadBodySizeMultipleOf = 1;
+export const createVenomChatFileUploadResponseFileIdMax = 64;
+export const createVenomChatFileUploadResponseFileNameMax = 160;
+export const createVenomChatFileUploadResponseFileContentTypeMax = 100;
+export const createVenomChatFileUploadResponseFileSizeMin = 0;
+export const createVenomChatFileUploadResponseFileSizeMax = 10485760;
+export const createVenomChatFileUploadResponseFileSizeMultipleOf = 1;
+export const createVenomChatFileUploadResponseFileCreatedAtMin = 0;
+export const createVenomChatFileUploadResponseFileCreatedAtMultipleOf = 1;
+export const createVenomChatFileUploadResponseUploadUrlMax = 8192;
+export const completeVenomChatFileUploadPathFileIdRegExp = new RegExp('^[A-Za-z0-9-]{1,64}$');
+export const completeVenomChatFileUploadResponseIdMax = 64;
+export const completeVenomChatFileUploadResponseNameMax = 160;
+export const completeVenomChatFileUploadResponseContentTypeMax = 100;
+export const completeVenomChatFileUploadResponseSizeMin = 0;
+export const completeVenomChatFileUploadResponseSizeMax = 10485760;
+export const completeVenomChatFileUploadResponseSizeMultipleOf = 1;
+export const completeVenomChatFileUploadResponseCreatedAtMin = 0;
+export const completeVenomChatFileUploadResponseCreatedAtMultipleOf = 1;
+export const downloadVenomChatFilePathFileIdRegExp = new RegExp('^[A-Za-z0-9-]{1,64}$');
+export const getVenomVoicesResponseNameMax = 40;
+export const getVenomVoicesResponsePersonaMax = 160;
+export const getVenomVoicesResponseSampleTextMax = 240;
+export const getVenomVoicesResponseAvailabilityTextMax = 160;
+export const transcribeVenomVoiceBodyAudioBase64Max = 5000000;
+export const transcribeVenomVoiceResponseTextMax = 8000;
+export const speakVenomVoiceBodyTextMax = 2000;
+export const decideVenomVoiceTurnBodyTranscriptMax = 8000;
+export const decideVenomVoiceTurnBodyRecentTurnsItemContentMax = 4000;
+export const decideVenomVoiceTurnBodyRecentTurnsMax = 12;
+export const decideVenomVoiceTurnResponseDecisionIdMax = 80;
+export const decideVenomVoiceTurnResponseAcknowledgmentMax = 200;
+export const reportVenomVoiceDecisionOutcomeBodyDecisionIdMax = 80;
+export const getVenomVoiceDecisionSummaryQueryWindowDaysDefault = 30;
+export const getVenomVoiceDecisionSummaryQueryWindowDaysMax = 90;
+export const getVenomVoiceDecisionSummaryResponseWindowDaysMax = 90;
+export const getVenomVoiceDecisionSummaryResponseOverallDecisionsMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallWithOutcomeMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallOutcomeCoverageMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallOutcomeCoverageMax = 1;
+export const getVenomVoiceDecisionSummaryResponseOverallDecisionCountsRespondMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallDecisionCountsAcknowledgeMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallDecisionCountsSilentMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallSourceCountsHeuristicMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallSourceCountsModelMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallSourceCountsFallbackMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallWindDownFlaggedMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallQuietRegretSettledMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallQuietRegretHitsMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallQuietRegretRateMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallQuietRegretRateMax = 1;
+export const getVenomVoiceDecisionSummaryResponseOverallSpokenInterruptionSettledMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallSpokenInterruptionHitsMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallSpokenInterruptionRateMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallSpokenInterruptionRateMax = 1;
+export const getVenomVoiceDecisionSummaryResponseOverallWindDownCleanSettledMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallWindDownCleanHitsMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallWindDownCleanRateMin = 0;
+export const getVenomVoiceDecisionSummaryResponseOverallWindDownCleanRateMax = 1;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemTalkativenessMax = 32;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesDecisionsMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWithOutcomeMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesOutcomeCoverageMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesOutcomeCoverageMax = 1;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesDecisionCountsRespondMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesDecisionCountsAcknowledgeMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesDecisionCountsSilentMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSourceCountsHeuristicMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSourceCountsModelMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSourceCountsFallbackMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWindDownFlaggedMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesQuietRegretSettledMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesQuietRegretHitsMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesQuietRegretRateMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesQuietRegretRateMax = 1;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSpokenInterruptionSettledMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSpokenInterruptionHitsMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSpokenInterruptionRateMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSpokenInterruptionRateMax = 1;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWindDownCleanSettledMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWindDownCleanHitsMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWindDownCleanRateMin = 0;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWindDownCleanRateMax = 1;
+export const getVenomVoiceDecisionSummaryResponseByTalkativenessMax = 12;
+export const getVenomVoiceDecisionSummaryResponseCellsItemTalkativenessMax = 32;
+export const getVenomVoiceDecisionSummaryResponseCellsItemDecisionMax = 32;
+export const getVenomVoiceDecisionSummaryResponseCellsItemSourceMax = 32;
+export const getVenomVoiceDecisionSummaryResponseCellsItemOutcomeMax = 32;
+export const getVenomVoiceDecisionSummaryResponseCellsMax = 400;
+export const getVenomVoiceDecisionSummaryResponseThresholdsWindDownTrailingShortTurnsMin = 0;
+export const exportVenomVoiceDecisionsQueryWindowDaysDefault = 90;
+export const exportVenomVoiceDecisionsQueryWindowDaysMax = 90;
+export const getVenomUsageSummaryResponseTotalsCostUsdMin = 0;
+export const getVenomUsageSummaryResponseTotalsRequestsMin = 0;
+export const getVenomUsageSummaryResponseTotalsPromptTokensMin = 0;
+export const getVenomUsageSummaryResponseTotalsOutputTokensMin = 0;
+export const getVenomUsageSummaryResponseDailyItemCostUsdMin = 0;
+export const getVenomUsageSummaryResponseDailyItemRequestsMin = 0;
+export const getVenomUsageSummaryResponseDailyMax = 31;
+export const getVenomUsageSummaryResponseModelsItemModelIdMax = 80;
+export const getVenomUsageSummaryResponseModelsItemModelNameMax = 120;
+export const getVenomUsageSummaryResponseModelsItemCostUsdMin = 0;
+export const getVenomUsageSummaryResponseModelsItemRequestsMin = 0;
+export const getVenomUsageSummaryResponseModelsItemPromptTokensMin = 0;
+export const getVenomUsageSummaryResponseModelsItemOutputTokensMin = 0;
+export const getVenomUsageSummaryResponseModelsMax = 40;
+export const extractVenomKnowledgeBodyConversationIdMax = 160;
+export const extractVenomKnowledgeBodyConversationTitleMax = 160;
+export const extractVenomKnowledgeBodyConversationProjectIdMax = 160;
+export const extractVenomKnowledgeBodyMessagesItemIdMax = 160;
+export const extractVenomKnowledgeBodyMessagesItemContentMax = 8000;
+export const extractVenomKnowledgeBodyMessagesMax = 48;
+export const extractVenomKnowledgeResponseClustersItemLabelMax = 64;
+export const extractVenomKnowledgeResponseClustersItemCategoryMax = 32;
+export const extractVenomKnowledgeResponseClustersItemConfidenceMin = 0;
+export const extractVenomKnowledgeResponseClustersItemConfidenceMax = 1;
+export const extractVenomKnowledgeResponseClustersItemSummaryMax = 240;
+export const extractVenomKnowledgeResponseClustersItemSourceMessageIdsItemMax = 160;
+export const extractVenomKnowledgeResponseClustersItemSourceMessageIdsMax = 12;
+export const extractVenomKnowledgeResponseClustersItemRelatedLabelsItemMax = 64;
+export const extractVenomKnowledgeResponseClustersItemRelatedLabelsMax = 8;
+export const extractVenomKnowledgeResponseClustersMax = 8;
+export const extractVenomKnowledgeResponseFiledItemIdMax = 120;
+export const extractVenomKnowledgeResponseFiledItemProjectIdMax = 120;
+export const extractVenomKnowledgeResponseFiledItemLabelMax = 200;
+export const extractVenomKnowledgeResponseFiledItemCategoryMax = 100;
+export const extractVenomKnowledgeResponseFiledItemStrengthMin = 0;
+export const extractVenomKnowledgeResponseFiledItemStrengthMax = 1;
+export const extractVenomKnowledgeResponseFiledItemLinksItemMax = 120;
+export const extractVenomKnowledgeResponseFiledItemLinksMax = 100;
+export const extractVenomKnowledgeResponseFiledItemDescriptionMax = 2000;
+export const extractVenomKnowledgeResponseFiledItemSummaryMax = 2000;
+export const extractVenomKnowledgeResponseFiledItemMentionCountMin = 0;
+export const extractVenomKnowledgeResponseFiledItemMentionCountMultipleOf = 1;
+export const extractVenomKnowledgeResponseFiledItemLastUpdatedAtMin = 0;
+export const extractVenomKnowledgeResponseFiledItemLastUpdatedAtMultipleOf = 1;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemConversationIdMax = 120;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemProjectIdMax = 120;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemConversationTitleMax = 200;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemMessageIdsItemMax = 120;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemMessageIdsMax = 12;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemExcerptMax = 2000;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemUpdatedAtMin = 0;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemUpdatedAtMultipleOf = 1;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemCapturedByUserIdMax = 120;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMin = 0;
+export const extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMultipleOf = 1;
+export const extractVenomKnowledgeResponseFiledItemSourcesMax = 8;
+export const extractVenomKnowledgeResponseFiledMax = 80;
+export const extractVenomKnowledgeResponseFiledScopeOrgIdMax = 64;
+export const extractVenomKnowledgeResponseFiledScopeOrgNameMax = 80;
+export const extractVenomKnowledgeResponseWorkspaceFilingsItemNoticeIdMax = 64;
+export const extractVenomKnowledgeResponseWorkspaceFilingsItemWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const extractVenomKnowledgeResponseWorkspaceFilingsItemWorkspaceNameMax = 120;
+export const extractVenomKnowledgeResponseWorkspaceFilingsItemLabelsItemMax = 64;
+export const extractVenomKnowledgeResponseWorkspaceFilingsItemLabelsMax = 8;
+export const extractVenomKnowledgeResponseWorkspaceFilingsMax = 8;
+export const listVenomKnowledgeMovesResponseNoticesItemIdMax = 64;
+export const listVenomKnowledgeMovesResponseNoticesItemWorkspaceIdMax = 64;
+export const listVenomKnowledgeMovesResponseNoticesItemWorkspaceNameMax = 120;
+export const listVenomKnowledgeMovesResponseNoticesItemLabelsItemMax = 64;
+export const listVenomKnowledgeMovesResponseNoticesItemLabelsMax = 8;
+export const listVenomKnowledgeMovesResponseNoticesItemCreatedAtMin = 0;
+export const listVenomKnowledgeMovesResponseNoticesItemCreatedAtMultipleOf = 1;
+export const listVenomKnowledgeMovesResponseNoticesMax = 20;
+export const listVenomKnowledgeMovesResponseSuggestionsItemIdMax = 64;
+export const listVenomKnowledgeMovesResponseSuggestionsItemWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomKnowledgeMovesResponseSuggestionsItemWorkspaceNameMax = 120;
+export const listVenomKnowledgeMovesResponseSuggestionsItemConceptIdMax = 120;
+export const listVenomKnowledgeMovesResponseSuggestionsItemLabelMax = 200;
+export const listVenomKnowledgeMovesResponseSuggestionsItemCreatedAtMin = 0;
+export const listVenomKnowledgeMovesResponseSuggestionsItemCreatedAtMultipleOf = 1;
+export const listVenomKnowledgeMovesResponseSuggestionsMax = 20;
+export const undoVenomKnowledgeMovePathMoveIdMax = 64;
+export const undoVenomKnowledgeMoveResponseRestoredItemIdMax = 120;
+export const undoVenomKnowledgeMoveResponseRestoredItemProjectIdMax = 120;
+export const undoVenomKnowledgeMoveResponseRestoredItemLabelMax = 200;
+export const undoVenomKnowledgeMoveResponseRestoredItemCategoryMax = 100;
+export const undoVenomKnowledgeMoveResponseRestoredItemStrengthMin = 0;
+export const undoVenomKnowledgeMoveResponseRestoredItemStrengthMax = 1;
+export const undoVenomKnowledgeMoveResponseRestoredItemLinksItemMax = 120;
+export const undoVenomKnowledgeMoveResponseRestoredItemLinksMax = 100;
+export const undoVenomKnowledgeMoveResponseRestoredItemDescriptionMax = 2000;
+export const undoVenomKnowledgeMoveResponseRestoredItemSummaryMax = 2000;
+export const undoVenomKnowledgeMoveResponseRestoredItemMentionCountMin = 0;
+export const undoVenomKnowledgeMoveResponseRestoredItemMentionCountMultipleOf = 1;
+export const undoVenomKnowledgeMoveResponseRestoredItemLastUpdatedAtMin = 0;
+export const undoVenomKnowledgeMoveResponseRestoredItemLastUpdatedAtMultipleOf = 1;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesItemConversationIdMax = 120;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesItemProjectIdMax = 120;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesItemConversationTitleMax = 200;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesItemMessageIdsItemMax = 120;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesItemMessageIdsMax = 12;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesItemExcerptMax = 2000;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesItemUpdatedAtMin = 0;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesItemUpdatedAtMultipleOf = 1;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesItemCapturedByUserIdMax = 120;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesItemCapturedAtMin = 0;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesItemCapturedAtMultipleOf = 1;
+export const undoVenomKnowledgeMoveResponseRestoredItemSourcesMax = 8;
+export const undoVenomKnowledgeMoveResponseRestoredMax = 80;
+export const acceptVenomKnowledgeSuggestionPathMoveIdMax = 64;
+export const acceptVenomKnowledgeSuggestionResponseWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const acceptVenomKnowledgeSuggestionResponseWorkspaceNameMax = 120;
+export const acceptVenomKnowledgeSuggestionResponseConceptIdMax = 120;
+export const acceptVenomKnowledgeSuggestionResponseMovedConceptIdMax = 120;
+export const dismissVenomKnowledgeSuggestionPathMoveIdMax = 64;
+export const moveVenomUnsortedConceptPathConceptIdMax = 120;
+export const moveVenomUnsortedConceptBodyWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const moveVenomUnsortedConceptResponseWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const moveVenomUnsortedConceptResponseWorkspaceNameMax = 120;
+export const moveVenomUnsortedConceptResponseConceptIdMax = 120;
+export const moveVenomUnsortedConceptResponseMovedConceptIdMax = 120;
+export const searchVenomOntologyQueryQMax = 200;
+export const searchVenomOntologyQueryOrgMax = 64;
+export const searchVenomOntologyQueryLimitMax = 50;
+export const searchVenomOntologyResponseResultsItemIdMax = 120;
+export const searchVenomOntologyResponseResultsItemProjectIdMax = 120;
+export const searchVenomOntologyResponseResultsItemLabelMax = 200;
+export const searchVenomOntologyResponseResultsItemCategoryMax = 100;
+export const searchVenomOntologyResponseResultsItemSummaryMax = 2000;
+export const searchVenomOntologyResponseResultsItemStrengthMin = 0;
+export const searchVenomOntologyResponseResultsItemStrengthMax = 1;
+export const searchVenomOntologyResponseResultsItemMentionCountMin = 0;
+export const searchVenomOntologyResponseResultsItemLastUpdatedAtMin = 0;
+export const searchVenomOntologyResponseResultsItemEvidenceCountMin = 0;
+export const searchVenomOntologyResponseResultsMax = 50;
+export const getVenomOntologyConceptPathConceptIdMax = 120;
+export const getVenomOntologyConceptQueryOrgMax = 64;
+export const getVenomOntologyConceptResponseConceptIdMax = 120;
+export const getVenomOntologyConceptResponseConceptProjectIdMax = 120;
+export const getVenomOntologyConceptResponseConceptLabelMax = 200;
+export const getVenomOntologyConceptResponseConceptCategoryMax = 100;
+export const getVenomOntologyConceptResponseConceptStrengthMin = 0;
+export const getVenomOntologyConceptResponseConceptStrengthMax = 1;
+export const getVenomOntologyConceptResponseConceptLinksItemMax = 120;
+export const getVenomOntologyConceptResponseConceptLinksMax = 100;
+export const getVenomOntologyConceptResponseConceptDescriptionMax = 2000;
+export const getVenomOntologyConceptResponseConceptSummaryMax = 2000;
+export const getVenomOntologyConceptResponseConceptMentionCountMin = 0;
+export const getVenomOntologyConceptResponseConceptMentionCountMultipleOf = 1;
+export const getVenomOntologyConceptResponseConceptLastUpdatedAtMin = 0;
+export const getVenomOntologyConceptResponseConceptLastUpdatedAtMultipleOf = 1;
+export const getVenomOntologyConceptResponseConceptSourcesItemConversationIdMax = 120;
+export const getVenomOntologyConceptResponseConceptSourcesItemProjectIdMax = 120;
+export const getVenomOntologyConceptResponseConceptSourcesItemConversationTitleMax = 200;
+export const getVenomOntologyConceptResponseConceptSourcesItemMessageIdsItemMax = 120;
+export const getVenomOntologyConceptResponseConceptSourcesItemMessageIdsMax = 12;
+export const getVenomOntologyConceptResponseConceptSourcesItemExcerptMax = 2000;
+export const getVenomOntologyConceptResponseConceptSourcesItemUpdatedAtMin = 0;
+export const getVenomOntologyConceptResponseConceptSourcesItemUpdatedAtMultipleOf = 1;
+export const getVenomOntologyConceptResponseConceptSourcesItemCapturedByUserIdMax = 120;
+export const getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMin = 0;
+export const getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMultipleOf = 1;
+export const getVenomOntologyConceptResponseConceptSourcesMax = 8;
+export const getVenomOntologyConceptResponseNeighborsItemIdMax = 120;
+export const getVenomOntologyConceptResponseNeighborsItemProjectIdMax = 120;
+export const getVenomOntologyConceptResponseNeighborsItemLabelMax = 200;
+export const getVenomOntologyConceptResponseNeighborsItemCategoryMax = 100;
+export const getVenomOntologyConceptResponseNeighborsItemSummaryMax = 2000;
+export const getVenomOntologyConceptResponseNeighborsItemStrengthMin = 0;
+export const getVenomOntologyConceptResponseNeighborsItemStrengthMax = 1;
+export const getVenomOntologyConceptResponseNeighborsItemMentionCountMin = 0;
+export const getVenomOntologyConceptResponseNeighborsItemLastUpdatedAtMin = 0;
+export const getVenomOntologyConceptResponseNeighborsItemEvidenceCountMin = 0;
+export const getVenomOntologyConceptResponseNeighborsMax = 100;
+export const getVenomOntologyConceptResponsePeopleItemUserIdMax = 120;
+export const getVenomOntologyConceptResponsePeopleItemDisplayNameMax = 320;
+export const getVenomOntologyConceptResponsePeopleMax = 16;
+export const getVenomConversationPathConversationIdMax = 120;
+export const getVenomConversationResponseConversationIdMax = 120;
+export const getVenomConversationResponseConversationTitleMax = 200;
+export const getVenomConversationResponseConversationProjectIdMax = 120;
+export const getVenomConversationResponseConversationUpdatedAtMin = 0;
+export const getVenomConversationResponseConversationUpdatedAtMultipleOf = 1;
+export const getVenomConversationResponseConversationMessagesItemIdMax = 120;
+export const getVenomConversationResponseConversationMessagesItemContentMax = 50000;
+export const getVenomConversationResponseConversationMessagesItemCreatedAtMin = 0;
+export const getVenomConversationResponseConversationMessagesItemCreatedAtMultipleOf = 1;
+export const getVenomConversationResponseConversationMessagesItemModelNameMax = 80;
+export const getVenomConversationResponseConversationMessagesItemDeliberationVoicesItemNameMax = 80;
+export const getVenomConversationResponseConversationMessagesItemDeliberationVoicesItemModelNameMax = 80;
+export const getVenomConversationResponseConversationMessagesItemDeliberationVoicesItemContentMax = 8000;
+export const getVenomConversationResponseConversationMessagesItemDeliberationVoicesMax = 4;
+export const getVenomConversationResponseConversationMessagesItemDeliberationDisagreementsItemMax = 500;
+export const getVenomConversationResponseConversationMessagesItemDeliberationDisagreementsMax = 8;
+export const getVenomConversationResponseConversationMessagesItemSpeakerIdMax = 64;
+export const getVenomConversationResponseConversationMessagesItemSpeakerNameMax = 80;
+export const getVenomConversationResponseConversationMessagesItemAttachmentsItemIdMax = 64;
+export const getVenomConversationResponseConversationMessagesItemAttachmentsItemNameMax = 160;
+export const getVenomConversationResponseConversationMessagesItemAttachmentsItemContentTypeMax = 100;
+export const getVenomConversationResponseConversationMessagesItemAttachmentsItemSizeMin = 0;
+export const getVenomConversationResponseConversationMessagesItemAttachmentsItemSizeMax = 10485760;
+export const getVenomConversationResponseConversationMessagesItemAttachmentsItemSizeMultipleOf = 1;
+export const getVenomConversationResponseConversationMessagesItemAttachmentsItemThumbnailMax = 24000;
+export const getVenomConversationResponseConversationMessagesItemAttachmentsItemThumbnailRegExp = new RegExp('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$');
+export const getVenomConversationResponseConversationMessagesItemAttachmentsMax = 5;
+export const getVenomConversationResponseConversationMessagesMax = 1000;
+export const getVenomConversationResponseConversationBlendCornersItemMax = 64;
+export const getVenomConversationResponseConversationBlendCornersMin = 3;
+export const getVenomConversationResponseConversationBlendCornersMax = 3;
+export const getVenomConversationResponseConversationBlendWeightsItemMin = 0;
+export const getVenomConversationResponseConversationBlendWeightsItemMax = 1;
+export const getVenomConversationResponseConversationBlendWeightsMin = 3;
+export const getVenomConversationResponseConversationBlendWeightsMax = 3;
+export const getVenomConversationResponseConversationModeUpdatedAtMin = 0;
+export const getVenomConversationResponseConversationModeUpdatedAtMultipleOf = 1;
+export const getVenomConversationResponseConversationVoiceModelsMax = 3;
+export const getVenomConversationResponseProjectNameMax = 200;
+export const getVenomIdentityResponseUserIdMax = 120;
+export const getVenomIdentityResponseDisplayNameMax = 200;
+export const getVenomIdentityResponseEmailMax = 320;
+export const getVenomIdentityResponseProviderMax = 60;
+export const listVenomCanonTeachingsResponseIdMax = 60;
+export const listVenomCanonTeachingsResponseDomainMax = 48;
+export const listVenomCanonTeachingsResponseTitleMax = 120;
+export const listVenomCanonTeachingsResponsePrinciplesItemMax = 360;
+export const listVenomCanonTeachingsResponsePrinciplesMax = 12;
+export const listVenomCanonTeachingsResponseTaughtByUserIdMax = 120;
+export const listVenomCanonTeachingsResponseTaughtByNameMax = 200;
+export const listVenomCanonTeachingsResponseConversationTitleMax = 200;
+export const commitVenomCanonTeachingBodyDomainMax = 48;
+export const commitVenomCanonTeachingBodyTitleMax = 120;
+export const commitVenomCanonTeachingBodyPrinciplesItemMax = 360;
+export const commitVenomCanonTeachingBodyPrinciplesMax = 12;
+export const commitVenomCanonTeachingBodyConversationIdMax = 120;
+export const commitVenomCanonTeachingBodyConversationTitleMax = 200;
+export const commitVenomCanonTeachingResponseTeachingIdMax = 60;
+export const commitVenomCanonTeachingResponseTeachingDomainMax = 48;
+export const commitVenomCanonTeachingResponseTeachingTitleMax = 120;
+export const commitVenomCanonTeachingResponseTeachingPrinciplesItemMax = 360;
+export const commitVenomCanonTeachingResponseTeachingPrinciplesMax = 12;
+export const commitVenomCanonTeachingResponseTeachingTaughtByUserIdMax = 120;
+export const commitVenomCanonTeachingResponseTeachingTaughtByNameMax = 200;
+export const commitVenomCanonTeachingResponseTeachingConversationTitleMax = 200;
+export const commitVenomCanonTeachingResponseAcknowledgmentMax = 500;
+export const updateVenomCanonTeachingPathTeachingIdMax = 60;
+export const updateVenomCanonTeachingBodyDomainMax = 48;
+export const updateVenomCanonTeachingBodyTitleMax = 120;
+export const updateVenomCanonTeachingBodyPrinciplesItemMax = 360;
+export const updateVenomCanonTeachingBodyPrinciplesMax = 12;
+export const updateVenomCanonTeachingResponseIdMax = 60;
+export const updateVenomCanonTeachingResponseDomainMax = 48;
+export const updateVenomCanonTeachingResponseTitleMax = 120;
+export const updateVenomCanonTeachingResponsePrinciplesItemMax = 360;
+export const updateVenomCanonTeachingResponsePrinciplesMax = 12;
+export const updateVenomCanonTeachingResponseTaughtByUserIdMax = 120;
+export const updateVenomCanonTeachingResponseTaughtByNameMax = 200;
+export const updateVenomCanonTeachingResponseConversationTitleMax = 200;
+export const proposeVenomCanonTeachingBodyMessageMax = 20000;
+export const proposeVenomCanonTeachingBodyConversationIdMax = 120;
+export const proposeVenomCanonTeachingBodyConversationTitleMax = 200;
+export const proposeVenomCanonTeachingResponseDraftDomainMax = 48;
+export const proposeVenomCanonTeachingResponseDraftTitleMax = 120;
+export const proposeVenomCanonTeachingResponseDraftPrinciplesItemMax = 360;
+export const proposeVenomCanonTeachingResponseDraftPrinciplesMax = 12;
+export const listVenomCanonAdminsResponseUserIdMax = 120;
+export const listVenomCanonAdminsResponseNameMax = 200;
+export const listVenomCanonAdminsResponseGrantedByUserIdMax = 120;
+export const grantVenomCanonAdminBodyUserIdMax = 120;
+export const grantVenomCanonAdminResponseUserIdMax = 120;
+export const grantVenomCanonAdminResponseNameMax = 200;
+export const grantVenomCanonAdminResponseGrantedByUserIdMax = 120;
+export const revokeVenomCanonAdminPathAdminUserIdMax = 120;
+export const getVenomOrgsResponseOrgsItemIdMax = 64;
+export const getVenomOrgsResponseOrgsItemNameMax = 80;
+export const getVenomOrgsResponseOrgsItemMemberCountMultipleOf = 1;
+export const getVenomOrgsResponseOrgsItemCreatedAtMin = 0;
+export const getVenomOrgsResponseOrgsItemCreatedAtMultipleOf = 1;
+export const getVenomOrgsResponseOrgsMax = 50;
+export const getVenomOrgsResponseInvitesItemIdMax = 64;
+export const getVenomOrgsResponseInvitesItemOrgIdMax = 64;
+export const getVenomOrgsResponseInvitesItemOrgNameMax = 80;
+export const getVenomOrgsResponseInvitesItemEmailMin = 3;
+export const getVenomOrgsResponseInvitesItemEmailMax = 320;
+export const getVenomOrgsResponseInvitesItemInvitedByNameMax = 120;
+export const getVenomOrgsResponseInvitesItemCreatedAtMin = 0;
+export const getVenomOrgsResponseInvitesItemCreatedAtMultipleOf = 1;
+export const getVenomOrgsResponseInvitesMax = 50;
+export const createVenomOrgBodyNameMax = 80;
+export const createVenomOrgResponseIdMax = 64;
+export const createVenomOrgResponseNameMax = 80;
+export const createVenomOrgResponseMemberCountMultipleOf = 1;
+export const createVenomOrgResponseCreatedAtMin = 0;
+export const createVenomOrgResponseCreatedAtMultipleOf = 1;
+export const deleteVenomOrgPathOrgIdMax = 64;
+export const getVenomOrgMembersPathOrgIdMax = 64;
+export const getVenomOrgMembersResponseMembersItemUserIdMax = 64;
+export const getVenomOrgMembersResponseMembersItemNameMax = 120;
+export const getVenomOrgMembersResponseMembersItemEmailMax = 320;
+export const getVenomOrgMembersResponseMembersMax = 500;
+export const getVenomOrgMembersResponseInvitesItemIdMax = 64;
+export const getVenomOrgMembersResponseInvitesItemEmailMin = 3;
+export const getVenomOrgMembersResponseInvitesItemEmailMax = 320;
+export const getVenomOrgMembersResponseInvitesItemInvitedByNameMax = 120;
+export const getVenomOrgMembersResponseInvitesItemCreatedAtMin = 0;
+export const getVenomOrgMembersResponseInvitesItemCreatedAtMultipleOf = 1;
+export const getVenomOrgMembersResponseInvitesMax = 200;
+export const removeVenomOrgMemberPathOrgIdMax = 64;
+export const removeVenomOrgMemberPathMemberUserIdMax = 64;
+export const inviteVenomOrgMemberPathOrgIdMax = 64;
+export const inviteVenomOrgMemberBodyEmailMin = 3;
+export const inviteVenomOrgMemberBodyEmailMax = 320;
+export const inviteVenomOrgMemberResponseMemberUserIdMax = 64;
+export const inviteVenomOrgMemberResponseMemberNameMax = 120;
+export const inviteVenomOrgMemberResponseMemberEmailMax = 320;
+export const inviteVenomOrgMemberResponseInviteIdMax = 64;
+export const inviteVenomOrgMemberResponseInviteEmailMin = 3;
+export const inviteVenomOrgMemberResponseInviteEmailMax = 320;
+export const inviteVenomOrgMemberResponseInviteInvitedByNameMax = 120;
+export const inviteVenomOrgMemberResponseInviteCreatedAtMin = 0;
+export const inviteVenomOrgMemberResponseInviteCreatedAtMultipleOf = 1;
+export const revokeVenomOrgInvitePathOrgIdMax = 64;
+export const revokeVenomOrgInvitePathInviteIdMax = 64;
+export const acceptVenomOrgInvitePathInviteIdMax = 64;
+export const acceptVenomOrgInviteResponseIdMax = 64;
+export const acceptVenomOrgInviteResponseNameMax = 80;
+export const acceptVenomOrgInviteResponseMemberCountMultipleOf = 1;
+export const acceptVenomOrgInviteResponseCreatedAtMin = 0;
+export const acceptVenomOrgInviteResponseCreatedAtMultipleOf = 1;
+export const declineVenomOrgInvitePathInviteIdMax = 64;
+export const getVenomOrgMasterContributionPathOrgIdMax = 64;
+export const updateVenomOrgMasterContributionPathOrgIdMax = 64;
+export const getVenomMasterBrainResponseConceptsItemIdMax = 160;
+export const getVenomMasterBrainResponseConceptsItemLabelMax = 64;
+export const getVenomMasterBrainResponseConceptsItemCategoryMax = 32;
+export const getVenomMasterBrainResponseConceptsItemStrengthMin = 0;
+export const getVenomMasterBrainResponseConceptsItemStrengthMax = 1;
+export const getVenomMasterBrainResponseConceptsMax = 300;
+export const getVenomMasterBrainResponseLinksItemAMax = 160;
+export const getVenomMasterBrainResponseLinksItemBMax = 160;
+export const getVenomMasterBrainResponseLinksItemStrengthMin = 0;
+export const getVenomMasterBrainResponseLinksItemStrengthMax = 1;
+export const getVenomMasterBrainResponseLinksMax = 900;
+export const getVenomMasterSuggestionsQueryOrgMax = 64;
+export const getVenomMasterSuggestionsResponseSuggestionsItemLabelMax = 64;
+export const getVenomMasterSuggestionsResponseSuggestionsItemCategoryMax = 32;
+export const getVenomMasterSuggestionsResponseSuggestionsItemStrengthMin = 0;
+export const getVenomMasterSuggestionsResponseSuggestionsItemStrengthMax = 1;
+export const getVenomMasterSuggestionsResponseSuggestionsItemRelatedToLabelsItemMax = 200;
+export const getVenomMasterSuggestionsResponseSuggestionsItemRelatedToLabelsMax = 3;
+export const getVenomMasterSuggestionsResponseSuggestionsMax = 8;
+export const dismissVenomMasterSuggestionBodyLabelMax = 64;
+export const applyVenomMasterSuggestionBodyLabelMax = 64;
+export const applyVenomMasterSuggestionBodyOrgIdMax = 64;
+export const applyVenomMasterSuggestionResponseFiledScopeOrgIdMax = 64;
+export const applyVenomMasterSuggestionResponseFiledScopeOrgNameMax = 80;
+export const applyVenomMasterSuggestionResponseFiledItemIdMax = 120;
+export const applyVenomMasterSuggestionResponseFiledItemProjectIdMax = 120;
+export const applyVenomMasterSuggestionResponseFiledItemLabelMax = 200;
+export const applyVenomMasterSuggestionResponseFiledItemCategoryMax = 100;
+export const applyVenomMasterSuggestionResponseFiledItemStrengthMin = 0;
+export const applyVenomMasterSuggestionResponseFiledItemStrengthMax = 1;
+export const applyVenomMasterSuggestionResponseFiledItemLinksItemMax = 120;
+export const applyVenomMasterSuggestionResponseFiledItemLinksMax = 100;
+export const applyVenomMasterSuggestionResponseFiledItemDescriptionMax = 2000;
+export const applyVenomMasterSuggestionResponseFiledItemSummaryMax = 2000;
+export const applyVenomMasterSuggestionResponseFiledItemMentionCountMin = 0;
+export const applyVenomMasterSuggestionResponseFiledItemMentionCountMultipleOf = 1;
+export const applyVenomMasterSuggestionResponseFiledItemLastUpdatedAtMin = 0;
+export const applyVenomMasterSuggestionResponseFiledItemLastUpdatedAtMultipleOf = 1;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesItemConversationIdMax = 120;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesItemProjectIdMax = 120;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesItemConversationTitleMax = 200;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesItemMessageIdsItemMax = 120;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesItemMessageIdsMax = 12;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesItemExcerptMax = 2000;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesItemUpdatedAtMin = 0;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesItemUpdatedAtMultipleOf = 1;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesItemCapturedByUserIdMax = 120;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesItemCapturedAtMin = 0;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesItemCapturedAtMultipleOf = 1;
+export const applyVenomMasterSuggestionResponseFiledItemSourcesMax = 8;
+export const applyVenomMasterSuggestionResponseFiledMax = 80;
+export const getVenomOrgBrainPathOrgIdMax = 64;
+export const getVenomOrgBrainResponseOrgIdMax = 64;
+export const getVenomOrgBrainResponseOrgNameMax = 80;
+export const getVenomOrgBrainResponseConceptsItemIdMax = 120;
+export const getVenomOrgBrainResponseConceptsItemProjectIdMax = 120;
+export const getVenomOrgBrainResponseConceptsItemLabelMax = 200;
+export const getVenomOrgBrainResponseConceptsItemCategoryMax = 100;
+export const getVenomOrgBrainResponseConceptsItemStrengthMin = 0;
+export const getVenomOrgBrainResponseConceptsItemStrengthMax = 1;
+export const getVenomOrgBrainResponseConceptsItemLinksItemMax = 120;
+export const getVenomOrgBrainResponseConceptsItemLinksMax = 100;
+export const getVenomOrgBrainResponseConceptsItemDescriptionMax = 2000;
+export const getVenomOrgBrainResponseConceptsItemSummaryMax = 2000;
+export const getVenomOrgBrainResponseConceptsItemMentionCountMin = 0;
+export const getVenomOrgBrainResponseConceptsItemMentionCountMultipleOf = 1;
+export const getVenomOrgBrainResponseConceptsItemLastUpdatedAtMin = 0;
+export const getVenomOrgBrainResponseConceptsItemLastUpdatedAtMultipleOf = 1;
+export const getVenomOrgBrainResponseConceptsItemSourcesItemConversationIdMax = 120;
+export const getVenomOrgBrainResponseConceptsItemSourcesItemProjectIdMax = 120;
+export const getVenomOrgBrainResponseConceptsItemSourcesItemConversationTitleMax = 200;
+export const getVenomOrgBrainResponseConceptsItemSourcesItemMessageIdsItemMax = 120;
+export const getVenomOrgBrainResponseConceptsItemSourcesItemMessageIdsMax = 12;
+export const getVenomOrgBrainResponseConceptsItemSourcesItemExcerptMax = 2000;
+export const getVenomOrgBrainResponseConceptsItemSourcesItemUpdatedAtMin = 0;
+export const getVenomOrgBrainResponseConceptsItemSourcesItemUpdatedAtMultipleOf = 1;
+export const getVenomOrgBrainResponseConceptsItemSourcesItemCapturedByUserIdMax = 120;
+export const getVenomOrgBrainResponseConceptsItemSourcesItemCapturedAtMin = 0;
+export const getVenomOrgBrainResponseConceptsItemSourcesItemCapturedAtMultipleOf = 1;
+export const getVenomOrgBrainResponseConceptsItemSourcesMax = 8;
+export const getVenomOrgBrainResponseConceptsMax = 1000;
+export const getVenomOrgBrainResponseAuditItemIdMax = 64;
+export const getVenomOrgBrainResponseAuditItemConceptIdMax = 120;
+export const getVenomOrgBrainResponseAuditItemConceptLabelMax = 200;
+export const getVenomOrgBrainResponseAuditItemActorUserIdMax = 64;
+export const getVenomOrgBrainResponseAuditItemActorNameMax = 120;
+export const getVenomOrgBrainResponseAuditItemCreatedAtMin = 0;
+export const getVenomOrgBrainResponseAuditItemCreatedAtMultipleOf = 1;
+export const getVenomOrgBrainResponseAuditMax = 50;
+export const getVenomOrgProjectsPathOrgIdMax = 64;
+export const getVenomOrgProjectsResponseProjectsItemProjectIdMax = 120;
+export const getVenomOrgProjectsResponseProjectsItemOrgIdMax = 64;
+export const getVenomOrgProjectsResponseProjectsItemNameMax = 120;
+export const getVenomOrgProjectsResponseProjectsItemDescriptionMax = 1000;
+export const getVenomOrgProjectsResponseProjectsItemAccentMax = 32;
+export const getVenomOrgProjectsResponseProjectsItemSharedByUserIdMax = 64;
+export const getVenomOrgProjectsResponseProjectsItemSharedByNameMax = 120;
+export const getVenomOrgProjectsResponseProjectsItemSharedAtMin = 0;
+export const getVenomOrgProjectsResponseProjectsItemSharedAtMultipleOf = 1;
+export const getVenomOrgProjectsResponseProjectsItemUpdatedAtMin = 0;
+export const getVenomOrgProjectsResponseProjectsItemUpdatedAtMultipleOf = 1;
+export const getVenomOrgProjectsResponseProjectsMax = 200;
+export const shareVenomOrgProjectPathOrgIdMax = 64;
+export const shareVenomOrgProjectPathProjectIdMax = 120;
+export const shareVenomOrgProjectBodyNameMax = 120;
+export const shareVenomOrgProjectBodyDescriptionMax = 1000;
+export const shareVenomOrgProjectBodyAccentMax = 32;
+export const shareVenomOrgProjectResponseProjectIdMax = 120;
+export const shareVenomOrgProjectResponseOrgIdMax = 64;
+export const shareVenomOrgProjectResponseNameMax = 120;
+export const shareVenomOrgProjectResponseDescriptionMax = 1000;
+export const shareVenomOrgProjectResponseAccentMax = 32;
+export const shareVenomOrgProjectResponseSharedByUserIdMax = 64;
+export const shareVenomOrgProjectResponseSharedByNameMax = 120;
+export const shareVenomOrgProjectResponseSharedAtMin = 0;
+export const shareVenomOrgProjectResponseSharedAtMultipleOf = 1;
+export const shareVenomOrgProjectResponseUpdatedAtMin = 0;
+export const shareVenomOrgProjectResponseUpdatedAtMultipleOf = 1;
+export const unshareVenomOrgProjectPathOrgIdMax = 64;
+export const unshareVenomOrgProjectPathProjectIdMax = 120;
+export const getVenomOrgSourcesPathOrgIdMax = 64;
+export const getVenomOrgSourcesResponseSourcesItemIdMax = 160;
+export const getVenomOrgSourcesResponseSourcesItemOrgIdMax = 64;
+export const getVenomOrgSourcesResponseSourcesItemNameMax = 300;
+export const getVenomOrgSourcesResponseSourcesItemUrlMax = 2048;
+export const getVenomOrgSourcesResponseSourcesItemSummaryMax = 1000;
+export const getVenomOrgSourcesResponseSourcesItemContextMax = 8000;
+export const getVenomOrgSourcesResponseSourcesItemCitationsItemIdMax = 160;
+export const getVenomOrgSourcesResponseSourcesItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const getVenomOrgSourcesResponseSourcesItemCitationsItemTitleMax = 300;
+export const getVenomOrgSourcesResponseSourcesItemCitationsItemUrlMax = 2048;
+export const getVenomOrgSourcesResponseSourcesItemCitationsItemExcerptMax = 1000;
+export const getVenomOrgSourcesResponseSourcesItemCitationsItemReferenceMax = 200;
+export const getVenomOrgSourcesResponseSourcesItemCitationsMax = 50;
+export const getVenomOrgSourcesResponseSourcesItemConnectedByUserIdMax = 64;
+export const getVenomOrgSourcesResponseSourcesItemConnectedByNameMax = 120;
+export const getVenomOrgSourcesResponseSourcesItemSyncedAtMin = 0;
+export const getVenomOrgSourcesResponseSourcesItemSyncedAtMultipleOf = 1;
+export const getVenomOrgSourcesResponseSourcesMax = 100;
+export const connectVenomOrgGitHubSourcePathOrgIdMax = 64;
+export const connectVenomOrgGitHubSourceBodyRepositoryMin = 3;
+export const connectVenomOrgGitHubSourceBodyRepositoryMax = 200;
+export const connectVenomOrgGitHubSourceResponseIdMax = 160;
+export const connectVenomOrgGitHubSourceResponseOrgIdMax = 64;
+export const connectVenomOrgGitHubSourceResponseNameMax = 300;
+export const connectVenomOrgGitHubSourceResponseUrlMax = 2048;
+export const connectVenomOrgGitHubSourceResponseSummaryMax = 1000;
+export const connectVenomOrgGitHubSourceResponseContextMax = 8000;
+export const connectVenomOrgGitHubSourceResponseCitationsItemIdMax = 160;
+export const connectVenomOrgGitHubSourceResponseCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const connectVenomOrgGitHubSourceResponseCitationsItemTitleMax = 300;
+export const connectVenomOrgGitHubSourceResponseCitationsItemUrlMax = 2048;
+export const connectVenomOrgGitHubSourceResponseCitationsItemExcerptMax = 1000;
+export const connectVenomOrgGitHubSourceResponseCitationsItemReferenceMax = 200;
+export const connectVenomOrgGitHubSourceResponseCitationsMax = 50;
+export const connectVenomOrgGitHubSourceResponseConnectedByUserIdMax = 64;
+export const connectVenomOrgGitHubSourceResponseConnectedByNameMax = 120;
+export const connectVenomOrgGitHubSourceResponseSyncedAtMin = 0;
+export const connectVenomOrgGitHubSourceResponseSyncedAtMultipleOf = 1;
+export const connectVenomOrgWebsiteSourcePathOrgIdMax = 64;
+export const connectVenomOrgWebsiteSourceBodyUrlMax = 2048;
+export const connectVenomOrgWebsiteSourceBodyNameMax = 120;
+export const connectVenomOrgWebsiteSourceResponseIdMax = 160;
+export const connectVenomOrgWebsiteSourceResponseOrgIdMax = 64;
+export const connectVenomOrgWebsiteSourceResponseNameMax = 300;
+export const connectVenomOrgWebsiteSourceResponseUrlMax = 2048;
+export const connectVenomOrgWebsiteSourceResponseSummaryMax = 1000;
+export const connectVenomOrgWebsiteSourceResponseContextMax = 8000;
+export const connectVenomOrgWebsiteSourceResponseCitationsItemIdMax = 160;
+export const connectVenomOrgWebsiteSourceResponseCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const connectVenomOrgWebsiteSourceResponseCitationsItemTitleMax = 300;
+export const connectVenomOrgWebsiteSourceResponseCitationsItemUrlMax = 2048;
+export const connectVenomOrgWebsiteSourceResponseCitationsItemExcerptMax = 1000;
+export const connectVenomOrgWebsiteSourceResponseCitationsItemReferenceMax = 200;
+export const connectVenomOrgWebsiteSourceResponseCitationsMax = 50;
+export const connectVenomOrgWebsiteSourceResponseConnectedByUserIdMax = 64;
+export const connectVenomOrgWebsiteSourceResponseConnectedByNameMax = 120;
+export const connectVenomOrgWebsiteSourceResponseSyncedAtMin = 0;
+export const connectVenomOrgWebsiteSourceResponseSyncedAtMultipleOf = 1;
+export const removeVenomOrgSourcePathOrgIdMax = 64;
+export const removeVenomOrgSourcePathSourceIdMax = 160;
+export const promoteVenomConceptToOrgPathOrgIdMax = 64;
+export const promoteVenomConceptToOrgBodyConceptIdMax = 120;
+export const promoteVenomConceptToOrgBodyConceptProjectIdMax = 120;
+export const promoteVenomConceptToOrgBodyConceptLabelMax = 200;
+export const promoteVenomConceptToOrgBodyConceptCategoryMax = 100;
+export const promoteVenomConceptToOrgBodyConceptStrengthMin = 0;
+export const promoteVenomConceptToOrgBodyConceptStrengthMax = 1;
+export const promoteVenomConceptToOrgBodyConceptLinksItemMax = 120;
+export const promoteVenomConceptToOrgBodyConceptLinksMax = 100;
+export const promoteVenomConceptToOrgBodyConceptDescriptionMax = 2000;
+export const promoteVenomConceptToOrgBodyConceptSummaryMax = 2000;
+export const promoteVenomConceptToOrgBodyConceptMentionCountMin = 0;
+export const promoteVenomConceptToOrgBodyConceptMentionCountMultipleOf = 1;
+export const promoteVenomConceptToOrgBodyConceptLastUpdatedAtMin = 0;
+export const promoteVenomConceptToOrgBodyConceptLastUpdatedAtMultipleOf = 1;
+export const promoteVenomConceptToOrgBodyConceptSourcesItemConversationIdMax = 120;
+export const promoteVenomConceptToOrgBodyConceptSourcesItemProjectIdMax = 120;
+export const promoteVenomConceptToOrgBodyConceptSourcesItemConversationTitleMax = 200;
+export const promoteVenomConceptToOrgBodyConceptSourcesItemMessageIdsItemMax = 120;
+export const promoteVenomConceptToOrgBodyConceptSourcesItemMessageIdsMax = 12;
+export const promoteVenomConceptToOrgBodyConceptSourcesItemExcerptMax = 2000;
+export const promoteVenomConceptToOrgBodyConceptSourcesItemUpdatedAtMin = 0;
+export const promoteVenomConceptToOrgBodyConceptSourcesItemUpdatedAtMultipleOf = 1;
+export const promoteVenomConceptToOrgBodyConceptSourcesItemCapturedByUserIdMax = 120;
+export const promoteVenomConceptToOrgBodyConceptSourcesItemCapturedAtMin = 0;
+export const promoteVenomConceptToOrgBodyConceptSourcesItemCapturedAtMultipleOf = 1;
+export const promoteVenomConceptToOrgBodyConceptSourcesMax = 8;
+export const promoteVenomConceptToOrgResponseConceptIdMax = 120;
+export const promoteVenomConceptToOrgResponseConceptProjectIdMax = 120;
+export const promoteVenomConceptToOrgResponseConceptLabelMax = 200;
+export const promoteVenomConceptToOrgResponseConceptCategoryMax = 100;
+export const promoteVenomConceptToOrgResponseConceptStrengthMin = 0;
+export const promoteVenomConceptToOrgResponseConceptStrengthMax = 1;
+export const promoteVenomConceptToOrgResponseConceptLinksItemMax = 120;
+export const promoteVenomConceptToOrgResponseConceptLinksMax = 100;
+export const promoteVenomConceptToOrgResponseConceptDescriptionMax = 2000;
+export const promoteVenomConceptToOrgResponseConceptSummaryMax = 2000;
+export const promoteVenomConceptToOrgResponseConceptMentionCountMin = 0;
+export const promoteVenomConceptToOrgResponseConceptMentionCountMultipleOf = 1;
+export const promoteVenomConceptToOrgResponseConceptLastUpdatedAtMin = 0;
+export const promoteVenomConceptToOrgResponseConceptLastUpdatedAtMultipleOf = 1;
+export const promoteVenomConceptToOrgResponseConceptSourcesItemConversationIdMax = 120;
+export const promoteVenomConceptToOrgResponseConceptSourcesItemProjectIdMax = 120;
+export const promoteVenomConceptToOrgResponseConceptSourcesItemConversationTitleMax = 200;
+export const promoteVenomConceptToOrgResponseConceptSourcesItemMessageIdsItemMax = 120;
+export const promoteVenomConceptToOrgResponseConceptSourcesItemMessageIdsMax = 12;
+export const promoteVenomConceptToOrgResponseConceptSourcesItemExcerptMax = 2000;
+export const promoteVenomConceptToOrgResponseConceptSourcesItemUpdatedAtMin = 0;
+export const promoteVenomConceptToOrgResponseConceptSourcesItemUpdatedAtMultipleOf = 1;
+export const promoteVenomConceptToOrgResponseConceptSourcesItemCapturedByUserIdMax = 120;
+export const promoteVenomConceptToOrgResponseConceptSourcesItemCapturedAtMin = 0;
+export const promoteVenomConceptToOrgResponseConceptSourcesItemCapturedAtMultipleOf = 1;
+export const promoteVenomConceptToOrgResponseConceptSourcesMax = 8;
+export const improveVenomNoteBodyNoteMax = 5000;
+export const improveVenomNoteResponseSuggestionMax = 5000;
+export const improveVenomNoteResponseChangeNotesItemMax = 160;
+export const improveVenomNoteResponseChangeNotesMax = 6;
+export const connectGitHubSourcePathProjectIdMax = 120;
+export const connectGitHubSourceBodyRepositoryMin = 3;
+export const connectGitHubSourceBodyRepositoryMax = 200;
+export const connectGitHubSourceResponseIdMax = 160;
+export const connectGitHubSourceResponseProjectIdMax = 160;
+export const connectGitHubSourceResponseNameMax = 300;
+export const connectGitHubSourceResponseUrlMax = 2048;
+export const connectGitHubSourceResponseSummaryMax = 1000;
+export const connectGitHubSourceResponseContextMax = 8000;
+export const connectGitHubSourceResponseCitationsItemIdMax = 160;
+export const connectGitHubSourceResponseCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const connectGitHubSourceResponseCitationsItemTitleMax = 300;
+export const connectGitHubSourceResponseCitationsItemUrlMax = 2048;
+export const connectGitHubSourceResponseCitationsItemExcerptMax = 1000;
+export const connectGitHubSourceResponseCitationsItemReferenceMax = 200;
+export const connectGitHubSourceResponseCitationsMax = 50;
+export const connectGitHubSourceResponseClustersItemStrengthMin = 0;
+export const connectGitHubSourceResponseClustersItemStrengthMax = 1;
+export const connectGitHubSourceResponseAttestationMax = 2048;
+export const connectGitHubSourceResponseAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const connectGitHubSourceResponseScheduleUpdatedAtMin = 0;
+export const connectGitHubSourceResponseScheduleUpdatedAtMultipleOf = 1;
+export const connectGitHubSourceResponseScheduleLastAttemptAtMin = 0;
+export const connectGitHubSourceResponseScheduleLastAttemptAtMultipleOf = 1;
+export const connectGitHubSourceResponseScheduleLastErrorMax = 300;
+export const connectGitHubSourceResponseScheduleClaimedAtMin = 0;
+export const connectGitHubSourceResponseScheduleClaimedAtMultipleOf = 1;
+export const connectGitHubSourceResponseScheduleClaimedByMax = 120;
+export const connectWebsiteSourcePathProjectIdMax = 120;
+export const connectWebsiteSourceBodyUrlMax = 2048;
+export const connectWebsiteSourceBodyNameMax = 120;
+export const connectWebsiteSourceResponseIdMax = 160;
+export const connectWebsiteSourceResponseProjectIdMax = 160;
+export const connectWebsiteSourceResponseNameMax = 300;
+export const connectWebsiteSourceResponseUrlMax = 2048;
+export const connectWebsiteSourceResponseSummaryMax = 1000;
+export const connectWebsiteSourceResponseContextMax = 8000;
+export const connectWebsiteSourceResponseCitationsItemIdMax = 160;
+export const connectWebsiteSourceResponseCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const connectWebsiteSourceResponseCitationsItemTitleMax = 300;
+export const connectWebsiteSourceResponseCitationsItemUrlMax = 2048;
+export const connectWebsiteSourceResponseCitationsItemExcerptMax = 1000;
+export const connectWebsiteSourceResponseCitationsItemReferenceMax = 200;
+export const connectWebsiteSourceResponseCitationsMax = 50;
+export const connectWebsiteSourceResponseClustersItemStrengthMin = 0;
+export const connectWebsiteSourceResponseClustersItemStrengthMax = 1;
+export const connectWebsiteSourceResponseAttestationMax = 2048;
+export const connectWebsiteSourceResponseAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const connectWebsiteSourceResponseScheduleUpdatedAtMin = 0;
+export const connectWebsiteSourceResponseScheduleUpdatedAtMultipleOf = 1;
+export const connectWebsiteSourceResponseScheduleLastAttemptAtMin = 0;
+export const connectWebsiteSourceResponseScheduleLastAttemptAtMultipleOf = 1;
+export const connectWebsiteSourceResponseScheduleLastErrorMax = 300;
+export const connectWebsiteSourceResponseScheduleClaimedAtMin = 0;
+export const connectWebsiteSourceResponseScheduleClaimedAtMultipleOf = 1;
+export const connectWebsiteSourceResponseScheduleClaimedByMax = 120;
+export const getVenomWorkspaceResponseStateOneProjectsItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneProjectsItemNameMax = 120;
+export const getVenomWorkspaceResponseStateOneProjectsItemDescriptionMax = 1000;
+export const getVenomWorkspaceResponseStateOneProjectsItemAccentMax = 32;
+export const getVenomWorkspaceResponseStateOneProjectsItemSourceCountMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemSourceCountMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax = 280;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemStageIdMax = 120;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesOneMax = 1000;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMax = 1000000000;
+export const getVenomWorkspaceResponseStateOneProjectsItemTasksMax = 2000;
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemNameMax = 80;
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesMax = 30;
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemNameMax = 80;
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsItemMax = 80;
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsMax = 30;
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax = 40;
+export const getVenomWorkspaceResponseStateOneProjectsItemOrgIdMax = 64;
+export const getVenomWorkspaceResponseStateOneProjectsMax = 500;
+export const getVenomWorkspaceResponseStateOneConversationsItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneConversationsItemTitleMax = 200;
+export const getVenomWorkspaceResponseStateOneConversationsItemProjectIdMax = 120;
+export const getVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemContentMax = 50000;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemModelNameMax = 80;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemNameMax = 80;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemModelNameMax = 80;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemContentMax = 8000;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesMax = 4;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsItemMax = 500;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsMax = 8;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerIdMax = 64;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax = 80;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemIdMax = 64;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemNameMax = 160;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemContentTypeMax = 100;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMin = 0;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMax = 10485760;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemThumbnailMax = 24000;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemThumbnailRegExp = new RegExp('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$');
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsMax = 5;
+export const getVenomWorkspaceResponseStateOneConversationsItemMessagesMax = 1000;
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendCornersItemMax = 64;
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendCornersMin = 3;
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendCornersMax = 3;
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMin = 0;
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMax = 1;
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMin = 3;
+export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMax = 3;
+export const getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneConversationsItemVoiceModelsMax = 3;
+export const getVenomWorkspaceResponseStateOneConversationsMax = 500;
+export const getVenomWorkspaceResponseStateOneClustersItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneClustersItemProjectIdMax = 120;
+export const getVenomWorkspaceResponseStateOneClustersItemLabelMax = 200;
+export const getVenomWorkspaceResponseStateOneClustersItemCategoryMax = 100;
+export const getVenomWorkspaceResponseStateOneClustersItemStrengthMin = 0;
+export const getVenomWorkspaceResponseStateOneClustersItemStrengthMax = 1;
+export const getVenomWorkspaceResponseStateOneClustersItemLinksItemMax = 120;
+export const getVenomWorkspaceResponseStateOneClustersItemLinksMax = 100;
+export const getVenomWorkspaceResponseStateOneClustersItemDescriptionMax = 2000;
+export const getVenomWorkspaceResponseStateOneClustersItemSummaryMax = 2000;
+export const getVenomWorkspaceResponseStateOneClustersItemMentionCountMin = 0;
+export const getVenomWorkspaceResponseStateOneClustersItemMentionCountMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationIdMax = 120;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemProjectIdMax = 120;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationTitleMax = 200;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsItemMax = 120;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsMax = 12;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax = 2000;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedByUserIdMax = 120;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneClustersItemSourcesMax = 8;
+export const getVenomWorkspaceResponseStateOneClustersMax = 1000;
+export const getVenomWorkspaceResponseStateOneSourcesItemIdMax = 160;
+export const getVenomWorkspaceResponseStateOneSourcesItemProjectIdMax = 160;
+export const getVenomWorkspaceResponseStateOneSourcesItemNameMax = 300;
+export const getVenomWorkspaceResponseStateOneSourcesItemUrlMax = 2048;
+export const getVenomWorkspaceResponseStateOneSourcesItemSummaryMax = 1000;
+export const getVenomWorkspaceResponseStateOneSourcesItemContextMax = 8000;
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdMax = 160;
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemTitleMax = 300;
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemUrlMax = 2048;
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemExcerptMax = 1000;
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemReferenceMax = 200;
+export const getVenomWorkspaceResponseStateOneSourcesItemCitationsMax = 50;
+export const getVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMin = 0;
+export const getVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMax = 1;
+export const getVenomWorkspaceResponseStateOneSourcesItemAttestationMax = 2048;
+export const getVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMin = 0;
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleLastErrorMax = 300;
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedByMax = 120;
+export const getVenomWorkspaceResponseStateOneSourcesMax = 500;
+export const getVenomWorkspaceResponseStateOneActiveProjectIdMax = 120;
+export const getVenomWorkspaceResponseStateOneActiveConversationIdMax = 120;
+export const getVenomWorkspaceResponseStateOneTombstonesProjectsItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneTombstonesProjectsMax = 1000;
+export const getVenomWorkspaceResponseStateOneTombstonesTasksItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneTombstonesTasksMax = 5000;
+export const getVenomWorkspaceResponseStateOneTombstonesConversationsItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneTombstonesConversationsMax = 1000;
+export const getVenomWorkspaceResponseStateOneTombstonesMessagesItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneTombstonesMessagesMax = 10000;
+export const getVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneTombstonesClustersMax = 2000;
+export const getVenomWorkspaceResponseStateOneTombstonesStagesItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneTombstonesStagesMax = 15000;
+export const getVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneTombstonesFieldsMax = 20000;
+export const getVenomWorkspaceResponseStateOneTombstonesSourcesItemIdMax = 120;
+export const getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneTombstonesSourcesMax = 2000;
+export const getVenomWorkspaceResponseStateOneModelPreferencesEnabledModelIdsMax = 4;
+export const getVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMin = 0;
+export const getVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemIdMax = 160;
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemTitleMax = 300;
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemUrlMax = 2048;
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMin = 0;
+export const getVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMultipleOf = 1;
+export const getVenomWorkspaceResponseStateOneArchivedCitationsMax = 500;
+export const getVenomWorkspaceResponseRevisionMin = 0;
+export const getVenomWorkspaceResponseRevisionMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateProjectsItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateProjectsItemNameMax = 120;
+export const saveVenomWorkspaceBodyStateProjectsItemDescriptionMax = 1000;
+export const saveVenomWorkspaceBodyStateProjectsItemAccentMax = 32;
+export const saveVenomWorkspaceBodyStateProjectsItemSourceCountMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemSourceCountMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateProjectsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemTitleMax = 280;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemStageIdMax = 120;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemPositionMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemPositionMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemValuesOneMax = 1000;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksItemValuesTwoMax = 1000000000;
+export const saveVenomWorkspaceBodyStateProjectsItemTasksMax = 2000;
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemNameMax = 80;
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemPositionMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemPositionMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesMax = 30;
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemNameMax = 80;
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemOptionsItemMax = 80;
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemOptionsMax = 30;
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemPositionMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemPositionMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsMax = 40;
+export const saveVenomWorkspaceBodyStateProjectsItemOrgIdMax = 64;
+export const saveVenomWorkspaceBodyStateProjectsMax = 500;
+export const saveVenomWorkspaceBodyStateConversationsItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateConversationsItemTitleMax = 200;
+export const saveVenomWorkspaceBodyStateConversationsItemProjectIdMax = 120;
+export const saveVenomWorkspaceBodyStateConversationsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateConversationsItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemContentMax = 50000;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemModelNameMax = 80;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemNameMax = 80;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemModelNameMax = 80;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemContentMax = 8000;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesMax = 4;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationDisagreementsItemMax = 500;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationDisagreementsMax = 8;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemSpeakerIdMax = 64;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemSpeakerNameMax = 80;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemIdMax = 64;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemNameMax = 160;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemContentTypeMax = 100;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemSizeMin = 0;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemSizeMax = 10485760;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemSizeMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemThumbnailMax = 24000;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemThumbnailRegExp = new RegExp('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$');
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsMax = 5;
+export const saveVenomWorkspaceBodyStateConversationsItemMessagesMax = 1000;
+export const saveVenomWorkspaceBodyStateConversationsItemBlendCornersItemMax = 64;
+export const saveVenomWorkspaceBodyStateConversationsItemBlendCornersMin = 3;
+export const saveVenomWorkspaceBodyStateConversationsItemBlendCornersMax = 3;
+export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsItemMin = 0;
+export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsItemMax = 1;
+export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsMin = 3;
+export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsMax = 3;
+export const saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateConversationsItemVoiceModelsMax = 3;
+export const saveVenomWorkspaceBodyStateConversationsMax = 500;
+export const saveVenomWorkspaceBodyStateClustersItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateClustersItemProjectIdMax = 120;
+export const saveVenomWorkspaceBodyStateClustersItemLabelMax = 200;
+export const saveVenomWorkspaceBodyStateClustersItemCategoryMax = 100;
+export const saveVenomWorkspaceBodyStateClustersItemStrengthMin = 0;
+export const saveVenomWorkspaceBodyStateClustersItemStrengthMax = 1;
+export const saveVenomWorkspaceBodyStateClustersItemLinksItemMax = 120;
+export const saveVenomWorkspaceBodyStateClustersItemLinksMax = 100;
+export const saveVenomWorkspaceBodyStateClustersItemDescriptionMax = 2000;
+export const saveVenomWorkspaceBodyStateClustersItemSummaryMax = 2000;
+export const saveVenomWorkspaceBodyStateClustersItemMentionCountMin = 0;
+export const saveVenomWorkspaceBodyStateClustersItemMentionCountMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateClustersItemLastUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateClustersItemLastUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemConversationIdMax = 120;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemProjectIdMax = 120;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemConversationTitleMax = 200;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemMessageIdsItemMax = 120;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemMessageIdsMax = 12;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemExcerptMax = 2000;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedByUserIdMax = 120;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMin = 0;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateClustersItemSourcesMax = 8;
+export const saveVenomWorkspaceBodyStateClustersMax = 1000;
+export const saveVenomWorkspaceBodyStateSourcesItemIdMax = 160;
+export const saveVenomWorkspaceBodyStateSourcesItemProjectIdMax = 160;
+export const saveVenomWorkspaceBodyStateSourcesItemNameMax = 300;
+export const saveVenomWorkspaceBodyStateSourcesItemUrlMax = 2048;
+export const saveVenomWorkspaceBodyStateSourcesItemSummaryMax = 1000;
+export const saveVenomWorkspaceBodyStateSourcesItemContextMax = 8000;
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemIdMax = 160;
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemTitleMax = 300;
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemUrlMax = 2048;
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemExcerptMax = 1000;
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemReferenceMax = 200;
+export const saveVenomWorkspaceBodyStateSourcesItemCitationsMax = 50;
+export const saveVenomWorkspaceBodyStateSourcesItemClustersItemStrengthMin = 0;
+export const saveVenomWorkspaceBodyStateSourcesItemClustersItemStrengthMax = 1;
+export const saveVenomWorkspaceBodyStateSourcesItemAttestationMax = 2048;
+export const saveVenomWorkspaceBodyStateSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleLastAttemptAtMin = 0;
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleLastAttemptAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleLastErrorMax = 300;
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedAtMin = 0;
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedByMax = 120;
+export const saveVenomWorkspaceBodyStateSourcesMax = 500;
+export const saveVenomWorkspaceBodyStateActiveProjectIdMax = 120;
+export const saveVenomWorkspaceBodyStateActiveConversationIdMax = 120;
+export const saveVenomWorkspaceBodyStateTombstonesProjectsItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateTombstonesProjectsMax = 1000;
+export const saveVenomWorkspaceBodyStateTombstonesTasksItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateTombstonesTasksMax = 5000;
+export const saveVenomWorkspaceBodyStateTombstonesConversationsItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateTombstonesConversationsMax = 1000;
+export const saveVenomWorkspaceBodyStateTombstonesMessagesItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateTombstonesMessagesMax = 10000;
+export const saveVenomWorkspaceBodyStateTombstonesClustersItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateTombstonesClustersMax = 2000;
+export const saveVenomWorkspaceBodyStateTombstonesStagesItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateTombstonesStagesMax = 15000;
+export const saveVenomWorkspaceBodyStateTombstonesFieldsItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateTombstonesFieldsMax = 20000;
+export const saveVenomWorkspaceBodyStateTombstonesSourcesItemIdMax = 120;
+export const saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateTombstonesSourcesMax = 2000;
+export const saveVenomWorkspaceBodyStateModelPreferencesEnabledModelIdsMax = 4;
+export const saveVenomWorkspaceBodyStateModelPreferencesUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateModelPreferencesUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateVoicePreferencesUpdatedAtMin = 0;
+export const saveVenomWorkspaceBodyStateVoicePreferencesUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemIdMax = 160;
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemTitleMax = 300;
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemUrlMax = 2048;
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemRetiredAtMin = 0;
+export const saveVenomWorkspaceBodyStateArchivedCitationsItemRetiredAtMultipleOf = 1;
+export const saveVenomWorkspaceBodyStateArchivedCitationsMax = 500;
+export const saveVenomWorkspaceBodyBaseRevisionMin = 0;
+export const saveVenomWorkspaceBodyBaseRevisionMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneProjectsItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneProjectsItemNameMax = 120;
+export const saveVenomWorkspaceResponseStateOneProjectsItemDescriptionMax = 1000;
+export const saveVenomWorkspaceResponseStateOneProjectsItemAccentMax = 32;
+export const saveVenomWorkspaceResponseStateOneProjectsItemSourceCountMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemSourceCountMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax = 280;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemStageIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesOneMax = 1000;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMax = 1000000000;
+export const saveVenomWorkspaceResponseStateOneProjectsItemTasksMax = 2000;
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemNameMax = 80;
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesMax = 30;
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemNameMax = 80;
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsItemMax = 80;
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsMax = 30;
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax = 40;
+export const saveVenomWorkspaceResponseStateOneProjectsItemOrgIdMax = 64;
+export const saveVenomWorkspaceResponseStateOneProjectsMax = 500;
+export const saveVenomWorkspaceResponseStateOneConversationsItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneConversationsItemTitleMax = 200;
+export const saveVenomWorkspaceResponseStateOneConversationsItemProjectIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemContentMax = 50000;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemModelNameMax = 80;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemNameMax = 80;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemModelNameMax = 80;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemContentMax = 8000;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesMax = 4;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsItemMax = 500;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsMax = 8;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerIdMax = 64;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax = 80;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemIdMax = 64;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemNameMax = 160;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemContentTypeMax = 100;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMin = 0;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMax = 10485760;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemThumbnailMax = 24000;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemThumbnailRegExp = new RegExp('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$');
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsMax = 5;
+export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesMax = 1000;
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersItemMax = 64;
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersMin = 3;
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersMax = 3;
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMin = 0;
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMax = 1;
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMin = 3;
+export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMax = 3;
+export const saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneConversationsItemVoiceModelsMax = 3;
+export const saveVenomWorkspaceResponseStateOneConversationsMax = 500;
+export const saveVenomWorkspaceResponseStateOneClustersItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneClustersItemProjectIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneClustersItemLabelMax = 200;
+export const saveVenomWorkspaceResponseStateOneClustersItemCategoryMax = 100;
+export const saveVenomWorkspaceResponseStateOneClustersItemStrengthMin = 0;
+export const saveVenomWorkspaceResponseStateOneClustersItemStrengthMax = 1;
+export const saveVenomWorkspaceResponseStateOneClustersItemLinksItemMax = 120;
+export const saveVenomWorkspaceResponseStateOneClustersItemLinksMax = 100;
+export const saveVenomWorkspaceResponseStateOneClustersItemDescriptionMax = 2000;
+export const saveVenomWorkspaceResponseStateOneClustersItemSummaryMax = 2000;
+export const saveVenomWorkspaceResponseStateOneClustersItemMentionCountMin = 0;
+export const saveVenomWorkspaceResponseStateOneClustersItemMentionCountMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemProjectIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationTitleMax = 200;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsItemMax = 120;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsMax = 12;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax = 2000;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedByUserIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneClustersItemSourcesMax = 8;
+export const saveVenomWorkspaceResponseStateOneClustersMax = 1000;
+export const saveVenomWorkspaceResponseStateOneSourcesItemIdMax = 160;
+export const saveVenomWorkspaceResponseStateOneSourcesItemProjectIdMax = 160;
+export const saveVenomWorkspaceResponseStateOneSourcesItemNameMax = 300;
+export const saveVenomWorkspaceResponseStateOneSourcesItemUrlMax = 2048;
+export const saveVenomWorkspaceResponseStateOneSourcesItemSummaryMax = 1000;
+export const saveVenomWorkspaceResponseStateOneSourcesItemContextMax = 8000;
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdMax = 160;
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemTitleMax = 300;
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemUrlMax = 2048;
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemExcerptMax = 1000;
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemReferenceMax = 200;
+export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsMax = 50;
+export const saveVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMin = 0;
+export const saveVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMax = 1;
+export const saveVenomWorkspaceResponseStateOneSourcesItemAttestationMax = 2048;
+export const saveVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastErrorMax = 300;
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedByMax = 120;
+export const saveVenomWorkspaceResponseStateOneSourcesMax = 500;
+export const saveVenomWorkspaceResponseStateOneActiveProjectIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneActiveConversationIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneTombstonesProjectsItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneTombstonesProjectsMax = 1000;
+export const saveVenomWorkspaceResponseStateOneTombstonesTasksItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneTombstonesTasksMax = 5000;
+export const saveVenomWorkspaceResponseStateOneTombstonesConversationsItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneTombstonesConversationsMax = 1000;
+export const saveVenomWorkspaceResponseStateOneTombstonesMessagesItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneTombstonesMessagesMax = 10000;
+export const saveVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneTombstonesClustersMax = 2000;
+export const saveVenomWorkspaceResponseStateOneTombstonesStagesItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneTombstonesStagesMax = 15000;
+export const saveVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneTombstonesFieldsMax = 20000;
+export const saveVenomWorkspaceResponseStateOneTombstonesSourcesItemIdMax = 120;
+export const saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneTombstonesSourcesMax = 2000;
+export const saveVenomWorkspaceResponseStateOneModelPreferencesEnabledModelIdsMax = 4;
+export const saveVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemIdMax = 160;
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemTitleMax = 300;
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemUrlMax = 2048;
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMin = 0;
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMultipleOf = 1;
+export const saveVenomWorkspaceResponseStateOneArchivedCitationsMax = 500;
+export const saveVenomWorkspaceResponseRevisionMin = 0;
+export const saveVenomWorkspaceResponseRevisionMultipleOf = 1;
+export const listSharedWorkspacesResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listSharedWorkspacesResponseNameMax = 80;
+export const listSharedWorkspacesResponseMemberCountMultipleOf = 1;
+export const createSharedWorkspaceBodyNameMax = 80;
+export const createSharedWorkspaceResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createSharedWorkspaceResponseNameMax = 80;
+export const createSharedWorkspaceResponseMemberCountMultipleOf = 1;
+export const listSharedWorkspaceMembersPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listSharedWorkspaceMembersResponseUserIdMax = 160;
+export const listSharedWorkspaceMembersResponseNameMax = 200;
+export const addSharedWorkspaceMemberPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const addSharedWorkspaceMemberBodyUserIdMax = 160;
+export const addSharedWorkspaceMemberResponseUserIdMax = 160;
+export const addSharedWorkspaceMemberResponseNameMax = 200;
+export const updateSharedWorkspaceMemberRolePathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateSharedWorkspaceMemberRolePathMemberUserIdMax = 160;
+export const updateSharedWorkspaceMemberRoleResponseUserIdMax = 160;
+export const updateSharedWorkspaceMemberRoleResponseNameMax = 200;
+export const removeSharedWorkspaceMemberPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const removeSharedWorkspaceMemberPathMemberUserIdMax = 160;
+export const removeSharedWorkspaceMemberResponseRemovedUserIdMax = 160;
+export const getSharedWorkspaceKnowledgePathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getSharedWorkspaceKnowledgeResponseClustersItemIdMax = 120;
+export const getSharedWorkspaceKnowledgeResponseClustersItemProjectIdMax = 120;
+export const getSharedWorkspaceKnowledgeResponseClustersItemLabelMax = 200;
+export const getSharedWorkspaceKnowledgeResponseClustersItemCategoryMax = 100;
+export const getSharedWorkspaceKnowledgeResponseClustersItemStrengthMin = 0;
+export const getSharedWorkspaceKnowledgeResponseClustersItemStrengthMax = 1;
+export const getSharedWorkspaceKnowledgeResponseClustersItemLinksItemMax = 120;
+export const getSharedWorkspaceKnowledgeResponseClustersItemLinksMax = 100;
+export const getSharedWorkspaceKnowledgeResponseClustersItemDescriptionMax = 2000;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSummaryMax = 2000;
+export const getSharedWorkspaceKnowledgeResponseClustersItemMentionCountMin = 0;
+export const getSharedWorkspaceKnowledgeResponseClustersItemMentionCountMultipleOf = 1;
+export const getSharedWorkspaceKnowledgeResponseClustersItemLastUpdatedAtMin = 0;
+export const getSharedWorkspaceKnowledgeResponseClustersItemLastUpdatedAtMultipleOf = 1;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemConversationIdMax = 120;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemProjectIdMax = 120;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemConversationTitleMax = 200;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemMessageIdsItemMax = 120;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemMessageIdsMax = 12;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemExcerptMax = 2000;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemUpdatedAtMin = 0;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemUpdatedAtMultipleOf = 1;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedByUserIdMax = 120;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMin = 0;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMultipleOf = 1;
+export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesMax = 8;
+export const getSharedWorkspaceKnowledgeResponseClustersMax = 1000;
+export const listSharedWorkspaceSopsPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listSharedWorkspaceSopsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listSharedWorkspaceSopsResponseTitleMax = 160;
+export const listSharedWorkspaceSopsResponseTagsItemMax = 50;
+export const listSharedWorkspaceSopsResponseTagsMax = 20;
+export const listSharedWorkspaceSopsResponseContentPurposeMax = 2000;
+export const listSharedWorkspaceSopsResponseContentPrerequisitesItemMax = 500;
+export const listSharedWorkspaceSopsResponseContentPrerequisitesMax = 25;
+export const listSharedWorkspaceSopsResponseContentInputsItemMax = 500;
+export const listSharedWorkspaceSopsResponseContentInputsMax = 25;
+export const listSharedWorkspaceSopsResponseContentGuidanceItemMax = 2000;
+export const listSharedWorkspaceSopsResponseContentGuidanceMax = 60;
+export const listSharedWorkspaceSopsResponseContentRequiredApprovalsItemMax = 500;
+export const listSharedWorkspaceSopsResponseContentRequiredApprovalsMax = 25;
+export const listSharedWorkspaceSopsResponseContentAcceptanceChecksItemMax = 500;
+export const listSharedWorkspaceSopsResponseContentAcceptanceChecksMax = 25;
+export const listSharedWorkspaceSopsResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listSharedWorkspaceSopsResponseActiveRevisionNumberMultipleOf = 1;
+export const createSharedWorkspaceSopPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createSharedWorkspaceSopBodyTitleMax = 160;
+export const createSharedWorkspaceSopBodyTagsItemMax = 50;
+export const createSharedWorkspaceSopBodyTagsMax = 20;
+export const createSharedWorkspaceSopBodyContentPurposeMax = 2000;
+export const createSharedWorkspaceSopBodyContentPrerequisitesItemMax = 500;
+export const createSharedWorkspaceSopBodyContentPrerequisitesMax = 25;
+export const createSharedWorkspaceSopBodyContentInputsItemMax = 500;
+export const createSharedWorkspaceSopBodyContentInputsMax = 25;
+export const createSharedWorkspaceSopBodyContentGuidanceItemMax = 2000;
+export const createSharedWorkspaceSopBodyContentGuidanceMax = 60;
+export const createSharedWorkspaceSopBodyContentRequiredApprovalsItemMax = 500;
+export const createSharedWorkspaceSopBodyContentRequiredApprovalsMax = 25;
+export const createSharedWorkspaceSopBodyContentAcceptanceChecksItemMax = 500;
+export const createSharedWorkspaceSopBodyContentAcceptanceChecksMax = 25;
+export const createSharedWorkspaceSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createSharedWorkspaceSopResponseTitleMax = 160;
+export const createSharedWorkspaceSopResponseTagsItemMax = 50;
+export const createSharedWorkspaceSopResponseTagsMax = 20;
+export const createSharedWorkspaceSopResponseContentPurposeMax = 2000;
+export const createSharedWorkspaceSopResponseContentPrerequisitesItemMax = 500;
+export const createSharedWorkspaceSopResponseContentPrerequisitesMax = 25;
+export const createSharedWorkspaceSopResponseContentInputsItemMax = 500;
+export const createSharedWorkspaceSopResponseContentInputsMax = 25;
+export const createSharedWorkspaceSopResponseContentGuidanceItemMax = 2000;
+export const createSharedWorkspaceSopResponseContentGuidanceMax = 60;
+export const createSharedWorkspaceSopResponseContentRequiredApprovalsItemMax = 500;
+export const createSharedWorkspaceSopResponseContentRequiredApprovalsMax = 25;
+export const createSharedWorkspaceSopResponseContentAcceptanceChecksItemMax = 500;
+export const createSharedWorkspaceSopResponseContentAcceptanceChecksMax = 25;
+export const createSharedWorkspaceSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createSharedWorkspaceSopResponseActiveRevisionNumberMultipleOf = 1;
+export const publishSharedWorkspaceSopPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishSharedWorkspaceSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishSharedWorkspaceSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishSharedWorkspaceSopResponseVersionNumberMultipleOf = 1;
+export const publishSharedWorkspaceSopResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const publishSharedWorkspaceSopResponseTitleMax = 160;
+export const publishSharedWorkspaceSopResponseTagsItemMax = 50;
+export const publishSharedWorkspaceSopResponseTagsMax = 20;
+export const publishSharedWorkspaceSopResponseContentPurposeMax = 2000;
+export const publishSharedWorkspaceSopResponseContentPrerequisitesItemMax = 500;
+export const publishSharedWorkspaceSopResponseContentPrerequisitesMax = 25;
+export const publishSharedWorkspaceSopResponseContentInputsItemMax = 500;
+export const publishSharedWorkspaceSopResponseContentInputsMax = 25;
+export const publishSharedWorkspaceSopResponseContentGuidanceItemMax = 2000;
+export const publishSharedWorkspaceSopResponseContentGuidanceMax = 60;
+export const publishSharedWorkspaceSopResponseContentRequiredApprovalsItemMax = 500;
+export const publishSharedWorkspaceSopResponseContentRequiredApprovalsMax = 25;
+export const publishSharedWorkspaceSopResponseContentAcceptanceChecksItemMax = 500;
+export const publishSharedWorkspaceSopResponseContentAcceptanceChecksMax = 25;
+export const getSharedWorkspaceSettingsPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateSharedWorkspaceSettingsPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceConceptSensitivityPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceConceptSensitivityPathConceptIdMax = 120;
+export const setSharedWorkspaceConceptSensitivityResponseIdMax = 120;
+export const setSharedWorkspaceConceptSensitivityResponseProjectIdMax = 120;
+export const setSharedWorkspaceConceptSensitivityResponseLabelMax = 200;
+export const setSharedWorkspaceConceptSensitivityResponseCategoryMax = 100;
+export const setSharedWorkspaceConceptSensitivityResponseStrengthMin = 0;
+export const setSharedWorkspaceConceptSensitivityResponseStrengthMax = 1;
+export const setSharedWorkspaceConceptSensitivityResponseLinksItemMax = 120;
+export const setSharedWorkspaceConceptSensitivityResponseLinksMax = 100;
+export const setSharedWorkspaceConceptSensitivityResponseDescriptionMax = 2000;
+export const setSharedWorkspaceConceptSensitivityResponseSummaryMax = 2000;
+export const setSharedWorkspaceConceptSensitivityResponseMentionCountMin = 0;
+export const setSharedWorkspaceConceptSensitivityResponseMentionCountMultipleOf = 1;
+export const setSharedWorkspaceConceptSensitivityResponseLastUpdatedAtMin = 0;
+export const setSharedWorkspaceConceptSensitivityResponseLastUpdatedAtMultipleOf = 1;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesItemConversationIdMax = 120;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesItemProjectIdMax = 120;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesItemConversationTitleMax = 200;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesItemMessageIdsItemMax = 120;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesItemMessageIdsMax = 12;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesItemExcerptMax = 2000;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesItemUpdatedAtMin = 0;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesItemUpdatedAtMultipleOf = 1;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesItemCapturedByUserIdMax = 120;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesItemCapturedAtMin = 0;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesItemCapturedAtMultipleOf = 1;
+export const setSharedWorkspaceConceptSensitivityResponseSourcesMax = 8;
+export const setSharedWorkspaceEvidenceSensitivityPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceEvidenceSensitivityPathConceptIdMax = 120;
+export const setSharedWorkspaceEvidenceSensitivityPathConversationIdMax = 120;
+export const setSharedWorkspaceEvidenceSensitivityResponseIdMax = 120;
+export const setSharedWorkspaceEvidenceSensitivityResponseProjectIdMax = 120;
+export const setSharedWorkspaceEvidenceSensitivityResponseLabelMax = 200;
+export const setSharedWorkspaceEvidenceSensitivityResponseCategoryMax = 100;
+export const setSharedWorkspaceEvidenceSensitivityResponseStrengthMin = 0;
+export const setSharedWorkspaceEvidenceSensitivityResponseStrengthMax = 1;
+export const setSharedWorkspaceEvidenceSensitivityResponseLinksItemMax = 120;
+export const setSharedWorkspaceEvidenceSensitivityResponseLinksMax = 100;
+export const setSharedWorkspaceEvidenceSensitivityResponseDescriptionMax = 2000;
+export const setSharedWorkspaceEvidenceSensitivityResponseSummaryMax = 2000;
+export const setSharedWorkspaceEvidenceSensitivityResponseMentionCountMin = 0;
+export const setSharedWorkspaceEvidenceSensitivityResponseMentionCountMultipleOf = 1;
+export const setSharedWorkspaceEvidenceSensitivityResponseLastUpdatedAtMin = 0;
+export const setSharedWorkspaceEvidenceSensitivityResponseLastUpdatedAtMultipleOf = 1;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesItemConversationIdMax = 120;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesItemProjectIdMax = 120;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesItemConversationTitleMax = 200;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesItemMessageIdsItemMax = 120;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesItemMessageIdsMax = 12;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesItemExcerptMax = 2000;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesItemUpdatedAtMin = 0;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesItemUpdatedAtMultipleOf = 1;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesItemCapturedByUserIdMax = 120;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesItemCapturedAtMin = 0;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesItemCapturedAtMultipleOf = 1;
+export const setSharedWorkspaceEvidenceSensitivityResponseSourcesMax = 8;
+export const setSharedWorkspaceSopSensitivityPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceSopSensitivityPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceSopSensitivityResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceSopSensitivityResponseTitleMax = 160;
+export const setSharedWorkspaceSopSensitivityResponseTagsItemMax = 50;
+export const setSharedWorkspaceSopSensitivityResponseTagsMax = 20;
+export const setSharedWorkspaceSopSensitivityResponseContentPurposeMax = 2000;
+export const setSharedWorkspaceSopSensitivityResponseContentPrerequisitesItemMax = 500;
+export const setSharedWorkspaceSopSensitivityResponseContentPrerequisitesMax = 25;
+export const setSharedWorkspaceSopSensitivityResponseContentInputsItemMax = 500;
+export const setSharedWorkspaceSopSensitivityResponseContentInputsMax = 25;
+export const setSharedWorkspaceSopSensitivityResponseContentGuidanceItemMax = 2000;
+export const setSharedWorkspaceSopSensitivityResponseContentGuidanceMax = 60;
+export const setSharedWorkspaceSopSensitivityResponseContentRequiredApprovalsItemMax = 500;
+export const setSharedWorkspaceSopSensitivityResponseContentRequiredApprovalsMax = 25;
+export const setSharedWorkspaceSopSensitivityResponseContentAcceptanceChecksItemMax = 500;
+export const setSharedWorkspaceSopSensitivityResponseContentAcceptanceChecksMax = 25;
+export const setSharedWorkspaceSopSensitivityResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceSopSensitivityResponseActiveRevisionNumberMultipleOf = 1;
+export const setSharedWorkspaceConceptRestrictionPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceConceptRestrictionPathConceptIdMax = 120;
+export const setSharedWorkspaceConceptRestrictionResponseIdMax = 120;
+export const setSharedWorkspaceConceptRestrictionResponseProjectIdMax = 120;
+export const setSharedWorkspaceConceptRestrictionResponseLabelMax = 200;
+export const setSharedWorkspaceConceptRestrictionResponseCategoryMax = 100;
+export const setSharedWorkspaceConceptRestrictionResponseStrengthMin = 0;
+export const setSharedWorkspaceConceptRestrictionResponseStrengthMax = 1;
+export const setSharedWorkspaceConceptRestrictionResponseLinksItemMax = 120;
+export const setSharedWorkspaceConceptRestrictionResponseLinksMax = 100;
+export const setSharedWorkspaceConceptRestrictionResponseDescriptionMax = 2000;
+export const setSharedWorkspaceConceptRestrictionResponseSummaryMax = 2000;
+export const setSharedWorkspaceConceptRestrictionResponseMentionCountMin = 0;
+export const setSharedWorkspaceConceptRestrictionResponseMentionCountMultipleOf = 1;
+export const setSharedWorkspaceConceptRestrictionResponseLastUpdatedAtMin = 0;
+export const setSharedWorkspaceConceptRestrictionResponseLastUpdatedAtMultipleOf = 1;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesItemConversationIdMax = 120;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesItemProjectIdMax = 120;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesItemConversationTitleMax = 200;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesItemMessageIdsItemMax = 120;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesItemMessageIdsMax = 12;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesItemExcerptMax = 2000;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesItemUpdatedAtMin = 0;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesItemUpdatedAtMultipleOf = 1;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesItemCapturedByUserIdMax = 120;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesItemCapturedAtMin = 0;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesItemCapturedAtMultipleOf = 1;
+export const setSharedWorkspaceConceptRestrictionResponseSourcesMax = 8;
+export const setSharedWorkspaceSopRestrictionPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceSopRestrictionPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceSopRestrictionResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceSopRestrictionResponseTitleMax = 160;
+export const setSharedWorkspaceSopRestrictionResponseTagsItemMax = 50;
+export const setSharedWorkspaceSopRestrictionResponseTagsMax = 20;
+export const setSharedWorkspaceSopRestrictionResponseContentPurposeMax = 2000;
+export const setSharedWorkspaceSopRestrictionResponseContentPrerequisitesItemMax = 500;
+export const setSharedWorkspaceSopRestrictionResponseContentPrerequisitesMax = 25;
+export const setSharedWorkspaceSopRestrictionResponseContentInputsItemMax = 500;
+export const setSharedWorkspaceSopRestrictionResponseContentInputsMax = 25;
+export const setSharedWorkspaceSopRestrictionResponseContentGuidanceItemMax = 2000;
+export const setSharedWorkspaceSopRestrictionResponseContentGuidanceMax = 60;
+export const setSharedWorkspaceSopRestrictionResponseContentRequiredApprovalsItemMax = 500;
+export const setSharedWorkspaceSopRestrictionResponseContentRequiredApprovalsMax = 25;
+export const setSharedWorkspaceSopRestrictionResponseContentAcceptanceChecksItemMax = 500;
+export const setSharedWorkspaceSopRestrictionResponseContentAcceptanceChecksMax = 25;
+export const setSharedWorkspaceSopRestrictionResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const setSharedWorkspaceSopRestrictionResponseActiveRevisionNumberMultipleOf = 1;
+export const exportSharedWorkspaceMarkdownPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomAppsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomAppsResponseNameMax = 120;
+export const listVenomAppsResponsePurposeMax = 1000;
+export const listVenomAppsResponseBrandMax = 120;
+export const listVenomAppsResponseDetectedStackItemMax = 60;
+export const listVenomAppsResponseDetectedStackMax = 20;
+export const listVenomAppsResponseSourceVersionMin = 0;
+export const listVenomAppsResponseSourceVersionMultipleOf = 1;
+export const listVenomAppsResponseDeploymentUrlMax = 2048;
+export const listVenomAppsResponseLinkedProjectIdMax = 120;
+export const listVenomAppsResponseLinkedProjectNameMax = 120;
+export const listVenomAppsResponseLatestIterationNumberMin = 0;
+export const listVenomAppsResponseLatestIterationNumberMultipleOf = 1;
+export const listVenomAppsResponseLiveReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomAppsResponseLiveIterationNumberOneMultipleOf = 1;
+export const listVenomAppsResponseImprovementSignalOneKnowledgeChangesMin = 0;
+export const listVenomAppsResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
+export const listVenomAppsResponseImprovementSignalOneSourceChangesMin = 0;
+export const listVenomAppsResponseImprovementSignalOneSourceChangesMultipleOf = 1;
+export const listVenomAppsResponseImprovementSignalOneTotalChangesMultipleOf = 1;
+export const listVenomAppsResponseImprovementSignalOneSummaryMax = 1500;
+export const listVenomAppsResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
+export const listVenomAppsResponseTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomAppsResponseTemplateNameMax = 120;
+export const createVenomAppBodyNameMax = 120;
+export const createVenomAppBodyPurposeMax = 1000;
+export const createVenomAppBodyBrandMax = 120;
+export const createVenomAppBodyDeploymentUrlMax = 2048;
+export const createVenomAppResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppResponseNameMax = 120;
+export const createVenomAppResponsePurposeMax = 1000;
+export const createVenomAppResponseBrandMax = 120;
+export const createVenomAppResponseDetectedStackItemMax = 60;
+export const createVenomAppResponseDetectedStackMax = 20;
+export const createVenomAppResponseSourceVersionMin = 0;
+export const createVenomAppResponseSourceVersionMultipleOf = 1;
+export const createVenomAppResponseDeploymentUrlMax = 2048;
+export const createVenomAppResponseLinkedProjectIdMax = 120;
+export const createVenomAppResponseLinkedProjectNameMax = 120;
+export const createVenomAppResponseLatestIterationNumberMin = 0;
+export const createVenomAppResponseLatestIterationNumberMultipleOf = 1;
+export const createVenomAppResponseLiveReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppResponseLiveIterationNumberOneMultipleOf = 1;
+export const createVenomAppResponseImprovementSignalOneKnowledgeChangesMin = 0;
+export const createVenomAppResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
+export const createVenomAppResponseImprovementSignalOneSourceChangesMin = 0;
+export const createVenomAppResponseImprovementSignalOneSourceChangesMultipleOf = 1;
+export const createVenomAppResponseImprovementSignalOneTotalChangesMultipleOf = 1;
+export const createVenomAppResponseImprovementSignalOneSummaryMax = 1500;
+export const createVenomAppResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
+export const createVenomAppResponseTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppResponseTemplateNameMax = 120;
+export const getVenomAppPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseAppNameMax = 120;
+export const getVenomAppResponseAppPurposeMax = 1000;
+export const getVenomAppResponseAppBrandMax = 120;
+export const getVenomAppResponseAppDetectedStackItemMax = 60;
+export const getVenomAppResponseAppDetectedStackMax = 20;
+export const getVenomAppResponseAppSourceVersionMin = 0;
+export const getVenomAppResponseAppSourceVersionMultipleOf = 1;
+export const getVenomAppResponseAppDeploymentUrlMax = 2048;
+export const getVenomAppResponseAppLinkedProjectIdMax = 120;
+export const getVenomAppResponseAppLinkedProjectNameMax = 120;
+export const getVenomAppResponseAppLatestIterationNumberMin = 0;
+export const getVenomAppResponseAppLatestIterationNumberMultipleOf = 1;
+export const getVenomAppResponseAppLiveReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseAppLiveIterationNumberOneMultipleOf = 1;
+export const getVenomAppResponseAppImprovementSignalOneKnowledgeChangesMin = 0;
+export const getVenomAppResponseAppImprovementSignalOneKnowledgeChangesMultipleOf = 1;
+export const getVenomAppResponseAppImprovementSignalOneSourceChangesMin = 0;
+export const getVenomAppResponseAppImprovementSignalOneSourceChangesMultipleOf = 1;
+export const getVenomAppResponseAppImprovementSignalOneTotalChangesMultipleOf = 1;
+export const getVenomAppResponseAppImprovementSignalOneSummaryMax = 1500;
+export const getVenomAppResponseAppImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
+export const getVenomAppResponseAppTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseAppTemplateNameMax = 120;
+export const getVenomAppResponseVersionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseVersionsItemVersionNumberMultipleOf = 1;
+export const getVenomAppResponseVersionsItemArchiveFilenameMax = 160;
+export const getVenomAppResponseVersionsItemArchiveBytesMultipleOf = 1;
+export const getVenomAppResponseVersionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomAppResponseVersionsItemManifestTotalEntriesMax = 5000;
+export const getVenomAppResponseVersionsItemManifestTotalEntriesMultipleOf = 1;
+export const getVenomAppResponseVersionsItemManifestSafeFileCountMin = 0;
+export const getVenomAppResponseVersionsItemManifestSafeFileCountMax = 5000;
+export const getVenomAppResponseVersionsItemManifestSafeFileCountMultipleOf = 1;
+export const getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMin = 0;
+export const getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMax = 5000;
+export const getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMultipleOf = 1;
+export const getVenomAppResponseVersionsItemManifestFilesItemMax = 240;
+export const getVenomAppResponseVersionsItemManifestFilesMax = 200;
+export const getVenomAppResponseVersionsItemManifestProjectFilesItemMax = 240;
+export const getVenomAppResponseVersionsItemManifestProjectFilesMax = 40;
+export const getVenomAppResponseVersionsItemManifestDetectedStackItemMax = 60;
+export const getVenomAppResponseVersionsItemManifestDetectedStackMax = 20;
+export const getVenomAppResponseVersionsMax = 500;
+export const getVenomAppResponseImportJobsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseImportJobsItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseImportJobsItemArchiveFilenameMax = 160;
+export const getVenomAppResponseImportJobsItemDeclaredBytesMultipleOf = 1;
+export const getVenomAppResponseImportJobsItemProgressMin = 0;
+export const getVenomAppResponseImportJobsItemProgressMax = 100;
+export const getVenomAppResponseImportJobsItemProgressMultipleOf = 1;
+export const getVenomAppResponseImportJobsItemFailureCodeMax = 80;
+export const getVenomAppResponseImportJobsItemFailureMessageMax = 240;
+export const getVenomAppResponseImportJobsItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseImportJobsMax = 100;
+export const getVenomAppResponseDeploymentLinksItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseDeploymentLinksItemLabelMax = 80;
+export const getVenomAppResponseDeploymentLinksItemUrlMax = 2048;
+export const getVenomAppResponseDeploymentLinksMax = 20;
+export const getVenomAppResponseProvisioningReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseProvisioningReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseProvisioningReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseProvisioningReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseProvisioningReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseProvisioningReleasesItemTargetNameMax = 120;
+export const getVenomAppResponseProvisioningReleasesItemProviderProjectIdMax = 120;
+export const getVenomAppResponseProvisioningReleasesItemProviderCandidateIdMax = 120;
+export const getVenomAppResponseProvisioningReleasesItemProviderReleaseIdMax = 120;
+export const getVenomAppResponseProvisioningReleasesItemLaunchUrlMax = 2048;
+export const getVenomAppResponseProvisioningReleasesItemPublishIdempotencyKeyMax = 120;
+export const getVenomAppResponseProvisioningReleasesItemRollbackIdempotencyKeyMax = 120;
+export const getVenomAppResponseProvisioningReleasesMax = 500;
+export const getVenomAppResponseIterationsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseIterationsItemIterationNumberMultipleOf = 1;
+export const getVenomAppResponseIterationsItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseIterationsItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseIterationsItemPackageTitleMax = 160;
+export const getVenomAppResponseIterationsItemPackageChecksumRegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomAppResponseIterationsItemReasonMax = 1000;
+export const getVenomAppResponseIterationsItemChangesSummaryMax = 2000;
+export const getVenomAppResponseIterationsItemBaselineIterationNumberOneMultipleOf = 1;
+export const getVenomAppResponseIterationsItemReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseIterationsItemCreatedByMax = 200;
+export const getVenomAppResponseIterationsMax = 200;
+export const getVenomAppResponseTimelineItemIdMax = 200;
+export const getVenomAppResponseTimelineItemTitleMax = 240;
+export const getVenomAppResponseTimelineItemDetailMax = 2000;
+export const getVenomAppResponseTimelineItemActorMax = 200;
+export const getVenomAppResponseTimelineItemStatusMax = 60;
+export const getVenomAppResponseTimelineItemBuildRunIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseTimelineItemReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseTimelineItemSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppResponseTimelineItemIterationNumberOneMultipleOf = 1;
+export const getVenomAppResponseTimelineMax = 400;
+export const getVenomAppResponseTimelineTotalMin = 0;
+export const getVenomAppResponseTimelineTotalMultipleOf = 1;
+export const updateVenomAppPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomAppBodyNameMax = 120;
+export const updateVenomAppBodyPurposeMax = 1000;
+export const updateVenomAppBodyBrandMax = 120;
+export const updateVenomAppBodyDeploymentUrlMax = 2048;
+export const updateVenomAppBodyLinkedProjectIdMax = 120;
+export const updateVenomAppResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomAppResponseNameMax = 120;
+export const updateVenomAppResponsePurposeMax = 1000;
+export const updateVenomAppResponseBrandMax = 120;
+export const updateVenomAppResponseDetectedStackItemMax = 60;
+export const updateVenomAppResponseDetectedStackMax = 20;
+export const updateVenomAppResponseSourceVersionMin = 0;
+export const updateVenomAppResponseSourceVersionMultipleOf = 1;
+export const updateVenomAppResponseDeploymentUrlMax = 2048;
+export const updateVenomAppResponseLinkedProjectIdMax = 120;
+export const updateVenomAppResponseLinkedProjectNameMax = 120;
+export const updateVenomAppResponseLatestIterationNumberMin = 0;
+export const updateVenomAppResponseLatestIterationNumberMultipleOf = 1;
+export const updateVenomAppResponseLiveReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomAppResponseLiveIterationNumberOneMultipleOf = 1;
+export const updateVenomAppResponseImprovementSignalOneKnowledgeChangesMin = 0;
+export const updateVenomAppResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
+export const updateVenomAppResponseImprovementSignalOneSourceChangesMin = 0;
+export const updateVenomAppResponseImprovementSignalOneSourceChangesMultipleOf = 1;
+export const updateVenomAppResponseImprovementSignalOneTotalChangesMultipleOf = 1;
+export const updateVenomAppResponseImprovementSignalOneSummaryMax = 1500;
+export const updateVenomAppResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
+export const updateVenomAppResponseTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomAppResponseTemplateNameMax = 120;
+export const deleteVenomAppPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppSharingPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppSharingResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppSharingResponseSlugMax = 60;
+export const getVenomAppSharingResponseShareUrlMax = 2048;
+export const getVenomAppSharingResponseEmbedUrlMax = 2048;
+export const getVenomAppSharingResponseEmbedSnippetMax = 4096;
+export const getVenomAppSharingResponseLiveIterationNumberOneMultipleOf = 1;
+export const updateVenomAppSharingPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomAppSharingResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomAppSharingResponseSlugMax = 60;
+export const updateVenomAppSharingResponseShareUrlMax = 2048;
+export const updateVenomAppSharingResponseEmbedUrlMax = 2048;
+export const updateVenomAppSharingResponseEmbedSnippetMax = 4096;
+export const updateVenomAppSharingResponseLiveIterationNumberOneMultipleOf = 1;
+export const getVenomAppAiPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppAiResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppAiResponseMonthlyCapUsdOneMin = 0;
+export const getVenomAppAiResponseSafetyCapUsdMin = 0;
+export const getVenomAppAiResponseCredentialOneDisplayPrefixMax = 20;
+export const getVenomAppAiResponseUsageCostUsdMin = 0;
+export const getVenomAppAiResponseUsageRequestsMin = 0;
+export const getVenomAppAiResponseUsageRequestsMultipleOf = 1;
+export const getVenomAppAiResponseUsagePromptTokensMin = 0;
+export const getVenomAppAiResponseUsagePromptTokensMultipleOf = 1;
+export const getVenomAppAiResponseUsageOutputTokensMin = 0;
+export const getVenomAppAiResponseUsageOutputTokensMultipleOf = 1;
+export const getVenomAppAiResponseUsageModelsItemModelIdMax = 80;
+export const getVenomAppAiResponseUsageModelsItemModelNameMax = 120;
+export const getVenomAppAiResponseUsageModelsItemCostUsdMin = 0;
+export const getVenomAppAiResponseUsageModelsItemRequestsMin = 0;
+export const getVenomAppAiResponseUsageModelsItemRequestsMultipleOf = 1;
+export const getVenomAppAiResponseUsageModelsMax = 40;
+export const getVenomAppAiResponseOwnerMonthUsdMin = 0;
+export const updateVenomAppAiSettingsPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomAppAiSettingsBodyMonthlyCapUsdOneMin = 0.01;
+export const updateVenomAppAiSettingsBodyMonthlyCapUsdOneMax = 100000;
+export const updateVenomAppAiSettingsResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomAppAiSettingsResponseMonthlyCapUsdOneMin = 0;
+export const updateVenomAppAiSettingsResponseSafetyCapUsdMin = 0;
+export const updateVenomAppAiSettingsResponseCredentialOneDisplayPrefixMax = 20;
+export const updateVenomAppAiSettingsResponseUsageCostUsdMin = 0;
+export const updateVenomAppAiSettingsResponseUsageRequestsMin = 0;
+export const updateVenomAppAiSettingsResponseUsageRequestsMultipleOf = 1;
+export const updateVenomAppAiSettingsResponseUsagePromptTokensMin = 0;
+export const updateVenomAppAiSettingsResponseUsagePromptTokensMultipleOf = 1;
+export const updateVenomAppAiSettingsResponseUsageOutputTokensMin = 0;
+export const updateVenomAppAiSettingsResponseUsageOutputTokensMultipleOf = 1;
+export const updateVenomAppAiSettingsResponseUsageModelsItemModelIdMax = 80;
+export const updateVenomAppAiSettingsResponseUsageModelsItemModelNameMax = 120;
+export const updateVenomAppAiSettingsResponseUsageModelsItemCostUsdMin = 0;
+export const updateVenomAppAiSettingsResponseUsageModelsItemRequestsMin = 0;
+export const updateVenomAppAiSettingsResponseUsageModelsItemRequestsMultipleOf = 1;
+export const updateVenomAppAiSettingsResponseUsageModelsMax = 40;
+export const updateVenomAppAiSettingsResponseOwnerMonthUsdMin = 0;
+export const rotateVenomAppAiCredentialPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rotateVenomAppAiCredentialResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rotateVenomAppAiCredentialResponseMonthlyCapUsdOneMin = 0;
+export const rotateVenomAppAiCredentialResponseSafetyCapUsdMin = 0;
+export const rotateVenomAppAiCredentialResponseCredentialOneDisplayPrefixMax = 20;
+export const rotateVenomAppAiCredentialResponseUsageCostUsdMin = 0;
+export const rotateVenomAppAiCredentialResponseUsageRequestsMin = 0;
+export const rotateVenomAppAiCredentialResponseUsageRequestsMultipleOf = 1;
+export const rotateVenomAppAiCredentialResponseUsagePromptTokensMin = 0;
+export const rotateVenomAppAiCredentialResponseUsagePromptTokensMultipleOf = 1;
+export const rotateVenomAppAiCredentialResponseUsageOutputTokensMin = 0;
+export const rotateVenomAppAiCredentialResponseUsageOutputTokensMultipleOf = 1;
+export const rotateVenomAppAiCredentialResponseUsageModelsItemModelIdMax = 80;
+export const rotateVenomAppAiCredentialResponseUsageModelsItemModelNameMax = 120;
+export const rotateVenomAppAiCredentialResponseUsageModelsItemCostUsdMin = 0;
+export const rotateVenomAppAiCredentialResponseUsageModelsItemRequestsMin = 0;
+export const rotateVenomAppAiCredentialResponseUsageModelsItemRequestsMultipleOf = 1;
+export const rotateVenomAppAiCredentialResponseUsageModelsMax = 40;
+export const rotateVenomAppAiCredentialResponseOwnerMonthUsdMin = 0;
+export const revokeVenomAppAiCredentialPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const revokeVenomAppAiCredentialResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const revokeVenomAppAiCredentialResponseMonthlyCapUsdOneMin = 0;
+export const revokeVenomAppAiCredentialResponseSafetyCapUsdMin = 0;
+export const revokeVenomAppAiCredentialResponseCredentialOneDisplayPrefixMax = 20;
+export const revokeVenomAppAiCredentialResponseUsageCostUsdMin = 0;
+export const revokeVenomAppAiCredentialResponseUsageRequestsMin = 0;
+export const revokeVenomAppAiCredentialResponseUsageRequestsMultipleOf = 1;
+export const revokeVenomAppAiCredentialResponseUsagePromptTokensMin = 0;
+export const revokeVenomAppAiCredentialResponseUsagePromptTokensMultipleOf = 1;
+export const revokeVenomAppAiCredentialResponseUsageOutputTokensMin = 0;
+export const revokeVenomAppAiCredentialResponseUsageOutputTokensMultipleOf = 1;
+export const revokeVenomAppAiCredentialResponseUsageModelsItemModelIdMax = 80;
+export const revokeVenomAppAiCredentialResponseUsageModelsItemModelNameMax = 120;
+export const revokeVenomAppAiCredentialResponseUsageModelsItemCostUsdMin = 0;
+export const revokeVenomAppAiCredentialResponseUsageModelsItemRequestsMin = 0;
+export const revokeVenomAppAiCredentialResponseUsageModelsItemRequestsMultipleOf = 1;
+export const revokeVenomAppAiCredentialResponseUsageModelsMax = 40;
+export const revokeVenomAppAiCredentialResponseOwnerMonthUsdMin = 0;
+export const getVenomAppIterationContextPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseAppNameMax = 120;
+export const getVenomAppIterationContextResponseLinkedProjectOneIdMax = 120;
+export const getVenomAppIterationContextResponseLinkedProjectOneNameMax = 120;
+export const getVenomAppIterationContextResponseBaselineOneIterationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseBaselineOneIterationNumberMultipleOf = 1;
+export const getVenomAppIterationContextResponseBaselineOneBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseBaselineOneRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseBaselineOnePackageTitleMax = 160;
+export const getVenomAppIterationContextResponseLatestSourceVersionOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseLatestSourceVersionOneVersionNumberMultipleOf = 1;
+export const getVenomAppIterationContextResponseLatestSourceVersionOneArchiveFilenameMax = 160;
+export const getVenomAppIterationContextResponseSuggestedSopsItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseSuggestedSopsItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseSuggestedSopsItemRevisionNumberMultipleOf = 1;
+export const getVenomAppIterationContextResponseSuggestedSopsItemTitleMax = 160;
+export const getVenomAppIterationContextResponseSuggestedSopsMax = 20;
+export const getVenomAppIterationContextResponseChangesOneKnowledgeChangesMin = 0;
+export const getVenomAppIterationContextResponseChangesOneKnowledgeChangesMultipleOf = 1;
+export const getVenomAppIterationContextResponseChangesOneSourceChangesMin = 0;
+export const getVenomAppIterationContextResponseChangesOneSourceChangesMultipleOf = 1;
+export const getVenomAppIterationContextResponseChangesOneSummaryMax = 1500;
+export const getVenomAppIterationContextResponseLiveOneReleaseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseLiveOneIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppIterationContextResponseLiveOneIterationNumberOneMultipleOf = 1;
+export const getVenomAppIterationContextResponseLiveOnePackageTitleMax = 160;
+export const getVenomAppIterationContextResponseLiveOneChangesOneKnowledgeChangesMin = 0;
+export const getVenomAppIterationContextResponseLiveOneChangesOneKnowledgeChangesMultipleOf = 1;
+export const getVenomAppIterationContextResponseLiveOneChangesOneSourceChangesMin = 0;
+export const getVenomAppIterationContextResponseLiveOneChangesOneSourceChangesMultipleOf = 1;
+export const getVenomAppIterationContextResponseLiveOneChangesOneSummaryMax = 1500;
+export const createVenomAppIterationPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationBodyInstructionMax = 4000;
+export const createVenomAppIterationBodyConstraintsMax = 4000;
+export const createVenomAppIterationBodySopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationBodySopRevisionIdsMax = 20;
+export const createVenomAppIterationBodyIdempotencyKeyMin = 16;
+export const createVenomAppIterationBodyIdempotencyKeyMax = 120;
+export const createVenomAppIterationBodyIdempotencyKeyRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+export const createVenomAppIterationBodyBaselineIterationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseOneTargetNameMax = 120;
+export const createVenomAppIterationResponseOneProgressMin = 0;
+export const createVenomAppIterationResponseOneProgressMax = 100;
+export const createVenomAppIterationResponseOneProgressMultipleOf = 1;
+export const createVenomAppIterationResponseOneCurrentRevisionNumberMin = 0;
+export const createVenomAppIterationResponseOneCurrentRevisionNumberMultipleOf = 1;
+export const createVenomAppIterationResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseOneTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseOneFailureMessageMax = 240;
+export const createVenomAppIterationResponseOneCancelledReasonMax = 500;
+export const createVenomAppIterationResponseTwoRequestTargetNameMax = 120;
+export const createVenomAppIterationResponseTwoRequestRequirementsMax = 8000;
+export const createVenomAppIterationResponseTwoRequestConstraintsMax = 4000;
+export const createVenomAppIterationResponseTwoRequestBrandDirectionMax = 3000;
+export const createVenomAppIterationResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRequestProjectIdMax = 120;
+export const createVenomAppIterationResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRequestSopRevisionIdsMax = 20;
+export const createVenomAppIterationResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRequestChangesSummaryMax = 2000;
+export const createVenomAppIterationResponseTwoRequestTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+export const createVenomAppIterationResponseTwoRevisionsItemReasonMax = 1000;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageTitleMax = 160;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+export const createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+export const createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+export const createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+export const createVenomAppIterationResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+export const createVenomAppIterationResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomAppIterationResponseTwoRevisionsMax = 50;
+export const createVenomAppIterationResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppIterationResponseTwoEventsItemProgressMin = 0;
+export const createVenomAppIterationResponseTwoEventsItemProgressMax = 100;
+export const createVenomAppIterationResponseTwoEventsItemProgressMultipleOf = 1;
+export const createVenomAppIterationResponseTwoEventsItemMessageMax = 240;
+export const createVenomAppIterationResponseTwoEventsMax = 200;
+export const createVenomAppIterationResponseTwoAttemptMax = 10;
+export const createVenomAppIterationResponseTwoAttemptMultipleOf = 1;
+export const createVenomAppIterationResponseTwoFailureCodeMax = 80;
+export const dismissVenomAppImprovementSuggestionPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const dismissVenomAppImprovementSuggestionResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const dismissVenomAppImprovementSuggestionResponseNameMax = 120;
+export const dismissVenomAppImprovementSuggestionResponsePurposeMax = 1000;
+export const dismissVenomAppImprovementSuggestionResponseBrandMax = 120;
+export const dismissVenomAppImprovementSuggestionResponseDetectedStackItemMax = 60;
+export const dismissVenomAppImprovementSuggestionResponseDetectedStackMax = 20;
+export const dismissVenomAppImprovementSuggestionResponseSourceVersionMin = 0;
+export const dismissVenomAppImprovementSuggestionResponseSourceVersionMultipleOf = 1;
+export const dismissVenomAppImprovementSuggestionResponseDeploymentUrlMax = 2048;
+export const dismissVenomAppImprovementSuggestionResponseLinkedProjectIdMax = 120;
+export const dismissVenomAppImprovementSuggestionResponseLinkedProjectNameMax = 120;
+export const dismissVenomAppImprovementSuggestionResponseLatestIterationNumberMin = 0;
+export const dismissVenomAppImprovementSuggestionResponseLatestIterationNumberMultipleOf = 1;
+export const dismissVenomAppImprovementSuggestionResponseLiveReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const dismissVenomAppImprovementSuggestionResponseLiveIterationNumberOneMultipleOf = 1;
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneKnowledgeChangesMin = 0;
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSourceChangesMin = 0;
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSourceChangesMultipleOf = 1;
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneTotalChangesMultipleOf = 1;
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSummaryMax = 1500;
+export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
+export const dismissVenomAppImprovementSuggestionResponseTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const dismissVenomAppImprovementSuggestionResponseTemplateNameMax = 120;
+export const getVenomAppTimelinePathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppTimelineQueryCursorMax = 300;
+export const getVenomAppTimelineQueryLimitDefault = 100;
+export const getVenomAppTimelineQueryLimitMax = 200;
+export const getVenomAppTimelineQueryLimitMultipleOf = 1;
+export const getVenomAppTimelineResponseEntriesItemIdMax = 200;
+export const getVenomAppTimelineResponseEntriesItemTitleMax = 240;
+export const getVenomAppTimelineResponseEntriesItemDetailMax = 2000;
+export const getVenomAppTimelineResponseEntriesItemActorMax = 200;
+export const getVenomAppTimelineResponseEntriesItemStatusMax = 60;
+export const getVenomAppTimelineResponseEntriesItemBuildRunIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppTimelineResponseEntriesItemReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppTimelineResponseEntriesItemSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppTimelineResponseEntriesItemIterationNumberOneMultipleOf = 1;
+export const getVenomAppTimelineResponseEntriesMax = 200;
+export const getVenomAppTimelineResponseNextCursorMax = 300;
+export const getVenomAppTimelineResponseTotalMin = 0;
+export const getVenomAppTimelineResponseTotalMultipleOf = 1;
+export const listVenomAppVersionsPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomAppVersionsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomAppVersionsResponseVersionNumberMultipleOf = 1;
+export const listVenomAppVersionsResponseArchiveFilenameMax = 160;
+export const listVenomAppVersionsResponseArchiveBytesMultipleOf = 1;
+export const listVenomAppVersionsResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listVenomAppVersionsResponseManifestTotalEntriesMax = 5000;
+export const listVenomAppVersionsResponseManifestTotalEntriesMultipleOf = 1;
+export const listVenomAppVersionsResponseManifestSafeFileCountMin = 0;
+export const listVenomAppVersionsResponseManifestSafeFileCountMax = 5000;
+export const listVenomAppVersionsResponseManifestSafeFileCountMultipleOf = 1;
+export const listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMin = 0;
+export const listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMax = 5000;
+export const listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMultipleOf = 1;
+export const listVenomAppVersionsResponseManifestFilesItemMax = 240;
+export const listVenomAppVersionsResponseManifestFilesMax = 200;
+export const listVenomAppVersionsResponseManifestProjectFilesItemMax = 240;
+export const listVenomAppVersionsResponseManifestProjectFilesMax = 40;
+export const listVenomAppVersionsResponseManifestDetectedStackItemMax = 60;
+export const listVenomAppVersionsResponseManifestDetectedStackMax = 20;
+export const createVenomAppImportPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppImportBodyFilenameMax = 160;
+export const createVenomAppImportBodyFilenameRegExp = new RegExp('^.*\\.[zZ][iI][pP]$');
+export const createVenomAppImportBodySizeMax = 52428800;
+export const createVenomAppImportBodySizeMultipleOf = 1;
+export const createVenomAppImportBodyIdempotencyKeyMin = 16;
+export const createVenomAppImportBodyIdempotencyKeyMax = 120;
+export const createVenomAppImportBodyIdempotencyKeyRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+export const createVenomAppImportResponseJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppImportResponseJobAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppImportResponseJobArchiveFilenameMax = 160;
+export const createVenomAppImportResponseJobDeclaredBytesMultipleOf = 1;
+export const createVenomAppImportResponseJobProgressMin = 0;
+export const createVenomAppImportResponseJobProgressMax = 100;
+export const createVenomAppImportResponseJobProgressMultipleOf = 1;
+export const createVenomAppImportResponseJobFailureCodeMax = 80;
+export const createVenomAppImportResponseJobFailureMessageMax = 240;
+export const createVenomAppImportResponseJobSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomAppImportResponseUploadUrlMax = 8192;
+export const getVenomAppImportPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppImportPathImportJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppImportResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppImportResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomAppImportResponseArchiveFilenameMax = 160;
+export const getVenomAppImportResponseDeclaredBytesMultipleOf = 1;
+export const getVenomAppImportResponseProgressMin = 0;
+export const getVenomAppImportResponseProgressMax = 100;
+export const getVenomAppImportResponseProgressMultipleOf = 1;
+export const getVenomAppImportResponseFailureCodeMax = 80;
+export const getVenomAppImportResponseFailureMessageMax = 240;
+export const getVenomAppImportResponseSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const completeVenomAppImportUploadPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const completeVenomAppImportUploadPathImportJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const completeVenomAppImportUploadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const completeVenomAppImportUploadResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const completeVenomAppImportUploadResponseArchiveFilenameMax = 160;
+export const completeVenomAppImportUploadResponseDeclaredBytesMultipleOf = 1;
+export const completeVenomAppImportUploadResponseProgressMin = 0;
+export const completeVenomAppImportUploadResponseProgressMax = 100;
+export const completeVenomAppImportUploadResponseProgressMultipleOf = 1;
+export const completeVenomAppImportUploadResponseFailureCodeMax = 80;
+export const completeVenomAppImportUploadResponseFailureMessageMax = 240;
+export const completeVenomAppImportUploadResponseSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomAppImportPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomAppImportPathImportJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomAppImportResponseJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomAppImportResponseJobAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomAppImportResponseJobArchiveFilenameMax = 160;
+export const retryVenomAppImportResponseJobDeclaredBytesMultipleOf = 1;
+export const retryVenomAppImportResponseJobProgressMin = 0;
+export const retryVenomAppImportResponseJobProgressMax = 100;
+export const retryVenomAppImportResponseJobProgressMultipleOf = 1;
+export const retryVenomAppImportResponseJobFailureCodeMax = 80;
+export const retryVenomAppImportResponseJobFailureMessageMax = 240;
+export const retryVenomAppImportResponseJobSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomAppImportResponseUploadUrlMax = 8192;
+export const listVenomSopsQueryQueryMax = 120;
+export const listVenomSopsQueryAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSopsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSopsResponseTitleMax = 160;
+export const listVenomSopsResponseTagsItemMax = 50;
+export const listVenomSopsResponseTagsMax = 20;
+export const listVenomSopsResponseContentPurposeMax = 2000;
+export const listVenomSopsResponseContentPrerequisitesItemMax = 500;
+export const listVenomSopsResponseContentPrerequisitesMax = 25;
+export const listVenomSopsResponseContentInputsItemMax = 500;
+export const listVenomSopsResponseContentInputsMax = 25;
+export const listVenomSopsResponseContentGuidanceItemMax = 2000;
+export const listVenomSopsResponseContentGuidanceMax = 60;
+export const listVenomSopsResponseContentRequiredApprovalsItemMax = 500;
+export const listVenomSopsResponseContentRequiredApprovalsMax = 25;
+export const listVenomSopsResponseContentAcceptanceChecksItemMax = 500;
+export const listVenomSopsResponseContentAcceptanceChecksMax = 25;
+export const listVenomSopsResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSopsResponseActiveRevisionNumberMultipleOf = 1;
+export const listVenomSopsResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSopsResponseAppIdsMax = 100;
+export const createVenomSopBodyTitleMax = 160;
+export const createVenomSopBodyTagsItemMax = 50;
+export const createVenomSopBodyTagsMax = 20;
+export const createVenomSopBodyContentPurposeMax = 2000;
+export const createVenomSopBodyContentPrerequisitesItemMax = 500;
+export const createVenomSopBodyContentPrerequisitesMax = 25;
+export const createVenomSopBodyContentInputsItemMax = 500;
+export const createVenomSopBodyContentInputsMax = 25;
+export const createVenomSopBodyContentGuidanceItemMax = 2000;
+export const createVenomSopBodyContentGuidanceMax = 60;
+export const createVenomSopBodyContentRequiredApprovalsItemMax = 500;
+export const createVenomSopBodyContentRequiredApprovalsMax = 25;
+export const createVenomSopBodyContentAcceptanceChecksItemMax = 500;
+export const createVenomSopBodyContentAcceptanceChecksMax = 25;
+export const createVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomSopResponseTitleMax = 160;
+export const createVenomSopResponseTagsItemMax = 50;
+export const createVenomSopResponseTagsMax = 20;
+export const createVenomSopResponseContentPurposeMax = 2000;
+export const createVenomSopResponseContentPrerequisitesItemMax = 500;
+export const createVenomSopResponseContentPrerequisitesMax = 25;
+export const createVenomSopResponseContentInputsItemMax = 500;
+export const createVenomSopResponseContentInputsMax = 25;
+export const createVenomSopResponseContentGuidanceItemMax = 2000;
+export const createVenomSopResponseContentGuidanceMax = 60;
+export const createVenomSopResponseContentRequiredApprovalsItemMax = 500;
+export const createVenomSopResponseContentRequiredApprovalsMax = 25;
+export const createVenomSopResponseContentAcceptanceChecksItemMax = 500;
+export const createVenomSopResponseContentAcceptanceChecksMax = 25;
+export const createVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomSopResponseActiveRevisionNumberMultipleOf = 1;
+export const createVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomSopResponseAppIdsMax = 100;
+export const getVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomSopResponseSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomSopResponseSopTitleMax = 160;
+export const getVenomSopResponseSopTagsItemMax = 50;
+export const getVenomSopResponseSopTagsMax = 20;
+export const getVenomSopResponseSopContentPurposeMax = 2000;
+export const getVenomSopResponseSopContentPrerequisitesItemMax = 500;
+export const getVenomSopResponseSopContentPrerequisitesMax = 25;
+export const getVenomSopResponseSopContentInputsItemMax = 500;
+export const getVenomSopResponseSopContentInputsMax = 25;
+export const getVenomSopResponseSopContentGuidanceItemMax = 2000;
+export const getVenomSopResponseSopContentGuidanceMax = 60;
+export const getVenomSopResponseSopContentRequiredApprovalsItemMax = 500;
+export const getVenomSopResponseSopContentRequiredApprovalsMax = 25;
+export const getVenomSopResponseSopContentAcceptanceChecksItemMax = 500;
+export const getVenomSopResponseSopContentAcceptanceChecksMax = 25;
+export const getVenomSopResponseSopActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomSopResponseSopActiveRevisionNumberMultipleOf = 1;
+export const getVenomSopResponseSopAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomSopResponseSopAppIdsMax = 100;
+export const getVenomSopResponseRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomSopResponseRevisionsItemVersionNumberMultipleOf = 1;
+export const getVenomSopResponseRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomSopResponseRevisionsItemTitleMax = 160;
+export const getVenomSopResponseRevisionsItemTagsItemMax = 50;
+export const getVenomSopResponseRevisionsItemTagsMax = 20;
+export const getVenomSopResponseRevisionsItemContentPurposeMax = 2000;
+export const getVenomSopResponseRevisionsItemContentPrerequisitesItemMax = 500;
+export const getVenomSopResponseRevisionsItemContentPrerequisitesMax = 25;
+export const getVenomSopResponseRevisionsItemContentInputsItemMax = 500;
+export const getVenomSopResponseRevisionsItemContentInputsMax = 25;
+export const getVenomSopResponseRevisionsItemContentGuidanceItemMax = 2000;
+export const getVenomSopResponseRevisionsItemContentGuidanceMax = 60;
+export const getVenomSopResponseRevisionsItemContentRequiredApprovalsItemMax = 500;
+export const getVenomSopResponseRevisionsItemContentRequiredApprovalsMax = 25;
+export const getVenomSopResponseRevisionsItemContentAcceptanceChecksItemMax = 500;
+export const getVenomSopResponseRevisionsItemContentAcceptanceChecksMax = 25;
+export const getVenomSopResponseRevisionsMax = 500;
+export const getVenomSopResponseAssignmentsItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomSopResponseAssignmentsMax = 100;
+export const updateVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomSopBodyOneTitleMax = 160;
+export const updateVenomSopBodyOneTagsItemMax = 50;
+export const updateVenomSopBodyOneTagsMax = 20;
+export const updateVenomSopBodyOneContentPurposeMax = 2000;
+export const updateVenomSopBodyOneContentPrerequisitesItemMax = 500;
+export const updateVenomSopBodyOneContentPrerequisitesMax = 25;
+export const updateVenomSopBodyOneContentInputsItemMax = 500;
+export const updateVenomSopBodyOneContentInputsMax = 25;
+export const updateVenomSopBodyOneContentGuidanceItemMax = 2000;
+export const updateVenomSopBodyOneContentGuidanceMax = 60;
+export const updateVenomSopBodyOneContentRequiredApprovalsItemMax = 500;
+export const updateVenomSopBodyOneContentRequiredApprovalsMax = 25;
+export const updateVenomSopBodyOneContentAcceptanceChecksItemMax = 500;
+export const updateVenomSopBodyOneContentAcceptanceChecksMax = 25;
+export const updateVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomSopResponseTitleMax = 160;
+export const updateVenomSopResponseTagsItemMax = 50;
+export const updateVenomSopResponseTagsMax = 20;
+export const updateVenomSopResponseContentPurposeMax = 2000;
+export const updateVenomSopResponseContentPrerequisitesItemMax = 500;
+export const updateVenomSopResponseContentPrerequisitesMax = 25;
+export const updateVenomSopResponseContentInputsItemMax = 500;
+export const updateVenomSopResponseContentInputsMax = 25;
+export const updateVenomSopResponseContentGuidanceItemMax = 2000;
+export const updateVenomSopResponseContentGuidanceMax = 60;
+export const updateVenomSopResponseContentRequiredApprovalsItemMax = 500;
+export const updateVenomSopResponseContentRequiredApprovalsMax = 25;
+export const updateVenomSopResponseContentAcceptanceChecksItemMax = 500;
+export const updateVenomSopResponseContentAcceptanceChecksMax = 25;
+export const updateVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomSopResponseActiveRevisionNumberMultipleOf = 1;
+export const updateVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateVenomSopResponseAppIdsMax = 100;
+export const publishVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishVenomSopResponseVersionNumberMultipleOf = 1;
+export const publishVenomSopResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const publishVenomSopResponseTitleMax = 160;
+export const publishVenomSopResponseTagsItemMax = 50;
+export const publishVenomSopResponseTagsMax = 20;
+export const publishVenomSopResponseContentPurposeMax = 2000;
+export const publishVenomSopResponseContentPrerequisitesItemMax = 500;
+export const publishVenomSopResponseContentPrerequisitesMax = 25;
+export const publishVenomSopResponseContentInputsItemMax = 500;
+export const publishVenomSopResponseContentInputsMax = 25;
+export const publishVenomSopResponseContentGuidanceItemMax = 2000;
+export const publishVenomSopResponseContentGuidanceMax = 60;
+export const publishVenomSopResponseContentRequiredApprovalsItemMax = 500;
+export const publishVenomSopResponseContentRequiredApprovalsMax = 25;
+export const publishVenomSopResponseContentAcceptanceChecksItemMax = 500;
+export const publishVenomSopResponseContentAcceptanceChecksMax = 25;
+export const duplicateVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const duplicateVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const duplicateVenomSopResponseTitleMax = 160;
+export const duplicateVenomSopResponseTagsItemMax = 50;
+export const duplicateVenomSopResponseTagsMax = 20;
+export const duplicateVenomSopResponseContentPurposeMax = 2000;
+export const duplicateVenomSopResponseContentPrerequisitesItemMax = 500;
+export const duplicateVenomSopResponseContentPrerequisitesMax = 25;
+export const duplicateVenomSopResponseContentInputsItemMax = 500;
+export const duplicateVenomSopResponseContentInputsMax = 25;
+export const duplicateVenomSopResponseContentGuidanceItemMax = 2000;
+export const duplicateVenomSopResponseContentGuidanceMax = 60;
+export const duplicateVenomSopResponseContentRequiredApprovalsItemMax = 500;
+export const duplicateVenomSopResponseContentRequiredApprovalsMax = 25;
+export const duplicateVenomSopResponseContentAcceptanceChecksItemMax = 500;
+export const duplicateVenomSopResponseContentAcceptanceChecksMax = 25;
+export const duplicateVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const duplicateVenomSopResponseActiveRevisionNumberMultipleOf = 1;
+export const duplicateVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const duplicateVenomSopResponseAppIdsMax = 100;
+export const archiveVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const archiveVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const archiveVenomSopResponseTitleMax = 160;
+export const archiveVenomSopResponseTagsItemMax = 50;
+export const archiveVenomSopResponseTagsMax = 20;
+export const archiveVenomSopResponseContentPurposeMax = 2000;
+export const archiveVenomSopResponseContentPrerequisitesItemMax = 500;
+export const archiveVenomSopResponseContentPrerequisitesMax = 25;
+export const archiveVenomSopResponseContentInputsItemMax = 500;
+export const archiveVenomSopResponseContentInputsMax = 25;
+export const archiveVenomSopResponseContentGuidanceItemMax = 2000;
+export const archiveVenomSopResponseContentGuidanceMax = 60;
+export const archiveVenomSopResponseContentRequiredApprovalsItemMax = 500;
+export const archiveVenomSopResponseContentRequiredApprovalsMax = 25;
+export const archiveVenomSopResponseContentAcceptanceChecksItemMax = 500;
+export const archiveVenomSopResponseContentAcceptanceChecksMax = 25;
+export const archiveVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const archiveVenomSopResponseActiveRevisionNumberMultipleOf = 1;
+export const archiveVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const archiveVenomSopResponseAppIdsMax = 100;
+export const assignVenomSopAppsPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const assignVenomSopAppsBodyAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const assignVenomSopAppsBodyAppIdsMax = 100;
+export const assignVenomSopAppsResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSopRevisionsPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSopRevisionsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSopRevisionsResponseVersionNumberMultipleOf = 1;
+export const listVenomSopRevisionsResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listVenomSopRevisionsResponseTitleMax = 160;
+export const listVenomSopRevisionsResponseTagsItemMax = 50;
+export const listVenomSopRevisionsResponseTagsMax = 20;
+export const listVenomSopRevisionsResponseContentPurposeMax = 2000;
+export const listVenomSopRevisionsResponseContentPrerequisitesItemMax = 500;
+export const listVenomSopRevisionsResponseContentPrerequisitesMax = 25;
+export const listVenomSopRevisionsResponseContentInputsItemMax = 500;
+export const listVenomSopRevisionsResponseContentInputsMax = 25;
+export const listVenomSopRevisionsResponseContentGuidanceItemMax = 2000;
+export const listVenomSopRevisionsResponseContentGuidanceMax = 60;
+export const listVenomSopRevisionsResponseContentRequiredApprovalsItemMax = 500;
+export const listVenomSopRevisionsResponseContentRequiredApprovalsMax = 25;
+export const listVenomSopRevisionsResponseContentAcceptanceChecksItemMax = 500;
+export const listVenomSopRevisionsResponseContentAcceptanceChecksMax = 25;
+export const listVenomProjectSopsPathProjectIdMax = 120;
+export const listVenomProjectSopsResponseSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomProjectSopsResponseRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomProjectSopsResponseRevisionNumberMultipleOf = 1;
+export const listVenomProjectSopsResponseTitleMax = 160;
+export const listVenomProjectSopsResponsePurposeMax = 2000;
+export const selectVenomProjectSopsPathProjectIdMax = 120;
+export const selectVenomProjectSopsBodySopIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const selectVenomProjectSopsBodySopIdsMax = 30;
+export const selectVenomProjectSopsResponseSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const selectVenomProjectSopsResponseRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const selectVenomProjectSopsResponseRevisionNumberMultipleOf = 1;
+export const selectVenomProjectSopsResponseTitleMax = 160;
+export const selectVenomProjectSopsResponsePurposeMax = 2000;
+export const getCommunityProfileResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityProfileResponseDisplayNameMax = 60;
+export const getCommunityProfileResponseBioMax = 300;
+export const upsertCommunityProfileBodyDisplayNameMax = 60;
+export const upsertCommunityProfileBodyBioMax = 300;
+export const upsertCommunityProfileResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const upsertCommunityProfileResponseDisplayNameMax = 60;
+export const upsertCommunityProfileResponseBioMax = 300;
+export const getCommunityFeedQueryCursorMax = 240;
+export const getCommunityFeedQueryLimitDefault = 20;
+export const getCommunityFeedQueryLimitMax = 50;
+export const getCommunityFeedQueryLimitMultipleOf = 1;
+export const getCommunityFeedResponseItemsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityFeedResponseItemsItemAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityFeedResponseItemsItemAuthorDisplayNameMax = 60;
+export const getCommunityFeedResponseItemsItemBodyMax = 2000;
+export const getCommunityFeedResponseItemsItemSummaryTextMax = 320;
+export const getCommunityFeedResponseItemsItemSummarySourceRevisionMin = 0;
+export const getCommunityFeedResponseItemsItemSummarySourceRevisionMultipleOf = 1;
+export const getCommunityFeedResponseItemsItemScoreMin = 0;
+export const getCommunityFeedResponseItemsItemScoreMultipleOf = 1;
+export const getCommunityFeedResponseItemsItemReplyCountMin = 0;
+export const getCommunityFeedResponseItemsItemReplyCountMultipleOf = 1;
+export const getCommunityFeedResponseItemsItemRevisionMin = 0;
+export const getCommunityFeedResponseItemsItemRevisionMultipleOf = 1;
+export const getCommunityFeedResponseNextCursorMax = 240;
+export const getCommunityBriefingQueryTimezoneMax = 80;
+export const getCommunityBriefingQueryDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getCommunityBriefingQueryCursorMax = 240;
+export const getCommunityBriefingQueryLimitDefault = 20;
+export const getCommunityBriefingQueryLimitMax = 50;
+export const getCommunityBriefingQueryLimitMultipleOf = 1;
+export const getCommunityBriefingResponseCommunityItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityBriefingResponseCommunityItemAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityBriefingResponseCommunityItemAuthorDisplayNameMax = 60;
+export const getCommunityBriefingResponseCommunityItemBodyMax = 2000;
+export const getCommunityBriefingResponseCommunityItemSummaryTextMax = 320;
+export const getCommunityBriefingResponseCommunityItemSummarySourceRevisionMin = 0;
+export const getCommunityBriefingResponseCommunityItemSummarySourceRevisionMultipleOf = 1;
+export const getCommunityBriefingResponseCommunityItemScoreMin = 0;
+export const getCommunityBriefingResponseCommunityItemScoreMultipleOf = 1;
+export const getCommunityBriefingResponseCommunityItemReplyCountMin = 0;
+export const getCommunityBriefingResponseCommunityItemReplyCountMultipleOf = 1;
+export const getCommunityBriefingResponseCommunityItemRevisionMin = 0;
+export const getCommunityBriefingResponseCommunityItemRevisionMultipleOf = 1;
+export const getCommunityBriefingResponseAgendaItemIdMax = 120;
+export const getCommunityBriefingResponseAgendaItemTitleMax = 300;
+export const getCommunityBriefingResponseAgendaItemDetailMax = 500;
+export const getCommunityBriefingResponseAgendaItemDueDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getCommunityBriefingResponseAgendaItemProjectNameMax = 120;
+export const getCommunityBriefingResponseViewerProfileOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityBriefingResponseViewerProfileOneDisplayNameMax = 60;
+export const getCommunityBriefingResponseViewerProfileOneBioMax = 300;
+export const getCommunityBriefingResponseNextCursorMax = 240;
+export const createCommunityThreadBodyBodyMax = 2000;
+export const createCommunityThreadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityThreadResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityThreadResponseAuthorDisplayNameMax = 60;
+export const createCommunityThreadResponseBodyMax = 2000;
+export const createCommunityThreadResponseSummaryTextMax = 320;
+export const createCommunityThreadResponseSummarySourceRevisionMin = 0;
+export const createCommunityThreadResponseSummarySourceRevisionMultipleOf = 1;
+export const createCommunityThreadResponseScoreMin = 0;
+export const createCommunityThreadResponseScoreMultipleOf = 1;
+export const createCommunityThreadResponseReplyCountMin = 0;
+export const createCommunityThreadResponseReplyCountMultipleOf = 1;
+export const createCommunityThreadResponseRevisionMin = 0;
+export const createCommunityThreadResponseRevisionMultipleOf = 1;
+export const getCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadQueryReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseThreadAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseThreadAuthorDisplayNameMax = 60;
+export const getCommunityThreadResponseThreadBodyMax = 2000;
+export const getCommunityThreadResponseThreadSummaryTextMax = 320;
+export const getCommunityThreadResponseThreadSummarySourceRevisionMin = 0;
+export const getCommunityThreadResponseThreadSummarySourceRevisionMultipleOf = 1;
+export const getCommunityThreadResponseThreadScoreMin = 0;
+export const getCommunityThreadResponseThreadScoreMultipleOf = 1;
+export const getCommunityThreadResponseThreadReplyCountMin = 0;
+export const getCommunityThreadResponseThreadReplyCountMultipleOf = 1;
+export const getCommunityThreadResponseThreadRevisionMin = 0;
+export const getCommunityThreadResponseThreadRevisionMultipleOf = 1;
+export const getCommunityThreadResponseRepliesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseRepliesItemThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseRepliesItemAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseRepliesItemAuthorDisplayNameMax = 60;
+export const getCommunityThreadResponseRepliesItemBodyMax = 1000;
+export const getCommunityThreadResponseRepliesItemParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getCommunityThreadResponseRepliesMax = 502;
+export const updateCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityThreadBodyBodyMax = 2000;
+export const updateCommunityThreadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityThreadResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityThreadResponseAuthorDisplayNameMax = 60;
+export const updateCommunityThreadResponseBodyMax = 2000;
+export const updateCommunityThreadResponseSummaryTextMax = 320;
+export const updateCommunityThreadResponseSummarySourceRevisionMin = 0;
+export const updateCommunityThreadResponseSummarySourceRevisionMultipleOf = 1;
+export const updateCommunityThreadResponseScoreMin = 0;
+export const updateCommunityThreadResponseScoreMultipleOf = 1;
+export const updateCommunityThreadResponseReplyCountMin = 0;
+export const updateCommunityThreadResponseReplyCountMultipleOf = 1;
+export const updateCommunityThreadResponseRevisionMin = 0;
+export const updateCommunityThreadResponseRevisionMultipleOf = 1;
+export const deleteCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReplyPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReplyBodyBodyMax = 1000;
+export const createCommunityReplyBodyClientRequestIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReplyBodyParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReplyResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReplyResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReplyResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReplyResponseAuthorDisplayNameMax = 60;
+export const createCommunityReplyResponseBodyMax = 1000;
+export const createCommunityReplyResponseParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityReplyPathReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityReplyBodyBodyMax = 1000;
+export const updateCommunityReplyResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityReplyResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityReplyResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const updateCommunityReplyResponseAuthorDisplayNameMax = 60;
+export const updateCommunityReplyResponseBodyMax = 1000;
+export const updateCommunityReplyResponseParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const deleteCommunityReplyPathReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const voteCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const voteCommunityThreadResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const voteCommunityThreadResponseScoreMin = 0;
+export const voteCommunityThreadResponseScoreMultipleOf = 1;
+export const createCommunityReportBodyTargetIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createCommunityReportBodyDetailsMax = 500;
+export const createCommunityReportResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listCommunityNotificationsQueryCursorMax = 240;
+export const listCommunityNotificationsQueryLimitDefault = 20;
+export const listCommunityNotificationsQueryLimitMax = 50;
+export const listCommunityNotificationsQueryLimitMultipleOf = 1;
+export const listCommunityNotificationsResponseItemsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listCommunityNotificationsResponseItemsItemActorDisplayNameMax = 60;
+export const listCommunityNotificationsResponseItemsItemActorAvatarUrlMax = 2048;
+export const listCommunityNotificationsResponseItemsItemThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listCommunityNotificationsResponseItemsItemReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listCommunityNotificationsResponseItemsItemParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listCommunityNotificationsResponseItemsMax = 50;
+export const listCommunityNotificationsResponseNextCursorMax = 240;
+export const getCommunityNotificationUnreadCountResponseCountMin = 0;
+export const getCommunityNotificationUnreadCountResponseCountMultipleOf = 1;
+export const markAllCommunityNotificationsReadResponseMarkedMin = 0;
+export const markAllCommunityNotificationsReadResponseMarkedMultipleOf = 1;
+export const markCommunityNotificationReadPathNotificationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const markCommunityNotificationReadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const markCommunityNotificationReadResponseActorDisplayNameMax = 60;
+export const markCommunityNotificationReadResponseActorAvatarUrlMax = 2048;
+export const markCommunityNotificationReadResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const markCommunityNotificationReadResponseReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const markCommunityNotificationReadResponseParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSourceSyncAlertsResponseAlertsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomSourceSyncAlertsResponseAlertsItemSourceIdMax = 200;
+export const listVenomSourceSyncAlertsResponseAlertsItemProjectIdMax = 200;
+export const listVenomSourceSyncAlertsResponseAlertsItemSourceNameMax = 200;
+export const listVenomSourceSyncAlertsResponseAlertsItemConsecutiveFailuresMultipleOf = 1;
+export const listVenomSourceSyncAlertsResponseAlertsItemLastErrorMax = 300;
+export const listVenomSourceSyncAlertsResponseAlertsMax = 100;
+export const markAllVenomSourceSyncAlertsReadResponseMarkedMin = 0;
+export const markAllVenomSourceSyncAlertsReadResponseMarkedMultipleOf = 1;
+export const listVenomBuildTemplatesResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomBuildTemplatesResponseSlugMax = 80;
+export const listVenomBuildTemplatesResponseSlugRegExp = new RegExp('^[a-z0-9][a-z0-9-]*$');
+export const listVenomBuildTemplatesResponseNameMax = 120;
+export const listVenomBuildTemplatesResponseDescriptionMax = 1000;
+export const getVenomBuildTemplatePathTemplateIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildTemplateResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildTemplateResponseOneSlugMax = 80;
+export const getVenomBuildTemplateResponseOneSlugRegExp = new RegExp('^[a-z0-9][a-z0-9-]*$');
+export const getVenomBuildTemplateResponseOneNameMax = 120;
+export const getVenomBuildTemplateResponseOneDescriptionMax = 1000;
+export const getVenomBuildTemplateResponseTwoPreviewSummaryMax = 2000;
+export const getVenomBuildTemplateResponseTwoTargetNameMax = 120;
+export const getVenomBuildTemplateResponseTwoRequirementsMax = 8000;
+export const getVenomBuildTemplateResponseTwoConstraintsMax = 4000;
+export const getVenomBuildTemplateResponseTwoBrandDirectionMax = 3000;
+export const getVenomBuildTemplateResponseTwoAcceptanceChecksItemMax = 800;
+export const getVenomBuildTemplateResponseTwoAcceptanceChecksMax = 40;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneTitleMax = 160;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneProductBriefSummaryMax = 3000;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneProductBriefAudienceItemMax = 300;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneProductBriefAudienceMax = 12;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneProductBriefOutcomesItemMax = 500;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneProductBriefOutcomesMax = 20;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneFunctionalScopeItemMax = 800;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneFunctionalScopeMax = 40;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneBrandDirectionItemMax = 600;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneBrandDirectionMax = 30;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneContentRequirementsItemMax = 600;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneContentRequirementsMax = 30;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneServiceFlowRequirementsItemMax = 600;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneServiceFlowRequirementsMax = 30;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemAppNameMax = 120;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemVersionNumberMultipleOf = 1;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesMax = 1;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemRevisionNumberMultipleOf = 1;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemTitleMax = 160;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesMax = 20;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneDataNeedsItemMax = 600;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneDataNeedsMax = 30;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneIntegrationNeedsItemMax = 600;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneIntegrationNeedsMax = 30;
+export const getVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsItemCapabilityMax = 160;
+export const getVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsItemReasonMax = 600;
+export const getVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsMax = 30;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneAcceptanceChecksItemMax = 800;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneAcceptanceChecksMax = 40;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneLaunchConstraintsItemMax = 600;
+export const getVenomBuildTemplateResponseTwoExamplePackageOneLaunchConstraintsMax = 30;
+export const getVenomBuildTemplateResponseTwoNetworkImprovementCountMin = 0;
+export const getVenomBuildTemplateResponseTwoNetworkImprovementCountMultipleOf = 1;
+export const useVenomBuildTemplatePathTemplateIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const useVenomBuildTemplateBodyNameMax = 120;
+export const useVenomBuildTemplateResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const useVenomBuildTemplateResponseAppNameMax = 120;
+export const useVenomBuildTemplateResponseAppPurposeMax = 1000;
+export const useVenomBuildTemplateResponseAppBrandMax = 120;
+export const useVenomBuildTemplateResponseAppDetectedStackItemMax = 60;
+export const useVenomBuildTemplateResponseAppDetectedStackMax = 20;
+export const useVenomBuildTemplateResponseAppSourceVersionMin = 0;
+export const useVenomBuildTemplateResponseAppSourceVersionMultipleOf = 1;
+export const useVenomBuildTemplateResponseAppDeploymentUrlMax = 2048;
+export const useVenomBuildTemplateResponseAppLinkedProjectIdMax = 120;
+export const useVenomBuildTemplateResponseAppLinkedProjectNameMax = 120;
+export const useVenomBuildTemplateResponseAppLatestIterationNumberMin = 0;
+export const useVenomBuildTemplateResponseAppLatestIterationNumberMultipleOf = 1;
+export const useVenomBuildTemplateResponseAppLiveReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const useVenomBuildTemplateResponseAppLiveIterationNumberOneMultipleOf = 1;
+export const useVenomBuildTemplateResponseAppImprovementSignalOneKnowledgeChangesMin = 0;
+export const useVenomBuildTemplateResponseAppImprovementSignalOneKnowledgeChangesMultipleOf = 1;
+export const useVenomBuildTemplateResponseAppImprovementSignalOneSourceChangesMin = 0;
+export const useVenomBuildTemplateResponseAppImprovementSignalOneSourceChangesMultipleOf = 1;
+export const useVenomBuildTemplateResponseAppImprovementSignalOneTotalChangesMultipleOf = 1;
+export const useVenomBuildTemplateResponseAppImprovementSignalOneSummaryMax = 1500;
+export const useVenomBuildTemplateResponseAppImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
+export const useVenomBuildTemplateResponseAppTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const useVenomBuildTemplateResponseAppTemplateNameMax = 120;
+export const useVenomBuildTemplateResponseTemplateIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const useVenomBuildTemplateResponseTemplateNameMax = 120;
+export const useVenomBuildTemplateResponsePrefillTargetNameMax = 120;
+export const useVenomBuildTemplateResponsePrefillRequirementsMax = 8000;
+export const useVenomBuildTemplateResponsePrefillConstraintsMax = 4000;
+export const useVenomBuildTemplateResponsePrefillBrandDirectionMax = 3000;
+export const upsertVenomBuildTemplatePathSlugMax = 80;
+export const upsertVenomBuildTemplatePathSlugRegExp = new RegExp('^[a-z0-9][a-z0-9-]*$');
+export const upsertVenomBuildTemplateBodyNameMax = 120;
+export const upsertVenomBuildTemplateBodyDescriptionMax = 1000;
+export const upsertVenomBuildTemplateBodyPreviewSummaryMax = 2000;
+export const upsertVenomBuildTemplateBodyTargetNameMax = 120;
+export const upsertVenomBuildTemplateBodyRequirementsMax = 8000;
+export const upsertVenomBuildTemplateBodyConstraintsMax = 4000;
+export const upsertVenomBuildTemplateBodyBrandDirectionMax = 3000;
+export const upsertVenomBuildTemplateBodyAcceptanceChecksItemMax = 800;
+export const upsertVenomBuildTemplateBodyAcceptanceChecksMax = 40;
+export const upsertVenomBuildTemplateBodyExamplePackageOneTitleMax = 160;
+export const upsertVenomBuildTemplateBodyExamplePackageOneProductBriefSummaryMax = 3000;
+export const upsertVenomBuildTemplateBodyExamplePackageOneProductBriefAudienceItemMax = 300;
+export const upsertVenomBuildTemplateBodyExamplePackageOneProductBriefAudienceMax = 12;
+export const upsertVenomBuildTemplateBodyExamplePackageOneProductBriefOutcomesItemMax = 500;
+export const upsertVenomBuildTemplateBodyExamplePackageOneProductBriefOutcomesMax = 20;
+export const upsertVenomBuildTemplateBodyExamplePackageOneFunctionalScopeItemMax = 800;
+export const upsertVenomBuildTemplateBodyExamplePackageOneFunctionalScopeMax = 40;
+export const upsertVenomBuildTemplateBodyExamplePackageOneBrandDirectionItemMax = 600;
+export const upsertVenomBuildTemplateBodyExamplePackageOneBrandDirectionMax = 30;
+export const upsertVenomBuildTemplateBodyExamplePackageOneContentRequirementsItemMax = 600;
+export const upsertVenomBuildTemplateBodyExamplePackageOneContentRequirementsMax = 30;
+export const upsertVenomBuildTemplateBodyExamplePackageOneServiceFlowRequirementsItemMax = 600;
+export const upsertVenomBuildTemplateBodyExamplePackageOneServiceFlowRequirementsMax = 30;
+export const upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesItemAppNameMax = 120;
+export const upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesItemVersionNumberMultipleOf = 1;
+export const upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesMax = 1;
+export const upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesItemRevisionNumberMultipleOf = 1;
+export const upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesItemTitleMax = 160;
+export const upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesMax = 20;
+export const upsertVenomBuildTemplateBodyExamplePackageOneDataNeedsItemMax = 600;
+export const upsertVenomBuildTemplateBodyExamplePackageOneDataNeedsMax = 30;
+export const upsertVenomBuildTemplateBodyExamplePackageOneIntegrationNeedsItemMax = 600;
+export const upsertVenomBuildTemplateBodyExamplePackageOneIntegrationNeedsMax = 30;
+export const upsertVenomBuildTemplateBodyExamplePackageOnePermissionRequestsItemCapabilityMax = 160;
+export const upsertVenomBuildTemplateBodyExamplePackageOnePermissionRequestsItemReasonMax = 600;
+export const upsertVenomBuildTemplateBodyExamplePackageOnePermissionRequestsMax = 30;
+export const upsertVenomBuildTemplateBodyExamplePackageOneAcceptanceChecksItemMax = 800;
+export const upsertVenomBuildTemplateBodyExamplePackageOneAcceptanceChecksMax = 40;
+export const upsertVenomBuildTemplateBodyExamplePackageOneLaunchConstraintsItemMax = 600;
+export const upsertVenomBuildTemplateBodyExamplePackageOneLaunchConstraintsMax = 30;
+export const upsertVenomBuildTemplateBodySortOrderMin = 0;
+export const upsertVenomBuildTemplateBodySortOrderMax = 10000;
+export const upsertVenomBuildTemplateBodySortOrderMultipleOf = 1;
+export const upsertVenomBuildTemplateResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const upsertVenomBuildTemplateResponseOneSlugMax = 80;
+export const upsertVenomBuildTemplateResponseOneSlugRegExp = new RegExp('^[a-z0-9][a-z0-9-]*$');
+export const upsertVenomBuildTemplateResponseOneNameMax = 120;
+export const upsertVenomBuildTemplateResponseOneDescriptionMax = 1000;
+export const upsertVenomBuildTemplateResponseTwoPreviewSummaryMax = 2000;
+export const upsertVenomBuildTemplateResponseTwoTargetNameMax = 120;
+export const upsertVenomBuildTemplateResponseTwoRequirementsMax = 8000;
+export const upsertVenomBuildTemplateResponseTwoConstraintsMax = 4000;
+export const upsertVenomBuildTemplateResponseTwoBrandDirectionMax = 3000;
+export const upsertVenomBuildTemplateResponseTwoAcceptanceChecksItemMax = 800;
+export const upsertVenomBuildTemplateResponseTwoAcceptanceChecksMax = 40;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneTitleMax = 160;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneProductBriefSummaryMax = 3000;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneProductBriefAudienceItemMax = 300;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneProductBriefAudienceMax = 12;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneProductBriefOutcomesItemMax = 500;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneProductBriefOutcomesMax = 20;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneFunctionalScopeItemMax = 800;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneFunctionalScopeMax = 40;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneBrandDirectionItemMax = 600;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneBrandDirectionMax = 30;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneContentRequirementsItemMax = 600;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneContentRequirementsMax = 30;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneServiceFlowRequirementsItemMax = 600;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneServiceFlowRequirementsMax = 30;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemAppNameMax = 120;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemVersionNumberMultipleOf = 1;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesMax = 1;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemRevisionNumberMultipleOf = 1;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemTitleMax = 160;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesMax = 20;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneDataNeedsItemMax = 600;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneDataNeedsMax = 30;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneIntegrationNeedsItemMax = 600;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneIntegrationNeedsMax = 30;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsItemCapabilityMax = 160;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsItemReasonMax = 600;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsMax = 30;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneAcceptanceChecksItemMax = 800;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneAcceptanceChecksMax = 40;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneLaunchConstraintsItemMax = 600;
+export const upsertVenomBuildTemplateResponseTwoExamplePackageOneLaunchConstraintsMax = 30;
+export const upsertVenomBuildTemplateResponseTwoNetworkImprovementCountMin = 0;
+export const upsertVenomBuildTemplateResponseTwoNetworkImprovementCountMultipleOf = 1;
+export const listVenomBuildRunsQueryAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomBuildRunsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomBuildRunsResponseCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomBuildRunsResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomBuildRunsResponseTargetNameMax = 120;
+export const listVenomBuildRunsResponseProgressMin = 0;
+export const listVenomBuildRunsResponseProgressMax = 100;
+export const listVenomBuildRunsResponseProgressMultipleOf = 1;
+export const listVenomBuildRunsResponseCurrentRevisionNumberMin = 0;
+export const listVenomBuildRunsResponseCurrentRevisionNumberMultipleOf = 1;
+export const listVenomBuildRunsResponseApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomBuildRunsResponseTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listVenomBuildRunsResponseFailureMessageMax = 240;
+export const listVenomBuildRunsResponseCancelledReasonMax = 500;
+export const createVenomBuildRunBodyTargetNameMax = 120;
+export const createVenomBuildRunBodyRequirementsMax = 8000;
+export const createVenomBuildRunBodyConstraintsMax = 4000;
+export const createVenomBuildRunBodyBrandDirectionMax = 3000;
+export const createVenomBuildRunBodyAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunBodySourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunBodyProjectIdMax = 120;
+export const createVenomBuildRunBodySopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunBodySopRevisionIdsMax = 20;
+export const createVenomBuildRunBodyTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunBodyIdempotencyKeyMin = 16;
+export const createVenomBuildRunBodyIdempotencyKeyMax = 120;
+export const createVenomBuildRunBodyIdempotencyKeyRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+export const createVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseOneTargetNameMax = 120;
+export const createVenomBuildRunResponseOneProgressMin = 0;
+export const createVenomBuildRunResponseOneProgressMax = 100;
+export const createVenomBuildRunResponseOneProgressMultipleOf = 1;
+export const createVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const createVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+export const createVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseOneTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseOneFailureMessageMax = 240;
+export const createVenomBuildRunResponseOneCancelledReasonMax = 500;
+export const createVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+export const createVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+export const createVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+export const createVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+export const createVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+export const createVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+export const createVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+export const createVenomBuildRunResponseTwoRequestTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+export const createVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+export const createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+export const createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+export const createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+export const createVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+export const createVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createVenomBuildRunResponseTwoRevisionsMax = 50;
+export const createVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const createVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const createVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const createVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+export const createVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+export const createVenomBuildRunResponseTwoEventsMax = 200;
+export const createVenomBuildRunResponseTwoAttemptMax = 10;
+export const createVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+export const createVenomBuildRunResponseTwoFailureCodeMax = 80;
+export const getVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseOneTargetNameMax = 120;
+export const getVenomBuildRunResponseOneProgressMin = 0;
+export const getVenomBuildRunResponseOneProgressMax = 100;
+export const getVenomBuildRunResponseOneProgressMultipleOf = 1;
+export const getVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const getVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+export const getVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseOneTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseOneFailureMessageMax = 240;
+export const getVenomBuildRunResponseOneCancelledReasonMax = 500;
+export const getVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+export const getVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+export const getVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+export const getVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+export const getVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+export const getVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+export const getVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+export const getVenomBuildRunResponseTwoRequestTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+export const getVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+export const getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+export const getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+export const getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+export const getVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+export const getVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getVenomBuildRunResponseTwoRevisionsMax = 50;
+export const getVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const getVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const getVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+export const getVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+export const getVenomBuildRunResponseTwoEventsMax = 200;
+export const getVenomBuildRunResponseTwoAttemptMax = 10;
+export const getVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+export const getVenomBuildRunResponseTwoFailureCodeMax = 80;
+export const cancelVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunBodyReasonMax = 500;
+export const cancelVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseOneTargetNameMax = 120;
+export const cancelVenomBuildRunResponseOneProgressMin = 0;
+export const cancelVenomBuildRunResponseOneProgressMax = 100;
+export const cancelVenomBuildRunResponseOneProgressMultipleOf = 1;
+export const cancelVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const cancelVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+export const cancelVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseOneTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseOneFailureMessageMax = 240;
+export const cancelVenomBuildRunResponseOneCancelledReasonMax = 500;
+export const cancelVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+export const cancelVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+export const cancelVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+export const cancelVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+export const cancelVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+export const cancelVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+export const cancelVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+export const cancelVenomBuildRunResponseTwoRequestTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+export const cancelVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+export const cancelVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+export const cancelVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const cancelVenomBuildRunResponseTwoRevisionsMax = 50;
+export const cancelVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const cancelVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const cancelVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+export const cancelVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+export const cancelVenomBuildRunResponseTwoEventsMax = 200;
+export const cancelVenomBuildRunResponseTwoAttemptMax = 10;
+export const cancelVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+export const cancelVenomBuildRunResponseTwoFailureCodeMax = 80;
+export const retryVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseOneTargetNameMax = 120;
+export const retryVenomBuildRunResponseOneProgressMin = 0;
+export const retryVenomBuildRunResponseOneProgressMax = 100;
+export const retryVenomBuildRunResponseOneProgressMultipleOf = 1;
+export const retryVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const retryVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+export const retryVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseOneTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseOneFailureMessageMax = 240;
+export const retryVenomBuildRunResponseOneCancelledReasonMax = 500;
+export const retryVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+export const retryVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+export const retryVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+export const retryVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+export const retryVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+export const retryVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+export const retryVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+export const retryVenomBuildRunResponseTwoRequestTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+export const retryVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+export const retryVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+export const retryVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryVenomBuildRunResponseTwoRevisionsMax = 50;
+export const retryVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const retryVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const retryVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+export const retryVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+export const retryVenomBuildRunResponseTwoEventsMax = 200;
+export const retryVenomBuildRunResponseTwoAttemptMax = 10;
+export const retryVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+export const retryVenomBuildRunResponseTwoFailureCodeMax = 80;
+export const reviseVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunBodyInstructionMax = 3000;
+export const reviseVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseOneTargetNameMax = 120;
+export const reviseVenomBuildRunResponseOneProgressMin = 0;
+export const reviseVenomBuildRunResponseOneProgressMax = 100;
+export const reviseVenomBuildRunResponseOneProgressMultipleOf = 1;
+export const reviseVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const reviseVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+export const reviseVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseOneTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseOneFailureMessageMax = 240;
+export const reviseVenomBuildRunResponseOneCancelledReasonMax = 500;
+export const reviseVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+export const reviseVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+export const reviseVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+export const reviseVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+export const reviseVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+export const reviseVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+export const reviseVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+export const reviseVenomBuildRunResponseTwoRequestTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+export const reviseVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+export const reviseVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+export const reviseVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const reviseVenomBuildRunResponseTwoRevisionsMax = 50;
+export const reviseVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const reviseVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const reviseVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const reviseVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+export const reviseVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+export const reviseVenomBuildRunResponseTwoEventsMax = 200;
+export const reviseVenomBuildRunResponseTwoAttemptMax = 10;
+export const reviseVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+export const reviseVenomBuildRunResponseTwoFailureCodeMax = 80;
+export const approveVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunBodyRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseOneTargetNameMax = 120;
+export const approveVenomBuildRunResponseOneProgressMin = 0;
+export const approveVenomBuildRunResponseOneProgressMax = 100;
+export const approveVenomBuildRunResponseOneProgressMultipleOf = 1;
+export const approveVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const approveVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+export const approveVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseOneTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseOneFailureMessageMax = 240;
+export const approveVenomBuildRunResponseOneCancelledReasonMax = 500;
+export const approveVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+export const approveVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+export const approveVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+export const approveVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+export const approveVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+export const approveVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+export const approveVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+export const approveVenomBuildRunResponseTwoRequestTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+export const approveVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+export const approveVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+export const approveVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const approveVenomBuildRunResponseTwoRevisionsMax = 50;
+export const approveVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const approveVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const approveVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const approveVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+export const approveVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+export const approveVenomBuildRunResponseTwoEventsMax = 200;
+export const approveVenomBuildRunResponseTwoAttemptMax = 10;
+export const approveVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+export const approveVenomBuildRunResponseTwoFailureCodeMax = 80;
+export const rejectVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunBodyReasonMax = 500;
+export const rejectVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseOneTargetNameMax = 120;
+export const rejectVenomBuildRunResponseOneProgressMin = 0;
+export const rejectVenomBuildRunResponseOneProgressMax = 100;
+export const rejectVenomBuildRunResponseOneProgressMultipleOf = 1;
+export const rejectVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
+export const rejectVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
+export const rejectVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseOneTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseOneFailureMessageMax = 240;
+export const rejectVenomBuildRunResponseOneCancelledReasonMax = 500;
+export const rejectVenomBuildRunResponseTwoRequestTargetNameMax = 120;
+export const rejectVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
+export const rejectVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
+export const rejectVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
+export const rejectVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRequestProjectIdMax = 120;
+export const rejectVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
+export const rejectVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
+export const rejectVenomBuildRunResponseTwoRequestTemplateIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
+export const rejectVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
+export const rejectVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
+export const rejectVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const rejectVenomBuildRunResponseTwoRevisionsMax = 50;
+export const rejectVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rejectVenomBuildRunResponseTwoEventsItemProgressMin = 0;
+export const rejectVenomBuildRunResponseTwoEventsItemProgressMax = 100;
+export const rejectVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
+export const rejectVenomBuildRunResponseTwoEventsItemMessageMax = 240;
+export const rejectVenomBuildRunResponseTwoEventsMax = 200;
+export const rejectVenomBuildRunResponseTwoAttemptMax = 10;
+export const rejectVenomBuildRunResponseTwoAttemptMultipleOf = 1;
+export const rejectVenomBuildRunResponseTwoFailureCodeMax = 80;
+export const exportVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const exportVenomBuildRunResponseTitleMax = 160;
+export const exportVenomBuildRunResponseProductBriefSummaryMax = 3000;
+export const exportVenomBuildRunResponseProductBriefAudienceItemMax = 300;
+export const exportVenomBuildRunResponseProductBriefAudienceMax = 12;
+export const exportVenomBuildRunResponseProductBriefOutcomesItemMax = 500;
+export const exportVenomBuildRunResponseProductBriefOutcomesMax = 20;
+export const exportVenomBuildRunResponseFunctionalScopeItemMax = 800;
+export const exportVenomBuildRunResponseFunctionalScopeMax = 40;
+export const exportVenomBuildRunResponseBrandDirectionItemMax = 600;
+export const exportVenomBuildRunResponseBrandDirectionMax = 30;
+export const exportVenomBuildRunResponseContentRequirementsItemMax = 600;
+export const exportVenomBuildRunResponseContentRequirementsMax = 30;
+export const exportVenomBuildRunResponseServiceFlowRequirementsItemMax = 600;
+export const exportVenomBuildRunResponseServiceFlowRequirementsMax = 30;
+export const exportVenomBuildRunResponseSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const exportVenomBuildRunResponseSourceReferencesItemAppNameMax = 120;
+export const exportVenomBuildRunResponseSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const exportVenomBuildRunResponseSourceReferencesItemVersionNumberMultipleOf = 1;
+export const exportVenomBuildRunResponseSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const exportVenomBuildRunResponseSourceReferencesMax = 1;
+export const exportVenomBuildRunResponseSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const exportVenomBuildRunResponseSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const exportVenomBuildRunResponseSopReferencesItemRevisionNumberMultipleOf = 1;
+export const exportVenomBuildRunResponseSopReferencesItemTitleMax = 160;
+export const exportVenomBuildRunResponseSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const exportVenomBuildRunResponseSopReferencesMax = 20;
+export const exportVenomBuildRunResponseDataNeedsItemMax = 600;
+export const exportVenomBuildRunResponseDataNeedsMax = 30;
+export const exportVenomBuildRunResponseIntegrationNeedsItemMax = 600;
+export const exportVenomBuildRunResponseIntegrationNeedsMax = 30;
+export const exportVenomBuildRunResponsePermissionRequestsItemCapabilityMax = 160;
+export const exportVenomBuildRunResponsePermissionRequestsItemReasonMax = 600;
+export const exportVenomBuildRunResponsePermissionRequestsMax = 30;
+export const exportVenomBuildRunResponseAcceptanceChecksItemMax = 800;
+export const exportVenomBuildRunResponseAcceptanceChecksMax = 40;
+export const exportVenomBuildRunResponseLaunchConstraintsItemMax = 600;
+export const exportVenomBuildRunResponseLaunchConstraintsMax = 30;
+export const getProvisioningCapabilityResponseSummaryMax = 2000;
+export const getProvisioningCapabilityResponseRecoveryGuidanceMax = 2000;
+export const getProvisioningCapabilityResponseSupportedTargetTypesMax = 10;
+export const getProvisioningCapabilityResponsePermissionSummaryOneAllowedItemMax = 200;
+export const getProvisioningCapabilityResponsePermissionSummaryOneAllowedMax = 100;
+export const getProvisioningCapabilityResponsePermissionSummaryOneDeniedItemIntegrationMax = 200;
+export const getProvisioningCapabilityResponsePermissionSummaryOneDeniedItemReasonMax = 500;
+export const getProvisioningCapabilityResponsePermissionSummaryOneDeniedMax = 100;
+export const provisionBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunBodyApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunBodyIdempotencyKeyMax = 120;
+export const provisionBuildRunBodyTargetNameMax = 120;
+export const provisionBuildRunBodyRequestedIntegrationsItemMax = 200;
+export const provisionBuildRunBodyRequestedIntegrationsMax = 50;
+export const provisionBuildRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseTargetNameMax = 120;
+export const provisionBuildRunResponseProgressMin = 0;
+export const provisionBuildRunResponseProgressMax = 100;
+export const provisionBuildRunResponseProgressMultipleOf = 1;
+export const provisionBuildRunResponseAttemptMin = 0;
+export const provisionBuildRunResponseAttemptMultipleOf = 1;
+export const provisionBuildRunResponseProviderProjectIdMax = 120;
+export const provisionBuildRunResponseProviderCandidateIdMax = 120;
+export const provisionBuildRunResponseFailureCodeMax = 200;
+export const provisionBuildRunResponseFailureMessageMax = 2000;
+export const provisionBuildRunResponseBlockedReasonMax = 2000;
+export const provisionBuildRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseEventsItemProgressMin = 0;
+export const provisionBuildRunResponseEventsItemProgressMax = 100;
+export const provisionBuildRunResponseEventsItemProgressMultipleOf = 1;
+export const provisionBuildRunResponseEventsItemMessageMax = 2000;
+export const provisionBuildRunResponseEventsMax = 200;
+export const provisionBuildRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const provisionBuildRunResponseReleasesItemTargetNameMax = 120;
+export const provisionBuildRunResponseReleasesItemProviderProjectIdMax = 120;
+export const provisionBuildRunResponseReleasesItemProviderCandidateIdMax = 120;
+export const provisionBuildRunResponseReleasesItemProviderReleaseIdMax = 120;
+export const provisionBuildRunResponseReleasesItemLaunchUrlMax = 2048;
+export const provisionBuildRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
+export const provisionBuildRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
+export const provisionBuildRunResponseReleasesMax = 50;
+export const listProvisioningRunsQueryBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listProvisioningRunsQueryAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listProvisioningRunsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listProvisioningRunsResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listProvisioningRunsResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listProvisioningRunsResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const listProvisioningRunsResponseTargetNameMax = 120;
+export const listProvisioningRunsResponseProgressMin = 0;
+export const listProvisioningRunsResponseProgressMax = 100;
+export const listProvisioningRunsResponseProgressMultipleOf = 1;
+export const listProvisioningRunsResponseAttemptMin = 0;
+export const listProvisioningRunsResponseAttemptMultipleOf = 1;
+export const listProvisioningRunsResponseProviderProjectIdMax = 120;
+export const listProvisioningRunsResponseProviderCandidateIdMax = 120;
+export const listProvisioningRunsResponseFailureCodeMax = 200;
+export const listProvisioningRunsResponseFailureMessageMax = 2000;
+export const listProvisioningRunsResponseBlockedReasonMax = 2000;
+export const getProvisioningRunPathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseTargetNameMax = 120;
+export const getProvisioningRunResponseProgressMin = 0;
+export const getProvisioningRunResponseProgressMax = 100;
+export const getProvisioningRunResponseProgressMultipleOf = 1;
+export const getProvisioningRunResponseAttemptMin = 0;
+export const getProvisioningRunResponseAttemptMultipleOf = 1;
+export const getProvisioningRunResponseProviderProjectIdMax = 120;
+export const getProvisioningRunResponseProviderCandidateIdMax = 120;
+export const getProvisioningRunResponseFailureCodeMax = 200;
+export const getProvisioningRunResponseFailureMessageMax = 2000;
+export const getProvisioningRunResponseBlockedReasonMax = 2000;
+export const getProvisioningRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseEventsItemProgressMin = 0;
+export const getProvisioningRunResponseEventsItemProgressMax = 100;
+export const getProvisioningRunResponseEventsItemProgressMultipleOf = 1;
+export const getProvisioningRunResponseEventsItemMessageMax = 2000;
+export const getProvisioningRunResponseEventsMax = 200;
+export const getProvisioningRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const getProvisioningRunResponseReleasesItemTargetNameMax = 120;
+export const getProvisioningRunResponseReleasesItemProviderProjectIdMax = 120;
+export const getProvisioningRunResponseReleasesItemProviderCandidateIdMax = 120;
+export const getProvisioningRunResponseReleasesItemProviderReleaseIdMax = 120;
+export const getProvisioningRunResponseReleasesItemLaunchUrlMax = 2048;
+export const getProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
+export const getProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
+export const getProvisioningRunResponseReleasesMax = 50;
+export const cancelProvisioningRunPathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunBodyReasonMax = 500;
+export const cancelProvisioningRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseTargetNameMax = 120;
+export const cancelProvisioningRunResponseProgressMin = 0;
+export const cancelProvisioningRunResponseProgressMax = 100;
+export const cancelProvisioningRunResponseProgressMultipleOf = 1;
+export const cancelProvisioningRunResponseAttemptMin = 0;
+export const cancelProvisioningRunResponseAttemptMultipleOf = 1;
+export const cancelProvisioningRunResponseProviderProjectIdMax = 120;
+export const cancelProvisioningRunResponseProviderCandidateIdMax = 120;
+export const cancelProvisioningRunResponseFailureCodeMax = 200;
+export const cancelProvisioningRunResponseFailureMessageMax = 2000;
+export const cancelProvisioningRunResponseBlockedReasonMax = 2000;
+export const cancelProvisioningRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseEventsItemProgressMin = 0;
+export const cancelProvisioningRunResponseEventsItemProgressMax = 100;
+export const cancelProvisioningRunResponseEventsItemProgressMultipleOf = 1;
+export const cancelProvisioningRunResponseEventsItemMessageMax = 2000;
+export const cancelProvisioningRunResponseEventsMax = 200;
+export const cancelProvisioningRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const cancelProvisioningRunResponseReleasesItemTargetNameMax = 120;
+export const cancelProvisioningRunResponseReleasesItemProviderProjectIdMax = 120;
+export const cancelProvisioningRunResponseReleasesItemProviderCandidateIdMax = 120;
+export const cancelProvisioningRunResponseReleasesItemProviderReleaseIdMax = 120;
+export const cancelProvisioningRunResponseReleasesItemLaunchUrlMax = 2048;
+export const cancelProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
+export const cancelProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
+export const cancelProvisioningRunResponseReleasesMax = 50;
+export const retryProvisioningRunPathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseTargetNameMax = 120;
+export const retryProvisioningRunResponseProgressMin = 0;
+export const retryProvisioningRunResponseProgressMax = 100;
+export const retryProvisioningRunResponseProgressMultipleOf = 1;
+export const retryProvisioningRunResponseAttemptMin = 0;
+export const retryProvisioningRunResponseAttemptMultipleOf = 1;
+export const retryProvisioningRunResponseProviderProjectIdMax = 120;
+export const retryProvisioningRunResponseProviderCandidateIdMax = 120;
+export const retryProvisioningRunResponseFailureCodeMax = 200;
+export const retryProvisioningRunResponseFailureMessageMax = 2000;
+export const retryProvisioningRunResponseBlockedReasonMax = 2000;
+export const retryProvisioningRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseEventsItemProgressMin = 0;
+export const retryProvisioningRunResponseEventsItemProgressMax = 100;
+export const retryProvisioningRunResponseEventsItemProgressMultipleOf = 1;
+export const retryProvisioningRunResponseEventsItemMessageMax = 2000;
+export const retryProvisioningRunResponseEventsMax = 200;
+export const retryProvisioningRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const retryProvisioningRunResponseReleasesItemTargetNameMax = 120;
+export const retryProvisioningRunResponseReleasesItemProviderProjectIdMax = 120;
+export const retryProvisioningRunResponseReleasesItemProviderCandidateIdMax = 120;
+export const retryProvisioningRunResponseReleasesItemProviderReleaseIdMax = 120;
+export const retryProvisioningRunResponseReleasesItemLaunchUrlMax = 2048;
+export const retryProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
+export const retryProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
+export const retryProvisioningRunResponseReleasesMax = 50;
+export const publishProvisioningCandidatePathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateBodyCandidateReleaseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateBodyIdempotencyKeyMax = 120;
+export const publishProvisioningCandidateBodyConfirmTargetNameMax = 120;
+export const publishProvisioningCandidateResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseTargetNameMax = 120;
+export const publishProvisioningCandidateResponseProgressMin = 0;
+export const publishProvisioningCandidateResponseProgressMax = 100;
+export const publishProvisioningCandidateResponseProgressMultipleOf = 1;
+export const publishProvisioningCandidateResponseAttemptMin = 0;
+export const publishProvisioningCandidateResponseAttemptMultipleOf = 1;
+export const publishProvisioningCandidateResponseProviderProjectIdMax = 120;
+export const publishProvisioningCandidateResponseProviderCandidateIdMax = 120;
+export const publishProvisioningCandidateResponseFailureCodeMax = 200;
+export const publishProvisioningCandidateResponseFailureMessageMax = 2000;
+export const publishProvisioningCandidateResponseBlockedReasonMax = 2000;
+export const publishProvisioningCandidateResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseEventsItemProgressMin = 0;
+export const publishProvisioningCandidateResponseEventsItemProgressMax = 100;
+export const publishProvisioningCandidateResponseEventsItemProgressMultipleOf = 1;
+export const publishProvisioningCandidateResponseEventsItemMessageMax = 2000;
+export const publishProvisioningCandidateResponseEventsMax = 200;
+export const publishProvisioningCandidateResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const publishProvisioningCandidateResponseReleasesItemTargetNameMax = 120;
+export const publishProvisioningCandidateResponseReleasesItemProviderProjectIdMax = 120;
+export const publishProvisioningCandidateResponseReleasesItemProviderCandidateIdMax = 120;
+export const publishProvisioningCandidateResponseReleasesItemProviderReleaseIdMax = 120;
+export const publishProvisioningCandidateResponseReleasesItemLaunchUrlMax = 2048;
+export const publishProvisioningCandidateResponseReleasesItemPublishIdempotencyKeyMax = 120;
+export const publishProvisioningCandidateResponseReleasesItemRollbackIdempotencyKeyMax = 120;
+export const publishProvisioningCandidateResponseReleasesMax = 50;
+export const rollbackProvisioningReleasePathReleaseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rollbackProvisioningReleaseBodyIdempotencyKeyMax = 120;
+export const rollbackProvisioningReleaseBodyConfirmTargetNameMax = 120;
+export const rollbackProvisioningReleaseResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rollbackProvisioningReleaseResponseProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rollbackProvisioningReleaseResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rollbackProvisioningReleaseResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rollbackProvisioningReleaseResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const rollbackProvisioningReleaseResponseTargetNameMax = 120;
+export const rollbackProvisioningReleaseResponseProviderProjectIdMax = 120;
+export const rollbackProvisioningReleaseResponseProviderCandidateIdMax = 120;
+export const rollbackProvisioningReleaseResponseProviderReleaseIdMax = 120;
+export const rollbackProvisioningReleaseResponseLaunchUrlMax = 2048;
+export const rollbackProvisioningReleaseResponsePublishIdempotencyKeyMax = 120;
+export const rollbackProvisioningReleaseResponseRollbackIdempotencyKeyMax = 120;
+export const resolvePublicAppSharePathSlugRegExp = new RegExp('^[a-z0-9]{10,60}$');
+export const resolvePublicAppShareResponseAppNameMax = 120;
+export const resolvePublicAppShareResponseFrameUrlMax = 2048;
+
 
 /**
  * Returns server health status
@@ -20,58 +3479,19 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Stream a response from the Venom assistant
  */
-export const sendVenomMessageBodyMessagesMax = 24;
-
-export const sendVenomMessageBodyProjectContextMax = 8000;
-
-export const sendVenomMessageBodyProjectIdMax = 160;
-
-export const sendVenomMessageBodyWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const sendVenomMessageBodySourceCitationIdsItemRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
-export const sendVenomMessageBodySourceCitationIdsMax = 200;
-
-export const sendVenomMessageBodySourceSnapshotsItemIdMax = 160;
 
 
-export const sendVenomMessageBodySourceSnapshotsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
-export const sendVenomMessageBodySourceSnapshotsItemContextMax = 8000;
 
-export const sendVenomMessageBodySourceSnapshotsItemCitationsItemIdMax = 160;
-
-
-export const sendVenomMessageBodySourceSnapshotsItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
-export const sendVenomMessageBodySourceSnapshotsItemCitationsItemTitleMax = 300;
-
-export const sendVenomMessageBodySourceSnapshotsItemCitationsItemUrlMax = 2048;
-
-export const sendVenomMessageBodySourceSnapshotsItemCitationsItemExcerptMax = 1000;
-
-export const sendVenomMessageBodySourceSnapshotsItemCitationsItemReferenceMax = 200;
-
-export const sendVenomMessageBodySourceSnapshotsItemCitationsMax = 50;
-
-export const sendVenomMessageBodySourceSnapshotsItemAttestationMax = 2048;
-
-
-export const sendVenomMessageBodySourceSnapshotsItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
-export const sendVenomMessageBodySourceSnapshotsMax = 32;
-
-export const sendVenomMessageBodyBlendItemIdMax = 64;
-
-export const sendVenomMessageBodyBlendItemWeightMin = 0;
-export const sendVenomMessageBodyBlendItemWeightMax = 1;
-
-export const sendVenomMessageBodyBlendMax = 3;
 
 
 export const SendVenomMessageBody = zod.object({
   "messages": zod.array(zod.object({
   "role": zod.enum(['user', 'assistant']),
-  "content": zod.string()
+  "content": zod.string(),
+  "attachmentIds": zod.array(zod.string().regex(sendVenomMessageBodyMessagesItemAttachmentIdsItemRegExp)).max(sendVenomMessageBodyMessagesItemAttachmentIdsMax).optional().describe('Ids of ready chat files attached to this message. The server re-verifies ownership against the file store; unknown or foreign ids are ignored rather than rejected.')
 })).min(1).max(sendVenomMessageBodyMessagesMax),
   "projectContext": zod.string().max(sendVenomMessageBodyProjectContextMax).optional(),
   "projectId": zod.string().min(1).max(sendVenomMessageBodyProjectIdMax),
-  "workspaceId": zod.string().regex(sendVenomMessageBodyWorkspaceIdRegExp).optional(),
   "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']).optional(),
   "sourceCitationIds": zod.array(zod.string().regex(sendVenomMessageBodySourceCitationIdsItemRegExp)).max(sendVenomMessageBodySourceCitationIdsMax).optional(),
   "sourceSnapshots": zod.array(zod.object({
@@ -93,7 +3513,11 @@ export const SendVenomMessageBody = zod.object({
   "blend": zod.array(zod.object({
   "id": zod.string().min(1).max(sendVenomMessageBodyBlendItemIdMax).describe('Corner identity — a managed model id when real providers back the corner, a persona voice id otherwise.'),
   "weight": zod.number().min(sendVenomMessageBodyBlendItemWeightMin).max(sendVenomMessageBodyBlendItemWeightMax)
-})).max(sendVenomMessageBodyBlendMax).optional().describe('Favoring weights for the participating voices in verify and debate. Omitted means an even blend. Weights favor a voice; they never silence the others.')
+})).max(sendVenomMessageBodyBlendMax).optional().describe('Favoring weights for the participating voices in verify and debate. Omitted means an even blend. Weights favor a voice; they never silence the others.'),
+  "voiceModels": zod.array(zod.object({
+  "voiceId": zod.enum(['direct', 'skeptic', 'evidence']),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok'])
+}).describe('Assigns one deliberation voice to a specific managed model. Opposing voices must run on different LLM providers; the server rejects picks that would make a model argue itself.')).max(sendVenomMessageBodyVoiceModelsMax).optional().describe('Explicit per-voice model choices for verify mode: which model plays First take, Skeptic, and Evidence. Voices left out keep automatic assignment, and a pick naming a model that is currently unusable falls back to automatic assignment for that voice. First take and Skeptic must land on different LLM providers — a model can\'t argue itself — while Evidence is neutral and may share. Debate corners are chosen through `blend` entry ids instead. Ignored in talk mode.')
 })
 
 export const SendVenomMessageResponse = zod.unknown()
@@ -102,11 +3526,6 @@ export const SendVenomMessageResponse = zod.unknown()
 /**
  * @summary List the server-managed text models available to Venom
  */
-export const getVenomModelsResponseNameMax = 80;
-
-export const getVenomModelsResponseSummaryMax = 240;
-
-export const getVenomModelsResponseAvailabilityTextMax = 160;
 
 
 export const GetVenomModelsResponseItem = zod.object({
@@ -116,7 +3535,9 @@ export const GetVenomModelsResponseItem = zod.object({
   "family": zod.enum(['GPT', 'Claude', 'Gemini', 'Grok']),
   "summary": zod.string().min(1).max(getVenomModelsResponseSummaryMax),
   "available": zod.boolean(),
-  "availabilityText": zod.string().min(1).max(getVenomModelsResponseAvailabilityTextMax)
+  "availabilityText": zod.string().min(1).max(getVenomModelsResponseAvailabilityTextMax),
+  "accountHealth": zod.enum(['ok', 'unfunded']).optional().describe('Account-level health observed on live provider calls. \"unfunded\" means the credential is configured but the account behind it cannot pay for replies (billing-class failures), so the model is available yet not plainly Ready. Absent means no such evidence.'),
+  "costTier": zod.enum(['$', '$$', '$$$']).optional().describe('Coarse relative running cost of a managed model, for comparing models against each other only. Deliberately never a price, currency amount, or provider SKU.')
 })
 export const GetVenomModelsResponse = zod.array(GetVenomModelsResponseItem)
 
@@ -124,11 +3545,6 @@ export const GetVenomModelsResponse = zod.array(GetVenomModelsResponseItem)
 /**
  * @summary Describe multi-voice deliberation availability and its voice roster
  */
-export const getVenomDeliberationResponseVoicesItemNameMax = 80;
-
-export const getVenomDeliberationResponseVoicesItemTaglineMax = 240;
-
-export const getVenomDeliberationResponseVoicesMax = 4;
 
 
 export const GetVenomDeliberationResponse = zod.object({
@@ -143,15 +3559,70 @@ export const GetVenomDeliberationResponse = zod.object({
 
 
 /**
+ * @summary Start a chat file upload and get a one-time signed upload URL
+ */
+
+
+export const CreateVenomChatFileUploadBody = zod.object({
+  "name": zod.string().min(1).max(createVenomChatFileUploadBodyNameMax),
+  "contentType": zod.string().min(1).max(createVenomChatFileUploadBodyContentTypeMax),
+  "size": zod.number().min(1).max(createVenomChatFileUploadBodySizeMax).multipleOf(createVenomChatFileUploadBodySizeMultipleOf)
+})
+
+
+
+export const CreateVenomChatFileUploadResponse = zod.object({
+  "file": zod.object({
+  "id": zod.string().min(1).max(createVenomChatFileUploadResponseFileIdMax),
+  "name": zod.string().min(1).max(createVenomChatFileUploadResponseFileNameMax),
+  "contentType": zod.string().min(1).max(createVenomChatFileUploadResponseFileContentTypeMax),
+  "size": zod.number().min(createVenomChatFileUploadResponseFileSizeMin).max(createVenomChatFileUploadResponseFileSizeMax).multipleOf(createVenomChatFileUploadResponseFileSizeMultipleOf),
+  "kind": zod.enum(['upload', 'generated']).describe('upload = host gave Venom a file; generated = Venom authored it.'),
+  "status": zod.enum(['pending', 'ready']),
+  "textExtracted": zod.boolean().describe('Whether readable text was extracted for model context.'),
+  "createdAt": zod.number().min(createVenomChatFileUploadResponseFileCreatedAtMin).multipleOf(createVenomChatFileUploadResponseFileCreatedAtMultipleOf)
+}).describe('A file exchanged through chat — uploaded by the host or generated by Venom. Extracted text never leaves the server; clients fetch the original bytes through the owner-checked download route.'),
+  "uploadUrl": zod.string().max(createVenomChatFileUploadResponseUploadUrlMax),
+  "maxBytes": zod.literal(10485760)
+})
+
+
+/**
+ * @summary Verify an uploaded chat file and extract its text for context
+ */
+
+export const CompleteVenomChatFileUploadParams = zod.object({
+  "fileId": zod.coerce.string().regex(completeVenomChatFileUploadPathFileIdRegExp)
+})
+
+
+
+export const CompleteVenomChatFileUploadResponse = zod.object({
+  "id": zod.string().min(1).max(completeVenomChatFileUploadResponseIdMax),
+  "name": zod.string().min(1).max(completeVenomChatFileUploadResponseNameMax),
+  "contentType": zod.string().min(1).max(completeVenomChatFileUploadResponseContentTypeMax),
+  "size": zod.number().min(completeVenomChatFileUploadResponseSizeMin).max(completeVenomChatFileUploadResponseSizeMax).multipleOf(completeVenomChatFileUploadResponseSizeMultipleOf),
+  "kind": zod.enum(['upload', 'generated']).describe('upload = host gave Venom a file; generated = Venom authored it.'),
+  "status": zod.enum(['pending', 'ready']),
+  "textExtracted": zod.boolean().describe('Whether readable text was extracted for model context.'),
+  "createdAt": zod.number().min(completeVenomChatFileUploadResponseCreatedAtMin).multipleOf(completeVenomChatFileUploadResponseCreatedAtMultipleOf)
+}).describe('A file exchanged through chat — uploaded by the host or generated by Venom. Extracted text never leaves the server; clients fetch the original bytes through the owner-checked download route.')
+
+
+/**
+ * @summary Download a chat file the caller owns
+ */
+
+export const DownloadVenomChatFileParams = zod.object({
+  "fileId": zod.coerce.string().regex(downloadVenomChatFilePathFileIdRegExp)
+})
+
+export const DownloadVenomChatFileResponse = zod.unknown()
+
+
+/**
  * @summary List the named voice presets for hands-free voice chat
  */
-export const getVenomVoicesResponseNameMax = 40;
-
-export const getVenomVoicesResponsePersonaMax = 160;
-
-export const getVenomVoicesResponseSampleTextMax = 240;
-
-export const getVenomVoicesResponseAvailabilityTextMax = 160;
 
 
 export const GetVenomVoicesResponseItem = zod.object({
@@ -170,7 +3641,6 @@ export const GetVenomVoicesResponse = zod.array(GetVenomVoicesResponseItem)
  * Audio is processed transiently in memory and never persisted or logged; only the recognized text is returned.
  * @summary Transcribe one spoken utterance to text
  */
-export const transcribeVenomVoiceBodyAudioBase64Max = 5000000;
 
 
 export const TranscribeVenomVoiceBody = zod.object({
@@ -178,7 +3648,6 @@ export const TranscribeVenomVoiceBody = zod.object({
   "format": zod.enum(['webm', 'wav', 'mp3', 'mp4', 'ogg']).optional()
 })
 
-export const transcribeVenomVoiceResponseTextMax = 8000;
 
 
 export const TranscribeVenomVoiceResponse = zod.object({
@@ -189,7 +3658,6 @@ export const TranscribeVenomVoiceResponse = zod.object({
 /**
  * @summary Stream spoken audio for a piece of assistant text
  */
-export const speakVenomVoiceBodyTextMax = 2000;
 
 
 export const SpeakVenomVoiceBody = zod.object({
@@ -204,12 +3672,6 @@ export const SpeakVenomVoiceResponse = zod.unknown()
  * Classifies one finished voice turn from its transcript and recent conversation momentum. Hard-biased toward responding: questions and direct requests always get a full reply, and any uncertainty or internal failure resolves to "respond". Applies only to voice mode; typed chat never consults this endpoint.
  * @summary Decide whether a finished spoken turn deserves a reply, a brief acknowledgment, or silence
  */
-export const decideVenomVoiceTurnBodyTranscriptMax = 8000;
-
-export const decideVenomVoiceTurnBodyRecentTurnsItemContentMax = 4000;
-
-export const decideVenomVoiceTurnBodyRecentTurnsMax = 12;
-
 
 
 export const DecideVenomVoiceTurnBody = zod.object({
@@ -220,10 +3682,6 @@ export const DecideVenomVoiceTurnBody = zod.object({
 })).max(decideVenomVoiceTurnBodyRecentTurnsMax).optional(),
   "talkativeness": zod.enum(['chatty', 'balanced', 'reserved']).optional().describe('How eager voice mode is to answer remarks that don\'t clearly invite a reply. Optional on stored preferences; absent means \"balanced\".')
 })
-
-export const decideVenomVoiceTurnResponseDecisionIdMax = 80;
-
-export const decideVenomVoiceTurnResponseAcknowledgmentMax = 200;
 
 
 
@@ -239,8 +3697,6 @@ export const DecideVenomVoiceTurnResponse = zod.object({
  * Pairs a prior decision with its observed outcome (reply interrupted, user re-asked after silence, session wound down cleanly, ...) so restraint thresholds can be tuned from real usage. No audio is ever attached.
  * @summary Record what actually happened after a speak/stay-quiet decision
  */
-export const reportVenomVoiceDecisionOutcomeBodyDecisionIdMax = 80;
-
 
 
 export const ReportVenomVoiceDecisionOutcomeBody = zod.object({
@@ -254,21 +3710,166 @@ export const ReportVenomVoiceDecisionOutcomeResponse = zod.object({
 
 
 /**
+ * Evidence view over the signed-in account's own logged voice restraint decisions: counts for every observed talkativeness x decision x outcome combination in the window, plus the headline rates the restraint thresholds are tuned from — how often silence was followed by a re-ask, how often spoken replies were interrupted, how often goodbyes wound down cleanly. The heuristic thresholds in force are echoed so the numbers can be read against them; interpretation notes live in artifacts/api-server/src/lib/venom-voice-restraint-tuning.md.
+ * @summary Aggregate your speak/stay-quiet decisions against their observed outcomes
+ */
+
+
+export const GetVenomVoiceDecisionSummaryQueryParams = zod.object({
+  "windowDays": zod.coerce.number().int().min(1).max(getVenomVoiceDecisionSummaryQueryWindowDaysMax).default(getVenomVoiceDecisionSummaryQueryWindowDaysDefault).describe('How many days back to aggregate. Bounded by the 90-day retention cap; defaults to 30.')
+})
+
+
+
+
+
+
+
+
+
+
+
+
+export const GetVenomVoiceDecisionSummaryResponse = zod.object({
+  "windowDays": zod.number().min(1).max(getVenomVoiceDecisionSummaryResponseWindowDaysMax),
+  "since": zod.coerce.date().describe('Decisions created at or after this moment were aggregated.'),
+  "generatedAt": zod.coerce.date(),
+  "overall": zod.object({
+  "decisions": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallDecisionsMin),
+  "withOutcome": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallWithOutcomeMin),
+  "outcomeCoverage": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallOutcomeCoverageMin).max(getVenomVoiceDecisionSummaryResponseOverallOutcomeCoverageMax).describe('Share of decisions whose outcome was reported; 0 when the slice is empty.'),
+  "decisionCounts": zod.object({
+  "respond": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallDecisionCountsRespondMin),
+  "acknowledge": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallDecisionCountsAcknowledgeMin),
+  "silent": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallDecisionCountsSilentMin)
+}),
+  "sourceCounts": zod.object({
+  "heuristic": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallSourceCountsHeuristicMin),
+  "model": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallSourceCountsModelMin),
+  "fallback": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallSourceCountsFallbackMin)
+}),
+  "windDownFlagged": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallWindDownFlaggedMin),
+  "quietRegret": zod.object({
+  "settled": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallQuietRegretSettledMin),
+  "hits": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallQuietRegretHitsMin),
+  "rate": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallQuietRegretRateMin).max(getVenomVoiceDecisionSummaryResponseOverallQuietRegretRateMax).nullable()
+}).describe('A proportion together with the sample it was computed from. \"settled\" counts only decisions whose outcome landed in one of the two buckets being compared; \"hits\" is how many landed in the tracked bucket. rate is hits\/settled, or null when nothing has settled yet — no data is never reported as 0%.'),
+  "spokenInterruption": zod.object({
+  "settled": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallSpokenInterruptionSettledMin),
+  "hits": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallSpokenInterruptionHitsMin),
+  "rate": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallSpokenInterruptionRateMin).max(getVenomVoiceDecisionSummaryResponseOverallSpokenInterruptionRateMax).nullable()
+}).describe('A proportion together with the sample it was computed from. \"settled\" counts only decisions whose outcome landed in one of the two buckets being compared; \"hits\" is how many landed in the tracked bucket. rate is hits\/settled, or null when nothing has settled yet — no data is never reported as 0%.'),
+  "windDownClean": zod.object({
+  "settled": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallWindDownCleanSettledMin),
+  "hits": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallWindDownCleanHitsMin),
+  "rate": zod.number().min(getVenomVoiceDecisionSummaryResponseOverallWindDownCleanRateMin).max(getVenomVoiceDecisionSummaryResponseOverallWindDownCleanRateMax).nullable()
+}).describe('A proportion together with the sample it was computed from. \"settled\" counts only decisions whose outcome landed in one of the two buckets being compared; \"hits\" is how many landed in the tracked bucket. rate is hits\/settled, or null when nothing has settled yet — no data is never reported as 0%.')
+}).describe('Decision\/outcome evidence for one slice of the log. quietRegret reads silent non-wind-down decisions (re-ask within the follow-up window vs stayed quiet); spokenInterruption reads respond\/acknowledge non-wind- down decisions (reply interrupted vs completed); windDownClean reads wind-down-flagged decisions (session eased closed vs the user re-engaging).'),
+  "byTalkativeness": zod.array(zod.object({
+  "talkativeness": zod.string().min(1).max(getVenomVoiceDecisionSummaryResponseByTalkativenessItemTalkativenessMax).describe('chatty, balanced, or reserved (unrecognized historical values pass through verbatim).'),
+  "rates": zod.object({
+  "decisions": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesDecisionsMin),
+  "withOutcome": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWithOutcomeMin),
+  "outcomeCoverage": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesOutcomeCoverageMin).max(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesOutcomeCoverageMax).describe('Share of decisions whose outcome was reported; 0 when the slice is empty.'),
+  "decisionCounts": zod.object({
+  "respond": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesDecisionCountsRespondMin),
+  "acknowledge": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesDecisionCountsAcknowledgeMin),
+  "silent": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesDecisionCountsSilentMin)
+}),
+  "sourceCounts": zod.object({
+  "heuristic": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSourceCountsHeuristicMin),
+  "model": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSourceCountsModelMin),
+  "fallback": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSourceCountsFallbackMin)
+}),
+  "windDownFlagged": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWindDownFlaggedMin),
+  "quietRegret": zod.object({
+  "settled": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesQuietRegretSettledMin),
+  "hits": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesQuietRegretHitsMin),
+  "rate": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesQuietRegretRateMin).max(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesQuietRegretRateMax).nullable()
+}).describe('A proportion together with the sample it was computed from. \"settled\" counts only decisions whose outcome landed in one of the two buckets being compared; \"hits\" is how many landed in the tracked bucket. rate is hits\/settled, or null when nothing has settled yet — no data is never reported as 0%.'),
+  "spokenInterruption": zod.object({
+  "settled": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSpokenInterruptionSettledMin),
+  "hits": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSpokenInterruptionHitsMin),
+  "rate": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSpokenInterruptionRateMin).max(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesSpokenInterruptionRateMax).nullable()
+}).describe('A proportion together with the sample it was computed from. \"settled\" counts only decisions whose outcome landed in one of the two buckets being compared; \"hits\" is how many landed in the tracked bucket. rate is hits\/settled, or null when nothing has settled yet — no data is never reported as 0%.'),
+  "windDownClean": zod.object({
+  "settled": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWindDownCleanSettledMin),
+  "hits": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWindDownCleanHitsMin),
+  "rate": zod.number().min(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWindDownCleanRateMin).max(getVenomVoiceDecisionSummaryResponseByTalkativenessItemRatesWindDownCleanRateMax).nullable()
+}).describe('A proportion together with the sample it was computed from. \"settled\" counts only decisions whose outcome landed in one of the two buckets being compared; \"hits\" is how many landed in the tracked bucket. rate is hits\/settled, or null when nothing has settled yet — no data is never reported as 0%.')
+}).describe('Decision\/outcome evidence for one slice of the log. quietRegret reads silent non-wind-down decisions (re-ask within the follow-up window vs stayed quiet); spokenInterruption reads respond\/acknowledge non-wind- down decisions (reply interrupted vs completed); windDownClean reads wind-down-flagged decisions (session eased closed vs the user re-engaging).')
+})).max(getVenomVoiceDecisionSummaryResponseByTalkativenessMax),
+  "cells": zod.array(zod.object({
+  "talkativeness": zod.string().min(1).max(getVenomVoiceDecisionSummaryResponseCellsItemTalkativenessMax),
+  "decision": zod.string().min(1).max(getVenomVoiceDecisionSummaryResponseCellsItemDecisionMax),
+  "windDown": zod.boolean(),
+  "source": zod.string().min(1).max(getVenomVoiceDecisionSummaryResponseCellsItemSourceMax),
+  "outcome": zod.string().min(1).max(getVenomVoiceDecisionSummaryResponseCellsItemOutcomeMax),
+  "count": zod.number().min(1)
+}).describe('One observed talkativeness x decision x outcome combination and how often it occurred. windDown and source ride along so goodbye cells and judge-made cells can be read separately; outcome is \"pending\" for decisions still awaiting their outcome report.')).max(getVenomVoiceDecisionSummaryResponseCellsMax).describe('Decisions x outcomes x talkativeness counts, deterministic order, observed combinations only.'),
+  "thresholds": zod.object({
+  "longUtteranceWords": zod.number().min(1),
+  "backchannelMaxWords": zod.number().min(1),
+  "shortGratitudeMaxWords": zod.number().min(1),
+  "botAnswerMaxWords": zod.number().min(1),
+  "shortTurnMaxWords": zod.number().min(1),
+  "windDownTrailingShortTurns": zod.number().min(getVenomVoiceDecisionSummaryResponseThresholdsWindDownTrailingShortTurnsMin),
+  "retentionDays": zod.number().min(1),
+  "maxRowsPerUser": zod.number().min(1),
+  "transcriptPreviewChars": zod.number().min(1)
+}).describe('The heuristic thresholds in force when the summary was generated (named constants in venom-voice-restraint.ts and the decision store), echoed so aggregate numbers are always read against the rules that produced them.')
+})
+
+
+/**
+ * One JSON object per line, oldest first: the context signals each decision was derived from, the decision and which layer made it, the talkativeness in force, and the observed outcome once reported. Contains only what the decision log stores — bounded transcript previews and signals, never audio.
+ * @summary Download your logged voice decisions as a JSONL training dataset
+ */
+
+
+export const ExportVenomVoiceDecisionsQueryParams = zod.object({
+  "windowDays": zod.coerce.number().int().min(1).max(exportVenomVoiceDecisionsQueryWindowDaysMax).default(exportVenomVoiceDecisionsQueryWindowDaysDefault).describe('How many days back to export. Bounded by the 90-day retention cap; defaults to 90 (everything retained).')
+})
+
+export const ExportVenomVoiceDecisionsResponse = zod.string()
+
+
+/**
+ * Personal metering view over the signed-in account's recorded AI calls: current calendar month (UTC) totals in dollars, a per-day trend, and a per-model breakdown under Venom-branded model names. Costs are computed server-side from a private pricing table, so provider SKUs and raw per-token rates never appear in the payload. Calls whose provider omitted exact token counts are folded in as flagged character-based estimates, and the audio legs of voice mode carry a flat documented per-request estimate.
+ * @summary Your own AI usage and spend for the current month
+ */
+
+
+export const GetVenomUsageSummaryResponse = zod.object({
+  "periodStart": zod.coerce.date().describe('First day of the summarized period (UTC), inclusive.'),
+  "periodEnd": zod.coerce.date().describe('End day of the summarized period (UTC), exclusive.'),
+  "totals": zod.object({
+  "costUsd": zod.number().min(getVenomUsageSummaryResponseTotalsCostUsdMin).describe('Dollars, rounded to micro-dollar precision.'),
+  "requests": zod.number().min(getVenomUsageSummaryResponseTotalsRequestsMin),
+  "promptTokens": zod.number().min(getVenomUsageSummaryResponseTotalsPromptTokensMin),
+  "outputTokens": zod.number().min(getVenomUsageSummaryResponseTotalsOutputTokensMin)
+}),
+  "hasEstimates": zod.boolean().describe('True when any entry in the period is a flagged estimate rather than provider-reported usage (interrupted streams, providers that omit usage metadata, and voice audio legs).'),
+  "daily": zod.array(zod.object({
+  "date": zod.coerce.date(),
+  "costUsd": zod.number().min(getVenomUsageSummaryResponseDailyItemCostUsdMin),
+  "requests": zod.number().min(getVenomUsageSummaryResponseDailyItemRequestsMin)
+})).max(getVenomUsageSummaryResponseDailyMax).describe('Per-day spend, oldest first; days without usage are omitted.'),
+  "models": zod.array(zod.object({
+  "modelId": zod.string().max(getVenomUsageSummaryResponseModelsItemModelIdMax).describe('Venom-branded model alias — never a provider SKU.'),
+  "modelName": zod.string().max(getVenomUsageSummaryResponseModelsItemModelNameMax),
+  "costUsd": zod.number().min(getVenomUsageSummaryResponseModelsItemCostUsdMin),
+  "requests": zod.number().min(getVenomUsageSummaryResponseModelsItemRequestsMin),
+  "promptTokens": zod.number().min(getVenomUsageSummaryResponseModelsItemPromptTokensMin),
+  "outputTokens": zod.number().min(getVenomUsageSummaryResponseModelsItemOutputTokensMin),
+  "hasEstimates": zod.boolean()
+})).max(getVenomUsageSummaryResponseModelsMax).describe('Per-model breakdown under Venom-branded names, highest spend first.')
+})
+
+
+/**
  * @summary Extract knowledge clusters from a project conversation
  */
-export const extractVenomKnowledgeBodyConversationIdMax = 160;
-
-export const extractVenomKnowledgeBodyConversationTitleMax = 160;
-
-export const extractVenomKnowledgeBodyConversationProjectIdMax = 160;
-
-export const extractVenomKnowledgeBodyMessagesItemIdMax = 160;
-
-export const extractVenomKnowledgeBodyMessagesItemContentMax = 8000;
-
-export const extractVenomKnowledgeBodyMessagesMax = 48;
-
-export const extractVenomKnowledgeBodyWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const ExtractVenomKnowledgeBody = zod.object({
@@ -282,79 +3883,9 @@ export const ExtractVenomKnowledgeBody = zod.object({
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string().min(1).max(extractVenomKnowledgeBodyMessagesItemContentMax)
 })).min(1).max(extractVenomKnowledgeBodyMessagesMax),
-  "file": zod.boolean().optional().describe('When true, the server files the extracted insights into the signed-in user\'s ontology store and returns the touched concepts in `filed`. Clients that omit this keep filing locally.'),
-  "workspaceId": zod.string().regex(extractVenomKnowledgeBodyWorkspaceIdRegExp).optional()
+  "file": zod.boolean().optional().describe('When true, the server files the extracted insights into the signed-in user\'s ontology store and returns the touched concepts in `filed`. The server decides scope per cluster (personal, a workspace the caller belongs to, or the private Unsorted holding area); clients no longer pick a destination. Clients that omit this keep filing locally.')
 })
 
-export const extractVenomKnowledgeResponseClustersItemLabelMax = 64;
-
-export const extractVenomKnowledgeResponseClustersItemCategoryMax = 32;
-
-export const extractVenomKnowledgeResponseClustersItemConfidenceMin = 0;
-export const extractVenomKnowledgeResponseClustersItemConfidenceMax = 1;
-
-export const extractVenomKnowledgeResponseClustersItemSummaryMax = 240;
-
-export const extractVenomKnowledgeResponseClustersItemSourceMessageIdsItemMax = 160;
-
-export const extractVenomKnowledgeResponseClustersItemSourceMessageIdsMax = 12;
-
-export const extractVenomKnowledgeResponseClustersItemRelatedLabelsItemMax = 64;
-
-export const extractVenomKnowledgeResponseClustersItemRelatedLabelsMax = 8;
-
-export const extractVenomKnowledgeResponseClustersMax = 8;
-
-export const extractVenomKnowledgeResponseFiledItemIdMax = 120;
-
-export const extractVenomKnowledgeResponseFiledItemProjectIdMax = 120;
-
-export const extractVenomKnowledgeResponseFiledItemLabelMax = 200;
-
-export const extractVenomKnowledgeResponseFiledItemCategoryMax = 100;
-
-export const extractVenomKnowledgeResponseFiledItemStrengthMin = 0;
-export const extractVenomKnowledgeResponseFiledItemStrengthMax = 1;
-
-export const extractVenomKnowledgeResponseFiledItemLinksItemMax = 120;
-
-export const extractVenomKnowledgeResponseFiledItemLinksMax = 100;
-
-export const extractVenomKnowledgeResponseFiledItemDescriptionMax = 2000;
-
-export const extractVenomKnowledgeResponseFiledItemSummaryMax = 2000;
-
-export const extractVenomKnowledgeResponseFiledItemMentionCountMin = 0;
-export const extractVenomKnowledgeResponseFiledItemMentionCountMultipleOf = 1;
-
-export const extractVenomKnowledgeResponseFiledItemLastUpdatedAtMin = 0;
-export const extractVenomKnowledgeResponseFiledItemLastUpdatedAtMultipleOf = 1;
-
-export const extractVenomKnowledgeResponseFiledItemSourcesItemConversationIdMax = 120;
-
-export const extractVenomKnowledgeResponseFiledItemSourcesItemProjectIdMax = 120;
-
-export const extractVenomKnowledgeResponseFiledItemSourcesItemConversationTitleMax = 200;
-
-export const extractVenomKnowledgeResponseFiledItemSourcesItemMessageIdsItemMax = 120;
-
-export const extractVenomKnowledgeResponseFiledItemSourcesItemMessageIdsMax = 12;
-
-export const extractVenomKnowledgeResponseFiledItemSourcesItemExcerptMax = 2000;
-
-export const extractVenomKnowledgeResponseFiledItemSourcesItemUpdatedAtMin = 0;
-export const extractVenomKnowledgeResponseFiledItemSourcesItemUpdatedAtMultipleOf = 1;
-
-export const extractVenomKnowledgeResponseFiledItemSourcesItemCapturedByUserIdMax = 120;
-
-export const extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMin = 0;
-export const extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMultipleOf = 1;
-
-export const extractVenomKnowledgeResponseFiledItemSourcesMax = 8;
-
-export const extractVenomKnowledgeResponseFiledMax = 80;
-
-export const extractVenomKnowledgeResponseFiledWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const ExtractVenomKnowledgeResponse = zod.object({
@@ -387,46 +3918,171 @@ export const ExtractVenomKnowledgeResponse = zod.object({
   "excerpt": zod.string().max(extractVenomKnowledgeResponseFiledItemSourcesItemExcerptMax),
   "updatedAt": zod.number().min(extractVenomKnowledgeResponseFiledItemSourcesItemUpdatedAtMin).multipleOf(extractVenomKnowledgeResponseFiledItemSourcesItemUpdatedAtMultipleOf),
   "capturedByUserId": zod.string().max(extractVenomKnowledgeResponseFiledItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
-  "capturedAt": zod.number().min(extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMin).multipleOf(extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
-})).max(extractVenomKnowledgeResponseFiledItemSourcesMax)
+  "capturedAt": zod.number().min(extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMin).multipleOf(extractVenomKnowledgeResponseFiledItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(extractVenomKnowledgeResponseFiledItemSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
 })).max(extractVenomKnowledgeResponseFiledMax).optional().describe('Present only when the request set `file: true` and the insights were filed server-side. Contains every concept the filing created, strengthened, or re-linked, with canonical ids.'),
-  "filedWorkspaceId": zod.string().regex(extractVenomKnowledgeResponseFiledWorkspaceIdRegExp).optional()
+  "filedScope": zod.object({
+  "ownerType": zod.enum(['user', 'org']),
+  "orgId": zod.string().min(1).max(extractVenomKnowledgeResponseFiledScopeOrgIdMax).optional(),
+  "orgName": zod.string().min(1).max(extractVenomKnowledgeResponseFiledScopeOrgNameMax).optional()
+}).optional().describe('Where server-side filing landed. Conversations in company-shared projects file into that company\'s Brain; everything else stays in the personal ontology. When ownerType is \"org\" the concepts in `filed` belong to the company layer and must not be merged into the caller\'s personal clusters.'),
+  "workspaceFilings": zod.array(zod.object({
+  "noticeId": zod.string().min(1).max(extractVenomKnowledgeResponseWorkspaceFilingsItemNoticeIdMax),
+  "workspaceId": zod.string().regex(extractVenomKnowledgeResponseWorkspaceFilingsItemWorkspaceIdRegExp),
+  "workspaceName": zod.string().min(1).max(extractVenomKnowledgeResponseWorkspaceFilingsItemWorkspaceNameMax),
+  "labels": zod.array(zod.string().min(1).max(extractVenomKnowledgeResponseWorkspaceFilingsItemLabelsItemMax)).max(extractVenomKnowledgeResponseWorkspaceFilingsItemLabelsMax)
+})).max(extractVenomKnowledgeResponseWorkspaceFilingsMax).optional().describe('Workspaces the extraction auto-filed clusters into, one entry per workspace, each carrying the ledger row id that lets the author undo the filing. The clusters themselves are not returned: workspace records never merge into personal state.')
+})
+
+
+/**
+ * Author-scoped ledger of automatic filing decisions: undoable notices for knowledge that auto-filed or re-filed into a workspace (or back to personal), plus pending personal-to-workspace suggestions that wait for explicit consent.
+ * @summary List your automatic knowledge-move notices and pending suggestions
+ */
+
+
+export const ListVenomKnowledgeMovesResponse = zod.object({
+  "notices": zod.array(zod.object({
+  "id": zod.string().min(1).max(listVenomKnowledgeMovesResponseNoticesItemIdMax),
+  "kind": zod.enum(['auto_file', 'refile']),
+  "status": zod.enum(['active', 'undone']),
+  "direction": zod.enum(['unsorted_to_workspace', 'workspace_to_personal']).optional(),
+  "workspaceId": zod.string().max(listVenomKnowledgeMovesResponseNoticesItemWorkspaceIdMax).nullish(),
+  "workspaceName": zod.string().max(listVenomKnowledgeMovesResponseNoticesItemWorkspaceNameMax).nullish(),
+  "labels": zod.array(zod.string().min(1).max(listVenomKnowledgeMovesResponseNoticesItemLabelsItemMax)).max(listVenomKnowledgeMovesResponseNoticesItemLabelsMax),
+  "createdAt": zod.number().min(listVenomKnowledgeMovesResponseNoticesItemCreatedAtMin).multipleOf(listVenomKnowledgeMovesResponseNoticesItemCreatedAtMultipleOf)
+}).describe('One automatic filing decision, kept author-private. `auto_file` rows come from extraction filing straight into a workspace; `refile` rows come from the re-filing pass, with `direction` telling which way the concept moved.')).max(listVenomKnowledgeMovesResponseNoticesMax),
+  "suggestions": zod.array(zod.object({
+  "id": zod.string().min(1).max(listVenomKnowledgeMovesResponseSuggestionsItemIdMax),
+  "workspaceId": zod.string().regex(listVenomKnowledgeMovesResponseSuggestionsItemWorkspaceIdRegExp),
+  "workspaceName": zod.string().min(1).max(listVenomKnowledgeMovesResponseSuggestionsItemWorkspaceNameMax),
+  "conceptId": zod.string().min(1).max(listVenomKnowledgeMovesResponseSuggestionsItemConceptIdMax),
+  "label": zod.string().min(1).max(listVenomKnowledgeMovesResponseSuggestionsItemLabelMax),
+  "createdAt": zod.number().min(listVenomKnowledgeMovesResponseSuggestionsItemCreatedAtMin).multipleOf(listVenomKnowledgeMovesResponseSuggestionsItemCreatedAtMultipleOf)
+}).describe('A pending personal-to-workspace sharing suggestion. Nothing moves until the author accepts; accepting widens visibility to the workspace\'s members.')).max(listVenomKnowledgeMovesResponseSuggestionsMax)
+})
+
+
+/**
+ * Reverses the recorded move: workspace stores return to their prior state and the affected clusters land in the author's private Unsorted area (for auto-filings) or their original store (for re-files). Needs no live membership, so it keeps working after leaving the workspace.
+ * @summary Undo an automatic knowledge filing or re-file
+ */
+
+
+export const UndoVenomKnowledgeMoveParams = zod.object({
+  "moveId": zod.coerce.string().min(1).max(undoVenomKnowledgeMovePathMoveIdMax)
+})
+
+
+
+export const UndoVenomKnowledgeMoveResponse = zod.object({
+  "restored": zod.array(zod.object({
+  "id": zod.string().min(1).max(undoVenomKnowledgeMoveResponseRestoredItemIdMax),
+  "projectId": zod.string().max(undoVenomKnowledgeMoveResponseRestoredItemProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(undoVenomKnowledgeMoveResponseRestoredItemLabelMax),
+  "category": zod.string().min(1).max(undoVenomKnowledgeMoveResponseRestoredItemCategoryMax),
+  "strength": zod.number().min(undoVenomKnowledgeMoveResponseRestoredItemStrengthMin).max(undoVenomKnowledgeMoveResponseRestoredItemStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(undoVenomKnowledgeMoveResponseRestoredItemLinksItemMax)).max(undoVenomKnowledgeMoveResponseRestoredItemLinksMax),
+  "description": zod.string().max(undoVenomKnowledgeMoveResponseRestoredItemDescriptionMax).optional(),
+  "summary": zod.string().max(undoVenomKnowledgeMoveResponseRestoredItemSummaryMax),
+  "mentionCount": zod.number().min(undoVenomKnowledgeMoveResponseRestoredItemMentionCountMin).multipleOf(undoVenomKnowledgeMoveResponseRestoredItemMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(undoVenomKnowledgeMoveResponseRestoredItemLastUpdatedAtMin).multipleOf(undoVenomKnowledgeMoveResponseRestoredItemLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(undoVenomKnowledgeMoveResponseRestoredItemSourcesItemConversationIdMax),
+  "projectId": zod.string().max(undoVenomKnowledgeMoveResponseRestoredItemSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(undoVenomKnowledgeMoveResponseRestoredItemSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(undoVenomKnowledgeMoveResponseRestoredItemSourcesItemMessageIdsItemMax)).max(undoVenomKnowledgeMoveResponseRestoredItemSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(undoVenomKnowledgeMoveResponseRestoredItemSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(undoVenomKnowledgeMoveResponseRestoredItemSourcesItemUpdatedAtMin).multipleOf(undoVenomKnowledgeMoveResponseRestoredItemSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(undoVenomKnowledgeMoveResponseRestoredItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(undoVenomKnowledgeMoveResponseRestoredItemSourcesItemCapturedAtMin).multipleOf(undoVenomKnowledgeMoveResponseRestoredItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(undoVenomKnowledgeMoveResponseRestoredItemSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
+})).max(undoVenomKnowledgeMoveResponseRestoredMax).describe('Personal-store records the undo created or restored (for auto-file undos these carry `unsorted: true`). Empty when the undo only touched workspace stores.')
+})
+
+
+/**
+ * The consent step that widens visibility: moves the suggested personal concept into the workspace's shared Brain. Membership is re-checked at this moment, never assumed from the suggestion.
+ * @summary Accept a personal-to-workspace sharing suggestion
+ */
+
+
+export const AcceptVenomKnowledgeSuggestionParams = zod.object({
+  "moveId": zod.coerce.string().min(1).max(acceptVenomKnowledgeSuggestionPathMoveIdMax)
+})
+
+
+
+export const AcceptVenomKnowledgeSuggestionResponse = zod.object({
+  "workspaceId": zod.string().regex(acceptVenomKnowledgeSuggestionResponseWorkspaceIdRegExp),
+  "workspaceName": zod.string().min(1).max(acceptVenomKnowledgeSuggestionResponseWorkspaceNameMax),
+  "conceptId": zod.string().min(1).max(acceptVenomKnowledgeSuggestionResponseConceptIdMax),
+  "movedConceptId": zod.string().min(1).max(acceptVenomKnowledgeSuggestionResponseMovedConceptIdMax),
+  "merged": zod.boolean()
+})
+
+
+/**
+ * @summary Dismiss a personal-to-workspace sharing suggestion
+ */
+
+
+export const DismissVenomKnowledgeSuggestionParams = zod.object({
+  "moveId": zod.coerce.string().min(1).max(dismissVenomKnowledgeSuggestionPathMoveIdMax)
+})
+
+export const DismissVenomKnowledgeSuggestionResponse = zod.object({
+  "dismissed": zod.boolean()
+})
+
+
+/**
+ * Explicit filing from the Unsorted review. Only concepts currently in the author's Unsorted holding area qualify; membership in the target workspace is re-checked here.
+ * @summary File an Unsorted concept into a workspace Brain
+ */
+
+
+export const MoveVenomUnsortedConceptParams = zod.object({
+  "conceptId": zod.coerce.string().min(1).max(moveVenomUnsortedConceptPathConceptIdMax)
+})
+
+
+export const MoveVenomUnsortedConceptBody = zod.object({
+  "workspaceId": zod.string().regex(moveVenomUnsortedConceptBodyWorkspaceIdRegExp)
+})
+
+
+
+export const MoveVenomUnsortedConceptResponse = zod.object({
+  "workspaceId": zod.string().regex(moveVenomUnsortedConceptResponseWorkspaceIdRegExp),
+  "workspaceName": zod.string().min(1).max(moveVenomUnsortedConceptResponseWorkspaceNameMax),
+  "conceptId": zod.string().min(1).max(moveVenomUnsortedConceptResponseConceptIdMax),
+  "movedConceptId": zod.string().min(1).max(moveVenomUnsortedConceptResponseMovedConceptIdMax),
+  "merged": zod.boolean()
 })
 
 
 /**
  * @summary Search the signed-in user's knowledge ontology across projects
  */
-export const searchVenomOntologyQueryQMax = 200;
-
-export const searchVenomOntologyQueryLimitMax = 50;
 
 
 export const SearchVenomOntologyQueryParams = zod.object({
   "q": zod.coerce.string().min(1).max(searchVenomOntologyQueryQMax),
+  "org": zod.coerce.string().min(1).max(searchVenomOntologyQueryOrgMax).optional().describe('Company id. When present, searches that company\'s shared Brain instead of the personal ontology; the caller must be a member.'),
   "limit": zod.coerce.number().int().min(1).max(searchVenomOntologyQueryLimitMax).optional()
 })
 
-export const searchVenomOntologyResponseResultsItemIdMax = 120;
-
-export const searchVenomOntologyResponseResultsItemProjectIdMax = 120;
-
-export const searchVenomOntologyResponseResultsItemLabelMax = 200;
-
-export const searchVenomOntologyResponseResultsItemCategoryMax = 100;
-
-export const searchVenomOntologyResponseResultsItemSummaryMax = 2000;
-
-export const searchVenomOntologyResponseResultsItemStrengthMin = 0;
-export const searchVenomOntologyResponseResultsItemStrengthMax = 1;
-
-export const searchVenomOntologyResponseResultsItemMentionCountMin = 0;
-
-export const searchVenomOntologyResponseResultsItemLastUpdatedAtMin = 0;
-
-export const searchVenomOntologyResponseResultsItemEvidenceCountMin = 0;
-
-export const searchVenomOntologyResponseResultsMax = 50;
 
 
 export const SearchVenomOntologyResponse = zod.object({
@@ -447,86 +4103,18 @@ export const SearchVenomOntologyResponse = zod.object({
 /**
  * @summary Get one ontology concept with its neighbors and evidence
  */
-export const getVenomOntologyConceptPathConceptIdMax = 120;
 
 
 export const GetVenomOntologyConceptParams = zod.object({
   "conceptId": zod.coerce.string().min(1).max(getVenomOntologyConceptPathConceptIdMax)
 })
 
-export const getVenomOntologyConceptResponseConceptIdMax = 120;
 
-export const getVenomOntologyConceptResponseConceptProjectIdMax = 120;
 
-export const getVenomOntologyConceptResponseConceptLabelMax = 200;
+export const GetVenomOntologyConceptQueryParams = zod.object({
+  "org": zod.coerce.string().min(1).max(getVenomOntologyConceptQueryOrgMax).optional().describe('Company id. When present, resolves the concept inside that company\'s shared Brain; the caller must be a member.')
+})
 
-export const getVenomOntologyConceptResponseConceptCategoryMax = 100;
-
-export const getVenomOntologyConceptResponseConceptStrengthMin = 0;
-export const getVenomOntologyConceptResponseConceptStrengthMax = 1;
-
-export const getVenomOntologyConceptResponseConceptLinksItemMax = 120;
-
-export const getVenomOntologyConceptResponseConceptLinksMax = 100;
-
-export const getVenomOntologyConceptResponseConceptDescriptionMax = 2000;
-
-export const getVenomOntologyConceptResponseConceptSummaryMax = 2000;
-
-export const getVenomOntologyConceptResponseConceptMentionCountMin = 0;
-export const getVenomOntologyConceptResponseConceptMentionCountMultipleOf = 1;
-
-export const getVenomOntologyConceptResponseConceptLastUpdatedAtMin = 0;
-export const getVenomOntologyConceptResponseConceptLastUpdatedAtMultipleOf = 1;
-
-export const getVenomOntologyConceptResponseConceptSourcesItemConversationIdMax = 120;
-
-export const getVenomOntologyConceptResponseConceptSourcesItemProjectIdMax = 120;
-
-export const getVenomOntologyConceptResponseConceptSourcesItemConversationTitleMax = 200;
-
-export const getVenomOntologyConceptResponseConceptSourcesItemMessageIdsItemMax = 120;
-
-export const getVenomOntologyConceptResponseConceptSourcesItemMessageIdsMax = 12;
-
-export const getVenomOntologyConceptResponseConceptSourcesItemExcerptMax = 2000;
-
-export const getVenomOntologyConceptResponseConceptSourcesItemUpdatedAtMin = 0;
-export const getVenomOntologyConceptResponseConceptSourcesItemUpdatedAtMultipleOf = 1;
-
-export const getVenomOntologyConceptResponseConceptSourcesItemCapturedByUserIdMax = 120;
-
-export const getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMin = 0;
-export const getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMultipleOf = 1;
-
-export const getVenomOntologyConceptResponseConceptSourcesMax = 8;
-
-export const getVenomOntologyConceptResponseNeighborsItemIdMax = 120;
-
-export const getVenomOntologyConceptResponseNeighborsItemProjectIdMax = 120;
-
-export const getVenomOntologyConceptResponseNeighborsItemLabelMax = 200;
-
-export const getVenomOntologyConceptResponseNeighborsItemCategoryMax = 100;
-
-export const getVenomOntologyConceptResponseNeighborsItemSummaryMax = 2000;
-
-export const getVenomOntologyConceptResponseNeighborsItemStrengthMin = 0;
-export const getVenomOntologyConceptResponseNeighborsItemStrengthMax = 1;
-
-export const getVenomOntologyConceptResponseNeighborsItemMentionCountMin = 0;
-
-export const getVenomOntologyConceptResponseNeighborsItemLastUpdatedAtMin = 0;
-
-export const getVenomOntologyConceptResponseNeighborsItemEvidenceCountMin = 0;
-
-export const getVenomOntologyConceptResponseNeighborsMax = 100;
-
-export const getVenomOntologyConceptResponsePeopleItemUserIdMax = 120;
-
-export const getVenomOntologyConceptResponsePeopleItemDisplayNameMax = 320;
-
-export const getVenomOntologyConceptResponsePeopleMax = 16;
 
 
 export const GetVenomOntologyConceptResponse = zod.object({
@@ -551,8 +4139,12 @@ export const GetVenomOntologyConceptResponse = zod.object({
   "excerpt": zod.string().max(getVenomOntologyConceptResponseConceptSourcesItemExcerptMax),
   "updatedAt": zod.number().min(getVenomOntologyConceptResponseConceptSourcesItemUpdatedAtMin).multipleOf(getVenomOntologyConceptResponseConceptSourcesItemUpdatedAtMultipleOf),
   "capturedByUserId": zod.string().max(getVenomOntologyConceptResponseConceptSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
-  "capturedAt": zod.number().min(getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMin).multipleOf(getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
-})).max(getVenomOntologyConceptResponseConceptSourcesMax)
+  "capturedAt": zod.number().min(getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMin).multipleOf(getVenomOntologyConceptResponseConceptSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(getVenomOntologyConceptResponseConceptSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
 }),
   "neighbors": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomOntologyConceptResponseNeighborsItemIdMax),
@@ -573,41 +4165,928 @@ export const GetVenomOntologyConceptResponse = zod.object({
 
 
 /**
+ * Serves a cited conversation for read-only viewing on a device that does not hold it locally. Brain evidence on a server-side concept can reference conversations that only exist in the cloud snapshot; this lookup completes that trail of proof. Owner-scoped - it only ever reads the signed-in user's own snapshot.
+ * @summary Read one conversation from the synced workspace snapshot
+ */
+
+
+export const GetVenomConversationParams = zod.object({
+  "conversationId": zod.coerce.string().min(1).max(getVenomConversationPathConversationIdMax)
+})
+
+
+
+
+export const GetVenomConversationResponse = zod.object({
+  "conversation": zod.object({
+  "id": zod.string().min(1).max(getVenomConversationResponseConversationIdMax),
+  "title": zod.string().min(1).max(getVenomConversationResponseConversationTitleMax),
+  "projectId": zod.string().max(getVenomConversationResponseConversationProjectIdMax).nullable(),
+  "updatedAt": zod.number().min(getVenomConversationResponseConversationUpdatedAtMin).multipleOf(getVenomConversationResponseConversationUpdatedAtMultipleOf),
+  "messages": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomConversationResponseConversationMessagesItemIdMax),
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().max(getVenomConversationResponseConversationMessagesItemContentMax),
+  "createdAt": zod.number().min(getVenomConversationResponseConversationMessagesItemCreatedAtMin).multipleOf(getVenomConversationResponseConversationMessagesItemCreatedAtMultipleOf),
+  "status": zod.enum(['sending', 'sent', 'error']),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']).optional(),
+  "modelName": zod.string().min(1).max(getVenomConversationResponseConversationMessagesItemModelNameMax).optional(),
+  "deliberation": zod.object({
+  "voices": zod.array(zod.object({
+  "voiceId": zod.enum(['direct', 'skeptic', 'evidence']),
+  "name": zod.string().min(1).max(getVenomConversationResponseConversationMessagesItemDeliberationVoicesItemNameMax),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']).optional(),
+  "modelName": zod.string().min(1).max(getVenomConversationResponseConversationMessagesItemDeliberationVoicesItemModelNameMax).optional(),
+  "content": zod.string().max(getVenomConversationResponseConversationMessagesItemDeliberationVoicesItemContentMax),
+  "status": zod.enum(['ok', 'failed'])
+})).max(getVenomConversationResponseConversationMessagesItemDeliberationVoicesMax),
+  "disagreements": zod.array(zod.string().max(getVenomConversationResponseConversationMessagesItemDeliberationDisagreementsItemMax)).max(getVenomConversationResponseConversationMessagesItemDeliberationDisagreementsMax)
+}).optional(),
+  "speakerId": zod.string().min(1).max(getVenomConversationResponseConversationMessagesItemSpeakerIdMax).optional().describe('Debate voice identity behind this assistant turn. Absent for ordinary replies, so older clients render debate turns as plain assistant messages.'),
+  "speakerName": zod.string().min(1).max(getVenomConversationResponseConversationMessagesItemSpeakerNameMax).optional().describe('Display name of the debate voice behind this assistant turn.'),
+  "attachments": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomConversationResponseConversationMessagesItemAttachmentsItemIdMax),
+  "name": zod.string().min(1).max(getVenomConversationResponseConversationMessagesItemAttachmentsItemNameMax),
+  "contentType": zod.string().min(1).max(getVenomConversationResponseConversationMessagesItemAttachmentsItemContentTypeMax),
+  "size": zod.number().min(getVenomConversationResponseConversationMessagesItemAttachmentsItemSizeMin).max(getVenomConversationResponseConversationMessagesItemAttachmentsItemSizeMax).multipleOf(getVenomConversationResponseConversationMessagesItemAttachmentsItemSizeMultipleOf),
+  "kind": zod.enum(['upload', 'generated']).describe('upload = host gave Venom a file; generated = Venom authored it.'),
+  "thumbnail": zod.string().min(1).max(getVenomConversationResponseConversationMessagesItemAttachmentsItemThumbnailMax).regex(getVenomConversationResponseConversationMessagesItemAttachmentsItemThumbnailRegExp).optional().describe('Tiny inline preview (JPEG\/PNG\/WEBP data URL) for image attachments, generated client-side at attach time. Bounded hard because stamps ride the synced workspace blob; full image bytes never sync.')
+}).describe('Compact attachment stamp carried on a chat message. The id resolves to a VenomChatFile; display metadata is denormalized so history renders without a lookup. Attachment stamps ride the synced workspace blob, so they must stay tiny.')).max(getVenomConversationResponseConversationMessagesItemAttachmentsMax).optional().describe('Files carried by this message — uploads on user turns, generated files on assistant turns. Optional, so older clients and existing history remain valid.')
+})).max(getVenomConversationResponseConversationMessagesMax),
+  "responseMode": zod.enum(['talk', 'verify', 'debate']).optional().describe('How Venom answers — a single assistant (talk), background multi-voice verification that converges on one conclusion (verify), or a visible multi-voice debate in the thread (debate).'),
+  "blend": zod.object({
+  "corners": zod.array(zod.string().min(1).max(getVenomConversationResponseConversationBlendCornersItemMax)).min(getVenomConversationResponseConversationBlendCornersMin).max(getVenomConversationResponseConversationBlendCornersMax),
+  "weights": zod.array(zod.number().min(getVenomConversationResponseConversationBlendWeightsItemMin).max(getVenomConversationResponseConversationBlendWeightsItemMax)).min(getVenomConversationResponseConversationBlendWeightsMin).max(getVenomConversationResponseConversationBlendWeightsMax)
+}).optional().describe('The blend pad position for this conversation, stored as the three corner identities and their normalized weights.'),
+  "modeUpdatedAt": zod.number().min(getVenomConversationResponseConversationModeUpdatedAtMin).multipleOf(getVenomConversationResponseConversationModeUpdatedAtMultipleOf).optional().describe('When the response mode, blend, or voice picks last changed on any device; the newer block wins in cross-device merges.'),
+  "voiceModels": zod.array(zod.object({
+  "voiceId": zod.enum(['direct', 'skeptic', 'evidence']),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok'])
+}).describe('Assigns one deliberation voice to a specific managed model. Opposing voices must run on different LLM providers; the server rejects picks that would make a model argue itself.')).max(getVenomConversationResponseConversationVoiceModelsMax).optional().describe('Per-conversation verify voice assignments. Part of the response-mode preference block: it merges on modeUpdatedAt with mode and blend so a pick made on one device survives another device\'s snapshot merge.')
+}),
+  "projectName": zod.string().max(getVenomConversationResponseProjectNameMax).nullable()
+}).describe('A conversation served from the synced workspace snapshot for read-only viewing. projectName is resolved against the snapshot\'s own project list because the requesting device may not hold the project either. Heavy per-message internals (deliberation transcripts) are omitted; the payload is the readable exchange.')
+
+
+/**
  * Resolves the signed-in account into its per-user identity record (display name, email, sign-in provider), creating the record on first authenticated use and refreshing it when stale.
  * @summary Who Venom recognizes the signed-in account as
  */
-export const getVenomIdentityResponseUserIdMax = 120;
-
-export const getVenomIdentityResponseDisplayNameMax = 200;
-
-export const getVenomIdentityResponseEmailMax = 320;
-
-export const getVenomIdentityResponseProviderMax = 60;
 
 
 export const GetVenomIdentityResponse = zod.object({
   "userId": zod.string().min(1).max(getVenomIdentityResponseUserIdMax),
   "displayName": zod.string().max(getVenomIdentityResponseDisplayNameMax).nullable(),
   "email": zod.string().max(getVenomIdentityResponseEmailMax).nullable(),
-  "provider": zod.string().max(getVenomIdentityResponseProviderMax).nullable().describe('Sign-in provider slug for the account, for example \"google\" or \"password\". Null when the provider is unknown.')
+  "provider": zod.string().max(getVenomIdentityResponseProviderMax).nullable().describe('Sign-in provider slug for the account, for example \"google\" or \"password\". Null when the provider is unknown.'),
+  "superAdmin": zod.boolean().describe('Whether this account holds the platform super admin role. Derived server-side from the durable designation table on every request — never from a client claim — and re-verified on the server for every privileged call, so this flag only ever gates what the UI offers to show.')
+})
+
+
+/**
+ * The full curated canon, active and retired, with provenance. Callers without the super admin role receive the opaque canon access error regardless of whether any teachings exist.
+ * @summary List every canon teaching (super admins only)
+ */
+
+
+export const ListVenomCanonTeachingsResponseItem = zod.object({
+  "id": zod.string().min(1).max(listVenomCanonTeachingsResponseIdMax),
+  "domain": zod.string().min(1).max(listVenomCanonTeachingsResponseDomainMax),
+  "title": zod.string().min(1).max(listVenomCanonTeachingsResponseTitleMax),
+  "principles": zod.array(zod.string().min(1).max(listVenomCanonTeachingsResponsePrinciplesItemMax)).min(1).max(listVenomCanonTeachingsResponsePrinciplesMax),
+  "status": zod.enum(['active', 'retired']),
+  "taughtByUserId": zod.string().min(1).max(listVenomCanonTeachingsResponseTaughtByUserIdMax),
+  "taughtByName": zod.string().max(listVenomCanonTeachingsResponseTaughtByNameMax).nullable().describe('Display label for the admin who taught it.'),
+  "conversationTitle": zod.string().max(listVenomCanonTeachingsResponseConversationTitleMax).nullable(),
+  "taughtAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListVenomCanonTeachingsResponse = zod.array(ListVenomCanonTeachingsResponseItem).max(1000)
+
+
+/**
+ * @summary Commit a confirmed teaching into the canon (super admins only)
+ */
+
+
+export const CommitVenomCanonTeachingBody = zod.object({
+  "domain": zod.string().min(1).max(commitVenomCanonTeachingBodyDomainMax),
+  "title": zod.string().min(1).max(commitVenomCanonTeachingBodyTitleMax),
+  "principles": zod.array(zod.string().min(1).max(commitVenomCanonTeachingBodyPrinciplesItemMax)).min(1).max(commitVenomCanonTeachingBodyPrinciplesMax),
+  "conversationId": zod.string().min(1).max(commitVenomCanonTeachingBodyConversationIdMax).optional(),
+  "conversationTitle": zod.string().min(1).max(commitVenomCanonTeachingBodyConversationTitleMax).optional()
+})
+
+
+
+export const CommitVenomCanonTeachingResponse = zod.object({
+  "teaching": zod.object({
+  "id": zod.string().min(1).max(commitVenomCanonTeachingResponseTeachingIdMax),
+  "domain": zod.string().min(1).max(commitVenomCanonTeachingResponseTeachingDomainMax),
+  "title": zod.string().min(1).max(commitVenomCanonTeachingResponseTeachingTitleMax),
+  "principles": zod.array(zod.string().min(1).max(commitVenomCanonTeachingResponseTeachingPrinciplesItemMax)).min(1).max(commitVenomCanonTeachingResponseTeachingPrinciplesMax),
+  "status": zod.enum(['active', 'retired']),
+  "taughtByUserId": zod.string().min(1).max(commitVenomCanonTeachingResponseTeachingTaughtByUserIdMax),
+  "taughtByName": zod.string().max(commitVenomCanonTeachingResponseTeachingTaughtByNameMax).nullable().describe('Display label for the admin who taught it.'),
+  "conversationTitle": zod.string().max(commitVenomCanonTeachingResponseTeachingConversationTitleMax).nullable(),
+  "taughtAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "acknowledgment": zod.string().min(1).max(commitVenomCanonTeachingResponseAcknowledgmentMax).describe('Venom\'s in-voice confirmation line for the chat thread.')
+})
+
+
+/**
+ * @summary Edit or retire/restore a canon teaching (super admins only)
+ */
+
+
+export const UpdateVenomCanonTeachingParams = zod.object({
+  "teachingId": zod.coerce.string().min(1).max(updateVenomCanonTeachingPathTeachingIdMax)
+})
+
+
+
+export const UpdateVenomCanonTeachingBody = zod.object({
+  "domain": zod.string().min(1).max(updateVenomCanonTeachingBodyDomainMax).optional(),
+  "title": zod.string().min(1).max(updateVenomCanonTeachingBodyTitleMax).optional(),
+  "principles": zod.array(zod.string().min(1).max(updateVenomCanonTeachingBodyPrinciplesItemMax)).min(1).max(updateVenomCanonTeachingBodyPrinciplesMax).optional(),
+  "status": zod.enum(['active', 'retired']).optional()
+}).describe('At least one field must be present.')
+
+
+
+export const UpdateVenomCanonTeachingResponse = zod.object({
+  "id": zod.string().min(1).max(updateVenomCanonTeachingResponseIdMax),
+  "domain": zod.string().min(1).max(updateVenomCanonTeachingResponseDomainMax),
+  "title": zod.string().min(1).max(updateVenomCanonTeachingResponseTitleMax),
+  "principles": zod.array(zod.string().min(1).max(updateVenomCanonTeachingResponsePrinciplesItemMax)).min(1).max(updateVenomCanonTeachingResponsePrinciplesMax),
+  "status": zod.enum(['active', 'retired']),
+  "taughtByUserId": zod.string().min(1).max(updateVenomCanonTeachingResponseTaughtByUserIdMax),
+  "taughtByName": zod.string().max(updateVenomCanonTeachingResponseTaughtByNameMax).nullable().describe('Display label for the admin who taught it.'),
+  "conversationTitle": zod.string().max(updateVenomCanonTeachingResponseConversationTitleMax).nullable(),
+  "taughtAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * Detects teach intent in a super admin's chat message and distills it into a draft teaching for confirmation. Ambiguous or non-teaching messages return teachIntent=false so the client falls back to an ordinary chat turn. Nothing is stored until the draft is committed.
+ * @summary Distill a chat message into a draft teaching (super admins only)
+ */
+
+
+export const ProposeVenomCanonTeachingBody = zod.object({
+  "message": zod.string().min(1).max(proposeVenomCanonTeachingBodyMessageMax).describe('The super admin\'s chat message, verbatim.'),
+  "conversationId": zod.string().min(1).max(proposeVenomCanonTeachingBodyConversationIdMax).optional(),
+  "conversationTitle": zod.string().min(1).max(proposeVenomCanonTeachingBodyConversationTitleMax).optional()
+})
+
+
+
+export const ProposeVenomCanonTeachingResponse = zod.object({
+  "teachIntent": zod.boolean(),
+  "draft": zod.object({
+  "domain": zod.string().min(1).max(proposeVenomCanonTeachingResponseDraftDomainMax),
+  "title": zod.string().min(1).max(proposeVenomCanonTeachingResponseDraftTitleMax),
+  "principles": zod.array(zod.string().min(1).max(proposeVenomCanonTeachingResponseDraftPrinciplesItemMax)).min(1).max(proposeVenomCanonTeachingResponseDraftPrinciplesMax)
+}).optional().describe('A distilled teaching awaiting confirmation. Nothing is stored until the super admin commits it.')
+}).describe('teachIntent=false means the message reads as ordinary chat and the client must fall back to a normal turn; the draft is present exactly when teachIntent is true.')
+
+
+/**
+ * @summary List super admins (super admins only)
+ */
+
+
+export const ListVenomCanonAdminsResponseItem = zod.object({
+  "userId": zod.string().min(1).max(listVenomCanonAdminsResponseUserIdMax),
+  "name": zod.string().max(listVenomCanonAdminsResponseNameMax).nullable().describe('Display label from the identity record, if known.'),
+  "grantedByUserId": zod.string().max(listVenomCanonAdminsResponseGrantedByUserIdMax).nullable().describe('Null for the bootstrap designation.'),
+  "grantedAt": zod.coerce.date()
+})
+export const ListVenomCanonAdminsResponse = zod.array(ListVenomCanonAdminsResponseItem).max(200)
+
+
+/**
+ * @summary Grant the super admin role to another account (super admins only)
+ */
+
+
+export const GrantVenomCanonAdminBody = zod.object({
+  "userId": zod.string().min(1).max(grantVenomCanonAdminBodyUserIdMax).describe('Auth-provider account id to designate.')
+})
+
+
+
+export const GrantVenomCanonAdminResponse = zod.object({
+  "userId": zod.string().min(1).max(grantVenomCanonAdminResponseUserIdMax),
+  "name": zod.string().max(grantVenomCanonAdminResponseNameMax).nullable().describe('Display label from the identity record, if known.'),
+  "grantedByUserId": zod.string().max(grantVenomCanonAdminResponseGrantedByUserIdMax).nullable().describe('Null for the bootstrap designation.'),
+  "grantedAt": zod.coerce.date()
+})
+
+
+/**
+ * Self-revocation is refused, and the last remaining super admin can never be removed, so the canon always keeps at least one steward.
+ * @summary Revoke another account's super admin role (super admins only)
+ */
+
+
+export const RevokeVenomCanonAdminParams = zod.object({
+  "adminUserId": zod.coerce.string().min(1).max(revokeVenomCanonAdminPathAdminUserIdMax)
+})
+
+export const RevokeVenomCanonAdminResponse = zod.void()
+
+
+/**
+ * @summary List the signed-in user's companies and pending invites
+ */
+
+
+export const GetVenomOrgsResponse = zod.object({
+  "orgs": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomOrgsResponseOrgsItemIdMax),
+  "name": zod.string().min(1).max(getVenomOrgsResponseOrgsItemNameMax),
+  "role": zod.enum(['admin', 'member']),
+  "memberCount": zod.number().min(1).multipleOf(getVenomOrgsResponseOrgsItemMemberCountMultipleOf),
+  "createdAt": zod.number().min(getVenomOrgsResponseOrgsItemCreatedAtMin).multipleOf(getVenomOrgsResponseOrgsItemCreatedAtMultipleOf)
+})).max(getVenomOrgsResponseOrgsMax),
+  "invites": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomOrgsResponseInvitesItemIdMax),
+  "orgId": zod.string().min(1).max(getVenomOrgsResponseInvitesItemOrgIdMax),
+  "orgName": zod.string().min(1).max(getVenomOrgsResponseInvitesItemOrgNameMax),
+  "email": zod.string().min(getVenomOrgsResponseInvitesItemEmailMin).max(getVenomOrgsResponseInvitesItemEmailMax),
+  "role": zod.enum(['admin', 'member']),
+  "invitedByName": zod.string().min(1).max(getVenomOrgsResponseInvitesItemInvitedByNameMax),
+  "createdAt": zod.number().min(getVenomOrgsResponseInvitesItemCreatedAtMin).multipleOf(getVenomOrgsResponseInvitesItemCreatedAtMultipleOf)
+})).max(getVenomOrgsResponseInvitesMax)
+})
+
+
+/**
+ * @summary Create a company workspace with the signed-in user as admin
+ */
+
+
+export const CreateVenomOrgBody = zod.object({
+  "name": zod.string().min(1).max(createVenomOrgBodyNameMax)
+})
+
+
+
+export const CreateVenomOrgResponse = zod.object({
+  "id": zod.string().min(1).max(createVenomOrgResponseIdMax),
+  "name": zod.string().min(1).max(createVenomOrgResponseNameMax),
+  "role": zod.enum(['admin', 'member']),
+  "memberCount": zod.number().min(1).multipleOf(createVenomOrgResponseMemberCountMultipleOf),
+  "createdAt": zod.number().min(createVenomOrgResponseCreatedAtMin).multipleOf(createVenomOrgResponseCreatedAtMultipleOf)
+})
+
+
+/**
+ * @summary Delete a company and purge its shared Brain
+ */
+
+
+export const DeleteVenomOrgParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(deleteVenomOrgPathOrgIdMax)
+})
+
+export const DeleteVenomOrgResponse = zod.void()
+
+
+/**
+ * @summary List a company's members and outstanding invites
+ */
+
+
+export const GetVenomOrgMembersParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(getVenomOrgMembersPathOrgIdMax)
+})
+
+
+
+export const GetVenomOrgMembersResponse = zod.object({
+  "members": zod.array(zod.object({
+  "userId": zod.string().min(1).max(getVenomOrgMembersResponseMembersItemUserIdMax),
+  "name": zod.string().min(1).max(getVenomOrgMembersResponseMembersItemNameMax),
+  "email": zod.string().max(getVenomOrgMembersResponseMembersItemEmailMax).nullish(),
+  "role": zod.enum(['admin', 'member']),
+  "isSelf": zod.boolean()
+})).max(getVenomOrgMembersResponseMembersMax),
+  "invites": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomOrgMembersResponseInvitesItemIdMax),
+  "email": zod.string().min(getVenomOrgMembersResponseInvitesItemEmailMin).max(getVenomOrgMembersResponseInvitesItemEmailMax),
+  "role": zod.enum(['admin', 'member']),
+  "invitedByName": zod.string().min(1).max(getVenomOrgMembersResponseInvitesItemInvitedByNameMax),
+  "createdAt": zod.number().min(getVenomOrgMembersResponseInvitesItemCreatedAtMin).multipleOf(getVenomOrgMembersResponseInvitesItemCreatedAtMultipleOf)
+})).max(getVenomOrgMembersResponseInvitesMax)
+})
+
+
+/**
+ * @summary Remove a member (admins) or leave the company (self)
+ */
+
+
+export const RemoveVenomOrgMemberParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(removeVenomOrgMemberPathOrgIdMax),
+  "memberUserId": zod.coerce.string().min(1).max(removeVenomOrgMemberPathMemberUserIdMax)
+})
+
+export const RemoveVenomOrgMemberResponse = zod.void()
+
+
+/**
+ * @summary Invite a teammate by email (admins only)
+ */
+
+
+export const InviteVenomOrgMemberParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(inviteVenomOrgMemberPathOrgIdMax)
+})
+
+
+
+export const InviteVenomOrgMemberBody = zod.object({
+  "email": zod.string().min(inviteVenomOrgMemberBodyEmailMin).max(inviteVenomOrgMemberBodyEmailMax),
+  "role": zod.enum(['admin', 'member']).optional()
+})
+
+
+
+export const InviteVenomOrgMemberResponse = zod.object({
+  "status": zod.enum(['added', 'invited']),
+  "member": zod.object({
+  "userId": zod.string().min(1).max(inviteVenomOrgMemberResponseMemberUserIdMax),
+  "name": zod.string().min(1).max(inviteVenomOrgMemberResponseMemberNameMax),
+  "email": zod.string().max(inviteVenomOrgMemberResponseMemberEmailMax).nullish(),
+  "role": zod.enum(['admin', 'member']),
+  "isSelf": zod.boolean()
+}).optional(),
+  "invite": zod.object({
+  "id": zod.string().min(1).max(inviteVenomOrgMemberResponseInviteIdMax),
+  "email": zod.string().min(inviteVenomOrgMemberResponseInviteEmailMin).max(inviteVenomOrgMemberResponseInviteEmailMax),
+  "role": zod.enum(['admin', 'member']),
+  "invitedByName": zod.string().min(1).max(inviteVenomOrgMemberResponseInviteInvitedByNameMax),
+  "createdAt": zod.number().min(inviteVenomOrgMemberResponseInviteCreatedAtMin).multipleOf(inviteVenomOrgMemberResponseInviteCreatedAtMultipleOf)
+}).optional()
+})
+
+
+/**
+ * @summary Revoke a pending invite (admins only)
+ */
+
+
+export const RevokeVenomOrgInviteParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(revokeVenomOrgInvitePathOrgIdMax),
+  "inviteId": zod.coerce.string().min(1).max(revokeVenomOrgInvitePathInviteIdMax)
+})
+
+export const RevokeVenomOrgInviteResponse = zod.void()
+
+
+/**
+ * @summary Accept a company invite addressed to one of my verified emails
+ */
+
+
+export const AcceptVenomOrgInviteParams = zod.object({
+  "inviteId": zod.coerce.string().min(1).max(acceptVenomOrgInvitePathInviteIdMax)
+})
+
+
+
+export const AcceptVenomOrgInviteResponse = zod.object({
+  "id": zod.string().min(1).max(acceptVenomOrgInviteResponseIdMax),
+  "name": zod.string().min(1).max(acceptVenomOrgInviteResponseNameMax),
+  "role": zod.enum(['admin', 'member']),
+  "memberCount": zod.number().min(1).multipleOf(acceptVenomOrgInviteResponseMemberCountMultipleOf),
+  "createdAt": zod.number().min(acceptVenomOrgInviteResponseCreatedAtMin).multipleOf(acceptVenomOrgInviteResponseCreatedAtMultipleOf)
+})
+
+
+/**
+ * @summary Decline a company invite addressed to one of my verified emails
+ */
+
+
+export const DeclineVenomOrgInviteParams = zod.object({
+  "inviteId": zod.coerce.string().min(1).max(declineVenomOrgInvitePathInviteIdMax)
+})
+
+export const DeclineVenomOrgInviteResponse = zod.void()
+
+
+/**
+ * @summary Read the signed-in user's knowledge-network contribution setting
+ */
+export const GetVenomMasterContributionResponse = zod.object({
+  "enabled": zod.boolean()
+})
+
+
+/**
+ * Off by default. Turning it off is retroactive: the account's past concept signals are removed from all future aggregates before the response returns.
+ * @summary Turn anonymous knowledge-network contribution on or off
+ */
+export const UpdateVenomMasterContributionBody = zod.object({
+  "enabled": zod.boolean()
+})
+
+export const UpdateVenomMasterContributionResponse = zod.object({
+  "enabled": zod.boolean()
+})
+
+
+/**
+ * @summary Read a company's knowledge-network contribution setting
+ */
+
+
+export const GetVenomOrgMasterContributionParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(getVenomOrgMasterContributionPathOrgIdMax)
+})
+
+export const GetVenomOrgMasterContributionResponse = zod.object({
+  "enabled": zod.boolean()
+})
+
+
+/**
+ * @summary Company admins turn anonymous contribution on or off
+ */
+
+
+export const UpdateVenomOrgMasterContributionParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(updateVenomOrgMasterContributionPathOrgIdMax)
+})
+
+export const UpdateVenomOrgMasterContributionBody = zod.object({
+  "enabled": zod.boolean()
+})
+
+export const UpdateVenomOrgMasterContributionResponse = zod.object({
+  "enabled": zod.boolean()
+})
+
+
+/**
+ * Aggregate concepts and connection patterns learned across opted-in accounts and companies. Contains labels, categories, and normalized weights only — never names, excerpts, or tenant traces — and a concept appears only once seen across the minimum number of distinct contributors.
+ * @summary Explore the anonymous Venom master knowledge map
+ */
+
+
+export const GetVenomMasterBrainResponse = zod.object({
+  "concepts": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomMasterBrainResponseConceptsItemIdMax),
+  "label": zod.string().min(1).max(getVenomMasterBrainResponseConceptsItemLabelMax),
+  "category": zod.string().min(1).max(getVenomMasterBrainResponseConceptsItemCategoryMax),
+  "strength": zod.number().min(getVenomMasterBrainResponseConceptsItemStrengthMin).max(getVenomMasterBrainResponseConceptsItemStrengthMax),
+  "x": zod.number(),
+  "y": zod.number()
+}).describe('An aggregate concept in the anonymous master ontology. Carries a label, a category, and a normalized prevalence weight only; it exists only once the concept was seen across the minimum number of distinct accounts or companies, and never carries names, excerpts, or per-contributor traces.')).max(getVenomMasterBrainResponseConceptsMax),
+  "links": zod.array(zod.object({
+  "a": zod.string().min(1).max(getVenomMasterBrainResponseLinksItemAMax),
+  "b": zod.string().min(1).max(getVenomMasterBrainResponseLinksItemBMax),
+  "strength": zod.number().min(getVenomMasterBrainResponseLinksItemStrengthMin).max(getVenomMasterBrainResponseLinksItemStrengthMax)
+})).max(getVenomMasterBrainResponseLinksMax)
+})
+
+
+/**
+ * @summary Concepts commonly related to this Brain across the Venom network
+ */
+
+
+export const GetVenomMasterSuggestionsQueryParams = zod.object({
+  "org": zod.coerce.string().min(1).max(getVenomMasterSuggestionsQueryOrgMax).optional().describe('Company id. When present, suggestions are computed against that company\'s shared Brain; the caller must be a member.')
+})
+
+
+
+export const GetVenomMasterSuggestionsResponse = zod.object({
+  "suggestions": zod.array(zod.object({
+  "label": zod.string().min(1).max(getVenomMasterSuggestionsResponseSuggestionsItemLabelMax),
+  "category": zod.string().min(1).max(getVenomMasterSuggestionsResponseSuggestionsItemCategoryMax),
+  "strength": zod.number().min(getVenomMasterSuggestionsResponseSuggestionsItemStrengthMin).max(getVenomMasterSuggestionsResponseSuggestionsItemStrengthMax),
+  "relatedToLabels": zod.array(zod.string().min(1).max(getVenomMasterSuggestionsResponseSuggestionsItemRelatedToLabelsItemMax)).max(getVenomMasterSuggestionsResponseSuggestionsItemRelatedToLabelsMax)
+})).max(getVenomMasterSuggestionsResponseSuggestionsMax)
+})
+
+
+/**
+ * @summary Hide a Venom network suggestion for this account
+ */
+
+
+export const DismissVenomMasterSuggestionBody = zod.object({
+  "label": zod.string().min(1).max(dismissVenomMasterSuggestionBodyLabelMax)
+})
+
+export const DismissVenomMasterSuggestionResponse = zod.object({
+  "dismissed": zod.boolean()
+})
+
+
+/**
+ * Files the suggested concept into the caller's personal Brain, or — when orgId is present and the caller is a member — into that company's shared Brain.
+ * @summary Add a Venom network suggestion to a Brain
+ */
+
+
+export const ApplyVenomMasterSuggestionBody = zod.object({
+  "label": zod.string().min(1).max(applyVenomMasterSuggestionBodyLabelMax),
+  "orgId": zod.string().min(1).max(applyVenomMasterSuggestionBodyOrgIdMax).optional()
+})
+
+
+
+export const ApplyVenomMasterSuggestionResponse = zod.object({
+  "filedScope": zod.object({
+  "ownerType": zod.enum(['user', 'org']),
+  "orgId": zod.string().min(1).max(applyVenomMasterSuggestionResponseFiledScopeOrgIdMax).optional(),
+  "orgName": zod.string().min(1).max(applyVenomMasterSuggestionResponseFiledScopeOrgNameMax).optional()
+}).describe('Where server-side filing landed. Conversations in company-shared projects file into that company\'s Brain; everything else stays in the personal ontology. When ownerType is \"org\" the concepts in `filed` belong to the company layer and must not be merged into the caller\'s personal clusters.'),
+  "filed": zod.array(zod.object({
+  "id": zod.string().min(1).max(applyVenomMasterSuggestionResponseFiledItemIdMax),
+  "projectId": zod.string().max(applyVenomMasterSuggestionResponseFiledItemProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(applyVenomMasterSuggestionResponseFiledItemLabelMax),
+  "category": zod.string().min(1).max(applyVenomMasterSuggestionResponseFiledItemCategoryMax),
+  "strength": zod.number().min(applyVenomMasterSuggestionResponseFiledItemStrengthMin).max(applyVenomMasterSuggestionResponseFiledItemStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(applyVenomMasterSuggestionResponseFiledItemLinksItemMax)).max(applyVenomMasterSuggestionResponseFiledItemLinksMax),
+  "description": zod.string().max(applyVenomMasterSuggestionResponseFiledItemDescriptionMax).optional(),
+  "summary": zod.string().max(applyVenomMasterSuggestionResponseFiledItemSummaryMax),
+  "mentionCount": zod.number().min(applyVenomMasterSuggestionResponseFiledItemMentionCountMin).multipleOf(applyVenomMasterSuggestionResponseFiledItemMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(applyVenomMasterSuggestionResponseFiledItemLastUpdatedAtMin).multipleOf(applyVenomMasterSuggestionResponseFiledItemLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(applyVenomMasterSuggestionResponseFiledItemSourcesItemConversationIdMax),
+  "projectId": zod.string().max(applyVenomMasterSuggestionResponseFiledItemSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(applyVenomMasterSuggestionResponseFiledItemSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(applyVenomMasterSuggestionResponseFiledItemSourcesItemMessageIdsItemMax)).max(applyVenomMasterSuggestionResponseFiledItemSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(applyVenomMasterSuggestionResponseFiledItemSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(applyVenomMasterSuggestionResponseFiledItemSourcesItemUpdatedAtMin).multipleOf(applyVenomMasterSuggestionResponseFiledItemSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(applyVenomMasterSuggestionResponseFiledItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(applyVenomMasterSuggestionResponseFiledItemSourcesItemCapturedAtMin).multipleOf(applyVenomMasterSuggestionResponseFiledItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(applyVenomMasterSuggestionResponseFiledItemSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
+})).max(applyVenomMasterSuggestionResponseFiledMax).optional().describe('Present for personal filings only. Company concepts stay in the company layer and are never mirrored into personal clusters.')
+})
+
+
+/**
+ * @summary Read the company's shared Brain with its contribution audit
+ */
+
+
+export const GetVenomOrgBrainParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(getVenomOrgBrainPathOrgIdMax)
+})
+
+
+
+export const GetVenomOrgBrainResponse = zod.object({
+  "orgId": zod.string().min(1).max(getVenomOrgBrainResponseOrgIdMax),
+  "orgName": zod.string().min(1).max(getVenomOrgBrainResponseOrgNameMax),
+  "concepts": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomOrgBrainResponseConceptsItemIdMax),
+  "projectId": zod.string().max(getVenomOrgBrainResponseConceptsItemProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(getVenomOrgBrainResponseConceptsItemLabelMax),
+  "category": zod.string().min(1).max(getVenomOrgBrainResponseConceptsItemCategoryMax),
+  "strength": zod.number().min(getVenomOrgBrainResponseConceptsItemStrengthMin).max(getVenomOrgBrainResponseConceptsItemStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(getVenomOrgBrainResponseConceptsItemLinksItemMax)).max(getVenomOrgBrainResponseConceptsItemLinksMax),
+  "description": zod.string().max(getVenomOrgBrainResponseConceptsItemDescriptionMax).optional(),
+  "summary": zod.string().max(getVenomOrgBrainResponseConceptsItemSummaryMax),
+  "mentionCount": zod.number().min(getVenomOrgBrainResponseConceptsItemMentionCountMin).multipleOf(getVenomOrgBrainResponseConceptsItemMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(getVenomOrgBrainResponseConceptsItemLastUpdatedAtMin).multipleOf(getVenomOrgBrainResponseConceptsItemLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(getVenomOrgBrainResponseConceptsItemSourcesItemConversationIdMax),
+  "projectId": zod.string().max(getVenomOrgBrainResponseConceptsItemSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(getVenomOrgBrainResponseConceptsItemSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(getVenomOrgBrainResponseConceptsItemSourcesItemMessageIdsItemMax)).max(getVenomOrgBrainResponseConceptsItemSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(getVenomOrgBrainResponseConceptsItemSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(getVenomOrgBrainResponseConceptsItemSourcesItemUpdatedAtMin).multipleOf(getVenomOrgBrainResponseConceptsItemSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(getVenomOrgBrainResponseConceptsItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(getVenomOrgBrainResponseConceptsItemSourcesItemCapturedAtMin).multipleOf(getVenomOrgBrainResponseConceptsItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(getVenomOrgBrainResponseConceptsItemSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
+})).max(getVenomOrgBrainResponseConceptsMax),
+  "audit": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomOrgBrainResponseAuditItemIdMax),
+  "action": zod.enum(['promoted']),
+  "conceptId": zod.string().min(1).max(getVenomOrgBrainResponseAuditItemConceptIdMax),
+  "conceptLabel": zod.string().min(1).max(getVenomOrgBrainResponseAuditItemConceptLabelMax),
+  "actorUserId": zod.string().min(1).max(getVenomOrgBrainResponseAuditItemActorUserIdMax),
+  "actorName": zod.string().min(1).max(getVenomOrgBrainResponseAuditItemActorNameMax),
+  "createdAt": zod.number().min(getVenomOrgBrainResponseAuditItemCreatedAtMin).multipleOf(getVenomOrgBrainResponseAuditItemCreatedAtMultipleOf)
+})).max(getVenomOrgBrainResponseAuditMax)
+})
+
+
+/**
+ * @summary List the company's shared projects
+ */
+
+
+export const GetVenomOrgProjectsParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(getVenomOrgProjectsPathOrgIdMax)
+})
+
+
+
+export const GetVenomOrgProjectsResponse = zod.object({
+  "projects": zod.array(zod.object({
+  "projectId": zod.string().min(1).max(getVenomOrgProjectsResponseProjectsItemProjectIdMax),
+  "orgId": zod.string().min(1).max(getVenomOrgProjectsResponseProjectsItemOrgIdMax),
+  "name": zod.string().min(1).max(getVenomOrgProjectsResponseProjectsItemNameMax),
+  "description": zod.string().max(getVenomOrgProjectsResponseProjectsItemDescriptionMax),
+  "accent": zod.string().max(getVenomOrgProjectsResponseProjectsItemAccentMax),
+  "sharedByUserId": zod.string().min(1).max(getVenomOrgProjectsResponseProjectsItemSharedByUserIdMax),
+  "sharedByName": zod.string().min(1).max(getVenomOrgProjectsResponseProjectsItemSharedByNameMax),
+  "sharedAt": zod.number().min(getVenomOrgProjectsResponseProjectsItemSharedAtMin).multipleOf(getVenomOrgProjectsResponseProjectsItemSharedAtMultipleOf),
+  "updatedAt": zod.number().min(getVenomOrgProjectsResponseProjectsItemUpdatedAtMin).multipleOf(getVenomOrgProjectsResponseProjectsItemUpdatedAtMultipleOf)
+})).max(getVenomOrgProjectsResponseProjectsMax)
+})
+
+
+/**
+ * @summary Mark one of my projects as company-shared (admins only)
+ */
+
+
+export const ShareVenomOrgProjectParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(shareVenomOrgProjectPathOrgIdMax),
+  "projectId": zod.coerce.string().min(1).max(shareVenomOrgProjectPathProjectIdMax)
+})
+
+
+
+export const ShareVenomOrgProjectBody = zod.object({
+  "name": zod.string().min(1).max(shareVenomOrgProjectBodyNameMax),
+  "description": zod.string().max(shareVenomOrgProjectBodyDescriptionMax).optional(),
+  "accent": zod.string().max(shareVenomOrgProjectBodyAccentMax).optional()
+})
+
+
+
+export const ShareVenomOrgProjectResponse = zod.object({
+  "projectId": zod.string().min(1).max(shareVenomOrgProjectResponseProjectIdMax),
+  "orgId": zod.string().min(1).max(shareVenomOrgProjectResponseOrgIdMax),
+  "name": zod.string().min(1).max(shareVenomOrgProjectResponseNameMax),
+  "description": zod.string().max(shareVenomOrgProjectResponseDescriptionMax),
+  "accent": zod.string().max(shareVenomOrgProjectResponseAccentMax),
+  "sharedByUserId": zod.string().min(1).max(shareVenomOrgProjectResponseSharedByUserIdMax),
+  "sharedByName": zod.string().min(1).max(shareVenomOrgProjectResponseSharedByNameMax),
+  "sharedAt": zod.number().min(shareVenomOrgProjectResponseSharedAtMin).multipleOf(shareVenomOrgProjectResponseSharedAtMultipleOf),
+  "updatedAt": zod.number().min(shareVenomOrgProjectResponseUpdatedAtMin).multipleOf(shareVenomOrgProjectResponseUpdatedAtMultipleOf)
+})
+
+
+/**
+ * @summary Stop sharing a project with the company
+ */
+
+
+export const UnshareVenomOrgProjectParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(unshareVenomOrgProjectPathOrgIdMax),
+  "projectId": zod.coerce.string().min(1).max(unshareVenomOrgProjectPathProjectIdMax)
+})
+
+export const UnshareVenomOrgProjectResponse = zod.void()
+
+
+/**
+ * @summary List the company's connected knowledge sources
+ */
+
+
+export const GetVenomOrgSourcesParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(getVenomOrgSourcesPathOrgIdMax)
+})
+
+
+
+
+export const GetVenomOrgSourcesResponse = zod.object({
+  "sources": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomOrgSourcesResponseSourcesItemIdMax),
+  "orgId": zod.string().min(1).max(getVenomOrgSourcesResponseSourcesItemOrgIdMax),
+  "provider": zod.enum(['github', 'website']),
+  "name": zod.string().min(1).max(getVenomOrgSourcesResponseSourcesItemNameMax),
+  "url": zod.string().max(getVenomOrgSourcesResponseSourcesItemUrlMax),
+  "summary": zod.string().max(getVenomOrgSourcesResponseSourcesItemSummaryMax),
+  "context": zod.string().min(1).max(getVenomOrgSourcesResponseSourcesItemContextMax),
+  "citations": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomOrgSourcesResponseSourcesItemCitationsItemIdMax).regex(getVenomOrgSourcesResponseSourcesItemCitationsItemIdRegExp),
+  "provider": zod.enum(['github', 'website']),
+  "kind": zod.enum(['repository', 'issue', 'pull_request', 'website']),
+  "title": zod.string().min(1).max(getVenomOrgSourcesResponseSourcesItemCitationsItemTitleMax),
+  "url": zod.string().max(getVenomOrgSourcesResponseSourcesItemCitationsItemUrlMax),
+  "excerpt": zod.string().min(1).max(getVenomOrgSourcesResponseSourcesItemCitationsItemExcerptMax),
+  "reference": zod.string().min(1).max(getVenomOrgSourcesResponseSourcesItemCitationsItemReferenceMax).nullable()
+})).min(1).max(getVenomOrgSourcesResponseSourcesItemCitationsMax),
+  "connectedByUserId": zod.string().min(1).max(getVenomOrgSourcesResponseSourcesItemConnectedByUserIdMax),
+  "connectedByName": zod.string().min(1).max(getVenomOrgSourcesResponseSourcesItemConnectedByNameMax),
+  "syncedAt": zod.number().min(getVenomOrgSourcesResponseSourcesItemSyncedAtMin).multipleOf(getVenomOrgSourcesResponseSourcesItemSyncedAtMultipleOf)
+})).max(getVenomOrgSourcesResponseSourcesMax)
+})
+
+
+/**
+ * @summary Connect a GitHub repository as a company knowledge source (admins only)
+ */
+
+
+export const ConnectVenomOrgGitHubSourceParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(connectVenomOrgGitHubSourcePathOrgIdMax)
+})
+
+
+
+export const ConnectVenomOrgGitHubSourceBody = zod.object({
+  "repository": zod.string().min(connectVenomOrgGitHubSourceBodyRepositoryMin).max(connectVenomOrgGitHubSourceBodyRepositoryMax)
+})
+
+
+
+
+export const ConnectVenomOrgGitHubSourceResponse = zod.object({
+  "id": zod.string().min(1).max(connectVenomOrgGitHubSourceResponseIdMax),
+  "orgId": zod.string().min(1).max(connectVenomOrgGitHubSourceResponseOrgIdMax),
+  "provider": zod.enum(['github', 'website']),
+  "name": zod.string().min(1).max(connectVenomOrgGitHubSourceResponseNameMax),
+  "url": zod.string().max(connectVenomOrgGitHubSourceResponseUrlMax),
+  "summary": zod.string().max(connectVenomOrgGitHubSourceResponseSummaryMax),
+  "context": zod.string().min(1).max(connectVenomOrgGitHubSourceResponseContextMax),
+  "citations": zod.array(zod.object({
+  "id": zod.string().min(1).max(connectVenomOrgGitHubSourceResponseCitationsItemIdMax).regex(connectVenomOrgGitHubSourceResponseCitationsItemIdRegExp),
+  "provider": zod.enum(['github', 'website']),
+  "kind": zod.enum(['repository', 'issue', 'pull_request', 'website']),
+  "title": zod.string().min(1).max(connectVenomOrgGitHubSourceResponseCitationsItemTitleMax),
+  "url": zod.string().max(connectVenomOrgGitHubSourceResponseCitationsItemUrlMax),
+  "excerpt": zod.string().min(1).max(connectVenomOrgGitHubSourceResponseCitationsItemExcerptMax),
+  "reference": zod.string().min(1).max(connectVenomOrgGitHubSourceResponseCitationsItemReferenceMax).nullable()
+})).min(1).max(connectVenomOrgGitHubSourceResponseCitationsMax),
+  "connectedByUserId": zod.string().min(1).max(connectVenomOrgGitHubSourceResponseConnectedByUserIdMax),
+  "connectedByName": zod.string().min(1).max(connectVenomOrgGitHubSourceResponseConnectedByNameMax),
+  "syncedAt": zod.number().min(connectVenomOrgGitHubSourceResponseSyncedAtMin).multipleOf(connectVenomOrgGitHubSourceResponseSyncedAtMultipleOf)
+})
+
+
+/**
+ * @summary Connect a public website as a company knowledge source (admins only)
+ */
+
+
+export const ConnectVenomOrgWebsiteSourceParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(connectVenomOrgWebsiteSourcePathOrgIdMax)
+})
+
+
+
+export const ConnectVenomOrgWebsiteSourceBody = zod.object({
+  "url": zod.string().max(connectVenomOrgWebsiteSourceBodyUrlMax),
+  "name": zod.string().min(1).max(connectVenomOrgWebsiteSourceBodyNameMax).optional()
+})
+
+
+
+
+export const ConnectVenomOrgWebsiteSourceResponse = zod.object({
+  "id": zod.string().min(1).max(connectVenomOrgWebsiteSourceResponseIdMax),
+  "orgId": zod.string().min(1).max(connectVenomOrgWebsiteSourceResponseOrgIdMax),
+  "provider": zod.enum(['github', 'website']),
+  "name": zod.string().min(1).max(connectVenomOrgWebsiteSourceResponseNameMax),
+  "url": zod.string().max(connectVenomOrgWebsiteSourceResponseUrlMax),
+  "summary": zod.string().max(connectVenomOrgWebsiteSourceResponseSummaryMax),
+  "context": zod.string().min(1).max(connectVenomOrgWebsiteSourceResponseContextMax),
+  "citations": zod.array(zod.object({
+  "id": zod.string().min(1).max(connectVenomOrgWebsiteSourceResponseCitationsItemIdMax).regex(connectVenomOrgWebsiteSourceResponseCitationsItemIdRegExp),
+  "provider": zod.enum(['github', 'website']),
+  "kind": zod.enum(['repository', 'issue', 'pull_request', 'website']),
+  "title": zod.string().min(1).max(connectVenomOrgWebsiteSourceResponseCitationsItemTitleMax),
+  "url": zod.string().max(connectVenomOrgWebsiteSourceResponseCitationsItemUrlMax),
+  "excerpt": zod.string().min(1).max(connectVenomOrgWebsiteSourceResponseCitationsItemExcerptMax),
+  "reference": zod.string().min(1).max(connectVenomOrgWebsiteSourceResponseCitationsItemReferenceMax).nullable()
+})).min(1).max(connectVenomOrgWebsiteSourceResponseCitationsMax),
+  "connectedByUserId": zod.string().min(1).max(connectVenomOrgWebsiteSourceResponseConnectedByUserIdMax),
+  "connectedByName": zod.string().min(1).max(connectVenomOrgWebsiteSourceResponseConnectedByNameMax),
+  "syncedAt": zod.number().min(connectVenomOrgWebsiteSourceResponseSyncedAtMin).multipleOf(connectVenomOrgWebsiteSourceResponseSyncedAtMultipleOf)
+})
+
+
+/**
+ * @summary Disconnect a company knowledge source and retire its concepts
+ */
+
+
+export const RemoveVenomOrgSourceParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(removeVenomOrgSourcePathOrgIdMax),
+  "sourceId": zod.coerce.string().min(1).max(removeVenomOrgSourcePathSourceIdMax)
+})
+
+export const RemoveVenomOrgSourceResponse = zod.void()
+
+
+/**
+ * The explicit, member-initiated action that lifts one personal concept (with its evidence) into the company's shared Brain. Nothing personal enters a company Brain without this call or work done inside shared projects and company sources.
+ * @summary Promote a personal Brain concept into the company Brain
+ */
+
+
+export const PromoteVenomConceptToOrgParams = zod.object({
+  "orgId": zod.coerce.string().min(1).max(promoteVenomConceptToOrgPathOrgIdMax)
+})
+
+
+
+export const PromoteVenomConceptToOrgBody = zod.object({
+  "concept": zod.object({
+  "id": zod.string().min(1).max(promoteVenomConceptToOrgBodyConceptIdMax),
+  "projectId": zod.string().max(promoteVenomConceptToOrgBodyConceptProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(promoteVenomConceptToOrgBodyConceptLabelMax),
+  "category": zod.string().min(1).max(promoteVenomConceptToOrgBodyConceptCategoryMax),
+  "strength": zod.number().min(promoteVenomConceptToOrgBodyConceptStrengthMin).max(promoteVenomConceptToOrgBodyConceptStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(promoteVenomConceptToOrgBodyConceptLinksItemMax)).max(promoteVenomConceptToOrgBodyConceptLinksMax),
+  "description": zod.string().max(promoteVenomConceptToOrgBodyConceptDescriptionMax).optional(),
+  "summary": zod.string().max(promoteVenomConceptToOrgBodyConceptSummaryMax),
+  "mentionCount": zod.number().min(promoteVenomConceptToOrgBodyConceptMentionCountMin).multipleOf(promoteVenomConceptToOrgBodyConceptMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(promoteVenomConceptToOrgBodyConceptLastUpdatedAtMin).multipleOf(promoteVenomConceptToOrgBodyConceptLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(promoteVenomConceptToOrgBodyConceptSourcesItemConversationIdMax),
+  "projectId": zod.string().max(promoteVenomConceptToOrgBodyConceptSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(promoteVenomConceptToOrgBodyConceptSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(promoteVenomConceptToOrgBodyConceptSourcesItemMessageIdsItemMax)).max(promoteVenomConceptToOrgBodyConceptSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(promoteVenomConceptToOrgBodyConceptSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(promoteVenomConceptToOrgBodyConceptSourcesItemUpdatedAtMin).multipleOf(promoteVenomConceptToOrgBodyConceptSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(promoteVenomConceptToOrgBodyConceptSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(promoteVenomConceptToOrgBodyConceptSourcesItemCapturedAtMin).multipleOf(promoteVenomConceptToOrgBodyConceptSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(promoteVenomConceptToOrgBodyConceptSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
+})
+})
+
+
+
+export const PromoteVenomConceptToOrgResponse = zod.object({
+  "concept": zod.object({
+  "id": zod.string().min(1).max(promoteVenomConceptToOrgResponseConceptIdMax),
+  "projectId": zod.string().max(promoteVenomConceptToOrgResponseConceptProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(promoteVenomConceptToOrgResponseConceptLabelMax),
+  "category": zod.string().min(1).max(promoteVenomConceptToOrgResponseConceptCategoryMax),
+  "strength": zod.number().min(promoteVenomConceptToOrgResponseConceptStrengthMin).max(promoteVenomConceptToOrgResponseConceptStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(promoteVenomConceptToOrgResponseConceptLinksItemMax)).max(promoteVenomConceptToOrgResponseConceptLinksMax),
+  "description": zod.string().max(promoteVenomConceptToOrgResponseConceptDescriptionMax).optional(),
+  "summary": zod.string().max(promoteVenomConceptToOrgResponseConceptSummaryMax),
+  "mentionCount": zod.number().min(promoteVenomConceptToOrgResponseConceptMentionCountMin).multipleOf(promoteVenomConceptToOrgResponseConceptMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(promoteVenomConceptToOrgResponseConceptLastUpdatedAtMin).multipleOf(promoteVenomConceptToOrgResponseConceptLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(promoteVenomConceptToOrgResponseConceptSourcesItemConversationIdMax),
+  "projectId": zod.string().max(promoteVenomConceptToOrgResponseConceptSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(promoteVenomConceptToOrgResponseConceptSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(promoteVenomConceptToOrgResponseConceptSourcesItemMessageIdsItemMax)).max(promoteVenomConceptToOrgResponseConceptSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(promoteVenomConceptToOrgResponseConceptSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(promoteVenomConceptToOrgResponseConceptSourcesItemUpdatedAtMin).multipleOf(promoteVenomConceptToOrgResponseConceptSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(promoteVenomConceptToOrgResponseConceptSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(promoteVenomConceptToOrgResponseConceptSourcesItemCapturedAtMin).multipleOf(promoteVenomConceptToOrgResponseConceptSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(promoteVenomConceptToOrgResponseConceptSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
+})
 })
 
 
 /**
  * @summary Improve the grammar and organization of a draft project note
  */
-export const improveVenomNoteBodyNoteMax = 5000;
 
 
 export const ImproveVenomNoteBody = zod.object({
   "note": zod.string().min(1).max(improveVenomNoteBodyNoteMax)
 })
 
-export const improveVenomNoteResponseSuggestionMax = 5000;
-
-export const improveVenomNoteResponseChangeNotesItemMax = 160;
-
-export const improveVenomNoteResponseChangeNotesMax = 6;
 
 
 export const ImproveVenomNoteResponse = zod.object({
@@ -632,66 +5111,20 @@ export const GetGitHubRepositoriesResponse = zod.array(GetGitHubRepositoriesResp
 /**
  * @summary Sync selected GitHub repository context into a project source
  */
-export const connectGitHubSourcePathProjectIdMax = 120;
 
 
 export const ConnectGitHubSourceParams = zod.object({
   "projectId": zod.coerce.string().min(1).max(connectGitHubSourcePathProjectIdMax)
 })
 
-export const connectGitHubSourceBodyRepositoryMin = 3;
-export const connectGitHubSourceBodyRepositoryMax = 200;
 
 
 export const ConnectGitHubSourceBody = zod.object({
   "repository": zod.string().min(connectGitHubSourceBodyRepositoryMin).max(connectGitHubSourceBodyRepositoryMax)
 })
 
-export const connectGitHubSourceResponseIdMax = 160;
-
-export const connectGitHubSourceResponseProjectIdMax = 160;
-
-export const connectGitHubSourceResponseNameMax = 300;
-
-export const connectGitHubSourceResponseUrlMax = 2048;
-
-export const connectGitHubSourceResponseSummaryMax = 1000;
-
-export const connectGitHubSourceResponseContextMax = 8000;
-
-export const connectGitHubSourceResponseCitationsItemIdMax = 160;
 
 
-export const connectGitHubSourceResponseCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
-export const connectGitHubSourceResponseCitationsItemTitleMax = 300;
-
-export const connectGitHubSourceResponseCitationsItemUrlMax = 2048;
-
-export const connectGitHubSourceResponseCitationsItemExcerptMax = 1000;
-
-export const connectGitHubSourceResponseCitationsItemReferenceMax = 200;
-
-export const connectGitHubSourceResponseCitationsMax = 50;
-
-export const connectGitHubSourceResponseClustersItemStrengthMin = 0;
-export const connectGitHubSourceResponseClustersItemStrengthMax = 1;
-
-export const connectGitHubSourceResponseAttestationMax = 2048;
-
-
-export const connectGitHubSourceResponseAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
-export const connectGitHubSourceResponseScheduleUpdatedAtMin = 0;
-export const connectGitHubSourceResponseScheduleUpdatedAtMultipleOf = 1;
-
-export const connectGitHubSourceResponseScheduleLastAttemptAtMin = 0;
-export const connectGitHubSourceResponseScheduleLastAttemptAtMultipleOf = 1;
-
-export const connectGitHubSourceResponseScheduleLastErrorMax = 300;
-
-export const connectGitHubSourceResponseScheduleClaimedAtMin = 0;
-export const connectGitHubSourceResponseScheduleClaimedAtMultipleOf = 1;
-
-export const connectGitHubSourceResponseScheduleClaimedByMax = 120;
 
 
 export const ConnectGitHubSourceResponse = zod.object({
@@ -735,16 +5168,12 @@ export const ConnectGitHubSourceResponse = zod.object({
 /**
  * @summary Add publicly available website context to a project source
  */
-export const connectWebsiteSourcePathProjectIdMax = 120;
 
 
 export const ConnectWebsiteSourceParams = zod.object({
   "projectId": zod.coerce.string().min(1).max(connectWebsiteSourcePathProjectIdMax)
 })
 
-export const connectWebsiteSourceBodyUrlMax = 2048;
-
-export const connectWebsiteSourceBodyNameMax = 120;
 
 
 export const ConnectWebsiteSourceBody = zod.object({
@@ -752,51 +5181,8 @@ export const ConnectWebsiteSourceBody = zod.object({
   "name": zod.string().min(1).max(connectWebsiteSourceBodyNameMax).optional()
 })
 
-export const connectWebsiteSourceResponseIdMax = 160;
-
-export const connectWebsiteSourceResponseProjectIdMax = 160;
-
-export const connectWebsiteSourceResponseNameMax = 300;
-
-export const connectWebsiteSourceResponseUrlMax = 2048;
-
-export const connectWebsiteSourceResponseSummaryMax = 1000;
-
-export const connectWebsiteSourceResponseContextMax = 8000;
-
-export const connectWebsiteSourceResponseCitationsItemIdMax = 160;
 
 
-export const connectWebsiteSourceResponseCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
-export const connectWebsiteSourceResponseCitationsItemTitleMax = 300;
-
-export const connectWebsiteSourceResponseCitationsItemUrlMax = 2048;
-
-export const connectWebsiteSourceResponseCitationsItemExcerptMax = 1000;
-
-export const connectWebsiteSourceResponseCitationsItemReferenceMax = 200;
-
-export const connectWebsiteSourceResponseCitationsMax = 50;
-
-export const connectWebsiteSourceResponseClustersItemStrengthMin = 0;
-export const connectWebsiteSourceResponseClustersItemStrengthMax = 1;
-
-export const connectWebsiteSourceResponseAttestationMax = 2048;
-
-
-export const connectWebsiteSourceResponseAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
-export const connectWebsiteSourceResponseScheduleUpdatedAtMin = 0;
-export const connectWebsiteSourceResponseScheduleUpdatedAtMultipleOf = 1;
-
-export const connectWebsiteSourceResponseScheduleLastAttemptAtMin = 0;
-export const connectWebsiteSourceResponseScheduleLastAttemptAtMultipleOf = 1;
-
-export const connectWebsiteSourceResponseScheduleLastErrorMax = 300;
-
-export const connectWebsiteSourceResponseScheduleClaimedAtMin = 0;
-export const connectWebsiteSourceResponseScheduleClaimedAtMultipleOf = 1;
-
-export const connectWebsiteSourceResponseScheduleClaimedByMax = 120;
 
 
 export const ConnectWebsiteSourceResponse = zod.object({
@@ -840,304 +5226,11 @@ export const ConnectWebsiteSourceResponse = zod.object({
 /**
  * @summary Get the signed-in user's workspace
  */
-export const getVenomWorkspaceResponseStateOneProjectsItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemNameMax = 120;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemDescriptionMax = 1000;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemAccentMax = 32;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemSourceCountMin = 0;
-export const getVenomWorkspaceResponseStateOneProjectsItemSourceCountMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax = 280;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemStageIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMin = 0;
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesOneMax = 1000;
-
 export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMin = -1000000000;
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMax = 1000000000;
 
-export const getVenomWorkspaceResponseStateOneProjectsItemTasksMax = 2000;
 
-export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemIdMax = 120;
 
-export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemNameMax = 80;
 
-export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMin = 0;
-export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemBoardStagesMax = 30;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemNameMax = 80;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsItemMax = 80;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsMax = 30;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMin = 0;
-export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax = 40;
-
-export const getVenomWorkspaceResponseStateOneProjectsMax = 500;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemTitleMax = 200;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemProjectIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemContentMax = 50000;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemModelNameMax = 80;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemNameMax = 80;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemModelNameMax = 80;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemContentMax = 8000;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesMax = 4;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsItemMax = 500;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsMax = 8;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerIdMax = 64;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax = 80;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemMessagesMax = 1000;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemBlendCornersItemMax = 64;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemBlendCornersMin = 3;
-export const getVenomWorkspaceResponseStateOneConversationsItemBlendCornersMax = 3;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMin = 0;
-export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMax = 1;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMin = 3;
-export const getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMax = 3;
-
-export const getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneConversationsMax = 500;
-
-export const getVenomWorkspaceResponseStateOneClustersItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneClustersItemProjectIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneClustersItemLabelMax = 200;
-
-export const getVenomWorkspaceResponseStateOneClustersItemCategoryMax = 100;
-
-export const getVenomWorkspaceResponseStateOneClustersItemStrengthMin = 0;
-export const getVenomWorkspaceResponseStateOneClustersItemStrengthMax = 1;
-
-export const getVenomWorkspaceResponseStateOneClustersItemLinksItemMax = 120;
-
-export const getVenomWorkspaceResponseStateOneClustersItemLinksMax = 100;
-
-export const getVenomWorkspaceResponseStateOneClustersItemDescriptionMax = 2000;
-
-export const getVenomWorkspaceResponseStateOneClustersItemSummaryMax = 2000;
-
-export const getVenomWorkspaceResponseStateOneClustersItemMentionCountMin = 0;
-export const getVenomWorkspaceResponseStateOneClustersItemMentionCountMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemProjectIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationTitleMax = 200;
-
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsItemMax = 120;
-
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsMax = 12;
-
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax = 2000;
-
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedByUserIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneClustersItemSourcesMax = 8;
-
-export const getVenomWorkspaceResponseStateOneClustersMax = 1000;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemIdMax = 160;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemProjectIdMax = 160;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemNameMax = 300;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemUrlMax = 2048;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemSummaryMax = 1000;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemContextMax = 8000;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdMax = 160;
-
-
-export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
-export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemTitleMax = 300;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemUrlMax = 2048;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemExcerptMax = 1000;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemCitationsItemReferenceMax = 200;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemCitationsMax = 50;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMin = 0;
-export const getVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMax = 1;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemAttestationMax = 2048;
-
-
-export const getVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
-export const getVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMin = 0;
-export const getVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemScheduleLastErrorMax = 300;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedByMax = 120;
-
-export const getVenomWorkspaceResponseStateOneSourcesMax = 500;
-
-export const getVenomWorkspaceResponseStateOneActiveProjectIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneActiveConversationIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneTombstonesProjectsItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneTombstonesProjectsMax = 1000;
-
-export const getVenomWorkspaceResponseStateOneTombstonesTasksItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneTombstonesTasksMax = 5000;
-
-export const getVenomWorkspaceResponseStateOneTombstonesConversationsItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneTombstonesConversationsMax = 1000;
-
-export const getVenomWorkspaceResponseStateOneTombstonesMessagesItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneTombstonesMessagesMax = 10000;
-
-export const getVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneTombstonesClustersMax = 2000;
-
-export const getVenomWorkspaceResponseStateOneTombstonesStagesItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneTombstonesStagesMax = 15000;
-
-export const getVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneTombstonesFieldsMax = 20000;
-
-export const getVenomWorkspaceResponseStateOneTombstonesSourcesItemIdMax = 120;
-
-export const getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneTombstonesSourcesMax = 2000;
-
-export const getVenomWorkspaceResponseStateOneModelPreferencesEnabledModelIdsMax = 4;
-
-export const getVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMin = 0;
-export const getVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneArchivedCitationsItemIdMax = 160;
-
-
-export const getVenomWorkspaceResponseStateOneArchivedCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
-export const getVenomWorkspaceResponseStateOneArchivedCitationsItemTitleMax = 300;
-
-export const getVenomWorkspaceResponseStateOneArchivedCitationsItemUrlMax = 2048;
-
-export const getVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMin = 0;
-export const getVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMultipleOf = 1;
-
-export const getVenomWorkspaceResponseStateOneArchivedCitationsMax = 500;
-
-export const getVenomWorkspaceResponseRevisionMin = 0;
-export const getVenomWorkspaceResponseRevisionMultipleOf = 1;
 
 
 export const GetVenomWorkspaceResponse = zod.object({
@@ -1174,7 +5267,9 @@ export const GetVenomWorkspaceResponse = zod.object({
   "position": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMultipleOf),
   "showOnCard": zod.boolean(),
   "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf)
-})).max(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax)
+})).max(getVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax),
+  "orgId": zod.string().min(1).max(getVenomWorkspaceResponseStateOneProjectsItemOrgIdMax).optional().describe('Present when the project is shared with a company. On the sharer\'s device it marks their own project as company-shared; on other members\' devices it marks the local mirror.'),
+  "orgMirror": zod.boolean().optional().describe('True when this project entry is a local mirror of a project another member shared with the company, rather than a project this account created.')
 })).max(getVenomWorkspaceResponseStateOneProjectsMax),
   "conversations": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemIdMax),
@@ -1201,14 +5296,26 @@ export const GetVenomWorkspaceResponse = zod.object({
   "disagreements": zod.array(zod.string().max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsItemMax)).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsMax)
 }).optional(),
   "speakerId": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerIdMax).optional().describe('Debate voice identity behind this assistant turn. Absent for ordinary replies, so older clients render debate turns as plain assistant messages.'),
-  "speakerName": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax).optional().describe('Display name of the debate voice behind this assistant turn.')
+  "speakerName": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax).optional().describe('Display name of the debate voice behind this assistant turn.'),
+  "attachments": zod.array(zod.object({
+  "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemIdMax),
+  "name": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemNameMax),
+  "contentType": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemContentTypeMax),
+  "size": zod.number().min(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMin).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMax).multipleOf(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMultipleOf),
+  "kind": zod.enum(['upload', 'generated']).describe('upload = host gave Venom a file; generated = Venom authored it.'),
+  "thumbnail": zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemThumbnailMax).regex(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemThumbnailRegExp).optional().describe('Tiny inline preview (JPEG\/PNG\/WEBP data URL) for image attachments, generated client-side at attach time. Bounded hard because stamps ride the synced workspace blob; full image bytes never sync.')
+}).describe('Compact attachment stamp carried on a chat message. The id resolves to a VenomChatFile; display metadata is denormalized so history renders without a lookup. Attachment stamps ride the synced workspace blob, so they must stay tiny.')).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsMax).optional().describe('Files carried by this message — uploads on user turns, generated files on assistant turns. Optional, so older clients and existing history remain valid.')
 })).max(getVenomWorkspaceResponseStateOneConversationsItemMessagesMax),
   "responseMode": zod.enum(['talk', 'verify', 'debate']).optional().describe('How Venom answers — a single assistant (talk), background multi-voice verification that converges on one conclusion (verify), or a visible multi-voice debate in the thread (debate).'),
   "blend": zod.object({
   "corners": zod.array(zod.string().min(1).max(getVenomWorkspaceResponseStateOneConversationsItemBlendCornersItemMax)).min(getVenomWorkspaceResponseStateOneConversationsItemBlendCornersMin).max(getVenomWorkspaceResponseStateOneConversationsItemBlendCornersMax),
   "weights": zod.array(zod.number().min(getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMin).max(getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMax)).min(getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMin).max(getVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMax)
 }).optional().describe('The blend pad position for this conversation, stored as the three corner identities and their normalized weights.'),
-  "modeUpdatedAt": zod.number().min(getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf).optional().describe('When the response mode or blend last changed on any device; the newer block wins in cross-device merges.')
+  "modeUpdatedAt": zod.number().min(getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf).optional().describe('When the response mode, blend, or voice picks last changed on any device; the newer block wins in cross-device merges.'),
+  "voiceModels": zod.array(zod.object({
+  "voiceId": zod.enum(['direct', 'skeptic', 'evidence']),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok'])
+}).describe('Assigns one deliberation voice to a specific managed model. Opposing voices must run on different LLM providers; the server rejects picks that would make a model argue itself.')).max(getVenomWorkspaceResponseStateOneConversationsItemVoiceModelsMax).optional().describe('Per-conversation verify voice assignments. Part of the response-mode preference block: it merges on modeUpdatedAt with mode and blend so a pick made on one device survives another device\'s snapshot merge.')
 })).max(getVenomWorkspaceResponseStateOneConversationsMax),
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneClustersItemIdMax),
@@ -1231,8 +5338,12 @@ export const GetVenomWorkspaceResponse = zod.object({
   "excerpt": zod.string().max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax),
   "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf),
   "capturedByUserId": zod.string().max(getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
-  "capturedAt": zod.number().min(getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin).multipleOf(getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
-})).max(getVenomWorkspaceResponseStateOneClustersItemSourcesMax)
+  "capturedAt": zod.number().min(getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin).multipleOf(getVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(getVenomWorkspaceResponseStateOneClustersItemSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
 })).max(getVenomWorkspaceResponseStateOneClustersMax),
   "sources": zod.array(zod.object({
   "id": zod.string().min(1).max(getVenomWorkspaceResponseStateOneSourcesItemIdMax),
@@ -1318,6 +5429,7 @@ export const GetVenomWorkspaceResponse = zod.object({
   "enabledModelIds": zod.array(zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok'])).min(1).max(getVenomWorkspaceResponseStateOneModelPreferencesEnabledModelIdsMax),
   "defaultModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
   "activeModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
+  "selectionPolicy": zod.enum(['manual', 'auto-cheapest', 'auto-max-power']).optional().describe('Account-level model selection policy. \"manual\" (and absent) keeps the user\'s explicit model picks exactly as before. In the auto modes the server chooses the serving models on every request — cheapest healthy models for \"auto-cheapest\", the most capable for \"auto-max-power\" — and keeps that choice current as availability and account health change.'),
   "updatedAt": zod.number().min(getVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMin).multipleOf(getVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMultipleOf)
 }).optional(),
   "voicePreferences": zod.object({
@@ -1340,304 +5452,11 @@ export const GetVenomWorkspaceResponse = zod.object({
 /**
  * @summary Save the signed-in user's workspace
  */
-export const saveVenomWorkspaceBodyStateProjectsItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateProjectsItemNameMax = 120;
-
-export const saveVenomWorkspaceBodyStateProjectsItemDescriptionMax = 1000;
-
-export const saveVenomWorkspaceBodyStateProjectsItemAccentMax = 32;
-
-export const saveVenomWorkspaceBodyStateProjectsItemSourceCountMin = 0;
-export const saveVenomWorkspaceBodyStateProjectsItemSourceCountMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateProjectsItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateProjectsItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemTitleMax = 280;
-
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemStageIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemPositionMin = 0;
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemPositionMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemCreatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemValuesOneMax = 1000;
-
 export const saveVenomWorkspaceBodyStateProjectsItemTasksItemValuesTwoMin = -1000000000;
-export const saveVenomWorkspaceBodyStateProjectsItemTasksItemValuesTwoMax = 1000000000;
 
-export const saveVenomWorkspaceBodyStateProjectsItemTasksMax = 2000;
 
-export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemIdMax = 120;
 
-export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemNameMax = 80;
 
-export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemPositionMin = 0;
-export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemPositionMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateProjectsItemBoardStagesMax = 30;
-
-export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemNameMax = 80;
-
-export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemOptionsItemMax = 80;
-
-export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemOptionsMax = 30;
-
-export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemPositionMin = 0;
-export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemPositionMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsMax = 40;
-
-export const saveVenomWorkspaceBodyStateProjectsMax = 500;
-
-export const saveVenomWorkspaceBodyStateConversationsItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateConversationsItemTitleMax = 200;
-
-export const saveVenomWorkspaceBodyStateConversationsItemProjectIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateConversationsItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateConversationsItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemContentMax = 50000;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemCreatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemModelNameMax = 80;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemNameMax = 80;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemModelNameMax = 80;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesItemContentMax = 8000;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationVoicesMax = 4;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationDisagreementsItemMax = 500;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationDisagreementsMax = 8;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemSpeakerIdMax = 64;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesItemSpeakerNameMax = 80;
-
-export const saveVenomWorkspaceBodyStateConversationsItemMessagesMax = 1000;
-
-export const saveVenomWorkspaceBodyStateConversationsItemBlendCornersItemMax = 64;
-
-export const saveVenomWorkspaceBodyStateConversationsItemBlendCornersMin = 3;
-export const saveVenomWorkspaceBodyStateConversationsItemBlendCornersMax = 3;
-
-export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsItemMin = 0;
-export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsItemMax = 1;
-
-export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsMin = 3;
-export const saveVenomWorkspaceBodyStateConversationsItemBlendWeightsMax = 3;
-
-export const saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateConversationsMax = 500;
-
-export const saveVenomWorkspaceBodyStateClustersItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateClustersItemProjectIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateClustersItemLabelMax = 200;
-
-export const saveVenomWorkspaceBodyStateClustersItemCategoryMax = 100;
-
-export const saveVenomWorkspaceBodyStateClustersItemStrengthMin = 0;
-export const saveVenomWorkspaceBodyStateClustersItemStrengthMax = 1;
-
-export const saveVenomWorkspaceBodyStateClustersItemLinksItemMax = 120;
-
-export const saveVenomWorkspaceBodyStateClustersItemLinksMax = 100;
-
-export const saveVenomWorkspaceBodyStateClustersItemDescriptionMax = 2000;
-
-export const saveVenomWorkspaceBodyStateClustersItemSummaryMax = 2000;
-
-export const saveVenomWorkspaceBodyStateClustersItemMentionCountMin = 0;
-export const saveVenomWorkspaceBodyStateClustersItemMentionCountMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateClustersItemLastUpdatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateClustersItemLastUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateClustersItemSourcesItemConversationIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateClustersItemSourcesItemProjectIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateClustersItemSourcesItemConversationTitleMax = 200;
-
-export const saveVenomWorkspaceBodyStateClustersItemSourcesItemMessageIdsItemMax = 120;
-
-export const saveVenomWorkspaceBodyStateClustersItemSourcesItemMessageIdsMax = 12;
-
-export const saveVenomWorkspaceBodyStateClustersItemSourcesItemExcerptMax = 2000;
-
-export const saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedByUserIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMin = 0;
-export const saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateClustersItemSourcesMax = 8;
-
-export const saveVenomWorkspaceBodyStateClustersMax = 1000;
-
-export const saveVenomWorkspaceBodyStateSourcesItemIdMax = 160;
-
-export const saveVenomWorkspaceBodyStateSourcesItemProjectIdMax = 160;
-
-export const saveVenomWorkspaceBodyStateSourcesItemNameMax = 300;
-
-export const saveVenomWorkspaceBodyStateSourcesItemUrlMax = 2048;
-
-export const saveVenomWorkspaceBodyStateSourcesItemSummaryMax = 1000;
-
-export const saveVenomWorkspaceBodyStateSourcesItemContextMax = 8000;
-
-export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemIdMax = 160;
-
-
-export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
-export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemTitleMax = 300;
-
-export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemUrlMax = 2048;
-
-export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemExcerptMax = 1000;
-
-export const saveVenomWorkspaceBodyStateSourcesItemCitationsItemReferenceMax = 200;
-
-export const saveVenomWorkspaceBodyStateSourcesItemCitationsMax = 50;
-
-export const saveVenomWorkspaceBodyStateSourcesItemClustersItemStrengthMin = 0;
-export const saveVenomWorkspaceBodyStateSourcesItemClustersItemStrengthMax = 1;
-
-export const saveVenomWorkspaceBodyStateSourcesItemAttestationMax = 2048;
-
-
-export const saveVenomWorkspaceBodyStateSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
-export const saveVenomWorkspaceBodyStateSourcesItemScheduleUpdatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateSourcesItemScheduleUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateSourcesItemScheduleLastAttemptAtMin = 0;
-export const saveVenomWorkspaceBodyStateSourcesItemScheduleLastAttemptAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateSourcesItemScheduleLastErrorMax = 300;
-
-export const saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedAtMin = 0;
-export const saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateSourcesItemScheduleClaimedByMax = 120;
-
-export const saveVenomWorkspaceBodyStateSourcesMax = 500;
-
-export const saveVenomWorkspaceBodyStateActiveProjectIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateActiveConversationIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateTombstonesProjectsItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMin = 0;
-export const saveVenomWorkspaceBodyStateTombstonesProjectsItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateTombstonesProjectsMax = 1000;
-
-export const saveVenomWorkspaceBodyStateTombstonesTasksItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMin = 0;
-export const saveVenomWorkspaceBodyStateTombstonesTasksItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateTombstonesTasksMax = 5000;
-
-export const saveVenomWorkspaceBodyStateTombstonesConversationsItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMin = 0;
-export const saveVenomWorkspaceBodyStateTombstonesConversationsItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateTombstonesConversationsMax = 1000;
-
-export const saveVenomWorkspaceBodyStateTombstonesMessagesItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMin = 0;
-export const saveVenomWorkspaceBodyStateTombstonesMessagesItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateTombstonesMessagesMax = 10000;
-
-export const saveVenomWorkspaceBodyStateTombstonesClustersItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMin = 0;
-export const saveVenomWorkspaceBodyStateTombstonesClustersItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateTombstonesClustersMax = 2000;
-
-export const saveVenomWorkspaceBodyStateTombstonesStagesItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMin = 0;
-export const saveVenomWorkspaceBodyStateTombstonesStagesItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateTombstonesStagesMax = 15000;
-
-export const saveVenomWorkspaceBodyStateTombstonesFieldsItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMin = 0;
-export const saveVenomWorkspaceBodyStateTombstonesFieldsItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateTombstonesFieldsMax = 20000;
-
-export const saveVenomWorkspaceBodyStateTombstonesSourcesItemIdMax = 120;
-
-export const saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMin = 0;
-export const saveVenomWorkspaceBodyStateTombstonesSourcesItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateTombstonesSourcesMax = 2000;
-
-export const saveVenomWorkspaceBodyStateModelPreferencesEnabledModelIdsMax = 4;
-
-export const saveVenomWorkspaceBodyStateModelPreferencesUpdatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateModelPreferencesUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateVoicePreferencesUpdatedAtMin = 0;
-export const saveVenomWorkspaceBodyStateVoicePreferencesUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateArchivedCitationsItemIdMax = 160;
-
-
-export const saveVenomWorkspaceBodyStateArchivedCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
-export const saveVenomWorkspaceBodyStateArchivedCitationsItemTitleMax = 300;
-
-export const saveVenomWorkspaceBodyStateArchivedCitationsItemUrlMax = 2048;
-
-export const saveVenomWorkspaceBodyStateArchivedCitationsItemRetiredAtMin = 0;
-export const saveVenomWorkspaceBodyStateArchivedCitationsItemRetiredAtMultipleOf = 1;
-
-export const saveVenomWorkspaceBodyStateArchivedCitationsMax = 500;
-
-export const saveVenomWorkspaceBodyBaseRevisionMin = 0;
-export const saveVenomWorkspaceBodyBaseRevisionMultipleOf = 1;
 
 
 export const SaveVenomWorkspaceBody = zod.object({
@@ -1674,7 +5493,9 @@ export const SaveVenomWorkspaceBody = zod.object({
   "position": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemPositionMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemPositionMultipleOf),
   "showOnCard": zod.boolean(),
   "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf)
-})).max(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsMax)
+})).max(saveVenomWorkspaceBodyStateProjectsItemFieldDefinitionsMax),
+  "orgId": zod.string().min(1).max(saveVenomWorkspaceBodyStateProjectsItemOrgIdMax).optional().describe('Present when the project is shared with a company. On the sharer\'s device it marks their own project as company-shared; on other members\' devices it marks the local mirror.'),
+  "orgMirror": zod.boolean().optional().describe('True when this project entry is a local mirror of a project another member shared with the company, rather than a project this account created.')
 })).max(saveVenomWorkspaceBodyStateProjectsMax),
   "conversations": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemIdMax),
@@ -1701,14 +5522,26 @@ export const SaveVenomWorkspaceBody = zod.object({
   "disagreements": zod.array(zod.string().max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationDisagreementsItemMax)).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemDeliberationDisagreementsMax)
 }).optional(),
   "speakerId": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemSpeakerIdMax).optional().describe('Debate voice identity behind this assistant turn. Absent for ordinary replies, so older clients render debate turns as plain assistant messages.'),
-  "speakerName": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemSpeakerNameMax).optional().describe('Display name of the debate voice behind this assistant turn.')
+  "speakerName": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemSpeakerNameMax).optional().describe('Display name of the debate voice behind this assistant turn.'),
+  "attachments": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemIdMax),
+  "name": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemNameMax),
+  "contentType": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemContentTypeMax),
+  "size": zod.number().min(saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemSizeMin).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemSizeMax).multipleOf(saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemSizeMultipleOf),
+  "kind": zod.enum(['upload', 'generated']).describe('upload = host gave Venom a file; generated = Venom authored it.'),
+  "thumbnail": zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemThumbnailMax).regex(saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsItemThumbnailRegExp).optional().describe('Tiny inline preview (JPEG\/PNG\/WEBP data URL) for image attachments, generated client-side at attach time. Bounded hard because stamps ride the synced workspace blob; full image bytes never sync.')
+}).describe('Compact attachment stamp carried on a chat message. The id resolves to a VenomChatFile; display metadata is denormalized so history renders without a lookup. Attachment stamps ride the synced workspace blob, so they must stay tiny.')).max(saveVenomWorkspaceBodyStateConversationsItemMessagesItemAttachmentsMax).optional().describe('Files carried by this message — uploads on user turns, generated files on assistant turns. Optional, so older clients and existing history remain valid.')
 })).max(saveVenomWorkspaceBodyStateConversationsItemMessagesMax),
   "responseMode": zod.enum(['talk', 'verify', 'debate']).optional().describe('How Venom answers — a single assistant (talk), background multi-voice verification that converges on one conclusion (verify), or a visible multi-voice debate in the thread (debate).'),
   "blend": zod.object({
   "corners": zod.array(zod.string().min(1).max(saveVenomWorkspaceBodyStateConversationsItemBlendCornersItemMax)).min(saveVenomWorkspaceBodyStateConversationsItemBlendCornersMin).max(saveVenomWorkspaceBodyStateConversationsItemBlendCornersMax),
   "weights": zod.array(zod.number().min(saveVenomWorkspaceBodyStateConversationsItemBlendWeightsItemMin).max(saveVenomWorkspaceBodyStateConversationsItemBlendWeightsItemMax)).min(saveVenomWorkspaceBodyStateConversationsItemBlendWeightsMin).max(saveVenomWorkspaceBodyStateConversationsItemBlendWeightsMax)
 }).optional().describe('The blend pad position for this conversation, stored as the three corner identities and their normalized weights.'),
-  "modeUpdatedAt": zod.number().min(saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMultipleOf).optional().describe('When the response mode or blend last changed on any device; the newer block wins in cross-device merges.')
+  "modeUpdatedAt": zod.number().min(saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateConversationsItemModeUpdatedAtMultipleOf).optional().describe('When the response mode, blend, or voice picks last changed on any device; the newer block wins in cross-device merges.'),
+  "voiceModels": zod.array(zod.object({
+  "voiceId": zod.enum(['direct', 'skeptic', 'evidence']),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok'])
+}).describe('Assigns one deliberation voice to a specific managed model. Opposing voices must run on different LLM providers; the server rejects picks that would make a model argue itself.')).max(saveVenomWorkspaceBodyStateConversationsItemVoiceModelsMax).optional().describe('Per-conversation verify voice assignments. Part of the response-mode preference block: it merges on modeUpdatedAt with mode and blend so a pick made on one device survives another device\'s snapshot merge.')
 })).max(saveVenomWorkspaceBodyStateConversationsMax),
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateClustersItemIdMax),
@@ -1731,8 +5564,12 @@ export const SaveVenomWorkspaceBody = zod.object({
   "excerpt": zod.string().max(saveVenomWorkspaceBodyStateClustersItemSourcesItemExcerptMax),
   "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateClustersItemSourcesItemUpdatedAtMultipleOf),
   "capturedByUserId": zod.string().max(saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
-  "capturedAt": zod.number().min(saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMin).multipleOf(saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
-})).max(saveVenomWorkspaceBodyStateClustersItemSourcesMax)
+  "capturedAt": zod.number().min(saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMin).multipleOf(saveVenomWorkspaceBodyStateClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(saveVenomWorkspaceBodyStateClustersItemSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
 })).max(saveVenomWorkspaceBodyStateClustersMax),
   "sources": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceBodyStateSourcesItemIdMax),
@@ -1818,6 +5655,7 @@ export const SaveVenomWorkspaceBody = zod.object({
   "enabledModelIds": zod.array(zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok'])).min(1).max(saveVenomWorkspaceBodyStateModelPreferencesEnabledModelIdsMax),
   "defaultModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
   "activeModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
+  "selectionPolicy": zod.enum(['manual', 'auto-cheapest', 'auto-max-power']).optional().describe('Account-level model selection policy. \"manual\" (and absent) keeps the user\'s explicit model picks exactly as before. In the auto modes the server chooses the serving models on every request — cheapest healthy models for \"auto-cheapest\", the most capable for \"auto-max-power\" — and keeps that choice current as availability and account health change.'),
   "updatedAt": zod.number().min(saveVenomWorkspaceBodyStateModelPreferencesUpdatedAtMin).multipleOf(saveVenomWorkspaceBodyStateModelPreferencesUpdatedAtMultipleOf)
 }).optional(),
   "voicePreferences": zod.object({
@@ -1835,304 +5673,11 @@ export const SaveVenomWorkspaceBody = zod.object({
   "baseRevision": zod.number().min(saveVenomWorkspaceBodyBaseRevisionMin).multipleOf(saveVenomWorkspaceBodyBaseRevisionMultipleOf)
 })
 
-export const saveVenomWorkspaceResponseStateOneProjectsItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemNameMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemDescriptionMax = 1000;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemAccentMax = 32;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemSourceCountMin = 0;
-export const saveVenomWorkspaceResponseStateOneProjectsItemSourceCountMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneProjectsItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemTitleMax = 280;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemStageIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMin = 0;
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemPositionMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemCreatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesOneMax = 1000;
-
 export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMin = -1000000000;
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksItemValuesTwoMax = 1000000000;
 
-export const saveVenomWorkspaceResponseStateOneProjectsItemTasksMax = 2000;
 
-export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemIdMax = 120;
 
-export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemNameMax = 80;
 
-export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMin = 0;
-export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemPositionMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemBoardStagesMax = 30;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemNameMax = 80;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsItemMax = 80;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemOptionsMax = 30;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMin = 0;
-export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax = 40;
-
-export const saveVenomWorkspaceResponseStateOneProjectsMax = 500;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemTitleMax = 200;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemProjectIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneConversationsItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemContentMax = 50000;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemCreatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemModelNameMax = 80;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemNameMax = 80;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemModelNameMax = 80;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesItemContentMax = 8000;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationVoicesMax = 4;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsItemMax = 500;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsMax = 8;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerIdMax = 64;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax = 80;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemMessagesMax = 1000;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersItemMax = 64;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersMin = 3;
-export const saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersMax = 3;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMin = 0;
-export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMax = 1;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMin = 3;
-export const saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMax = 3;
-
-export const saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneConversationsMax = 500;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemProjectIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemLabelMax = 200;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemCategoryMax = 100;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemStrengthMin = 0;
-export const saveVenomWorkspaceResponseStateOneClustersItemStrengthMax = 1;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemLinksItemMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemLinksMax = 100;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemDescriptionMax = 2000;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemSummaryMax = 2000;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemMentionCountMin = 0;
-export const saveVenomWorkspaceResponseStateOneClustersItemMentionCountMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneClustersItemLastUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemProjectIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemConversationTitleMax = 200;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsItemMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemMessageIdsMax = 12;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax = 2000;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedByUserIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneClustersItemSourcesMax = 8;
-
-export const saveVenomWorkspaceResponseStateOneClustersMax = 1000;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemIdMax = 160;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemProjectIdMax = 160;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemNameMax = 300;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemUrlMax = 2048;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemSummaryMax = 1000;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemContextMax = 8000;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdMax = 160;
-
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
-export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemTitleMax = 300;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemUrlMax = 2048;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemExcerptMax = 1000;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsItemReferenceMax = 200;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemCitationsMax = 50;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMin = 0;
-export const saveVenomWorkspaceResponseStateOneSourcesItemClustersItemStrengthMax = 1;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemAttestationMax = 2048;
-
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemAttestationRegExp = new RegExp('^v1\\.[A-Za-z0-9_-]{2,214}\\.[a-f0-9]{64}\\.[A-Za-z0-9_-]{43}$');
-export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastAttemptAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleLastErrorMax = 300;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneSourcesItemScheduleClaimedByMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneSourcesMax = 500;
-
-export const saveVenomWorkspaceResponseStateOneActiveProjectIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneActiveConversationIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesProjectsItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneTombstonesProjectsItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesProjectsMax = 1000;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesTasksItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneTombstonesTasksItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesTasksMax = 5000;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesConversationsItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneTombstonesConversationsItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesConversationsMax = 1000;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesMessagesItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneTombstonesMessagesItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesMessagesMax = 10000;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesClustersItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneTombstonesClustersItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesClustersMax = 2000;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesStagesItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneTombstonesStagesItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesStagesMax = 15000;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesFieldsItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneTombstonesFieldsItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesFieldsMax = 20000;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesSourcesItemIdMax = 120;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneTombstonesSourcesItemDeletedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneTombstonesSourcesMax = 2000;
-
-export const saveVenomWorkspaceResponseStateOneModelPreferencesEnabledModelIdsMax = 4;
-
-export const saveVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneVoicePreferencesUpdatedAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemIdMax = 160;
-
-
-export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemIdRegExp = new RegExp('^[A-Za-z0-9_-]{1,160}$');
-export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemTitleMax = 300;
-
-export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemUrlMax = 2048;
-
-export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMin = 0;
-export const saveVenomWorkspaceResponseStateOneArchivedCitationsItemRetiredAtMultipleOf = 1;
-
-export const saveVenomWorkspaceResponseStateOneArchivedCitationsMax = 500;
-
-export const saveVenomWorkspaceResponseRevisionMin = 0;
-export const saveVenomWorkspaceResponseRevisionMultipleOf = 1;
 
 
 export const SaveVenomWorkspaceResponse = zod.object({
@@ -2169,7 +5714,9 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "position": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemPositionMultipleOf),
   "showOnCard": zod.boolean(),
   "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsItemUpdatedAtMultipleOf)
-})).max(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax)
+})).max(saveVenomWorkspaceResponseStateOneProjectsItemFieldDefinitionsMax),
+  "orgId": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneProjectsItemOrgIdMax).optional().describe('Present when the project is shared with a company. On the sharer\'s device it marks their own project as company-shared; on other members\' devices it marks the local mirror.'),
+  "orgMirror": zod.boolean().optional().describe('True when this project entry is a local mirror of a project another member shared with the company, rather than a project this account created.')
 })).max(saveVenomWorkspaceResponseStateOneProjectsMax),
   "conversations": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemIdMax),
@@ -2196,14 +5743,26 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "disagreements": zod.array(zod.string().max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsItemMax)).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemDeliberationDisagreementsMax)
 }).optional(),
   "speakerId": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerIdMax).optional().describe('Debate voice identity behind this assistant turn. Absent for ordinary replies, so older clients render debate turns as plain assistant messages.'),
-  "speakerName": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax).optional().describe('Display name of the debate voice behind this assistant turn.')
+  "speakerName": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemSpeakerNameMax).optional().describe('Display name of the debate voice behind this assistant turn.'),
+  "attachments": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemIdMax),
+  "name": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemNameMax),
+  "contentType": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemContentTypeMax),
+  "size": zod.number().min(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMin).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMax).multipleOf(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemSizeMultipleOf),
+  "kind": zod.enum(['upload', 'generated']).describe('upload = host gave Venom a file; generated = Venom authored it.'),
+  "thumbnail": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemThumbnailMax).regex(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsItemThumbnailRegExp).optional().describe('Tiny inline preview (JPEG\/PNG\/WEBP data URL) for image attachments, generated client-side at attach time. Bounded hard because stamps ride the synced workspace blob; full image bytes never sync.')
+}).describe('Compact attachment stamp carried on a chat message. The id resolves to a VenomChatFile; display metadata is denormalized so history renders without a lookup. Attachment stamps ride the synced workspace blob, so they must stay tiny.')).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesItemAttachmentsMax).optional().describe('Files carried by this message — uploads on user turns, generated files on assistant turns. Optional, so older clients and existing history remain valid.')
 })).max(saveVenomWorkspaceResponseStateOneConversationsItemMessagesMax),
   "responseMode": zod.enum(['talk', 'verify', 'debate']).optional().describe('How Venom answers — a single assistant (talk), background multi-voice verification that converges on one conclusion (verify), or a visible multi-voice debate in the thread (debate).'),
   "blend": zod.object({
   "corners": zod.array(zod.string().min(1).max(saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersItemMax)).min(saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersMin).max(saveVenomWorkspaceResponseStateOneConversationsItemBlendCornersMax),
   "weights": zod.array(zod.number().min(saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMin).max(saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsItemMax)).min(saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMin).max(saveVenomWorkspaceResponseStateOneConversationsItemBlendWeightsMax)
 }).optional().describe('The blend pad position for this conversation, stored as the three corner identities and their normalized weights.'),
-  "modeUpdatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf).optional().describe('When the response mode or blend last changed on any device; the newer block wins in cross-device merges.')
+  "modeUpdatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneConversationsItemModeUpdatedAtMultipleOf).optional().describe('When the response mode, blend, or voice picks last changed on any device; the newer block wins in cross-device merges.'),
+  "voiceModels": zod.array(zod.object({
+  "voiceId": zod.enum(['direct', 'skeptic', 'evidence']),
+  "modelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok'])
+}).describe('Assigns one deliberation voice to a specific managed model. Opposing voices must run on different LLM providers; the server rejects picks that would make a model argue itself.')).max(saveVenomWorkspaceResponseStateOneConversationsItemVoiceModelsMax).optional().describe('Per-conversation verify voice assignments. Part of the response-mode preference block: it merges on modeUpdatedAt with mode and blend so a pick made on one device survives another device\'s snapshot merge.')
 })).max(saveVenomWorkspaceResponseStateOneConversationsMax),
   "clusters": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneClustersItemIdMax),
@@ -2226,8 +5785,12 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "excerpt": zod.string().max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemExcerptMax),
   "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemUpdatedAtMultipleOf),
   "capturedByUserId": zod.string().max(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
-  "capturedAt": zod.number().min(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
-})).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesMax)
+  "capturedAt": zod.number().min(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(saveVenomWorkspaceResponseStateOneClustersItemSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
 })).max(saveVenomWorkspaceResponseStateOneClustersMax),
   "sources": zod.array(zod.object({
   "id": zod.string().min(1).max(saveVenomWorkspaceResponseStateOneSourcesItemIdMax),
@@ -2313,6 +5876,7 @@ export const SaveVenomWorkspaceResponse = zod.object({
   "enabledModelIds": zod.array(zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok'])).min(1).max(saveVenomWorkspaceResponseStateOneModelPreferencesEnabledModelIdsMax),
   "defaultModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
   "activeModelId": zod.enum(['venom-gpt', 'venom-claude', 'venom-gemini', 'venom-grok']),
+  "selectionPolicy": zod.enum(['manual', 'auto-cheapest', 'auto-max-power']).optional().describe('Account-level model selection policy. \"manual\" (and absent) keeps the user\'s explicit model picks exactly as before. In the auto modes the server chooses the serving models on every request — cheapest healthy models for \"auto-cheapest\", the most capable for \"auto-max-power\" — and keeps that choice current as availability and account health change.'),
   "updatedAt": zod.number().min(saveVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMin).multipleOf(saveVenomWorkspaceResponseStateOneModelPreferencesUpdatedAtMultipleOf)
 }).optional(),
   "voicePreferences": zod.object({
@@ -2335,10 +5899,6 @@ export const SaveVenomWorkspaceResponse = zod.object({
 /**
  * @summary List the shared workspaces the signed-in user belongs to
  */
-export const listSharedWorkspacesResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listSharedWorkspacesResponseNameMax = 80;
-
-export const listSharedWorkspacesResponseMemberCountMultipleOf = 1;
 
 
 export const ListSharedWorkspacesResponseItem = zod.object({
@@ -2354,17 +5914,12 @@ export const ListSharedWorkspacesResponse = zod.array(ListSharedWorkspacesRespon
 /**
  * @summary Create a shared workspace with the caller as its first admin
  */
-export const createSharedWorkspaceBodyNameMax = 80;
 
 
 export const CreateSharedWorkspaceBody = zod.object({
   "name": zod.string().min(1).max(createSharedWorkspaceBodyNameMax)
 })
 
-export const createSharedWorkspaceResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createSharedWorkspaceResponseNameMax = 80;
-
-export const createSharedWorkspaceResponseMemberCountMultipleOf = 1;
 
 
 export const CreateSharedWorkspaceResponse = zod.object({
@@ -2379,16 +5934,11 @@ export const CreateSharedWorkspaceResponse = zod.object({
 /**
  * @summary List the members of a shared workspace (members only)
  */
-export const listSharedWorkspaceMembersPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ListSharedWorkspaceMembersParams = zod.object({
   "workspaceId": zod.coerce.string().regex(listSharedWorkspaceMembersPathWorkspaceIdRegExp)
 })
 
-export const listSharedWorkspaceMembersResponseUserIdMax = 160;
-
-export const listSharedWorkspaceMembersResponseNameMax = 200;
 
 
 export const ListSharedWorkspaceMembersResponseItem = zod.object({
@@ -2403,14 +5953,11 @@ export const ListSharedWorkspaceMembersResponse = zod.array(ListSharedWorkspaceM
 /**
  * @summary Add an account to a shared workspace (admins only)
  */
-export const addSharedWorkspaceMemberPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const AddSharedWorkspaceMemberParams = zod.object({
   "workspaceId": zod.coerce.string().regex(addSharedWorkspaceMemberPathWorkspaceIdRegExp)
 })
 
-export const addSharedWorkspaceMemberBodyUserIdMax = 160;
 
 
 export const AddSharedWorkspaceMemberBody = zod.object({
@@ -2418,9 +5965,6 @@ export const AddSharedWorkspaceMemberBody = zod.object({
   "role": zod.enum(['admin', 'member']).optional()
 })
 
-export const addSharedWorkspaceMemberResponseUserIdMax = 160;
-
-export const addSharedWorkspaceMemberResponseNameMax = 200;
 
 
 export const AddSharedWorkspaceMemberResponse = zod.object({
@@ -2432,10 +5976,32 @@ export const AddSharedWorkspaceMemberResponse = zod.object({
 
 
 /**
+ * @summary Change a member's role in place; their access never lapses (admins only)
+ */
+
+
+export const UpdateSharedWorkspaceMemberRoleParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(updateSharedWorkspaceMemberRolePathWorkspaceIdRegExp),
+  "memberUserId": zod.coerce.string().min(1).max(updateSharedWorkspaceMemberRolePathMemberUserIdMax)
+})
+
+export const UpdateSharedWorkspaceMemberRoleBody = zod.object({
+  "role": zod.enum(['admin', 'member'])
+})
+
+
+
+export const UpdateSharedWorkspaceMemberRoleResponse = zod.object({
+  "userId": zod.string().min(1).max(updateSharedWorkspaceMemberRoleResponseUserIdMax),
+  "role": zod.enum(['admin', 'member']),
+  "name": zod.string().max(updateSharedWorkspaceMemberRoleResponseNameMax).nullable(),
+  "addedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Remove a member; their workspace access ends at their next request (admins only)
  */
-export const removeSharedWorkspaceMemberPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const removeSharedWorkspaceMemberPathMemberUserIdMax = 160;
 
 
 export const RemoveSharedWorkspaceMemberParams = zod.object({
@@ -2443,7 +6009,6 @@ export const RemoveSharedWorkspaceMemberParams = zod.object({
   "memberUserId": zod.coerce.string().min(1).max(removeSharedWorkspaceMemberPathMemberUserIdMax)
 })
 
-export const removeSharedWorkspaceMemberResponseRemovedUserIdMax = 160;
 
 
 export const RemoveSharedWorkspaceMemberResponse = zod.object({
@@ -2455,61 +6020,11 @@ export const RemoveSharedWorkspaceMemberResponse = zod.object({
  * Workspace-tier knowledge is served exclusively through this membership-checked endpoint and is never embedded in any per-user sync snapshot, so revoking membership revokes access.
  * @summary Read a shared workspace's knowledge clusters (members only)
  */
-export const getSharedWorkspaceKnowledgePathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const GetSharedWorkspaceKnowledgeParams = zod.object({
   "workspaceId": zod.coerce.string().regex(getSharedWorkspaceKnowledgePathWorkspaceIdRegExp)
 })
 
-export const getSharedWorkspaceKnowledgeResponseClustersItemIdMax = 120;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemProjectIdMax = 120;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemLabelMax = 200;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemCategoryMax = 100;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemStrengthMin = 0;
-export const getSharedWorkspaceKnowledgeResponseClustersItemStrengthMax = 1;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemLinksItemMax = 120;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemLinksMax = 100;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemDescriptionMax = 2000;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemSummaryMax = 2000;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemMentionCountMin = 0;
-export const getSharedWorkspaceKnowledgeResponseClustersItemMentionCountMultipleOf = 1;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemLastUpdatedAtMin = 0;
-export const getSharedWorkspaceKnowledgeResponseClustersItemLastUpdatedAtMultipleOf = 1;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemConversationIdMax = 120;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemProjectIdMax = 120;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemConversationTitleMax = 200;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemMessageIdsItemMax = 120;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemMessageIdsMax = 12;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemExcerptMax = 2000;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemUpdatedAtMin = 0;
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemUpdatedAtMultipleOf = 1;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedByUserIdMax = 120;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMin = 0;
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMultipleOf = 1;
-
-export const getSharedWorkspaceKnowledgeResponseClustersItemSourcesMax = 8;
-
-export const getSharedWorkspaceKnowledgeResponseClustersMax = 1000;
 
 
 export const GetSharedWorkspaceKnowledgeResponse = zod.object({
@@ -2534,8 +6049,12 @@ export const GetSharedWorkspaceKnowledgeResponse = zod.object({
   "excerpt": zod.string().max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemExcerptMax),
   "updatedAt": zod.number().min(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemUpdatedAtMin).multipleOf(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemUpdatedAtMultipleOf),
   "capturedByUserId": zod.string().max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
-  "capturedAt": zod.number().min(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMin).multipleOf(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.')
-})).max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesMax)
+  "capturedAt": zod.number().min(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMin).multipleOf(getSharedWorkspaceKnowledgeResponseClustersItemSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(getSharedWorkspaceKnowledgeResponseClustersItemSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
 })).max(getSharedWorkspaceKnowledgeResponseClustersMax)
 })
 
@@ -2543,44 +6062,11 @@ export const GetSharedWorkspaceKnowledgeResponse = zod.object({
 /**
  * @summary List a shared workspace's SOPs (members only)
  */
-export const listSharedWorkspaceSopsPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ListSharedWorkspaceSopsParams = zod.object({
   "workspaceId": zod.coerce.string().regex(listSharedWorkspaceSopsPathWorkspaceIdRegExp)
 })
 
-export const listSharedWorkspaceSopsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listSharedWorkspaceSopsResponseTitleMax = 160;
-
-export const listSharedWorkspaceSopsResponseTagsItemMax = 50;
-
-export const listSharedWorkspaceSopsResponseTagsMax = 20;
-
-export const listSharedWorkspaceSopsResponseContentPurposeMax = 2000;
-
-export const listSharedWorkspaceSopsResponseContentPrerequisitesItemMax = 500;
-
-export const listSharedWorkspaceSopsResponseContentPrerequisitesMax = 25;
-
-export const listSharedWorkspaceSopsResponseContentInputsItemMax = 500;
-
-export const listSharedWorkspaceSopsResponseContentInputsMax = 25;
-
-export const listSharedWorkspaceSopsResponseContentGuidanceItemMax = 2000;
-
-export const listSharedWorkspaceSopsResponseContentGuidanceMax = 60;
-
-export const listSharedWorkspaceSopsResponseContentRequiredApprovalsItemMax = 500;
-
-export const listSharedWorkspaceSopsResponseContentRequiredApprovalsMax = 25;
-
-export const listSharedWorkspaceSopsResponseContentAcceptanceChecksItemMax = 500;
-
-export const listSharedWorkspaceSopsResponseContentAcceptanceChecksMax = 25;
-
-export const listSharedWorkspaceSopsResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listSharedWorkspaceSopsResponseActiveRevisionNumberMultipleOf = 1;
 
 
 export const ListSharedWorkspaceSopsResponseItem = zod.object({
@@ -2600,6 +6086,8 @@ export const ListSharedWorkspaceSopsResponseItem = zod.object({
 }),
   "activeRevisionId": zod.union([zod.string().regex(listSharedWorkspaceSopsResponseActiveRevisionIdOneRegExp),zod.null()]),
   "activeRevisionNumber": zod.number().min(1).multipleOf(listSharedWorkspaceSopsResponseActiveRevisionNumberMultipleOf).nullable(),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock. Any member may set or clear it; locked SOPs stay visible inside the workspace but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction. Set only by workspace admins through the restriction endpoint. Restricted SOPs are filtered out of member reads, member chat context, and member exports server-side, so a non-admin response never carries one — when this flag is true, the reader is an admin.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -2609,40 +6097,11 @@ export const ListSharedWorkspaceSopsResponse = zod.array(ListSharedWorkspaceSops
 /**
  * @summary Create an SOP owned by the shared workspace (members only)
  */
-export const createSharedWorkspaceSopPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const CreateSharedWorkspaceSopParams = zod.object({
   "workspaceId": zod.coerce.string().regex(createSharedWorkspaceSopPathWorkspaceIdRegExp)
 })
 
-export const createSharedWorkspaceSopBodyTitleMax = 160;
-
-export const createSharedWorkspaceSopBodyTagsItemMax = 50;
-
-export const createSharedWorkspaceSopBodyTagsMax = 20;
-
-export const createSharedWorkspaceSopBodyContentPurposeMax = 2000;
-
-export const createSharedWorkspaceSopBodyContentPrerequisitesItemMax = 500;
-
-export const createSharedWorkspaceSopBodyContentPrerequisitesMax = 25;
-
-export const createSharedWorkspaceSopBodyContentInputsItemMax = 500;
-
-export const createSharedWorkspaceSopBodyContentInputsMax = 25;
-
-export const createSharedWorkspaceSopBodyContentGuidanceItemMax = 2000;
-
-export const createSharedWorkspaceSopBodyContentGuidanceMax = 60;
-
-export const createSharedWorkspaceSopBodyContentRequiredApprovalsItemMax = 500;
-
-export const createSharedWorkspaceSopBodyContentRequiredApprovalsMax = 25;
-
-export const createSharedWorkspaceSopBodyContentAcceptanceChecksItemMax = 500;
-
-export const createSharedWorkspaceSopBodyContentAcceptanceChecksMax = 25;
 
 
 export const CreateSharedWorkspaceSopBody = zod.object({
@@ -2660,37 +6119,6 @@ export const CreateSharedWorkspaceSopBody = zod.object({
 })
 })
 
-export const createSharedWorkspaceSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createSharedWorkspaceSopResponseTitleMax = 160;
-
-export const createSharedWorkspaceSopResponseTagsItemMax = 50;
-
-export const createSharedWorkspaceSopResponseTagsMax = 20;
-
-export const createSharedWorkspaceSopResponseContentPurposeMax = 2000;
-
-export const createSharedWorkspaceSopResponseContentPrerequisitesItemMax = 500;
-
-export const createSharedWorkspaceSopResponseContentPrerequisitesMax = 25;
-
-export const createSharedWorkspaceSopResponseContentInputsItemMax = 500;
-
-export const createSharedWorkspaceSopResponseContentInputsMax = 25;
-
-export const createSharedWorkspaceSopResponseContentGuidanceItemMax = 2000;
-
-export const createSharedWorkspaceSopResponseContentGuidanceMax = 60;
-
-export const createSharedWorkspaceSopResponseContentRequiredApprovalsItemMax = 500;
-
-export const createSharedWorkspaceSopResponseContentRequiredApprovalsMax = 25;
-
-export const createSharedWorkspaceSopResponseContentAcceptanceChecksItemMax = 500;
-
-export const createSharedWorkspaceSopResponseContentAcceptanceChecksMax = 25;
-
-export const createSharedWorkspaceSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createSharedWorkspaceSopResponseActiveRevisionNumberMultipleOf = 1;
 
 
 export const CreateSharedWorkspaceSopResponse = zod.object({
@@ -2710,6 +6138,8 @@ export const CreateSharedWorkspaceSopResponse = zod.object({
 }),
   "activeRevisionId": zod.union([zod.string().regex(createSharedWorkspaceSopResponseActiveRevisionIdOneRegExp),zod.null()]),
   "activeRevisionNumber": zod.number().min(1).multipleOf(createSharedWorkspaceSopResponseActiveRevisionNumberMultipleOf).nullable(),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock. Any member may set or clear it; locked SOPs stay visible inside the workspace but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction. Set only by workspace admins through the restriction endpoint. Restricted SOPs are filtered out of member reads, member chat context, and member exports server-side, so a non-admin response never carries one — when this flag is true, the reader is an admin.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -2718,46 +6148,12 @@ export const CreateSharedWorkspaceSopResponse = zod.object({
 /**
  * @summary Publish the current draft of a workspace SOP (members only)
  */
-export const publishSharedWorkspaceSopPathWorkspaceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishSharedWorkspaceSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const PublishSharedWorkspaceSopParams = zod.object({
   "workspaceId": zod.coerce.string().regex(publishSharedWorkspaceSopPathWorkspaceIdRegExp),
   "sopId": zod.coerce.string().regex(publishSharedWorkspaceSopPathSopIdRegExp)
 })
 
-export const publishSharedWorkspaceSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishSharedWorkspaceSopResponseVersionNumberMultipleOf = 1;
-
-export const publishSharedWorkspaceSopResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const publishSharedWorkspaceSopResponseTitleMax = 160;
-
-export const publishSharedWorkspaceSopResponseTagsItemMax = 50;
-
-export const publishSharedWorkspaceSopResponseTagsMax = 20;
-
-export const publishSharedWorkspaceSopResponseContentPurposeMax = 2000;
-
-export const publishSharedWorkspaceSopResponseContentPrerequisitesItemMax = 500;
-
-export const publishSharedWorkspaceSopResponseContentPrerequisitesMax = 25;
-
-export const publishSharedWorkspaceSopResponseContentInputsItemMax = 500;
-
-export const publishSharedWorkspaceSopResponseContentInputsMax = 25;
-
-export const publishSharedWorkspaceSopResponseContentGuidanceItemMax = 2000;
-
-export const publishSharedWorkspaceSopResponseContentGuidanceMax = 60;
-
-export const publishSharedWorkspaceSopResponseContentRequiredApprovalsItemMax = 500;
-
-export const publishSharedWorkspaceSopResponseContentRequiredApprovalsMax = 25;
-
-export const publishSharedWorkspaceSopResponseContentAcceptanceChecksItemMax = 500;
-
-export const publishSharedWorkspaceSopResponseContentAcceptanceChecksMax = 25;
 
 
 export const PublishSharedWorkspaceSopResponse = zod.object({
@@ -2781,42 +6177,285 @@ export const PublishSharedWorkspaceSopResponse = zod.object({
 
 
 /**
+ * @summary Read the workspace's security settings (admins only)
+ */
+
+export const GetSharedWorkspaceSettingsParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(getSharedWorkspaceSettingsPathWorkspaceIdRegExp)
+})
+
+export const GetSharedWorkspaceSettingsResponse = zod.object({
+  "allowSensitiveExport": zod.boolean().describe('Export policy. True (the default) lets exports include items marked sensitive; false makes the server exclude them from every export and state how many were withheld.')
+})
+
+
+/**
+ * @summary Update the workspace's security settings (admins only)
+ */
+
+export const UpdateSharedWorkspaceSettingsParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(updateSharedWorkspaceSettingsPathWorkspaceIdRegExp)
+})
+
+export const UpdateSharedWorkspaceSettingsBody = zod.object({
+  "allowSensitiveExport": zod.boolean().describe('Export policy. True (the default) lets exports include items marked sensitive; false makes the server exclude them from every export and state how many were withheld.')
+})
+
+export const UpdateSharedWorkspaceSettingsResponse = zod.object({
+  "allowSensitiveExport": zod.boolean().describe('Export policy. True (the default) lets exports include items marked sensitive; false makes the server exclude them from every export and state how many were withheld.')
+})
+
+
+/**
+ * @summary Lock or unlock a workspace knowledge cluster (members only)
+ */
+
+
+export const SetSharedWorkspaceConceptSensitivityParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(setSharedWorkspaceConceptSensitivityPathWorkspaceIdRegExp),
+  "conceptId": zod.coerce.string().min(1).max(setSharedWorkspaceConceptSensitivityPathConceptIdMax)
+})
+
+export const SetSharedWorkspaceConceptSensitivityBody = zod.object({
+  "sensitive": zod.boolean()
+})
+
+
+
+export const SetSharedWorkspaceConceptSensitivityResponse = zod.object({
+  "id": zod.string().min(1).max(setSharedWorkspaceConceptSensitivityResponseIdMax),
+  "projectId": zod.string().max(setSharedWorkspaceConceptSensitivityResponseProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(setSharedWorkspaceConceptSensitivityResponseLabelMax),
+  "category": zod.string().min(1).max(setSharedWorkspaceConceptSensitivityResponseCategoryMax),
+  "strength": zod.number().min(setSharedWorkspaceConceptSensitivityResponseStrengthMin).max(setSharedWorkspaceConceptSensitivityResponseStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(setSharedWorkspaceConceptSensitivityResponseLinksItemMax)).max(setSharedWorkspaceConceptSensitivityResponseLinksMax),
+  "description": zod.string().max(setSharedWorkspaceConceptSensitivityResponseDescriptionMax).optional(),
+  "summary": zod.string().max(setSharedWorkspaceConceptSensitivityResponseSummaryMax),
+  "mentionCount": zod.number().min(setSharedWorkspaceConceptSensitivityResponseMentionCountMin).multipleOf(setSharedWorkspaceConceptSensitivityResponseMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(setSharedWorkspaceConceptSensitivityResponseLastUpdatedAtMin).multipleOf(setSharedWorkspaceConceptSensitivityResponseLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(setSharedWorkspaceConceptSensitivityResponseSourcesItemConversationIdMax),
+  "projectId": zod.string().max(setSharedWorkspaceConceptSensitivityResponseSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(setSharedWorkspaceConceptSensitivityResponseSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(setSharedWorkspaceConceptSensitivityResponseSourcesItemMessageIdsItemMax)).max(setSharedWorkspaceConceptSensitivityResponseSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(setSharedWorkspaceConceptSensitivityResponseSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(setSharedWorkspaceConceptSensitivityResponseSourcesItemUpdatedAtMin).multipleOf(setSharedWorkspaceConceptSensitivityResponseSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(setSharedWorkspaceConceptSensitivityResponseSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(setSharedWorkspaceConceptSensitivityResponseSourcesItemCapturedAtMin).multipleOf(setSharedWorkspaceConceptSensitivityResponseSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(setSharedWorkspaceConceptSensitivityResponseSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
+})
+
+
+/**
+ * @summary Lock or unlock a single evidence entry (members only)
+ */
+
+
+export const SetSharedWorkspaceEvidenceSensitivityParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(setSharedWorkspaceEvidenceSensitivityPathWorkspaceIdRegExp),
+  "conceptId": zod.coerce.string().min(1).max(setSharedWorkspaceEvidenceSensitivityPathConceptIdMax),
+  "conversationId": zod.coerce.string().min(1).max(setSharedWorkspaceEvidenceSensitivityPathConversationIdMax)
+})
+
+export const SetSharedWorkspaceEvidenceSensitivityBody = zod.object({
+  "sensitive": zod.boolean()
+})
+
+
+
+export const SetSharedWorkspaceEvidenceSensitivityResponse = zod.object({
+  "id": zod.string().min(1).max(setSharedWorkspaceEvidenceSensitivityResponseIdMax),
+  "projectId": zod.string().max(setSharedWorkspaceEvidenceSensitivityResponseProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(setSharedWorkspaceEvidenceSensitivityResponseLabelMax),
+  "category": zod.string().min(1).max(setSharedWorkspaceEvidenceSensitivityResponseCategoryMax),
+  "strength": zod.number().min(setSharedWorkspaceEvidenceSensitivityResponseStrengthMin).max(setSharedWorkspaceEvidenceSensitivityResponseStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(setSharedWorkspaceEvidenceSensitivityResponseLinksItemMax)).max(setSharedWorkspaceEvidenceSensitivityResponseLinksMax),
+  "description": zod.string().max(setSharedWorkspaceEvidenceSensitivityResponseDescriptionMax).optional(),
+  "summary": zod.string().max(setSharedWorkspaceEvidenceSensitivityResponseSummaryMax),
+  "mentionCount": zod.number().min(setSharedWorkspaceEvidenceSensitivityResponseMentionCountMin).multipleOf(setSharedWorkspaceEvidenceSensitivityResponseMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(setSharedWorkspaceEvidenceSensitivityResponseLastUpdatedAtMin).multipleOf(setSharedWorkspaceEvidenceSensitivityResponseLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(setSharedWorkspaceEvidenceSensitivityResponseSourcesItemConversationIdMax),
+  "projectId": zod.string().max(setSharedWorkspaceEvidenceSensitivityResponseSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(setSharedWorkspaceEvidenceSensitivityResponseSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(setSharedWorkspaceEvidenceSensitivityResponseSourcesItemMessageIdsItemMax)).max(setSharedWorkspaceEvidenceSensitivityResponseSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(setSharedWorkspaceEvidenceSensitivityResponseSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(setSharedWorkspaceEvidenceSensitivityResponseSourcesItemUpdatedAtMin).multipleOf(setSharedWorkspaceEvidenceSensitivityResponseSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(setSharedWorkspaceEvidenceSensitivityResponseSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(setSharedWorkspaceEvidenceSensitivityResponseSourcesItemCapturedAtMin).multipleOf(setSharedWorkspaceEvidenceSensitivityResponseSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(setSharedWorkspaceEvidenceSensitivityResponseSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
+})
+
+
+/**
+ * @summary Lock or unlock a workspace SOP (members only)
+ */
+
+export const SetSharedWorkspaceSopSensitivityParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(setSharedWorkspaceSopSensitivityPathWorkspaceIdRegExp),
+  "sopId": zod.coerce.string().regex(setSharedWorkspaceSopSensitivityPathSopIdRegExp)
+})
+
+export const SetSharedWorkspaceSopSensitivityBody = zod.object({
+  "sensitive": zod.boolean()
+})
+
+
+
+export const SetSharedWorkspaceSopSensitivityResponse = zod.object({
+  "id": zod.string().regex(setSharedWorkspaceSopSensitivityResponseIdRegExp),
+  "title": zod.string().min(1).max(setSharedWorkspaceSopSensitivityResponseTitleMax),
+  "lifecycle": zod.enum(['draft', 'active', 'archived']),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(setSharedWorkspaceSopSensitivityResponseTagsItemMax)).max(setSharedWorkspaceSopSensitivityResponseTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(setSharedWorkspaceSopSensitivityResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(setSharedWorkspaceSopSensitivityResponseContentPrerequisitesItemMax)).max(setSharedWorkspaceSopSensitivityResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(setSharedWorkspaceSopSensitivityResponseContentInputsItemMax)).max(setSharedWorkspaceSopSensitivityResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(setSharedWorkspaceSopSensitivityResponseContentGuidanceItemMax)).min(1).max(setSharedWorkspaceSopSensitivityResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(setSharedWorkspaceSopSensitivityResponseContentRequiredApprovalsItemMax)).max(setSharedWorkspaceSopSensitivityResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(setSharedWorkspaceSopSensitivityResponseContentAcceptanceChecksItemMax)).max(setSharedWorkspaceSopSensitivityResponseContentAcceptanceChecksMax)
+}),
+  "activeRevisionId": zod.union([zod.string().regex(setSharedWorkspaceSopSensitivityResponseActiveRevisionIdOneRegExp),zod.null()]),
+  "activeRevisionNumber": zod.number().min(1).multipleOf(setSharedWorkspaceSopSensitivityResponseActiveRevisionNumberMultipleOf).nullable(),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock. Any member may set or clear it; locked SOPs stay visible inside the workspace but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction. Set only by workspace admins through the restriction endpoint. Restricted SOPs are filtered out of member reads, member chat context, and member exports server-side, so a non-admin response never carries one — when this flag is true, the reader is an admin.'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * Marks or unmarks a cluster as admin-only. Restricted clusters are enforced server-side per request, like membership: they never appear in member knowledge reads, member chat context, member citations, or member exports. Non-admin callers get the same opaque 403 as non-members.
+ * @summary Restrict a workspace knowledge cluster to admins (admins only)
+ */
+
+
+export const SetSharedWorkspaceConceptRestrictionParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(setSharedWorkspaceConceptRestrictionPathWorkspaceIdRegExp),
+  "conceptId": zod.coerce.string().min(1).max(setSharedWorkspaceConceptRestrictionPathConceptIdMax)
+})
+
+export const SetSharedWorkspaceConceptRestrictionBody = zod.object({
+  "adminOnly": zod.boolean()
+})
+
+
+
+export const SetSharedWorkspaceConceptRestrictionResponse = zod.object({
+  "id": zod.string().min(1).max(setSharedWorkspaceConceptRestrictionResponseIdMax),
+  "projectId": zod.string().max(setSharedWorkspaceConceptRestrictionResponseProjectIdMax).nullable(),
+  "label": zod.string().min(1).max(setSharedWorkspaceConceptRestrictionResponseLabelMax),
+  "category": zod.string().min(1).max(setSharedWorkspaceConceptRestrictionResponseCategoryMax),
+  "strength": zod.number().min(setSharedWorkspaceConceptRestrictionResponseStrengthMin).max(setSharedWorkspaceConceptRestrictionResponseStrengthMax),
+  "x": zod.number(),
+  "y": zod.number(),
+  "links": zod.array(zod.string().min(1).max(setSharedWorkspaceConceptRestrictionResponseLinksItemMax)).max(setSharedWorkspaceConceptRestrictionResponseLinksMax),
+  "description": zod.string().max(setSharedWorkspaceConceptRestrictionResponseDescriptionMax).optional(),
+  "summary": zod.string().max(setSharedWorkspaceConceptRestrictionResponseSummaryMax),
+  "mentionCount": zod.number().min(setSharedWorkspaceConceptRestrictionResponseMentionCountMin).multipleOf(setSharedWorkspaceConceptRestrictionResponseMentionCountMultipleOf),
+  "lastUpdatedAt": zod.number().min(setSharedWorkspaceConceptRestrictionResponseLastUpdatedAtMin).multipleOf(setSharedWorkspaceConceptRestrictionResponseLastUpdatedAtMultipleOf),
+  "sources": zod.array(zod.object({
+  "conversationId": zod.string().min(1).max(setSharedWorkspaceConceptRestrictionResponseSourcesItemConversationIdMax),
+  "projectId": zod.string().max(setSharedWorkspaceConceptRestrictionResponseSourcesItemProjectIdMax).nullable(),
+  "conversationTitle": zod.string().min(1).max(setSharedWorkspaceConceptRestrictionResponseSourcesItemConversationTitleMax),
+  "messageIds": zod.array(zod.string().min(1).max(setSharedWorkspaceConceptRestrictionResponseSourcesItemMessageIdsItemMax)).max(setSharedWorkspaceConceptRestrictionResponseSourcesItemMessageIdsMax),
+  "excerpt": zod.string().max(setSharedWorkspaceConceptRestrictionResponseSourcesItemExcerptMax),
+  "updatedAt": zod.number().min(setSharedWorkspaceConceptRestrictionResponseSourcesItemUpdatedAtMin).multipleOf(setSharedWorkspaceConceptRestrictionResponseSourcesItemUpdatedAtMultipleOf),
+  "capturedByUserId": zod.string().max(setSharedWorkspaceConceptRestrictionResponseSourcesItemCapturedByUserIdMax).nullish().describe('Clerk user id of the account whose chat produced this evidence. Null for knowledge captured before attribution existed; renderers then attribute it to the ontology owner. The server discards stamps that name anyone other than the owner when absorbing client snapshots, so the value is trustworthy.'),
+  "capturedAt": zod.number().min(setSharedWorkspaceConceptRestrictionResponseSourcesItemCapturedAtMin).multipleOf(setSharedWorkspaceConceptRestrictionResponseSourcesItemCapturedAtMultipleOf).nullish().describe('When the capture that produced this evidence was filed, in ms since epoch. Null for pre-attribution evidence; renderers then fall back to updatedAt.'),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on this evidence entry. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked evidence stays visible to members but is withheld from exports when the workspace\'s export policy forbids sensitive content leaving.')
+})).max(setSharedWorkspaceConceptRestrictionResponseSourcesMax),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock on the whole cluster. Server-managed on workspace-tier knowledge: set only through the sensitivity endpoints, never through client snapshots. Locked clusters stay visible to members but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction on the whole cluster. Set only by workspace admins through the restriction endpoint. Restricted clusters are filtered out of member reads, member chat context, member citations, and member exports server-side, so a non-admin response never carries a restricted cluster at all — when this flag is true, the reader is an admin.'),
+  "unsorted": zod.boolean().optional().describe('Author-private Unsorted holding state, used when scope classification was not confident enough to file the cluster. Lives only on personal-tier records: it syncs across the author\'s own devices but never appears in workspace reads or workspace exports. Cleared when the concept is clarified — by a confident re-extraction, an automatic re-file, or the author sorting it by hand.')
+})
+
+
+/**
+ * Marks or unmarks a SOP as admin-only. Restricted SOPs are enforced server-side per request, like membership: they never appear in member SOP reads, member chat context, or member exports. Non-admin callers get the same opaque 403 as non-members.
+ * @summary Restrict a workspace SOP to admins (admins only)
+ */
+
+export const SetSharedWorkspaceSopRestrictionParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(setSharedWorkspaceSopRestrictionPathWorkspaceIdRegExp),
+  "sopId": zod.coerce.string().regex(setSharedWorkspaceSopRestrictionPathSopIdRegExp)
+})
+
+export const SetSharedWorkspaceSopRestrictionBody = zod.object({
+  "adminOnly": zod.boolean()
+})
+
+
+
+export const SetSharedWorkspaceSopRestrictionResponse = zod.object({
+  "id": zod.string().regex(setSharedWorkspaceSopRestrictionResponseIdRegExp),
+  "title": zod.string().min(1).max(setSharedWorkspaceSopRestrictionResponseTitleMax),
+  "lifecycle": zod.enum(['draft', 'active', 'archived']),
+  "category": zod.enum(['operations', 'brand', 'customer_service']),
+  "tags": zod.array(zod.string().min(1).max(setSharedWorkspaceSopRestrictionResponseTagsItemMax)).max(setSharedWorkspaceSopRestrictionResponseTagsMax),
+  "provenance": zod.enum(['manual', 'imported', 'model_assisted']),
+  "content": zod.object({
+  "purpose": zod.string().min(1).max(setSharedWorkspaceSopRestrictionResponseContentPurposeMax),
+  "prerequisites": zod.array(zod.string().min(1).max(setSharedWorkspaceSopRestrictionResponseContentPrerequisitesItemMax)).max(setSharedWorkspaceSopRestrictionResponseContentPrerequisitesMax),
+  "inputs": zod.array(zod.string().min(1).max(setSharedWorkspaceSopRestrictionResponseContentInputsItemMax)).max(setSharedWorkspaceSopRestrictionResponseContentInputsMax),
+  "guidance": zod.array(zod.string().min(1).max(setSharedWorkspaceSopRestrictionResponseContentGuidanceItemMax)).min(1).max(setSharedWorkspaceSopRestrictionResponseContentGuidanceMax),
+  "requiredApprovals": zod.array(zod.string().min(1).max(setSharedWorkspaceSopRestrictionResponseContentRequiredApprovalsItemMax)).max(setSharedWorkspaceSopRestrictionResponseContentRequiredApprovalsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(setSharedWorkspaceSopRestrictionResponseContentAcceptanceChecksItemMax)).max(setSharedWorkspaceSopRestrictionResponseContentAcceptanceChecksMax)
+}),
+  "activeRevisionId": zod.union([zod.string().regex(setSharedWorkspaceSopRestrictionResponseActiveRevisionIdOneRegExp),zod.null()]),
+  "activeRevisionNumber": zod.number().min(1).multipleOf(setSharedWorkspaceSopRestrictionResponseActiveRevisionNumberMultipleOf).nullable(),
+  "sensitive": zod.boolean().optional().describe('Sensitivity lock. Any member may set or clear it; locked SOPs stay visible inside the workspace but are withheld from exports when the workspace\'s export policy forbids sensitive content leaving.'),
+  "adminOnly": zod.boolean().optional().describe('Admin-only restriction. Set only by workspace admins through the restriction endpoint. Restricted SOPs are filtered out of member reads, member chat context, and member exports server-side, so a non-admin response never carries one — when this flag is true, the reader is an admin.'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * The export policy is enforced here, server-side. When the workspace forbids sensitive exports, locked items are excluded and the file states how many were withheld — never a silent gap. Non-members get no workspace content at all.
+ * @summary Download workspace knowledge or SOPs as Markdown (members only)
+ */
+
+export const ExportSharedWorkspaceMarkdownParams = zod.object({
+  "workspaceId": zod.coerce.string().regex(exportSharedWorkspaceMarkdownPathWorkspaceIdRegExp),
+  "kind": zod.enum(['brain', 'sops'])
+})
+
+export const ExportSharedWorkspaceMarkdownResponse = zod.unknown()
+
+
+/**
+ * Always scoped to the requesting account's personal tier; contains no workspace content, so it keeps working after leaving a workspace.
+ * @summary Download your personal Brain notes or SOPs as Markdown
+ */
+export const ExportVenomPersonalMarkdownParams = zod.object({
+  "kind": zod.enum(['brain', 'sops'])
+})
+
+export const ExportVenomPersonalMarkdownQueryParams = zod.object({
+  "scope": zod.enum(['sorted', 'unsorted']).optional().describe('Brain exports only. `sorted` limits the download to knowledge outside the Unsorted holding area; `unsorted` downloads just the Unsorted items. Omit for everything.')
+})
+
+export const ExportVenomPersonalMarkdownResponse = zod.unknown()
+
+
+/**
  * @summary List the signed-in user's portfolio apps
  */
-export const listVenomAppsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomAppsResponseNameMax = 120;
-
-export const listVenomAppsResponsePurposeMax = 1000;
-
-export const listVenomAppsResponseBrandMax = 120;
-
-export const listVenomAppsResponseDetectedStackItemMax = 60;
-
-export const listVenomAppsResponseDetectedStackMax = 20;
-
-export const listVenomAppsResponseSourceVersionMin = 0;
-export const listVenomAppsResponseSourceVersionMultipleOf = 1;
-
-export const listVenomAppsResponseDeploymentUrlMax = 2048;
-
-export const listVenomAppsResponseLinkedProjectIdMax = 120;
-
-export const listVenomAppsResponseLinkedProjectNameMax = 120;
-
-export const listVenomAppsResponseLatestIterationNumberMin = 0;
-export const listVenomAppsResponseLatestIterationNumberMultipleOf = 1;
-
-export const listVenomAppsResponseImprovementSignalOneKnowledgeChangesMin = 0;
-export const listVenomAppsResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
-
-export const listVenomAppsResponseImprovementSignalOneSourceChangesMin = 0;
-export const listVenomAppsResponseImprovementSignalOneSourceChangesMultipleOf = 1;
-
-export const listVenomAppsResponseImprovementSignalOneTotalChangesMultipleOf = 1;
-
-export const listVenomAppsResponseImprovementSignalOneSummaryMax = 1500;
-
-export const listVenomAppsResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
 
 
 export const ListVenomAppsResponseItem = zod.object({
@@ -2834,6 +6473,9 @@ export const ListVenomAppsResponseItem = zod.object({
   "linkedProjectId": zod.string().max(listVenomAppsResponseLinkedProjectIdMax).nullable(),
   "linkedProjectName": zod.string().max(listVenomAppsResponseLinkedProjectNameMax).nullable(),
   "latestIterationNumber": zod.number().min(listVenomAppsResponseLatestIterationNumberMin).multipleOf(listVenomAppsResponseLatestIterationNumberMultipleOf),
+  "liveReleaseId": zod.union([zod.string().regex(listVenomAppsResponseLiveReleaseIdOneRegExp),zod.null()]),
+  "liveIterationNumber": zod.union([zod.number().min(1).multipleOf(listVenomAppsResponseLiveIterationNumberOneMultipleOf),zod.null()]),
+  "livePublishedAt": zod.coerce.date().nullable(),
   "improvementSignal": zod.union([zod.object({
   "since": zod.coerce.date(),
   "knowledgeChanges": zod.number().min(listVenomAppsResponseImprovementSignalOneKnowledgeChangesMin).multipleOf(listVenomAppsResponseImprovementSignalOneKnowledgeChangesMultipleOf),
@@ -2842,6 +6484,8 @@ export const ListVenomAppsResponseItem = zod.object({
   "summary": zod.string().min(1).max(listVenomAppsResponseImprovementSignalOneSummaryMax),
   "baselineIterationNumber": zod.number().min(1).multipleOf(listVenomAppsResponseImprovementSignalOneBaselineIterationNumberMultipleOf)
 }),zod.null()]),
+  "templateId": zod.union([zod.string().regex(listVenomAppsResponseTemplateIdOneRegExp),zod.null()]),
+  "templateName": zod.string().max(listVenomAppsResponseTemplateNameMax).nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -2851,13 +6495,6 @@ export const ListVenomAppsResponse = zod.array(ListVenomAppsResponseItem).max(50
 /**
  * @summary Create an app portfolio record
  */
-export const createVenomAppBodyNameMax = 120;
-
-export const createVenomAppBodyPurposeMax = 1000;
-
-export const createVenomAppBodyBrandMax = 120;
-
-export const createVenomAppBodyDeploymentUrlMax = 2048;
 
 
 export const CreateVenomAppBody = zod.object({
@@ -2867,40 +6504,6 @@ export const CreateVenomAppBody = zod.object({
   "deploymentUrl": zod.string().max(createVenomAppBodyDeploymentUrlMax).nullish()
 })
 
-export const createVenomAppResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppResponseNameMax = 120;
-
-export const createVenomAppResponsePurposeMax = 1000;
-
-export const createVenomAppResponseBrandMax = 120;
-
-export const createVenomAppResponseDetectedStackItemMax = 60;
-
-export const createVenomAppResponseDetectedStackMax = 20;
-
-export const createVenomAppResponseSourceVersionMin = 0;
-export const createVenomAppResponseSourceVersionMultipleOf = 1;
-
-export const createVenomAppResponseDeploymentUrlMax = 2048;
-
-export const createVenomAppResponseLinkedProjectIdMax = 120;
-
-export const createVenomAppResponseLinkedProjectNameMax = 120;
-
-export const createVenomAppResponseLatestIterationNumberMin = 0;
-export const createVenomAppResponseLatestIterationNumberMultipleOf = 1;
-
-export const createVenomAppResponseImprovementSignalOneKnowledgeChangesMin = 0;
-export const createVenomAppResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
-
-export const createVenomAppResponseImprovementSignalOneSourceChangesMin = 0;
-export const createVenomAppResponseImprovementSignalOneSourceChangesMultipleOf = 1;
-
-export const createVenomAppResponseImprovementSignalOneTotalChangesMultipleOf = 1;
-
-export const createVenomAppResponseImprovementSignalOneSummaryMax = 1500;
-
-export const createVenomAppResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
 
 
 export const CreateVenomAppResponse = zod.object({
@@ -2918,6 +6521,9 @@ export const CreateVenomAppResponse = zod.object({
   "linkedProjectId": zod.string().max(createVenomAppResponseLinkedProjectIdMax).nullable(),
   "linkedProjectName": zod.string().max(createVenomAppResponseLinkedProjectNameMax).nullable(),
   "latestIterationNumber": zod.number().min(createVenomAppResponseLatestIterationNumberMin).multipleOf(createVenomAppResponseLatestIterationNumberMultipleOf),
+  "liveReleaseId": zod.union([zod.string().regex(createVenomAppResponseLiveReleaseIdOneRegExp),zod.null()]),
+  "liveIterationNumber": zod.union([zod.number().min(1).multipleOf(createVenomAppResponseLiveIterationNumberOneMultipleOf),zod.null()]),
+  "livePublishedAt": zod.coerce.date().nullable(),
   "improvementSignal": zod.union([zod.object({
   "since": zod.coerce.date(),
   "knowledgeChanges": zod.number().min(createVenomAppResponseImprovementSignalOneKnowledgeChangesMin).multipleOf(createVenomAppResponseImprovementSignalOneKnowledgeChangesMultipleOf),
@@ -2926,6 +6532,8 @@ export const CreateVenomAppResponse = zod.object({
   "summary": zod.string().min(1).max(createVenomAppResponseImprovementSignalOneSummaryMax),
   "baselineIterationNumber": zod.number().min(1).multipleOf(createVenomAppResponseImprovementSignalOneBaselineIterationNumberMultipleOf)
 }),zod.null()]),
+  "templateId": zod.union([zod.string().regex(createVenomAppResponseTemplateIdOneRegExp),zod.null()]),
+  "templateName": zod.string().max(createVenomAppResponseTemplateNameMax).nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -2934,163 +6542,11 @@ export const CreateVenomAppResponse = zod.object({
 /**
  * @summary Get an app and its source history
  */
-export const getVenomAppPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const GetVenomAppParams = zod.object({
   "appId": zod.coerce.string().regex(getVenomAppPathAppIdRegExp)
 })
 
-export const getVenomAppResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseAppNameMax = 120;
-
-export const getVenomAppResponseAppPurposeMax = 1000;
-
-export const getVenomAppResponseAppBrandMax = 120;
-
-export const getVenomAppResponseAppDetectedStackItemMax = 60;
-
-export const getVenomAppResponseAppDetectedStackMax = 20;
-
-export const getVenomAppResponseAppSourceVersionMin = 0;
-export const getVenomAppResponseAppSourceVersionMultipleOf = 1;
-
-export const getVenomAppResponseAppDeploymentUrlMax = 2048;
-
-export const getVenomAppResponseAppLinkedProjectIdMax = 120;
-
-export const getVenomAppResponseAppLinkedProjectNameMax = 120;
-
-export const getVenomAppResponseAppLatestIterationNumberMin = 0;
-export const getVenomAppResponseAppLatestIterationNumberMultipleOf = 1;
-
-export const getVenomAppResponseAppImprovementSignalOneKnowledgeChangesMin = 0;
-export const getVenomAppResponseAppImprovementSignalOneKnowledgeChangesMultipleOf = 1;
-
-export const getVenomAppResponseAppImprovementSignalOneSourceChangesMin = 0;
-export const getVenomAppResponseAppImprovementSignalOneSourceChangesMultipleOf = 1;
-
-export const getVenomAppResponseAppImprovementSignalOneTotalChangesMultipleOf = 1;
-
-export const getVenomAppResponseAppImprovementSignalOneSummaryMax = 1500;
-
-export const getVenomAppResponseAppImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
-
-export const getVenomAppResponseVersionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseVersionsItemVersionNumberMultipleOf = 1;
-
-export const getVenomAppResponseVersionsItemArchiveFilenameMax = 160;
-
-export const getVenomAppResponseVersionsItemArchiveBytesMultipleOf = 1;
-
-export const getVenomAppResponseVersionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const getVenomAppResponseVersionsItemManifestTotalEntriesMax = 5000;
-export const getVenomAppResponseVersionsItemManifestTotalEntriesMultipleOf = 1;
-
-export const getVenomAppResponseVersionsItemManifestSafeFileCountMin = 0;
-export const getVenomAppResponseVersionsItemManifestSafeFileCountMax = 5000;
-export const getVenomAppResponseVersionsItemManifestSafeFileCountMultipleOf = 1;
-
-export const getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMin = 0;
-export const getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMax = 5000;
-export const getVenomAppResponseVersionsItemManifestExcludedSensitiveFileCountMultipleOf = 1;
-
-export const getVenomAppResponseVersionsItemManifestFilesItemMax = 240;
-
-export const getVenomAppResponseVersionsItemManifestFilesMax = 200;
-
-export const getVenomAppResponseVersionsItemManifestProjectFilesItemMax = 240;
-
-export const getVenomAppResponseVersionsItemManifestProjectFilesMax = 40;
-
-export const getVenomAppResponseVersionsItemManifestDetectedStackItemMax = 60;
-
-export const getVenomAppResponseVersionsItemManifestDetectedStackMax = 20;
-
-export const getVenomAppResponseVersionsMax = 500;
-
-export const getVenomAppResponseImportJobsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseImportJobsItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseImportJobsItemArchiveFilenameMax = 160;
-
-export const getVenomAppResponseImportJobsItemDeclaredBytesMultipleOf = 1;
-
-export const getVenomAppResponseImportJobsItemProgressMin = 0;
-export const getVenomAppResponseImportJobsItemProgressMax = 100;
-export const getVenomAppResponseImportJobsItemProgressMultipleOf = 1;
-
-export const getVenomAppResponseImportJobsItemFailureCodeMax = 80;
-
-export const getVenomAppResponseImportJobsItemFailureMessageMax = 240;
-
-export const getVenomAppResponseImportJobsItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseImportJobsMax = 100;
-
-export const getVenomAppResponseDeploymentLinksItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseDeploymentLinksItemLabelMax = 80;
-
-export const getVenomAppResponseDeploymentLinksItemUrlMax = 2048;
-
-export const getVenomAppResponseDeploymentLinksMax = 20;
-
-export const getVenomAppResponseProvisioningReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseProvisioningReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseProvisioningReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseProvisioningReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseProvisioningReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseProvisioningReleasesItemTargetNameMax = 120;
-
-export const getVenomAppResponseProvisioningReleasesItemProviderProjectIdMax = 120;
-
-export const getVenomAppResponseProvisioningReleasesItemProviderCandidateIdMax = 120;
-
-export const getVenomAppResponseProvisioningReleasesItemProviderReleaseIdMax = 120;
-
-export const getVenomAppResponseProvisioningReleasesItemLaunchUrlMax = 2048;
-
-export const getVenomAppResponseProvisioningReleasesItemPublishIdempotencyKeyMax = 120;
-
-export const getVenomAppResponseProvisioningReleasesItemRollbackIdempotencyKeyMax = 120;
-
-export const getVenomAppResponseProvisioningReleasesMax = 500;
-
-export const getVenomAppResponseIterationsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseIterationsItemIterationNumberMultipleOf = 1;
-
-export const getVenomAppResponseIterationsItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseIterationsItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseIterationsItemPackageTitleMax = 160;
-
-export const getVenomAppResponseIterationsItemPackageChecksumRegExp = new RegExp('^[a-f0-9]{64}$');
-export const getVenomAppResponseIterationsItemReasonMax = 1000;
-
-export const getVenomAppResponseIterationsItemChangesSummaryMax = 2000;
-
-export const getVenomAppResponseIterationsItemBaselineIterationNumberOneMultipleOf = 1;
-
-export const getVenomAppResponseIterationsItemCreatedByMax = 200;
-
-export const getVenomAppResponseIterationsMax = 200;
-
-export const getVenomAppResponseTimelineItemIdMax = 200;
-
-export const getVenomAppResponseTimelineItemTitleMax = 240;
-
-export const getVenomAppResponseTimelineItemDetailMax = 2000;
-
-export const getVenomAppResponseTimelineItemActorMax = 200;
-
-export const getVenomAppResponseTimelineItemStatusMax = 60;
-
-export const getVenomAppResponseTimelineItemBuildRunIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseTimelineItemReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseTimelineItemSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppResponseTimelineItemIterationNumberOneMultipleOf = 1;
-
-export const getVenomAppResponseTimelineMax = 400;
-
-export const getVenomAppResponseTimelineTotalMin = 0;
-export const getVenomAppResponseTimelineTotalMultipleOf = 1;
 
 
 export const GetVenomAppResponse = zod.object({
@@ -3109,6 +6565,9 @@ export const GetVenomAppResponse = zod.object({
   "linkedProjectId": zod.string().max(getVenomAppResponseAppLinkedProjectIdMax).nullable(),
   "linkedProjectName": zod.string().max(getVenomAppResponseAppLinkedProjectNameMax).nullable(),
   "latestIterationNumber": zod.number().min(getVenomAppResponseAppLatestIterationNumberMin).multipleOf(getVenomAppResponseAppLatestIterationNumberMultipleOf),
+  "liveReleaseId": zod.union([zod.string().regex(getVenomAppResponseAppLiveReleaseIdOneRegExp),zod.null()]),
+  "liveIterationNumber": zod.union([zod.number().min(1).multipleOf(getVenomAppResponseAppLiveIterationNumberOneMultipleOf),zod.null()]),
+  "livePublishedAt": zod.coerce.date().nullable(),
   "improvementSignal": zod.union([zod.object({
   "since": zod.coerce.date(),
   "knowledgeChanges": zod.number().min(getVenomAppResponseAppImprovementSignalOneKnowledgeChangesMin).multipleOf(getVenomAppResponseAppImprovementSignalOneKnowledgeChangesMultipleOf),
@@ -3117,6 +6576,8 @@ export const GetVenomAppResponse = zod.object({
   "summary": zod.string().min(1).max(getVenomAppResponseAppImprovementSignalOneSummaryMax),
   "baselineIterationNumber": zod.number().min(1).multipleOf(getVenomAppResponseAppImprovementSignalOneBaselineIterationNumberMultipleOf)
 }),zod.null()]),
+  "templateId": zod.union([zod.string().regex(getVenomAppResponseAppTemplateIdOneRegExp),zod.null()]),
+  "templateName": zod.string().max(getVenomAppResponseAppTemplateNameMax).nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 }),
@@ -3191,6 +6652,8 @@ export const GetVenomAppResponse = zod.object({
   "reason": zod.string().min(1).max(getVenomAppResponseIterationsItemReasonMax),
   "changesSummary": zod.string().max(getVenomAppResponseIterationsItemChangesSummaryMax).nullable(),
   "baselineIterationNumber": zod.union([zod.number().min(1).multipleOf(getVenomAppResponseIterationsItemBaselineIterationNumberOneMultipleOf),zod.null()]),
+  "releaseId": zod.union([zod.string().regex(getVenomAppResponseIterationsItemReleaseIdOneRegExp),zod.null()]),
+  "isLive": zod.boolean(),
   "createdBy": zod.string().min(1).max(getVenomAppResponseIterationsItemCreatedByMax),
   "createdAt": zod.coerce.date()
 })).max(getVenomAppResponseIterationsMax),
@@ -3215,22 +6678,11 @@ export const GetVenomAppResponse = zod.object({
 /**
  * @summary Update app metadata
  */
-export const updateVenomAppPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const UpdateVenomAppParams = zod.object({
   "appId": zod.coerce.string().regex(updateVenomAppPathAppIdRegExp)
 })
 
-export const updateVenomAppBodyNameMax = 120;
-
-export const updateVenomAppBodyPurposeMax = 1000;
-
-export const updateVenomAppBodyBrandMax = 120;
-
-export const updateVenomAppBodyDeploymentUrlMax = 2048;
-
-export const updateVenomAppBodyLinkedProjectIdMax = 120;
 
 
 export const UpdateVenomAppBody = zod.object({
@@ -3242,40 +6694,6 @@ export const UpdateVenomAppBody = zod.object({
   "linkedProjectId": zod.string().max(updateVenomAppBodyLinkedProjectIdMax).nullish()
 })
 
-export const updateVenomAppResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const updateVenomAppResponseNameMax = 120;
-
-export const updateVenomAppResponsePurposeMax = 1000;
-
-export const updateVenomAppResponseBrandMax = 120;
-
-export const updateVenomAppResponseDetectedStackItemMax = 60;
-
-export const updateVenomAppResponseDetectedStackMax = 20;
-
-export const updateVenomAppResponseSourceVersionMin = 0;
-export const updateVenomAppResponseSourceVersionMultipleOf = 1;
-
-export const updateVenomAppResponseDeploymentUrlMax = 2048;
-
-export const updateVenomAppResponseLinkedProjectIdMax = 120;
-
-export const updateVenomAppResponseLinkedProjectNameMax = 120;
-
-export const updateVenomAppResponseLatestIterationNumberMin = 0;
-export const updateVenomAppResponseLatestIterationNumberMultipleOf = 1;
-
-export const updateVenomAppResponseImprovementSignalOneKnowledgeChangesMin = 0;
-export const updateVenomAppResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
-
-export const updateVenomAppResponseImprovementSignalOneSourceChangesMin = 0;
-export const updateVenomAppResponseImprovementSignalOneSourceChangesMultipleOf = 1;
-
-export const updateVenomAppResponseImprovementSignalOneTotalChangesMultipleOf = 1;
-
-export const updateVenomAppResponseImprovementSignalOneSummaryMax = 1500;
-
-export const updateVenomAppResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
 
 
 export const UpdateVenomAppResponse = zod.object({
@@ -3293,6 +6711,9 @@ export const UpdateVenomAppResponse = zod.object({
   "linkedProjectId": zod.string().max(updateVenomAppResponseLinkedProjectIdMax).nullable(),
   "linkedProjectName": zod.string().max(updateVenomAppResponseLinkedProjectNameMax).nullable(),
   "latestIterationNumber": zod.number().min(updateVenomAppResponseLatestIterationNumberMin).multipleOf(updateVenomAppResponseLatestIterationNumberMultipleOf),
+  "liveReleaseId": zod.union([zod.string().regex(updateVenomAppResponseLiveReleaseIdOneRegExp),zod.null()]),
+  "liveIterationNumber": zod.union([zod.number().min(1).multipleOf(updateVenomAppResponseLiveIterationNumberOneMultipleOf),zod.null()]),
+  "livePublishedAt": zod.coerce.date().nullable(),
   "improvementSignal": zod.union([zod.object({
   "since": zod.coerce.date(),
   "knowledgeChanges": zod.number().min(updateVenomAppResponseImprovementSignalOneKnowledgeChangesMin).multipleOf(updateVenomAppResponseImprovementSignalOneKnowledgeChangesMultipleOf),
@@ -3301,6 +6722,8 @@ export const UpdateVenomAppResponse = zod.object({
   "summary": zod.string().min(1).max(updateVenomAppResponseImprovementSignalOneSummaryMax),
   "baselineIterationNumber": zod.number().min(1).multipleOf(updateVenomAppResponseImprovementSignalOneBaselineIterationNumberMultipleOf)
 }),zod.null()]),
+  "templateId": zod.union([zod.string().regex(updateVenomAppResponseTemplateIdOneRegExp),zod.null()]),
+  "templateName": zod.string().max(updateVenomAppResponseTemplateNameMax).nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -3309,8 +6732,6 @@ export const UpdateVenomAppResponse = zod.object({
 /**
  * @summary Delete an app record and its private source packages
  */
-export const deleteVenomAppPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const DeleteVenomAppParams = zod.object({
   "appId": zod.coerce.string().regex(deleteVenomAppPathAppIdRegExp)
@@ -3320,49 +6741,232 @@ export const DeleteVenomAppResponse = zod.void()
 
 
 /**
+ * @summary Get the public sharing state for an app
+ */
+
+export const GetVenomAppSharingParams = zod.object({
+  "appId": zod.coerce.string().regex(getVenomAppSharingPathAppIdRegExp)
+})
+
+
+
+export const GetVenomAppSharingResponse = zod.object({
+  "appId": zod.string().regex(getVenomAppSharingResponseAppIdRegExp),
+  "enabled": zod.boolean(),
+  "slug": zod.string().max(getVenomAppSharingResponseSlugMax).nullable(),
+  "shareUrl": zod.string().max(getVenomAppSharingResponseShareUrlMax).nullable(),
+  "embedUrl": zod.string().max(getVenomAppSharingResponseEmbedUrlMax).nullable(),
+  "embedSnippet": zod.string().max(getVenomAppSharingResponseEmbedSnippetMax).nullable(),
+  "publicStatus": zod.enum(['live', 'unavailable']),
+  "liveIterationNumber": zod.union([zod.number().min(1).multipleOf(getVenomAppSharingResponseLiveIterationNumberOneMultipleOf),zod.null()]),
+  "livePublishedAt": zod.coerce.date().nullable()
+}).describe('Owner-only view of an app\'s public sharing state. The slug is stable for the lifetime of the app: disabling sharing keeps it reserved so re-enabling restores the same link. shareUrl\/embedUrl\/embedSnippet are server-composed from the request origin and are null while sharing is disabled.')
+
+
+/**
+ * @summary Enable or disable public sharing for an app
+ */
+
+export const UpdateVenomAppSharingParams = zod.object({
+  "appId": zod.coerce.string().regex(updateVenomAppSharingPathAppIdRegExp)
+})
+
+export const UpdateVenomAppSharingBody = zod.object({
+  "enabled": zod.boolean()
+})
+
+
+
+export const UpdateVenomAppSharingResponse = zod.object({
+  "appId": zod.string().regex(updateVenomAppSharingResponseAppIdRegExp),
+  "enabled": zod.boolean(),
+  "slug": zod.string().max(updateVenomAppSharingResponseSlugMax).nullable(),
+  "shareUrl": zod.string().max(updateVenomAppSharingResponseShareUrlMax).nullable(),
+  "embedUrl": zod.string().max(updateVenomAppSharingResponseEmbedUrlMax).nullable(),
+  "embedSnippet": zod.string().max(updateVenomAppSharingResponseEmbedSnippetMax).nullable(),
+  "publicStatus": zod.enum(['live', 'unavailable']),
+  "liveIterationNumber": zod.union([zod.number().min(1).multipleOf(updateVenomAppSharingResponseLiveIterationNumberOneMultipleOf),zod.null()]),
+  "livePublishedAt": zod.coerce.date().nullable()
+}).describe('Owner-only view of an app\'s public sharing state. The slug is stable for the lifetime of the app: disabling sharing keeps it reserved so re-enabling restores the same link. shareUrl\/embedUrl\/embedSnippet are server-composed from the request origin and are null while sharing is disabled.')
+
+
+/**
+ * @summary Owner view of an app's whitelabeled AI usage and controls
+ */
+
+export const GetVenomAppAiParams = zod.object({
+  "appId": zod.coerce.string().regex(getVenomAppAiPathAppIdRegExp)
+})
+
+
+
+export const GetVenomAppAiResponse = zod.object({
+  "appId": zod.string().regex(getVenomAppAiResponseAppIdRegExp),
+  "paused": zod.boolean(),
+  "monthlyCapUsd": zod.union([zod.number().min(getVenomAppAiResponseMonthlyCapUsdOneMin),zod.null()]),
+  "safetyCapUsd": zod.number().min(getVenomAppAiResponseSafetyCapUsdMin),
+  "credential": zod.union([zod.object({
+  "displayPrefix": zod.string().max(getVenomAppAiResponseCredentialOneDisplayPrefixMax),
+  "createdAt": zod.coerce.date(),
+  "lastUsedAt": zod.coerce.date().nullable(),
+  "delivered": zod.boolean()
+}).describe('Display-safe credential summary. The prefix identifies the key for the owner; the secret itself is only ever delivered into the provisioned app\'s secret storage.'),zod.null()]),
+  "usage": zod.object({
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date(),
+  "costUsd": zod.number().min(getVenomAppAiResponseUsageCostUsdMin),
+  "requests": zod.number().min(getVenomAppAiResponseUsageRequestsMin).multipleOf(getVenomAppAiResponseUsageRequestsMultipleOf),
+  "promptTokens": zod.number().min(getVenomAppAiResponseUsagePromptTokensMin).multipleOf(getVenomAppAiResponseUsagePromptTokensMultipleOf),
+  "outputTokens": zod.number().min(getVenomAppAiResponseUsageOutputTokensMin).multipleOf(getVenomAppAiResponseUsageOutputTokensMultipleOf),
+  "hasEstimates": zod.boolean(),
+  "models": zod.array(zod.object({
+  "modelId": zod.string().max(getVenomAppAiResponseUsageModelsItemModelIdMax),
+  "modelName": zod.string().max(getVenomAppAiResponseUsageModelsItemModelNameMax),
+  "costUsd": zod.number().min(getVenomAppAiResponseUsageModelsItemCostUsdMin),
+  "requests": zod.number().min(getVenomAppAiResponseUsageModelsItemRequestsMin).multipleOf(getVenomAppAiResponseUsageModelsItemRequestsMultipleOf)
+})).max(getVenomAppAiResponseUsageModelsMax)
+}),
+  "ownerMonthUsd": zod.number().min(getVenomAppAiResponseOwnerMonthUsdMin)
+}).describe('Owner-only view of an app\'s whitelabeled AI: month-to-date usage from the canonical ledger, spend controls, and a summary of the gateway credential. Never contains the credential secret, provider names, or per-token rates — costs are aggregated dollars and models are Venom aliases only.')
+
+
+/**
+ * @summary Set the app's monthly AI spending cap and pause switch
+ */
+
+export const UpdateVenomAppAiSettingsParams = zod.object({
+  "appId": zod.coerce.string().regex(updateVenomAppAiSettingsPathAppIdRegExp)
+})
+
+
+
+export const UpdateVenomAppAiSettingsBody = zod.object({
+  "monthlyCapUsd": zod.union([zod.number().min(updateVenomAppAiSettingsBodyMonthlyCapUsdOneMin).max(updateVenomAppAiSettingsBodyMonthlyCapUsdOneMax),zod.null()]),
+  "paused": zod.boolean()
+}).describe('Full settings write: both fields are explicit on every update. The cap is dollars per calendar month (UTC); null removes the owner cap while the global safety cap keeps applying.')
+
+
+
+export const UpdateVenomAppAiSettingsResponse = zod.object({
+  "appId": zod.string().regex(updateVenomAppAiSettingsResponseAppIdRegExp),
+  "paused": zod.boolean(),
+  "monthlyCapUsd": zod.union([zod.number().min(updateVenomAppAiSettingsResponseMonthlyCapUsdOneMin),zod.null()]),
+  "safetyCapUsd": zod.number().min(updateVenomAppAiSettingsResponseSafetyCapUsdMin),
+  "credential": zod.union([zod.object({
+  "displayPrefix": zod.string().max(updateVenomAppAiSettingsResponseCredentialOneDisplayPrefixMax),
+  "createdAt": zod.coerce.date(),
+  "lastUsedAt": zod.coerce.date().nullable(),
+  "delivered": zod.boolean()
+}).describe('Display-safe credential summary. The prefix identifies the key for the owner; the secret itself is only ever delivered into the provisioned app\'s secret storage.'),zod.null()]),
+  "usage": zod.object({
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date(),
+  "costUsd": zod.number().min(updateVenomAppAiSettingsResponseUsageCostUsdMin),
+  "requests": zod.number().min(updateVenomAppAiSettingsResponseUsageRequestsMin).multipleOf(updateVenomAppAiSettingsResponseUsageRequestsMultipleOf),
+  "promptTokens": zod.number().min(updateVenomAppAiSettingsResponseUsagePromptTokensMin).multipleOf(updateVenomAppAiSettingsResponseUsagePromptTokensMultipleOf),
+  "outputTokens": zod.number().min(updateVenomAppAiSettingsResponseUsageOutputTokensMin).multipleOf(updateVenomAppAiSettingsResponseUsageOutputTokensMultipleOf),
+  "hasEstimates": zod.boolean(),
+  "models": zod.array(zod.object({
+  "modelId": zod.string().max(updateVenomAppAiSettingsResponseUsageModelsItemModelIdMax),
+  "modelName": zod.string().max(updateVenomAppAiSettingsResponseUsageModelsItemModelNameMax),
+  "costUsd": zod.number().min(updateVenomAppAiSettingsResponseUsageModelsItemCostUsdMin),
+  "requests": zod.number().min(updateVenomAppAiSettingsResponseUsageModelsItemRequestsMin).multipleOf(updateVenomAppAiSettingsResponseUsageModelsItemRequestsMultipleOf)
+})).max(updateVenomAppAiSettingsResponseUsageModelsMax)
+}),
+  "ownerMonthUsd": zod.number().min(updateVenomAppAiSettingsResponseOwnerMonthUsdMin)
+}).describe('Owner-only view of an app\'s whitelabeled AI: month-to-date usage from the canonical ledger, spend controls, and a summary of the gateway credential. Never contains the credential secret, provider names, or per-token rates — costs are aggregated dollars and models are Venom aliases only.')
+
+
+/**
+ * Revokes the current credential and mints a replacement in one step. The new secret is delivered into the provisioned app's secret storage through the provisioning provider — it never appears in this API. If immediate delivery is not possible, the credential is delivered at the next provisioning handoff and the overview reports it as not yet delivered.
+ * @summary Rotate the app's AI gateway credential
+ */
+
+export const RotateVenomAppAiCredentialParams = zod.object({
+  "appId": zod.coerce.string().regex(rotateVenomAppAiCredentialPathAppIdRegExp)
+})
+
+
+
+export const RotateVenomAppAiCredentialResponse = zod.object({
+  "appId": zod.string().regex(rotateVenomAppAiCredentialResponseAppIdRegExp),
+  "paused": zod.boolean(),
+  "monthlyCapUsd": zod.union([zod.number().min(rotateVenomAppAiCredentialResponseMonthlyCapUsdOneMin),zod.null()]),
+  "safetyCapUsd": zod.number().min(rotateVenomAppAiCredentialResponseSafetyCapUsdMin),
+  "credential": zod.union([zod.object({
+  "displayPrefix": zod.string().max(rotateVenomAppAiCredentialResponseCredentialOneDisplayPrefixMax),
+  "createdAt": zod.coerce.date(),
+  "lastUsedAt": zod.coerce.date().nullable(),
+  "delivered": zod.boolean()
+}).describe('Display-safe credential summary. The prefix identifies the key for the owner; the secret itself is only ever delivered into the provisioned app\'s secret storage.'),zod.null()]),
+  "usage": zod.object({
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date(),
+  "costUsd": zod.number().min(rotateVenomAppAiCredentialResponseUsageCostUsdMin),
+  "requests": zod.number().min(rotateVenomAppAiCredentialResponseUsageRequestsMin).multipleOf(rotateVenomAppAiCredentialResponseUsageRequestsMultipleOf),
+  "promptTokens": zod.number().min(rotateVenomAppAiCredentialResponseUsagePromptTokensMin).multipleOf(rotateVenomAppAiCredentialResponseUsagePromptTokensMultipleOf),
+  "outputTokens": zod.number().min(rotateVenomAppAiCredentialResponseUsageOutputTokensMin).multipleOf(rotateVenomAppAiCredentialResponseUsageOutputTokensMultipleOf),
+  "hasEstimates": zod.boolean(),
+  "models": zod.array(zod.object({
+  "modelId": zod.string().max(rotateVenomAppAiCredentialResponseUsageModelsItemModelIdMax),
+  "modelName": zod.string().max(rotateVenomAppAiCredentialResponseUsageModelsItemModelNameMax),
+  "costUsd": zod.number().min(rotateVenomAppAiCredentialResponseUsageModelsItemCostUsdMin),
+  "requests": zod.number().min(rotateVenomAppAiCredentialResponseUsageModelsItemRequestsMin).multipleOf(rotateVenomAppAiCredentialResponseUsageModelsItemRequestsMultipleOf)
+})).max(rotateVenomAppAiCredentialResponseUsageModelsMax)
+}),
+  "ownerMonthUsd": zod.number().min(rotateVenomAppAiCredentialResponseOwnerMonthUsdMin)
+}).describe('Owner-only view of an app\'s whitelabeled AI: month-to-date usage from the canonical ledger, spend controls, and a summary of the gateway credential. Never contains the credential secret, provider names, or per-token rates — costs are aggregated dollars and models are Venom aliases only.')
+
+
+/**
+ * Server-side kill switch: the deployed app's AI stops immediately and stays off until a rotate or the next provisioning handoff mints a replacement.
+ * @summary Revoke the app's AI gateway credential
+ */
+
+export const RevokeVenomAppAiCredentialParams = zod.object({
+  "appId": zod.coerce.string().regex(revokeVenomAppAiCredentialPathAppIdRegExp)
+})
+
+
+
+export const RevokeVenomAppAiCredentialResponse = zod.object({
+  "appId": zod.string().regex(revokeVenomAppAiCredentialResponseAppIdRegExp),
+  "paused": zod.boolean(),
+  "monthlyCapUsd": zod.union([zod.number().min(revokeVenomAppAiCredentialResponseMonthlyCapUsdOneMin),zod.null()]),
+  "safetyCapUsd": zod.number().min(revokeVenomAppAiCredentialResponseSafetyCapUsdMin),
+  "credential": zod.union([zod.object({
+  "displayPrefix": zod.string().max(revokeVenomAppAiCredentialResponseCredentialOneDisplayPrefixMax),
+  "createdAt": zod.coerce.date(),
+  "lastUsedAt": zod.coerce.date().nullable(),
+  "delivered": zod.boolean()
+}).describe('Display-safe credential summary. The prefix identifies the key for the owner; the secret itself is only ever delivered into the provisioned app\'s secret storage.'),zod.null()]),
+  "usage": zod.object({
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date(),
+  "costUsd": zod.number().min(revokeVenomAppAiCredentialResponseUsageCostUsdMin),
+  "requests": zod.number().min(revokeVenomAppAiCredentialResponseUsageRequestsMin).multipleOf(revokeVenomAppAiCredentialResponseUsageRequestsMultipleOf),
+  "promptTokens": zod.number().min(revokeVenomAppAiCredentialResponseUsagePromptTokensMin).multipleOf(revokeVenomAppAiCredentialResponseUsagePromptTokensMultipleOf),
+  "outputTokens": zod.number().min(revokeVenomAppAiCredentialResponseUsageOutputTokensMin).multipleOf(revokeVenomAppAiCredentialResponseUsageOutputTokensMultipleOf),
+  "hasEstimates": zod.boolean(),
+  "models": zod.array(zod.object({
+  "modelId": zod.string().max(revokeVenomAppAiCredentialResponseUsageModelsItemModelIdMax),
+  "modelName": zod.string().max(revokeVenomAppAiCredentialResponseUsageModelsItemModelNameMax),
+  "costUsd": zod.number().min(revokeVenomAppAiCredentialResponseUsageModelsItemCostUsdMin),
+  "requests": zod.number().min(revokeVenomAppAiCredentialResponseUsageModelsItemRequestsMin).multipleOf(revokeVenomAppAiCredentialResponseUsageModelsItemRequestsMultipleOf)
+})).max(revokeVenomAppAiCredentialResponseUsageModelsMax)
+}),
+  "ownerMonthUsd": zod.number().min(revokeVenomAppAiCredentialResponseOwnerMonthUsdMin)
+}).describe('Owner-only view of an app\'s whitelabeled AI: month-to-date usage from the canonical ledger, spend controls, and a summary of the gateway credential. Never contains the credential secret, provider names, or per-token rates — costs are aggregated dollars and models are Venom aliases only.')
+
+
+/**
  * @summary Get the pre-seeded context for improving this app
  */
-export const getVenomAppIterationContextPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const GetVenomAppIterationContextParams = zod.object({
   "appId": zod.coerce.string().regex(getVenomAppIterationContextPathAppIdRegExp)
 })
 
-export const getVenomAppIterationContextResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppIterationContextResponseAppNameMax = 120;
-
-export const getVenomAppIterationContextResponseLinkedProjectOneIdMax = 120;
-
-export const getVenomAppIterationContextResponseLinkedProjectOneNameMax = 120;
-
-export const getVenomAppIterationContextResponseBaselineOneIterationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppIterationContextResponseBaselineOneIterationNumberMultipleOf = 1;
-
-export const getVenomAppIterationContextResponseBaselineOneBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppIterationContextResponseBaselineOneRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppIterationContextResponseBaselineOnePackageTitleMax = 160;
-
-export const getVenomAppIterationContextResponseLatestSourceVersionOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppIterationContextResponseLatestSourceVersionOneVersionNumberMultipleOf = 1;
-
-export const getVenomAppIterationContextResponseLatestSourceVersionOneArchiveFilenameMax = 160;
-
-export const getVenomAppIterationContextResponseSuggestedSopsItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppIterationContextResponseSuggestedSopsItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppIterationContextResponseSuggestedSopsItemRevisionNumberMultipleOf = 1;
-
-export const getVenomAppIterationContextResponseSuggestedSopsItemTitleMax = 160;
-
-export const getVenomAppIterationContextResponseSuggestedSopsMax = 20;
-
-export const getVenomAppIterationContextResponseChangesOneKnowledgeChangesMin = 0;
-export const getVenomAppIterationContextResponseChangesOneKnowledgeChangesMultipleOf = 1;
-
-export const getVenomAppIterationContextResponseChangesOneSourceChangesMin = 0;
-export const getVenomAppIterationContextResponseChangesOneSourceChangesMultipleOf = 1;
-
-export const getVenomAppIterationContextResponseChangesOneSummaryMax = 1500;
 
 
 export const GetVenomAppIterationContextResponse = zod.object({
@@ -3398,6 +7002,23 @@ export const GetVenomAppIterationContextResponse = zod.object({
   "sourceChanges": zod.number().min(getVenomAppIterationContextResponseChangesOneSourceChangesMin).multipleOf(getVenomAppIterationContextResponseChangesOneSourceChangesMultipleOf),
   "summary": zod.string().min(1).max(getVenomAppIterationContextResponseChangesOneSummaryMax)
 }),zod.null()]),
+  "live": zod.union([zod.object({
+  "releaseId": zod.string().regex(getVenomAppIterationContextResponseLiveOneReleaseIdRegExp),
+  "iterationId": zod.union([zod.string().regex(getVenomAppIterationContextResponseLiveOneIterationIdOneRegExp),zod.null()]),
+  "iterationNumber": zod.union([zod.number().min(1).multipleOf(getVenomAppIterationContextResponseLiveOneIterationNumberOneMultipleOf),zod.null()]),
+  "packageTitle": zod.string().max(getVenomAppIterationContextResponseLiveOnePackageTitleMax).nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "restoredByRollback": zod.boolean(),
+  "resolvable": zod.boolean(),
+  "baselineSelectable": zod.boolean(),
+  "changes": zod.union([zod.object({
+  "since": zod.coerce.date(),
+  "knowledgeChanges": zod.number().min(getVenomAppIterationContextResponseLiveOneChangesOneKnowledgeChangesMin).multipleOf(getVenomAppIterationContextResponseLiveOneChangesOneKnowledgeChangesMultipleOf),
+  "sourceChanges": zod.number().min(getVenomAppIterationContextResponseLiveOneChangesOneSourceChangesMin).multipleOf(getVenomAppIterationContextResponseLiveOneChangesOneSourceChangesMultipleOf),
+  "summary": zod.string().min(1).max(getVenomAppIterationContextResponseLiveOneChangesOneSummaryMax)
+}),zod.null()])
+}),zod.null()]),
+  "divergence": zod.union([zod.enum(['in_sync', 'live_behind', 'live_ahead', 'live_unversioned']),zod.null()]),
   "canIterate": zod.boolean(),
   "blockedReason": zod.union([zod.enum(['no_baseline', 'baseline_unresolvable']),zod.null()])
 })
@@ -3406,159 +7027,21 @@ export const GetVenomAppIterationContextResponse = zod.object({
 /**
  * @summary Start an improvement build run from the app's approved baseline
  */
-export const createVenomAppIterationPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const CreateVenomAppIterationParams = zod.object({
   "appId": zod.coerce.string().regex(createVenomAppIterationPathAppIdRegExp)
 })
 
-export const createVenomAppIterationBodyInstructionMax = 4000;
-
-export const createVenomAppIterationBodyConstraintsMax = 4000;
-
-export const createVenomAppIterationBodySopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationBodySopRevisionIdsMax = 20;
-
-export const createVenomAppIterationBodyIdempotencyKeyMin = 16;
-export const createVenomAppIterationBodyIdempotencyKeyMax = 120;
-
-
-export const createVenomAppIterationBodyIdempotencyKeyRegExp = new RegExp('^[A-Za-z0-9_-]+$');
 
 
 export const CreateVenomAppIterationBody = zod.object({
   "instruction": zod.string().min(1).max(createVenomAppIterationBodyInstructionMax),
   "constraints": zod.string().max(createVenomAppIterationBodyConstraintsMax).optional(),
   "sopRevisionIds": zod.array(zod.string().regex(createVenomAppIterationBodySopRevisionIdsItemRegExp)).max(createVenomAppIterationBodySopRevisionIdsMax).optional(),
-  "idempotencyKey": zod.string().min(createVenomAppIterationBodyIdempotencyKeyMin).max(createVenomAppIterationBodyIdempotencyKeyMax).regex(createVenomAppIterationBodyIdempotencyKeyRegExp)
+  "idempotencyKey": zod.string().min(createVenomAppIterationBodyIdempotencyKeyMin).max(createVenomAppIterationBodyIdempotencyKeyMax).regex(createVenomAppIterationBodyIdempotencyKeyRegExp),
+  "baselineIterationId": zod.string().regex(createVenomAppIterationBodyBaselineIterationIdRegExp).optional()
 })
 
-export const createVenomAppIterationResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseOneTargetNameMax = 120;
-
-export const createVenomAppIterationResponseOneProgressMin = 0;
-export const createVenomAppIterationResponseOneProgressMax = 100;
-export const createVenomAppIterationResponseOneProgressMultipleOf = 1;
-
-export const createVenomAppIterationResponseOneCurrentRevisionNumberMin = 0;
-export const createVenomAppIterationResponseOneCurrentRevisionNumberMultipleOf = 1;
-
-export const createVenomAppIterationResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseOneFailureMessageMax = 240;
-
-export const createVenomAppIterationResponseOneCancelledReasonMax = 500;
-
-export const createVenomAppIterationResponseTwoRequestTargetNameMax = 120;
-
-export const createVenomAppIterationResponseTwoRequestRequirementsMax = 8000;
-
-export const createVenomAppIterationResponseTwoRequestConstraintsMax = 4000;
-
-export const createVenomAppIterationResponseTwoRequestBrandDirectionMax = 3000;
-
-export const createVenomAppIterationResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseTwoRequestProjectIdMax = 120;
-
-export const createVenomAppIterationResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseTwoRequestSopRevisionIdsMax = 20;
-
-export const createVenomAppIterationResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseTwoRequestChangesSummaryMax = 2000;
-
-export const createVenomAppIterationResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
-
-export const createVenomAppIterationResponseTwoRevisionsItemReasonMax = 1000;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageTitleMax = 160;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const createVenomAppIterationResponseTwoRevisionsItemPackageSopReferencesMax = 20;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageDataNeedsMax = 30;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
-
-export const createVenomAppIterationResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
-
-export const createVenomAppIterationResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const createVenomAppIterationResponseTwoRevisionsMax = 50;
-
-export const createVenomAppIterationResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppIterationResponseTwoEventsItemProgressMin = 0;
-export const createVenomAppIterationResponseTwoEventsItemProgressMax = 100;
-export const createVenomAppIterationResponseTwoEventsItemProgressMultipleOf = 1;
-
-export const createVenomAppIterationResponseTwoEventsItemMessageMax = 240;
-
-export const createVenomAppIterationResponseTwoEventsMax = 200;
-
-export const createVenomAppIterationResponseTwoAttemptMax = 10;
-export const createVenomAppIterationResponseTwoAttemptMultipleOf = 1;
-
-export const createVenomAppIterationResponseTwoFailureCodeMax = 80;
 
 
 export const CreateVenomAppIterationResponse = zod.object({
@@ -3572,6 +7055,7 @@ export const CreateVenomAppIterationResponse = zod.object({
   "progress": zod.number().min(createVenomAppIterationResponseOneProgressMin).max(createVenomAppIterationResponseOneProgressMax).multipleOf(createVenomAppIterationResponseOneProgressMultipleOf),
   "currentRevisionNumber": zod.number().min(createVenomAppIterationResponseOneCurrentRevisionNumberMin).multipleOf(createVenomAppIterationResponseOneCurrentRevisionNumberMultipleOf),
   "approvedRevisionId": zod.union([zod.string().regex(createVenomAppIterationResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "templateId": zod.union([zod.string().regex(createVenomAppIterationResponseOneTemplateIdOneRegExp),zod.null()]),
   "failureMessage": zod.string().max(createVenomAppIterationResponseOneFailureMessageMax).nullable(),
   "cancelledReason": zod.string().max(createVenomAppIterationResponseOneCancelledReasonMax).nullable(),
   "createdAt": zod.coerce.date(),
@@ -3589,7 +7073,8 @@ export const CreateVenomAppIterationResponse = zod.object({
   "sopRevisionIds": zod.array(zod.string().regex(createVenomAppIterationResponseTwoRequestSopRevisionIdsItemRegExp)).max(createVenomAppIterationResponseTwoRequestSopRevisionIdsMax),
   "baselineIterationId": zod.union([zod.string().regex(createVenomAppIterationResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
   "baselineRevisionId": zod.union([zod.string().regex(createVenomAppIterationResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
-  "changesSummary": zod.string().max(createVenomAppIterationResponseTwoRequestChangesSummaryMax).nullable()
+  "changesSummary": zod.string().max(createVenomAppIterationResponseTwoRequestChangesSummaryMax).nullable(),
+  "templateId": zod.union([zod.string().regex(createVenomAppIterationResponseTwoRequestTemplateIdOneRegExp),zod.null()])
 }),
   "revisions": zod.array(zod.object({
   "id": zod.string().regex(createVenomAppIterationResponseTwoRevisionsItemIdRegExp),
@@ -3638,7 +7123,7 @@ export const CreateVenomAppIterationResponse = zod.object({
 })).max(createVenomAppIterationResponseTwoRevisionsMax),
   "events": zod.array(zod.object({
   "id": zod.string().regex(createVenomAppIterationResponseTwoEventsItemIdRegExp),
-  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "eventType": zod.enum(['queued', 'preparing', 'network_guidance', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
   "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
   "progress": zod.number().min(createVenomAppIterationResponseTwoEventsItemProgressMin).max(createVenomAppIterationResponseTwoEventsItemProgressMax).multipleOf(createVenomAppIterationResponseTwoEventsItemProgressMultipleOf),
   "message": zod.string().min(1).max(createVenomAppIterationResponseTwoEventsItemMessageMax),
@@ -3654,47 +7139,11 @@ export const CreateVenomAppIterationResponse = zod.object({
 /**
  * @summary Dismiss the current new-data improvement suggestion
  */
-export const dismissVenomAppImprovementSuggestionPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const DismissVenomAppImprovementSuggestionParams = zod.object({
   "appId": zod.coerce.string().regex(dismissVenomAppImprovementSuggestionPathAppIdRegExp)
 })
 
-export const dismissVenomAppImprovementSuggestionResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const dismissVenomAppImprovementSuggestionResponseNameMax = 120;
-
-export const dismissVenomAppImprovementSuggestionResponsePurposeMax = 1000;
-
-export const dismissVenomAppImprovementSuggestionResponseBrandMax = 120;
-
-export const dismissVenomAppImprovementSuggestionResponseDetectedStackItemMax = 60;
-
-export const dismissVenomAppImprovementSuggestionResponseDetectedStackMax = 20;
-
-export const dismissVenomAppImprovementSuggestionResponseSourceVersionMin = 0;
-export const dismissVenomAppImprovementSuggestionResponseSourceVersionMultipleOf = 1;
-
-export const dismissVenomAppImprovementSuggestionResponseDeploymentUrlMax = 2048;
-
-export const dismissVenomAppImprovementSuggestionResponseLinkedProjectIdMax = 120;
-
-export const dismissVenomAppImprovementSuggestionResponseLinkedProjectNameMax = 120;
-
-export const dismissVenomAppImprovementSuggestionResponseLatestIterationNumberMin = 0;
-export const dismissVenomAppImprovementSuggestionResponseLatestIterationNumberMultipleOf = 1;
-
-export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneKnowledgeChangesMin = 0;
-export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneKnowledgeChangesMultipleOf = 1;
-
-export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSourceChangesMin = 0;
-export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSourceChangesMultipleOf = 1;
-
-export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneTotalChangesMultipleOf = 1;
-
-export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSummaryMax = 1500;
-
-export const dismissVenomAppImprovementSuggestionResponseImprovementSignalOneBaselineIterationNumberMultipleOf = 1;
 
 
 export const DismissVenomAppImprovementSuggestionResponse = zod.object({
@@ -3712,6 +7161,9 @@ export const DismissVenomAppImprovementSuggestionResponse = zod.object({
   "linkedProjectId": zod.string().max(dismissVenomAppImprovementSuggestionResponseLinkedProjectIdMax).nullable(),
   "linkedProjectName": zod.string().max(dismissVenomAppImprovementSuggestionResponseLinkedProjectNameMax).nullable(),
   "latestIterationNumber": zod.number().min(dismissVenomAppImprovementSuggestionResponseLatestIterationNumberMin).multipleOf(dismissVenomAppImprovementSuggestionResponseLatestIterationNumberMultipleOf),
+  "liveReleaseId": zod.union([zod.string().regex(dismissVenomAppImprovementSuggestionResponseLiveReleaseIdOneRegExp),zod.null()]),
+  "liveIterationNumber": zod.union([zod.number().min(1).multipleOf(dismissVenomAppImprovementSuggestionResponseLiveIterationNumberOneMultipleOf),zod.null()]),
+  "livePublishedAt": zod.coerce.date().nullable(),
   "improvementSignal": zod.union([zod.object({
   "since": zod.coerce.date(),
   "knowledgeChanges": zod.number().min(dismissVenomAppImprovementSuggestionResponseImprovementSignalOneKnowledgeChangesMin).multipleOf(dismissVenomAppImprovementSuggestionResponseImprovementSignalOneKnowledgeChangesMultipleOf),
@@ -3720,6 +7172,8 @@ export const DismissVenomAppImprovementSuggestionResponse = zod.object({
   "summary": zod.string().min(1).max(dismissVenomAppImprovementSuggestionResponseImprovementSignalOneSummaryMax),
   "baselineIterationNumber": zod.number().min(1).multipleOf(dismissVenomAppImprovementSuggestionResponseImprovementSignalOneBaselineIterationNumberMultipleOf)
 }),zod.null()]),
+  "templateId": zod.union([zod.string().regex(dismissVenomAppImprovementSuggestionResponseTemplateIdOneRegExp),zod.null()]),
+  "templateName": zod.string().max(dismissVenomAppImprovementSuggestionResponseTemplateNameMax).nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -3728,18 +7182,11 @@ export const DismissVenomAppImprovementSuggestionResponse = zod.object({
 /**
  * @summary Page through the app's full evolution timeline
  */
-export const getVenomAppTimelinePathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const GetVenomAppTimelineParams = zod.object({
   "appId": zod.coerce.string().regex(getVenomAppTimelinePathAppIdRegExp)
 })
 
-export const getVenomAppTimelineQueryCursorMax = 300;
-
-export const getVenomAppTimelineQueryLimitDefault = 100;
-export const getVenomAppTimelineQueryLimitMax = 200;
-export const getVenomAppTimelineQueryLimitMultipleOf = 1;
 
 
 export const GetVenomAppTimelineQueryParams = zod.object({
@@ -3747,27 +7194,6 @@ export const GetVenomAppTimelineQueryParams = zod.object({
   "limit": zod.coerce.number().min(1).max(getVenomAppTimelineQueryLimitMax).multipleOf(getVenomAppTimelineQueryLimitMultipleOf).default(getVenomAppTimelineQueryLimitDefault)
 })
 
-export const getVenomAppTimelineResponseEntriesItemIdMax = 200;
-
-export const getVenomAppTimelineResponseEntriesItemTitleMax = 240;
-
-export const getVenomAppTimelineResponseEntriesItemDetailMax = 2000;
-
-export const getVenomAppTimelineResponseEntriesItemActorMax = 200;
-
-export const getVenomAppTimelineResponseEntriesItemStatusMax = 60;
-
-export const getVenomAppTimelineResponseEntriesItemBuildRunIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppTimelineResponseEntriesItemReleaseIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppTimelineResponseEntriesItemSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppTimelineResponseEntriesItemIterationNumberOneMultipleOf = 1;
-
-export const getVenomAppTimelineResponseEntriesMax = 200;
-
-export const getVenomAppTimelineResponseNextCursorMax = 300;
-
-export const getVenomAppTimelineResponseTotalMin = 0;
-export const getVenomAppTimelineResponseTotalMultipleOf = 1;
 
 
 export const GetVenomAppTimelineResponse = zod.object({
@@ -3792,43 +7218,11 @@ export const GetVenomAppTimelineResponse = zod.object({
 /**
  * @summary List immutable source versions for an app
  */
-export const listVenomAppVersionsPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ListVenomAppVersionsParams = zod.object({
   "appId": zod.coerce.string().regex(listVenomAppVersionsPathAppIdRegExp)
 })
 
-export const listVenomAppVersionsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomAppVersionsResponseVersionNumberMultipleOf = 1;
-
-export const listVenomAppVersionsResponseArchiveFilenameMax = 160;
-
-export const listVenomAppVersionsResponseArchiveBytesMultipleOf = 1;
-
-export const listVenomAppVersionsResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const listVenomAppVersionsResponseManifestTotalEntriesMax = 5000;
-export const listVenomAppVersionsResponseManifestTotalEntriesMultipleOf = 1;
-
-export const listVenomAppVersionsResponseManifestSafeFileCountMin = 0;
-export const listVenomAppVersionsResponseManifestSafeFileCountMax = 5000;
-export const listVenomAppVersionsResponseManifestSafeFileCountMultipleOf = 1;
-
-export const listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMin = 0;
-export const listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMax = 5000;
-export const listVenomAppVersionsResponseManifestExcludedSensitiveFileCountMultipleOf = 1;
-
-export const listVenomAppVersionsResponseManifestFilesItemMax = 240;
-
-export const listVenomAppVersionsResponseManifestFilesMax = 200;
-
-export const listVenomAppVersionsResponseManifestProjectFilesItemMax = 240;
-
-export const listVenomAppVersionsResponseManifestProjectFilesMax = 40;
-
-export const listVenomAppVersionsResponseManifestDetectedStackItemMax = 60;
-
-export const listVenomAppVersionsResponseManifestDetectedStackMax = 20;
 
 
 export const ListVenomAppVersionsResponseItem = zod.object({
@@ -3856,25 +7250,12 @@ export const ListVenomAppVersionsResponse = zod.array(ListVenomAppVersionsRespon
 /**
  * @summary Start a private ZIP source import
  */
-export const createVenomAppImportPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const CreateVenomAppImportParams = zod.object({
   "appId": zod.coerce.string().regex(createVenomAppImportPathAppIdRegExp)
 })
 
-export const createVenomAppImportBodyFilenameMax = 160;
 
-
-export const createVenomAppImportBodyFilenameRegExp = new RegExp('^.*\\.[zZ][iI][pP]$');
-export const createVenomAppImportBodySizeMax = 52428800;
-export const createVenomAppImportBodySizeMultipleOf = 1;
-
-export const createVenomAppImportBodyIdempotencyKeyMin = 16;
-export const createVenomAppImportBodyIdempotencyKeyMax = 120;
-
-
-export const createVenomAppImportBodyIdempotencyKeyRegExp = new RegExp('^[A-Za-z0-9_-]+$');
 
 
 export const CreateVenomAppImportBody = zod.object({
@@ -3883,22 +7264,6 @@ export const CreateVenomAppImportBody = zod.object({
   "idempotencyKey": zod.string().min(createVenomAppImportBodyIdempotencyKeyMin).max(createVenomAppImportBodyIdempotencyKeyMax).regex(createVenomAppImportBodyIdempotencyKeyRegExp)
 })
 
-export const createVenomAppImportResponseJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppImportResponseJobAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppImportResponseJobArchiveFilenameMax = 160;
-
-export const createVenomAppImportResponseJobDeclaredBytesMultipleOf = 1;
-
-export const createVenomAppImportResponseJobProgressMin = 0;
-export const createVenomAppImportResponseJobProgressMax = 100;
-export const createVenomAppImportResponseJobProgressMultipleOf = 1;
-
-export const createVenomAppImportResponseJobFailureCodeMax = 80;
-
-export const createVenomAppImportResponseJobFailureMessageMax = 240;
-
-export const createVenomAppImportResponseJobSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomAppImportResponseUploadUrlMax = 8192;
 
 
 export const CreateVenomAppImportResponse = zod.object({
@@ -3925,30 +7290,11 @@ export const CreateVenomAppImportResponse = zod.object({
 /**
  * @summary Get a ZIP import's observable status
  */
-export const getVenomAppImportPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppImportPathImportJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const GetVenomAppImportParams = zod.object({
   "appId": zod.coerce.string().regex(getVenomAppImportPathAppIdRegExp),
   "importJobId": zod.coerce.string().regex(getVenomAppImportPathImportJobIdRegExp)
 })
-
-export const getVenomAppImportResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppImportResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomAppImportResponseArchiveFilenameMax = 160;
-
-export const getVenomAppImportResponseDeclaredBytesMultipleOf = 1;
-
-export const getVenomAppImportResponseProgressMin = 0;
-export const getVenomAppImportResponseProgressMax = 100;
-export const getVenomAppImportResponseProgressMultipleOf = 1;
-
-export const getVenomAppImportResponseFailureCodeMax = 80;
-
-export const getVenomAppImportResponseFailureMessageMax = 240;
-
-export const getVenomAppImportResponseSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const GetVenomAppImportResponse = zod.object({
@@ -3970,30 +7316,11 @@ export const GetVenomAppImportResponse = zod.object({
 /**
  * @summary Confirm upload and start bounded archive inspection
  */
-export const completeVenomAppImportUploadPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const completeVenomAppImportUploadPathImportJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const CompleteVenomAppImportUploadParams = zod.object({
   "appId": zod.coerce.string().regex(completeVenomAppImportUploadPathAppIdRegExp),
   "importJobId": zod.coerce.string().regex(completeVenomAppImportUploadPathImportJobIdRegExp)
 })
-
-export const completeVenomAppImportUploadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const completeVenomAppImportUploadResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const completeVenomAppImportUploadResponseArchiveFilenameMax = 160;
-
-export const completeVenomAppImportUploadResponseDeclaredBytesMultipleOf = 1;
-
-export const completeVenomAppImportUploadResponseProgressMin = 0;
-export const completeVenomAppImportUploadResponseProgressMax = 100;
-export const completeVenomAppImportUploadResponseProgressMultipleOf = 1;
-
-export const completeVenomAppImportUploadResponseFailureCodeMax = 80;
-
-export const completeVenomAppImportUploadResponseFailureMessageMax = 240;
-
-export const completeVenomAppImportUploadResponseSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const CompleteVenomAppImportUploadResponse = zod.object({
@@ -4015,31 +7342,12 @@ export const CompleteVenomAppImportUploadResponse = zod.object({
 /**
  * @summary Create a fresh private upload target for a failed import
  */
-export const retryVenomAppImportPathAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomAppImportPathImportJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const RetryVenomAppImportParams = zod.object({
   "appId": zod.coerce.string().regex(retryVenomAppImportPathAppIdRegExp),
   "importJobId": zod.coerce.string().regex(retryVenomAppImportPathImportJobIdRegExp)
 })
 
-export const retryVenomAppImportResponseJobIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomAppImportResponseJobAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomAppImportResponseJobArchiveFilenameMax = 160;
-
-export const retryVenomAppImportResponseJobDeclaredBytesMultipleOf = 1;
-
-export const retryVenomAppImportResponseJobProgressMin = 0;
-export const retryVenomAppImportResponseJobProgressMax = 100;
-export const retryVenomAppImportResponseJobProgressMultipleOf = 1;
-
-export const retryVenomAppImportResponseJobFailureCodeMax = 80;
-
-export const retryVenomAppImportResponseJobFailureMessageMax = 240;
-
-export const retryVenomAppImportResponseJobSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomAppImportResponseUploadUrlMax = 8192;
 
 
 export const RetryVenomAppImportResponse = zod.object({
@@ -4066,10 +7374,6 @@ export const RetryVenomAppImportResponse = zod.object({
 /**
  * @summary Search the signed-in user's SOP library
  */
-export const listVenomSopsQueryQueryMax = 120;
-
-export const listVenomSopsQueryAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ListVenomSopsQueryParams = zod.object({
   "query": zod.coerce.string().max(listVenomSopsQueryQueryMax).optional(),
@@ -4077,40 +7381,6 @@ export const ListVenomSopsQueryParams = zod.object({
   "appId": zod.coerce.string().regex(listVenomSopsQueryAppIdRegExp).optional()
 })
 
-export const listVenomSopsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomSopsResponseTitleMax = 160;
-
-export const listVenomSopsResponseTagsItemMax = 50;
-
-export const listVenomSopsResponseTagsMax = 20;
-
-export const listVenomSopsResponseContentPurposeMax = 2000;
-
-export const listVenomSopsResponseContentPrerequisitesItemMax = 500;
-
-export const listVenomSopsResponseContentPrerequisitesMax = 25;
-
-export const listVenomSopsResponseContentInputsItemMax = 500;
-
-export const listVenomSopsResponseContentInputsMax = 25;
-
-export const listVenomSopsResponseContentGuidanceItemMax = 2000;
-
-export const listVenomSopsResponseContentGuidanceMax = 60;
-
-export const listVenomSopsResponseContentRequiredApprovalsItemMax = 500;
-
-export const listVenomSopsResponseContentRequiredApprovalsMax = 25;
-
-export const listVenomSopsResponseContentAcceptanceChecksItemMax = 500;
-
-export const listVenomSopsResponseContentAcceptanceChecksMax = 25;
-
-export const listVenomSopsResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomSopsResponseActiveRevisionNumberMultipleOf = 1;
-
-export const listVenomSopsResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomSopsResponseAppIdsMax = 100;
 
 
 export const ListVenomSopsResponseItem = zod.object({
@@ -4141,33 +7411,6 @@ export const ListVenomSopsResponse = zod.array(ListVenomSopsResponseItem).max(50
 /**
  * @summary Create a mutable SOP draft
  */
-export const createVenomSopBodyTitleMax = 160;
-
-export const createVenomSopBodyTagsItemMax = 50;
-
-export const createVenomSopBodyTagsMax = 20;
-
-export const createVenomSopBodyContentPurposeMax = 2000;
-
-export const createVenomSopBodyContentPrerequisitesItemMax = 500;
-
-export const createVenomSopBodyContentPrerequisitesMax = 25;
-
-export const createVenomSopBodyContentInputsItemMax = 500;
-
-export const createVenomSopBodyContentInputsMax = 25;
-
-export const createVenomSopBodyContentGuidanceItemMax = 2000;
-
-export const createVenomSopBodyContentGuidanceMax = 60;
-
-export const createVenomSopBodyContentRequiredApprovalsItemMax = 500;
-
-export const createVenomSopBodyContentRequiredApprovalsMax = 25;
-
-export const createVenomSopBodyContentAcceptanceChecksItemMax = 500;
-
-export const createVenomSopBodyContentAcceptanceChecksMax = 25;
 
 
 export const CreateVenomSopBody = zod.object({
@@ -4185,40 +7428,6 @@ export const CreateVenomSopBody = zod.object({
 })
 })
 
-export const createVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomSopResponseTitleMax = 160;
-
-export const createVenomSopResponseTagsItemMax = 50;
-
-export const createVenomSopResponseTagsMax = 20;
-
-export const createVenomSopResponseContentPurposeMax = 2000;
-
-export const createVenomSopResponseContentPrerequisitesItemMax = 500;
-
-export const createVenomSopResponseContentPrerequisitesMax = 25;
-
-export const createVenomSopResponseContentInputsItemMax = 500;
-
-export const createVenomSopResponseContentInputsMax = 25;
-
-export const createVenomSopResponseContentGuidanceItemMax = 2000;
-
-export const createVenomSopResponseContentGuidanceMax = 60;
-
-export const createVenomSopResponseContentRequiredApprovalsItemMax = 500;
-
-export const createVenomSopResponseContentRequiredApprovalsMax = 25;
-
-export const createVenomSopResponseContentAcceptanceChecksItemMax = 500;
-
-export const createVenomSopResponseContentAcceptanceChecksMax = 25;
-
-export const createVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomSopResponseActiveRevisionNumberMultipleOf = 1;
-
-export const createVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomSopResponseAppIdsMax = 100;
 
 
 export const CreateVenomSopResponse = zod.object({
@@ -4248,84 +7457,11 @@ export const CreateVenomSopResponse = zod.object({
 /**
  * @summary Inspect an SOP, its current draft, revisions, and assignments
  */
-export const getVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const GetVenomSopParams = zod.object({
   "sopId": zod.coerce.string().regex(getVenomSopPathSopIdRegExp)
 })
 
-export const getVenomSopResponseSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomSopResponseSopTitleMax = 160;
-
-export const getVenomSopResponseSopTagsItemMax = 50;
-
-export const getVenomSopResponseSopTagsMax = 20;
-
-export const getVenomSopResponseSopContentPurposeMax = 2000;
-
-export const getVenomSopResponseSopContentPrerequisitesItemMax = 500;
-
-export const getVenomSopResponseSopContentPrerequisitesMax = 25;
-
-export const getVenomSopResponseSopContentInputsItemMax = 500;
-
-export const getVenomSopResponseSopContentInputsMax = 25;
-
-export const getVenomSopResponseSopContentGuidanceItemMax = 2000;
-
-export const getVenomSopResponseSopContentGuidanceMax = 60;
-
-export const getVenomSopResponseSopContentRequiredApprovalsItemMax = 500;
-
-export const getVenomSopResponseSopContentRequiredApprovalsMax = 25;
-
-export const getVenomSopResponseSopContentAcceptanceChecksItemMax = 500;
-
-export const getVenomSopResponseSopContentAcceptanceChecksMax = 25;
-
-export const getVenomSopResponseSopActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomSopResponseSopActiveRevisionNumberMultipleOf = 1;
-
-export const getVenomSopResponseSopAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomSopResponseSopAppIdsMax = 100;
-
-export const getVenomSopResponseRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomSopResponseRevisionsItemVersionNumberMultipleOf = 1;
-
-export const getVenomSopResponseRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const getVenomSopResponseRevisionsItemTitleMax = 160;
-
-export const getVenomSopResponseRevisionsItemTagsItemMax = 50;
-
-export const getVenomSopResponseRevisionsItemTagsMax = 20;
-
-export const getVenomSopResponseRevisionsItemContentPurposeMax = 2000;
-
-export const getVenomSopResponseRevisionsItemContentPrerequisitesItemMax = 500;
-
-export const getVenomSopResponseRevisionsItemContentPrerequisitesMax = 25;
-
-export const getVenomSopResponseRevisionsItemContentInputsItemMax = 500;
-
-export const getVenomSopResponseRevisionsItemContentInputsMax = 25;
-
-export const getVenomSopResponseRevisionsItemContentGuidanceItemMax = 2000;
-
-export const getVenomSopResponseRevisionsItemContentGuidanceMax = 60;
-
-export const getVenomSopResponseRevisionsItemContentRequiredApprovalsItemMax = 500;
-
-export const getVenomSopResponseRevisionsItemContentRequiredApprovalsMax = 25;
-
-export const getVenomSopResponseRevisionsItemContentAcceptanceChecksItemMax = 500;
-
-export const getVenomSopResponseRevisionsItemContentAcceptanceChecksMax = 25;
-
-export const getVenomSopResponseRevisionsMax = 500;
-
-export const getVenomSopResponseAssignmentsItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomSopResponseAssignmentsMax = 100;
 
 
 export const GetVenomSopResponse = zod.object({
@@ -4379,40 +7515,11 @@ export const GetVenomSopResponse = zod.object({
 /**
  * @summary Update a mutable SOP draft
  */
-export const updateVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const UpdateVenomSopParams = zod.object({
   "sopId": zod.coerce.string().regex(updateVenomSopPathSopIdRegExp)
 })
 
-export const updateVenomSopBodyOneTitleMax = 160;
-
-export const updateVenomSopBodyOneTagsItemMax = 50;
-
-export const updateVenomSopBodyOneTagsMax = 20;
-
-export const updateVenomSopBodyOneContentPurposeMax = 2000;
-
-export const updateVenomSopBodyOneContentPrerequisitesItemMax = 500;
-
-export const updateVenomSopBodyOneContentPrerequisitesMax = 25;
-
-export const updateVenomSopBodyOneContentInputsItemMax = 500;
-
-export const updateVenomSopBodyOneContentInputsMax = 25;
-
-export const updateVenomSopBodyOneContentGuidanceItemMax = 2000;
-
-export const updateVenomSopBodyOneContentGuidanceMax = 60;
-
-export const updateVenomSopBodyOneContentRequiredApprovalsItemMax = 500;
-
-export const updateVenomSopBodyOneContentRequiredApprovalsMax = 25;
-
-export const updateVenomSopBodyOneContentAcceptanceChecksItemMax = 500;
-
-export const updateVenomSopBodyOneContentAcceptanceChecksMax = 25;
 
 
 export const UpdateVenomSopBody = zod.object({
@@ -4430,40 +7537,6 @@ export const UpdateVenomSopBody = zod.object({
 })
 })
 
-export const updateVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const updateVenomSopResponseTitleMax = 160;
-
-export const updateVenomSopResponseTagsItemMax = 50;
-
-export const updateVenomSopResponseTagsMax = 20;
-
-export const updateVenomSopResponseContentPurposeMax = 2000;
-
-export const updateVenomSopResponseContentPrerequisitesItemMax = 500;
-
-export const updateVenomSopResponseContentPrerequisitesMax = 25;
-
-export const updateVenomSopResponseContentInputsItemMax = 500;
-
-export const updateVenomSopResponseContentInputsMax = 25;
-
-export const updateVenomSopResponseContentGuidanceItemMax = 2000;
-
-export const updateVenomSopResponseContentGuidanceMax = 60;
-
-export const updateVenomSopResponseContentRequiredApprovalsItemMax = 500;
-
-export const updateVenomSopResponseContentRequiredApprovalsMax = 25;
-
-export const updateVenomSopResponseContentAcceptanceChecksItemMax = 500;
-
-export const updateVenomSopResponseContentAcceptanceChecksMax = 25;
-
-export const updateVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const updateVenomSopResponseActiveRevisionNumberMultipleOf = 1;
-
-export const updateVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const updateVenomSopResponseAppIdsMax = 100;
 
 
 export const UpdateVenomSopResponse = zod.object({
@@ -4493,44 +7566,11 @@ export const UpdateVenomSopResponse = zod.object({
 /**
  * @summary Publish the current draft as an immutable SOP revision
  */
-export const publishVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const PublishVenomSopParams = zod.object({
   "sopId": zod.coerce.string().regex(publishVenomSopPathSopIdRegExp)
 })
 
-export const publishVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishVenomSopResponseVersionNumberMultipleOf = 1;
-
-export const publishVenomSopResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const publishVenomSopResponseTitleMax = 160;
-
-export const publishVenomSopResponseTagsItemMax = 50;
-
-export const publishVenomSopResponseTagsMax = 20;
-
-export const publishVenomSopResponseContentPurposeMax = 2000;
-
-export const publishVenomSopResponseContentPrerequisitesItemMax = 500;
-
-export const publishVenomSopResponseContentPrerequisitesMax = 25;
-
-export const publishVenomSopResponseContentInputsItemMax = 500;
-
-export const publishVenomSopResponseContentInputsMax = 25;
-
-export const publishVenomSopResponseContentGuidanceItemMax = 2000;
-
-export const publishVenomSopResponseContentGuidanceMax = 60;
-
-export const publishVenomSopResponseContentRequiredApprovalsItemMax = 500;
-
-export const publishVenomSopResponseContentRequiredApprovalsMax = 25;
-
-export const publishVenomSopResponseContentAcceptanceChecksItemMax = 500;
-
-export const publishVenomSopResponseContentAcceptanceChecksMax = 25;
 
 
 export const PublishVenomSopResponse = zod.object({
@@ -4556,47 +7596,11 @@ export const PublishVenomSopResponse = zod.object({
 /**
  * @summary Duplicate an SOP into a new mutable draft
  */
-export const duplicateVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const DuplicateVenomSopParams = zod.object({
   "sopId": zod.coerce.string().regex(duplicateVenomSopPathSopIdRegExp)
 })
 
-export const duplicateVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const duplicateVenomSopResponseTitleMax = 160;
-
-export const duplicateVenomSopResponseTagsItemMax = 50;
-
-export const duplicateVenomSopResponseTagsMax = 20;
-
-export const duplicateVenomSopResponseContentPurposeMax = 2000;
-
-export const duplicateVenomSopResponseContentPrerequisitesItemMax = 500;
-
-export const duplicateVenomSopResponseContentPrerequisitesMax = 25;
-
-export const duplicateVenomSopResponseContentInputsItemMax = 500;
-
-export const duplicateVenomSopResponseContentInputsMax = 25;
-
-export const duplicateVenomSopResponseContentGuidanceItemMax = 2000;
-
-export const duplicateVenomSopResponseContentGuidanceMax = 60;
-
-export const duplicateVenomSopResponseContentRequiredApprovalsItemMax = 500;
-
-export const duplicateVenomSopResponseContentRequiredApprovalsMax = 25;
-
-export const duplicateVenomSopResponseContentAcceptanceChecksItemMax = 500;
-
-export const duplicateVenomSopResponseContentAcceptanceChecksMax = 25;
-
-export const duplicateVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const duplicateVenomSopResponseActiveRevisionNumberMultipleOf = 1;
-
-export const duplicateVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const duplicateVenomSopResponseAppIdsMax = 100;
 
 
 export const DuplicateVenomSopResponse = zod.object({
@@ -4626,47 +7630,11 @@ export const DuplicateVenomSopResponse = zod.object({
 /**
  * @summary Archive an SOP without deleting its revision history
  */
-export const archiveVenomSopPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ArchiveVenomSopParams = zod.object({
   "sopId": zod.coerce.string().regex(archiveVenomSopPathSopIdRegExp)
 })
 
-export const archiveVenomSopResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const archiveVenomSopResponseTitleMax = 160;
-
-export const archiveVenomSopResponseTagsItemMax = 50;
-
-export const archiveVenomSopResponseTagsMax = 20;
-
-export const archiveVenomSopResponseContentPurposeMax = 2000;
-
-export const archiveVenomSopResponseContentPrerequisitesItemMax = 500;
-
-export const archiveVenomSopResponseContentPrerequisitesMax = 25;
-
-export const archiveVenomSopResponseContentInputsItemMax = 500;
-
-export const archiveVenomSopResponseContentInputsMax = 25;
-
-export const archiveVenomSopResponseContentGuidanceItemMax = 2000;
-
-export const archiveVenomSopResponseContentGuidanceMax = 60;
-
-export const archiveVenomSopResponseContentRequiredApprovalsItemMax = 500;
-
-export const archiveVenomSopResponseContentRequiredApprovalsMax = 25;
-
-export const archiveVenomSopResponseContentAcceptanceChecksItemMax = 500;
-
-export const archiveVenomSopResponseContentAcceptanceChecksMax = 25;
-
-export const archiveVenomSopResponseActiveRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const archiveVenomSopResponseActiveRevisionNumberMultipleOf = 1;
-
-export const archiveVenomSopResponseAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const archiveVenomSopResponseAppIdsMax = 100;
 
 
 export const ArchiveVenomSopResponse = zod.object({
@@ -4696,22 +7664,16 @@ export const ArchiveVenomSopResponse = zod.object({
 /**
  * @summary Assign an SOP to registered apps, or remove assignments for account-wide use
  */
-export const assignVenomSopAppsPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const AssignVenomSopAppsParams = zod.object({
   "sopId": zod.coerce.string().regex(assignVenomSopAppsPathSopIdRegExp)
 })
 
-export const assignVenomSopAppsBodyAppIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const assignVenomSopAppsBodyAppIdsMax = 100;
 
 
 export const AssignVenomSopAppsBody = zod.object({
   "appIds": zod.array(zod.string().regex(assignVenomSopAppsBodyAppIdsItemRegExp)).max(assignVenomSopAppsBodyAppIdsMax)
 })
-
-export const assignVenomSopAppsResponseAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const AssignVenomSopAppsResponseItem = zod.object({
@@ -4724,44 +7686,11 @@ export const AssignVenomSopAppsResponse = zod.array(AssignVenomSopAppsResponseIt
 /**
  * @summary List immutable SOP revisions
  */
-export const listVenomSopRevisionsPathSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ListVenomSopRevisionsParams = zod.object({
   "sopId": zod.coerce.string().regex(listVenomSopRevisionsPathSopIdRegExp)
 })
 
-export const listVenomSopRevisionsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomSopRevisionsResponseVersionNumberMultipleOf = 1;
-
-export const listVenomSopRevisionsResponseChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const listVenomSopRevisionsResponseTitleMax = 160;
-
-export const listVenomSopRevisionsResponseTagsItemMax = 50;
-
-export const listVenomSopRevisionsResponseTagsMax = 20;
-
-export const listVenomSopRevisionsResponseContentPurposeMax = 2000;
-
-export const listVenomSopRevisionsResponseContentPrerequisitesItemMax = 500;
-
-export const listVenomSopRevisionsResponseContentPrerequisitesMax = 25;
-
-export const listVenomSopRevisionsResponseContentInputsItemMax = 500;
-
-export const listVenomSopRevisionsResponseContentInputsMax = 25;
-
-export const listVenomSopRevisionsResponseContentGuidanceItemMax = 2000;
-
-export const listVenomSopRevisionsResponseContentGuidanceMax = 60;
-
-export const listVenomSopRevisionsResponseContentRequiredApprovalsItemMax = 500;
-
-export const listVenomSopRevisionsResponseContentRequiredApprovalsMax = 25;
-
-export const listVenomSopRevisionsResponseContentAcceptanceChecksItemMax = 500;
-
-export const listVenomSopRevisionsResponseContentAcceptanceChecksMax = 25;
 
 
 export const ListVenomSopRevisionsResponseItem = zod.object({
@@ -4788,20 +7717,12 @@ export const ListVenomSopRevisionsResponse = zod.array(ListVenomSopRevisionsResp
 /**
  * @summary List active SOP revision references selected for a workspace project
  */
-export const listVenomProjectSopsPathProjectIdMax = 120;
 
 
 export const ListVenomProjectSopsParams = zod.object({
   "projectId": zod.coerce.string().min(1).max(listVenomProjectSopsPathProjectIdMax)
 })
 
-export const listVenomProjectSopsResponseSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomProjectSopsResponseRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomProjectSopsResponseRevisionNumberMultipleOf = 1;
-
-export const listVenomProjectSopsResponseTitleMax = 160;
-
-export const listVenomProjectSopsResponsePurposeMax = 2000;
 
 
 export const ListVenomProjectSopsResponseItem = zod.object({
@@ -4819,28 +7740,18 @@ export const ListVenomProjectSopsResponse = zod.array(ListVenomProjectSopsRespon
 /**
  * @summary Select active SOP revisions for a workspace project
  */
-export const selectVenomProjectSopsPathProjectIdMax = 120;
 
 
 export const SelectVenomProjectSopsParams = zod.object({
   "projectId": zod.coerce.string().min(1).max(selectVenomProjectSopsPathProjectIdMax)
 })
 
-export const selectVenomProjectSopsBodySopIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const selectVenomProjectSopsBodySopIdsMax = 30;
 
 
 export const SelectVenomProjectSopsBody = zod.object({
   "sopIds": zod.array(zod.string().regex(selectVenomProjectSopsBodySopIdsItemRegExp)).max(selectVenomProjectSopsBodySopIdsMax)
 })
 
-export const selectVenomProjectSopsResponseSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const selectVenomProjectSopsResponseRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const selectVenomProjectSopsResponseRevisionNumberMultipleOf = 1;
-
-export const selectVenomProjectSopsResponseTitleMax = 160;
-
-export const selectVenomProjectSopsResponsePurposeMax = 2000;
 
 
 export const SelectVenomProjectSopsResponseItem = zod.object({
@@ -4858,10 +7769,6 @@ export const SelectVenomProjectSopsResponse = zod.array(SelectVenomProjectSopsRe
 /**
  * @summary Get the signed-in user's public community profile
  */
-export const getCommunityProfileResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityProfileResponseDisplayNameMax = 60;
-
-export const getCommunityProfileResponseBioMax = 300;
 
 
 export const GetCommunityProfileResponse = zod.object({
@@ -4875,9 +7782,6 @@ export const GetCommunityProfileResponse = zod.object({
 /**
  * @summary Create or update the signed-in user's public community profile
  */
-export const upsertCommunityProfileBodyDisplayNameMax = 60;
-
-export const upsertCommunityProfileBodyBioMax = 300;
 
 
 export const UpsertCommunityProfileBody = zod.object({
@@ -4885,10 +7789,6 @@ export const UpsertCommunityProfileBody = zod.object({
   "bio": zod.string().max(upsertCommunityProfileBodyBioMax).nullish()
 })
 
-export const upsertCommunityProfileResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const upsertCommunityProfileResponseDisplayNameMax = 60;
-
-export const upsertCommunityProfileResponseBioMax = 300;
 
 
 export const UpsertCommunityProfileResponse = zod.object({
@@ -4902,11 +7802,6 @@ export const UpsertCommunityProfileResponse = zod.object({
 /**
  * @summary Get a cursor page of community threads
  */
-export const getCommunityFeedQueryCursorMax = 240;
-
-export const getCommunityFeedQueryLimitDefault = 20;
-export const getCommunityFeedQueryLimitMax = 50;
-export const getCommunityFeedQueryLimitMultipleOf = 1;
 
 
 export const GetCommunityFeedQueryParams = zod.object({
@@ -4915,27 +7810,6 @@ export const GetCommunityFeedQueryParams = zod.object({
   "limit": zod.coerce.number().min(1).max(getCommunityFeedQueryLimitMax).multipleOf(getCommunityFeedQueryLimitMultipleOf).default(getCommunityFeedQueryLimitDefault)
 })
 
-export const getCommunityFeedResponseItemsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityFeedResponseItemsItemAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityFeedResponseItemsItemAuthorDisplayNameMax = 60;
-
-export const getCommunityFeedResponseItemsItemBodyMax = 2000;
-
-export const getCommunityFeedResponseItemsItemSummaryTextMax = 320;
-
-export const getCommunityFeedResponseItemsItemSummarySourceRevisionMin = 0;
-export const getCommunityFeedResponseItemsItemSummarySourceRevisionMultipleOf = 1;
-
-export const getCommunityFeedResponseItemsItemScoreMin = 0;
-export const getCommunityFeedResponseItemsItemScoreMultipleOf = 1;
-
-export const getCommunityFeedResponseItemsItemReplyCountMin = 0;
-export const getCommunityFeedResponseItemsItemReplyCountMultipleOf = 1;
-
-export const getCommunityFeedResponseItemsItemRevisionMin = 0;
-export const getCommunityFeedResponseItemsItemRevisionMultipleOf = 1;
-
-export const getCommunityFeedResponseNextCursorMax = 240;
 
 
 export const GetCommunityFeedResponse = zod.object({
@@ -4968,15 +7842,7 @@ export const GetCommunityFeedResponse = zod.object({
 /**
  * @summary Get the community briefing with personal agenda and calendar status
  */
-export const getCommunityBriefingQueryTimezoneMax = 80;
-
-export const getCommunityBriefingQueryDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const getCommunityBriefingQueryOrderDefault = `new`;
-export const getCommunityBriefingQueryCursorMax = 240;
-
-export const getCommunityBriefingQueryLimitDefault = 20;
-export const getCommunityBriefingQueryLimitMax = 50;
-export const getCommunityBriefingQueryLimitMultipleOf = 1;
 
 
 export const GetCommunityBriefingQueryParams = zod.object({
@@ -4987,41 +7853,6 @@ export const GetCommunityBriefingQueryParams = zod.object({
   "limit": zod.coerce.number().min(1).max(getCommunityBriefingQueryLimitMax).multipleOf(getCommunityBriefingQueryLimitMultipleOf).default(getCommunityBriefingQueryLimitDefault)
 })
 
-export const getCommunityBriefingResponseCommunityItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityBriefingResponseCommunityItemAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityBriefingResponseCommunityItemAuthorDisplayNameMax = 60;
-
-export const getCommunityBriefingResponseCommunityItemBodyMax = 2000;
-
-export const getCommunityBriefingResponseCommunityItemSummaryTextMax = 320;
-
-export const getCommunityBriefingResponseCommunityItemSummarySourceRevisionMin = 0;
-export const getCommunityBriefingResponseCommunityItemSummarySourceRevisionMultipleOf = 1;
-
-export const getCommunityBriefingResponseCommunityItemScoreMin = 0;
-export const getCommunityBriefingResponseCommunityItemScoreMultipleOf = 1;
-
-export const getCommunityBriefingResponseCommunityItemReplyCountMin = 0;
-export const getCommunityBriefingResponseCommunityItemReplyCountMultipleOf = 1;
-
-export const getCommunityBriefingResponseCommunityItemRevisionMin = 0;
-export const getCommunityBriefingResponseCommunityItemRevisionMultipleOf = 1;
-
-export const getCommunityBriefingResponseAgendaItemIdMax = 120;
-
-export const getCommunityBriefingResponseAgendaItemTitleMax = 300;
-
-export const getCommunityBriefingResponseAgendaItemDetailMax = 500;
-
-export const getCommunityBriefingResponseAgendaItemDueDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getCommunityBriefingResponseAgendaItemProjectNameMax = 120;
-
-export const getCommunityBriefingResponseViewerProfileOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityBriefingResponseViewerProfileOneDisplayNameMax = 60;
-
-export const getCommunityBriefingResponseViewerProfileOneBioMax = 300;
-
-export const getCommunityBriefingResponseNextCursorMax = 240;
 
 
 export const GetCommunityBriefingResponse = zod.object({
@@ -5072,32 +7903,12 @@ export const GetCommunityBriefingResponse = zod.object({
 /**
  * @summary Create a new community thread
  */
-export const createCommunityThreadBodyBodyMax = 2000;
 
 
 export const CreateCommunityThreadBody = zod.object({
   "body": zod.string().min(1).max(createCommunityThreadBodyBodyMax)
 })
 
-export const createCommunityThreadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createCommunityThreadResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createCommunityThreadResponseAuthorDisplayNameMax = 60;
-
-export const createCommunityThreadResponseBodyMax = 2000;
-
-export const createCommunityThreadResponseSummaryTextMax = 320;
-
-export const createCommunityThreadResponseSummarySourceRevisionMin = 0;
-export const createCommunityThreadResponseSummarySourceRevisionMultipleOf = 1;
-
-export const createCommunityThreadResponseScoreMin = 0;
-export const createCommunityThreadResponseScoreMultipleOf = 1;
-
-export const createCommunityThreadResponseReplyCountMin = 0;
-export const createCommunityThreadResponseReplyCountMultipleOf = 1;
-
-export const createCommunityThreadResponseRevisionMin = 0;
-export const createCommunityThreadResponseRevisionMultipleOf = 1;
 
 
 export const CreateCommunityThreadResponse = zod.object({
@@ -5127,49 +7938,16 @@ export const CreateCommunityThreadResponse = zod.object({
 /**
  * @summary Get a community thread with its replies
  */
-export const getCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const GetCommunityThreadParams = zod.object({
   "threadId": zod.coerce.string().regex(getCommunityThreadPathThreadIdRegExp)
 })
-
-export const getCommunityThreadQueryReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const GetCommunityThreadQueryParams = zod.object({
   "replyId": zod.coerce.string().regex(getCommunityThreadQueryReplyIdRegExp).optional().describe('Include this specific reply even when it falls outside the normal reply window')
 })
 
-export const getCommunityThreadResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityThreadResponseThreadAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityThreadResponseThreadAuthorDisplayNameMax = 60;
-
-export const getCommunityThreadResponseThreadBodyMax = 2000;
-
-export const getCommunityThreadResponseThreadSummaryTextMax = 320;
-
-export const getCommunityThreadResponseThreadSummarySourceRevisionMin = 0;
-export const getCommunityThreadResponseThreadSummarySourceRevisionMultipleOf = 1;
-
-export const getCommunityThreadResponseThreadScoreMin = 0;
-export const getCommunityThreadResponseThreadScoreMultipleOf = 1;
-
-export const getCommunityThreadResponseThreadReplyCountMin = 0;
-export const getCommunityThreadResponseThreadReplyCountMultipleOf = 1;
-
-export const getCommunityThreadResponseThreadRevisionMin = 0;
-export const getCommunityThreadResponseThreadRevisionMultipleOf = 1;
-
-export const getCommunityThreadResponseRepliesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityThreadResponseRepliesItemThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityThreadResponseRepliesItemAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityThreadResponseRepliesItemAuthorDisplayNameMax = 60;
-
-export const getCommunityThreadResponseRepliesItemBodyMax = 1000;
-
-export const getCommunityThreadResponseRepliesItemParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getCommunityThreadResponseRepliesMax = 502;
 
 
 export const GetCommunityThreadResponse = zod.object({
@@ -5214,39 +7992,17 @@ export const GetCommunityThreadResponse = zod.object({
 /**
  * @summary Update a community thread (owner only)
  */
-export const updateCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const UpdateCommunityThreadParams = zod.object({
   "threadId": zod.coerce.string().regex(updateCommunityThreadPathThreadIdRegExp)
 })
 
-export const updateCommunityThreadBodyBodyMax = 2000;
 
 
 export const UpdateCommunityThreadBody = zod.object({
   "body": zod.string().min(1).max(updateCommunityThreadBodyBodyMax).optional()
 })
 
-export const updateCommunityThreadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const updateCommunityThreadResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const updateCommunityThreadResponseAuthorDisplayNameMax = 60;
-
-export const updateCommunityThreadResponseBodyMax = 2000;
-
-export const updateCommunityThreadResponseSummaryTextMax = 320;
-
-export const updateCommunityThreadResponseSummarySourceRevisionMin = 0;
-export const updateCommunityThreadResponseSummarySourceRevisionMultipleOf = 1;
-
-export const updateCommunityThreadResponseScoreMin = 0;
-export const updateCommunityThreadResponseScoreMultipleOf = 1;
-
-export const updateCommunityThreadResponseReplyCountMin = 0;
-export const updateCommunityThreadResponseReplyCountMultipleOf = 1;
-
-export const updateCommunityThreadResponseRevisionMin = 0;
-export const updateCommunityThreadResponseRevisionMultipleOf = 1;
 
 
 export const UpdateCommunityThreadResponse = zod.object({
@@ -5276,8 +8032,6 @@ export const UpdateCommunityThreadResponse = zod.object({
 /**
  * @summary Delete a community thread (owner only)
  */
-export const deleteCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const DeleteCommunityThreadParams = zod.object({
   "threadId": zod.coerce.string().regex(deleteCommunityThreadPathThreadIdRegExp)
@@ -5289,17 +8043,10 @@ export const DeleteCommunityThreadResponse = zod.void()
 /**
  * @summary Post a reply to a community thread
  */
-export const createCommunityReplyPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const CreateCommunityReplyParams = zod.object({
   "threadId": zod.coerce.string().regex(createCommunityReplyPathThreadIdRegExp)
 })
-
-export const createCommunityReplyBodyBodyMax = 1000;
-
-export const createCommunityReplyBodyClientRequestIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createCommunityReplyBodyParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const CreateCommunityReplyBody = zod.object({
@@ -5307,15 +8054,6 @@ export const CreateCommunityReplyBody = zod.object({
   "clientRequestId": zod.string().regex(createCommunityReplyBodyClientRequestIdRegExp).describe('Client-generated operation id reused when retrying the same post'),
   "parentReplyId": zod.string().regex(createCommunityReplyBodyParentReplyIdRegExp).nullish()
 })
-
-export const createCommunityReplyResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createCommunityReplyResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createCommunityReplyResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createCommunityReplyResponseAuthorDisplayNameMax = 60;
-
-export const createCommunityReplyResponseBodyMax = 1000;
-
-export const createCommunityReplyResponseParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const CreateCommunityReplyResponse = zod.object({
@@ -5336,28 +8074,16 @@ export const CreateCommunityReplyResponse = zod.object({
 /**
  * @summary Update a community reply (owner only)
  */
-export const updateCommunityReplyPathReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const UpdateCommunityReplyParams = zod.object({
   "replyId": zod.coerce.string().regex(updateCommunityReplyPathReplyIdRegExp)
 })
 
-export const updateCommunityReplyBodyBodyMax = 1000;
 
 
 export const UpdateCommunityReplyBody = zod.object({
   "body": zod.string().min(1).max(updateCommunityReplyBodyBodyMax).optional()
 })
-
-export const updateCommunityReplyResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const updateCommunityReplyResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const updateCommunityReplyResponseAuthorIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const updateCommunityReplyResponseAuthorDisplayNameMax = 60;
-
-export const updateCommunityReplyResponseBodyMax = 1000;
-
-export const updateCommunityReplyResponseParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const UpdateCommunityReplyResponse = zod.object({
@@ -5378,8 +8104,6 @@ export const UpdateCommunityReplyResponse = zod.object({
 /**
  * @summary Delete a community reply (owner only)
  */
-export const deleteCommunityReplyPathReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const DeleteCommunityReplyParams = zod.object({
   "replyId": zod.coerce.string().regex(deleteCommunityReplyPathReplyIdRegExp)
@@ -5391,8 +8115,6 @@ export const DeleteCommunityReplyResponse = zod.void()
 /**
  * @summary Set the viewer's upvote state on a thread (idempotent)
  */
-export const voteCommunityThreadPathThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const VoteCommunityThreadParams = zod.object({
   "threadId": zod.coerce.string().regex(voteCommunityThreadPathThreadIdRegExp)
@@ -5402,9 +8124,6 @@ export const VoteCommunityThreadBody = zod.object({
   "upvoted": zod.boolean()
 })
 
-export const voteCommunityThreadResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const voteCommunityThreadResponseScoreMin = 0;
-export const voteCommunityThreadResponseScoreMultipleOf = 1;
 
 
 export const VoteCommunityThreadResponse = zod.object({
@@ -5417,8 +8136,6 @@ export const VoteCommunityThreadResponse = zod.object({
 /**
  * @summary Submit a content report for a thread or reply
  */
-export const createCommunityReportBodyTargetIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createCommunityReportBodyDetailsMax = 500;
 
 
 export const CreateCommunityReportBody = zod.object({
@@ -5427,8 +8144,6 @@ export const CreateCommunityReportBody = zod.object({
   "reason": zod.enum(['spam', 'abuse', 'harassment', 'other']),
   "details": zod.string().max(createCommunityReportBodyDetailsMax).optional()
 })
-
-export const createCommunityReportResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const CreateCommunityReportResponse = zod.object({
@@ -5440,11 +8155,6 @@ export const CreateCommunityReportResponse = zod.object({
 /**
  * @summary List the signed-in user's community notifications (cursor paginated)
  */
-export const listCommunityNotificationsQueryCursorMax = 240;
-
-export const listCommunityNotificationsQueryLimitDefault = 20;
-export const listCommunityNotificationsQueryLimitMax = 50;
-export const listCommunityNotificationsQueryLimitMultipleOf = 1;
 
 
 export const ListCommunityNotificationsQueryParams = zod.object({
@@ -5452,17 +8162,6 @@ export const ListCommunityNotificationsQueryParams = zod.object({
   "limit": zod.coerce.number().min(1).max(listCommunityNotificationsQueryLimitMax).multipleOf(listCommunityNotificationsQueryLimitMultipleOf).default(listCommunityNotificationsQueryLimitDefault)
 })
 
-export const listCommunityNotificationsResponseItemsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listCommunityNotificationsResponseItemsItemActorDisplayNameMax = 60;
-
-export const listCommunityNotificationsResponseItemsItemActorAvatarUrlMax = 2048;
-
-export const listCommunityNotificationsResponseItemsItemThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listCommunityNotificationsResponseItemsItemReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listCommunityNotificationsResponseItemsItemParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listCommunityNotificationsResponseItemsMax = 50;
-
-export const listCommunityNotificationsResponseNextCursorMax = 240;
 
 
 export const ListCommunityNotificationsResponse = zod.object({
@@ -5487,8 +8186,6 @@ export const ListCommunityNotificationsResponse = zod.object({
 /**
  * @summary Get the signed-in user's unread community notification count
  */
-export const getCommunityNotificationUnreadCountResponseCountMin = 0;
-export const getCommunityNotificationUnreadCountResponseCountMultipleOf = 1;
 
 
 export const GetCommunityNotificationUnreadCountResponse = zod.object({
@@ -5499,8 +8196,6 @@ export const GetCommunityNotificationUnreadCountResponse = zod.object({
 /**
  * @summary Mark all of the signed-in user's community notifications as read
  */
-export const markAllCommunityNotificationsReadResponseMarkedMin = 0;
-export const markAllCommunityNotificationsReadResponseMarkedMultipleOf = 1;
 
 
 export const MarkAllCommunityNotificationsReadResponse = zod.object({
@@ -5511,21 +8206,10 @@ export const MarkAllCommunityNotificationsReadResponse = zod.object({
 /**
  * @summary Mark a single community notification as read (idempotent)
  */
-export const markCommunityNotificationReadPathNotificationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const MarkCommunityNotificationReadParams = zod.object({
   "notificationId": zod.coerce.string().regex(markCommunityNotificationReadPathNotificationIdRegExp)
 })
-
-export const markCommunityNotificationReadResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const markCommunityNotificationReadResponseActorDisplayNameMax = 60;
-
-export const markCommunityNotificationReadResponseActorAvatarUrlMax = 2048;
-
-export const markCommunityNotificationReadResponseThreadIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const markCommunityNotificationReadResponseReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const markCommunityNotificationReadResponseParentReplyIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const MarkCommunityNotificationReadResponse = zod.object({
@@ -5545,31 +8229,316 @@ export const MarkCommunityNotificationReadResponse = zod.object({
 
 
 /**
+ * @summary List active scheduled source sync alerts for the signed-in user
+ */
+
+
+export const ListVenomSourceSyncAlertsResponse = zod.object({
+  "alerts": zod.array(zod.object({
+  "id": zod.string().regex(listVenomSourceSyncAlertsResponseAlertsItemIdRegExp),
+  "sourceId": zod.string().min(1).max(listVenomSourceSyncAlertsResponseAlertsItemSourceIdMax),
+  "projectId": zod.string().min(1).max(listVenomSourceSyncAlertsResponseAlertsItemProjectIdMax),
+  "provider": zod.enum(['github', 'website']),
+  "sourceName": zod.string().min(1).max(listVenomSourceSyncAlertsResponseAlertsItemSourceNameMax),
+  "consecutiveFailures": zod.number().min(1).multipleOf(listVenomSourceSyncAlertsResponseAlertsItemConsecutiveFailuresMultipleOf),
+  "lastError": zod.string().max(listVenomSourceSyncAlertsResponseAlertsItemLastErrorMax),
+  "firstFailedAt": zod.coerce.date(),
+  "lastFailedAt": zod.coerce.date(),
+  "readAt": zod.coerce.date().nullable()
+})).max(listVenomSourceSyncAlertsResponseAlertsMax)
+})
+
+
+/**
+ * @summary Mark all of the signed-in user's source sync alerts as read
+ */
+
+
+export const MarkAllVenomSourceSyncAlertsReadResponse = zod.object({
+  "marked": zod.number().min(markAllVenomSourceSyncAlertsReadResponseMarkedMin).multipleOf(markAllVenomSourceSyncAlertsReadResponseMarkedMultipleOf)
+})
+
+
+/**
+ * @summary Browse the global catalog of curated build templates
+ */
+
+
+
+export const ListVenomBuildTemplatesResponseItem = zod.object({
+  "id": zod.string().regex(listVenomBuildTemplatesResponseIdRegExp),
+  "slug": zod.string().min(1).max(listVenomBuildTemplatesResponseSlugMax).regex(listVenomBuildTemplatesResponseSlugRegExp),
+  "name": zod.string().min(1).max(listVenomBuildTemplatesResponseNameMax),
+  "category": zod.enum(['app', 'widget']),
+  "description": zod.string().min(1).max(listVenomBuildTemplatesResponseDescriptionMax),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "hasExamplePackage": zod.boolean(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListVenomBuildTemplatesResponse = zod.array(ListVenomBuildTemplatesResponseItem).max(200)
+
+
+/**
+ * @summary Inspect one template, including its pre-filled build inputs
+ */
+
+export const GetVenomBuildTemplateParams = zod.object({
+  "templateId": zod.coerce.string().regex(getVenomBuildTemplatePathTemplateIdRegExp)
+})
+
+
+
+
+export const GetVenomBuildTemplateResponse = zod.object({
+  "id": zod.string().regex(getVenomBuildTemplateResponseOneIdRegExp),
+  "slug": zod.string().min(1).max(getVenomBuildTemplateResponseOneSlugMax).regex(getVenomBuildTemplateResponseOneSlugRegExp),
+  "name": zod.string().min(1).max(getVenomBuildTemplateResponseOneNameMax),
+  "category": zod.enum(['app', 'widget']),
+  "description": zod.string().min(1).max(getVenomBuildTemplateResponseOneDescriptionMax),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "hasExamplePackage": zod.boolean(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "previewSummary": zod.string().max(getVenomBuildTemplateResponseTwoPreviewSummaryMax),
+  "targetName": zod.string().min(1).max(getVenomBuildTemplateResponseTwoTargetNameMax),
+  "requirements": zod.string().min(1).max(getVenomBuildTemplateResponseTwoRequirementsMax),
+  "constraints": zod.string().max(getVenomBuildTemplateResponseTwoConstraintsMax),
+  "brandDirection": zod.string().max(getVenomBuildTemplateResponseTwoBrandDirectionMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(getVenomBuildTemplateResponseTwoAcceptanceChecksItemMax)).max(getVenomBuildTemplateResponseTwoAcceptanceChecksMax),
+  "examplePackage": zod.union([zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneProductBriefAudienceItemMax)).max(getVenomBuildTemplateResponseTwoExamplePackageOneProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneProductBriefOutcomesItemMax)).max(getVenomBuildTemplateResponseTwoExamplePackageOneProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneFunctionalScopeItemMax)).max(getVenomBuildTemplateResponseTwoExamplePackageOneFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneBrandDirectionItemMax)).max(getVenomBuildTemplateResponseTwoExamplePackageOneBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneContentRequirementsItemMax)).max(getVenomBuildTemplateResponseTwoExamplePackageOneContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneServiceFlowRequirementsItemMax)).max(getVenomBuildTemplateResponseTwoExamplePackageOneServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemChecksumSha256RegExp)
+})).max(getVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemChecksumSha256RegExp)
+})).max(getVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneDataNeedsItemMax)).max(getVenomBuildTemplateResponseTwoExamplePackageOneDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneIntegrationNeedsItemMax)).max(getVenomBuildTemplateResponseTwoExamplePackageOneIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(getVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneAcceptanceChecksItemMax)).min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneLaunchConstraintsItemMax)).min(1).max(getVenomBuildTemplateResponseTwoExamplePackageOneLaunchConstraintsMax)
+}),zod.null()]),
+  "status": zod.enum(['active', 'retired']),
+  "networkImprovementCount": zod.number().min(getVenomBuildTemplateResponseTwoNetworkImprovementCountMin).multipleOf(getVenomBuildTemplateResponseTwoNetworkImprovementCountMultipleOf).describe('How many concept-level lessons this template has learned from the anonymous builder network (opted-in accounts only, each lesson seen across several distinct accounts). A plain count — never tenant traces.')
+}))
+
+
+/**
+ * @summary Create a portfolio app from this template plus a pre-filled build run request
+ */
+
+export const UseVenomBuildTemplateParams = zod.object({
+  "templateId": zod.coerce.string().regex(useVenomBuildTemplatePathTemplateIdRegExp)
+})
+
+
+
+export const UseVenomBuildTemplateBody = zod.object({
+  "name": zod.string().min(1).max(useVenomBuildTemplateBodyNameMax).optional().describe('Optional app name override; defaults to the template\'s target name.')
+})
+
+
+
+export const UseVenomBuildTemplateResponse = zod.object({
+  "app": zod.object({
+  "id": zod.string().regex(useVenomBuildTemplateResponseAppIdRegExp),
+  "name": zod.string().min(1).max(useVenomBuildTemplateResponseAppNameMax),
+  "purpose": zod.string().min(1).max(useVenomBuildTemplateResponseAppPurposeMax),
+  "brand": zod.string().min(1).max(useVenomBuildTemplateResponseAppBrandMax),
+  "status": zod.enum(['draft', 'importing', 'ready', 'attention']),
+  "detectedStack": zod.array(zod.string().min(1).max(useVenomBuildTemplateResponseAppDetectedStackItemMax)).max(useVenomBuildTemplateResponseAppDetectedStackMax),
+  "sourceType": zod.enum(['none', 'zip']),
+  "sourceVersion": zod.number().min(useVenomBuildTemplateResponseAppSourceVersionMin).multipleOf(useVenomBuildTemplateResponseAppSourceVersionMultipleOf),
+  "deploymentUrl": zod.string().max(useVenomBuildTemplateResponseAppDeploymentUrlMax).nullable(),
+  "importStatus": zod.union([zod.enum(['awaiting_upload', 'uploading', 'validating', 'inspecting', 'complete', 'failed']),zod.null()]),
+  "sourceUpdatedAt": zod.coerce.date().nullable(),
+  "linkedProjectId": zod.string().max(useVenomBuildTemplateResponseAppLinkedProjectIdMax).nullable(),
+  "linkedProjectName": zod.string().max(useVenomBuildTemplateResponseAppLinkedProjectNameMax).nullable(),
+  "latestIterationNumber": zod.number().min(useVenomBuildTemplateResponseAppLatestIterationNumberMin).multipleOf(useVenomBuildTemplateResponseAppLatestIterationNumberMultipleOf),
+  "liveReleaseId": zod.union([zod.string().regex(useVenomBuildTemplateResponseAppLiveReleaseIdOneRegExp),zod.null()]),
+  "liveIterationNumber": zod.union([zod.number().min(1).multipleOf(useVenomBuildTemplateResponseAppLiveIterationNumberOneMultipleOf),zod.null()]),
+  "livePublishedAt": zod.coerce.date().nullable(),
+  "improvementSignal": zod.union([zod.object({
+  "since": zod.coerce.date(),
+  "knowledgeChanges": zod.number().min(useVenomBuildTemplateResponseAppImprovementSignalOneKnowledgeChangesMin).multipleOf(useVenomBuildTemplateResponseAppImprovementSignalOneKnowledgeChangesMultipleOf),
+  "sourceChanges": zod.number().min(useVenomBuildTemplateResponseAppImprovementSignalOneSourceChangesMin).multipleOf(useVenomBuildTemplateResponseAppImprovementSignalOneSourceChangesMultipleOf),
+  "totalChanges": zod.number().min(1).multipleOf(useVenomBuildTemplateResponseAppImprovementSignalOneTotalChangesMultipleOf),
+  "summary": zod.string().min(1).max(useVenomBuildTemplateResponseAppImprovementSignalOneSummaryMax),
+  "baselineIterationNumber": zod.number().min(1).multipleOf(useVenomBuildTemplateResponseAppImprovementSignalOneBaselineIterationNumberMultipleOf)
+}),zod.null()]),
+  "templateId": zod.union([zod.string().regex(useVenomBuildTemplateResponseAppTemplateIdOneRegExp),zod.null()]),
+  "templateName": zod.string().max(useVenomBuildTemplateResponseAppTemplateNameMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "templateId": zod.string().regex(useVenomBuildTemplateResponseTemplateIdRegExp),
+  "templateName": zod.string().min(1).max(useVenomBuildTemplateResponseTemplateNameMax),
+  "prefill": zod.object({
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(useVenomBuildTemplateResponsePrefillTargetNameMax),
+  "requirements": zod.string().min(1).max(useVenomBuildTemplateResponsePrefillRequirementsMax),
+  "constraints": zod.string().max(useVenomBuildTemplateResponsePrefillConstraintsMax),
+  "brandDirection": zod.string().max(useVenomBuildTemplateResponsePrefillBrandDirectionMax)
+}).describe('Ready-to-edit build-run form values derived from a template.')
+})
+
+
+/**
+ * @summary Create or update a global template (super admins only)
+ */
+
+
+export const UpsertVenomBuildTemplateParams = zod.object({
+  "slug": zod.coerce.string().min(1).max(upsertVenomBuildTemplatePathSlugMax).regex(upsertVenomBuildTemplatePathSlugRegExp)
+})
+
+
+
+export const UpsertVenomBuildTemplateBody = zod.object({
+  "name": zod.string().min(1).max(upsertVenomBuildTemplateBodyNameMax),
+  "category": zod.enum(['app', 'widget']),
+  "description": zod.string().min(1).max(upsertVenomBuildTemplateBodyDescriptionMax),
+  "previewSummary": zod.string().max(upsertVenomBuildTemplateBodyPreviewSummaryMax).optional(),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "targetName": zod.string().min(1).max(upsertVenomBuildTemplateBodyTargetNameMax),
+  "requirements": zod.string().min(1).max(upsertVenomBuildTemplateBodyRequirementsMax),
+  "constraints": zod.string().max(upsertVenomBuildTemplateBodyConstraintsMax).optional(),
+  "brandDirection": zod.string().max(upsertVenomBuildTemplateBodyBrandDirectionMax).optional(),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateBodyAcceptanceChecksItemMax)).max(upsertVenomBuildTemplateBodyAcceptanceChecksMax).optional(),
+  "examplePackage": zod.union([zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneProductBriefAudienceItemMax)).max(upsertVenomBuildTemplateBodyExamplePackageOneProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneProductBriefOutcomesItemMax)).max(upsertVenomBuildTemplateBodyExamplePackageOneProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneFunctionalScopeItemMax)).max(upsertVenomBuildTemplateBodyExamplePackageOneFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneBrandDirectionItemMax)).max(upsertVenomBuildTemplateBodyExamplePackageOneBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneContentRequirementsItemMax)).max(upsertVenomBuildTemplateBodyExamplePackageOneContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneServiceFlowRequirementsItemMax)).max(upsertVenomBuildTemplateBodyExamplePackageOneServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesItemChecksumSha256RegExp)
+})).max(upsertVenomBuildTemplateBodyExamplePackageOneSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesItemChecksumSha256RegExp)
+})).max(upsertVenomBuildTemplateBodyExamplePackageOneSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneDataNeedsItemMax)).max(upsertVenomBuildTemplateBodyExamplePackageOneDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneIntegrationNeedsItemMax)).max(upsertVenomBuildTemplateBodyExamplePackageOneIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOnePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOnePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(upsertVenomBuildTemplateBodyExamplePackageOnePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneAcceptanceChecksItemMax)).min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneLaunchConstraintsItemMax)).min(1).max(upsertVenomBuildTemplateBodyExamplePackageOneLaunchConstraintsMax)
+}),zod.null()]).optional(),
+  "status": zod.enum(['active', 'retired']).optional(),
+  "sortOrder": zod.number().min(upsertVenomBuildTemplateBodySortOrderMin).max(upsertVenomBuildTemplateBodySortOrderMax).multipleOf(upsertVenomBuildTemplateBodySortOrderMultipleOf).optional()
+})
+
+
+
+
+export const UpsertVenomBuildTemplateResponse = zod.object({
+  "id": zod.string().regex(upsertVenomBuildTemplateResponseOneIdRegExp),
+  "slug": zod.string().min(1).max(upsertVenomBuildTemplateResponseOneSlugMax).regex(upsertVenomBuildTemplateResponseOneSlugRegExp),
+  "name": zod.string().min(1).max(upsertVenomBuildTemplateResponseOneNameMax),
+  "category": zod.enum(['app', 'widget']),
+  "description": zod.string().min(1).max(upsertVenomBuildTemplateResponseOneDescriptionMax),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "hasExamplePackage": zod.boolean(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "previewSummary": zod.string().max(upsertVenomBuildTemplateResponseTwoPreviewSummaryMax),
+  "targetName": zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoTargetNameMax),
+  "requirements": zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoRequirementsMax),
+  "constraints": zod.string().max(upsertVenomBuildTemplateResponseTwoConstraintsMax),
+  "brandDirection": zod.string().max(upsertVenomBuildTemplateResponseTwoBrandDirectionMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoAcceptanceChecksItemMax)).max(upsertVenomBuildTemplateResponseTwoAcceptanceChecksMax),
+  "examplePackage": zod.union([zod.object({
+  "formatVersion": zod.literal(1),
+  "targetType": zod.enum(['app', 'website', 'brand', 'customer_service_flow']),
+  "title": zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneTitleMax),
+  "productBrief": zod.object({
+  "summary": zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneProductBriefSummaryMax),
+  "audience": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneProductBriefAudienceItemMax)).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneProductBriefAudienceMax),
+  "outcomes": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneProductBriefOutcomesItemMax)).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneProductBriefOutcomesMax)
+}),
+  "functionalScope": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneFunctionalScopeItemMax)).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneFunctionalScopeMax),
+  "brandDirection": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneBrandDirectionItemMax)).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneBrandDirectionMax),
+  "contentRequirements": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneContentRequirementsItemMax)).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneContentRequirementsMax),
+  "serviceFlowRequirements": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneServiceFlowRequirementsItemMax)).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneServiceFlowRequirementsMax),
+  "sourceReferences": zod.array(zod.object({
+  "appId": zod.string().regex(upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemAppIdRegExp),
+  "appName": zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemAppNameMax),
+  "sourceVersionId": zod.string().regex(upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemSourceVersionIdRegExp),
+  "versionNumber": zod.number().min(1).multipleOf(upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemVersionNumberMultipleOf),
+  "checksumSha256": zod.string().regex(upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesItemChecksumSha256RegExp)
+})).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneSourceReferencesMax),
+  "sopReferences": zod.array(zod.object({
+  "sopId": zod.string().regex(upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemSopIdRegExp),
+  "revisionId": zod.string().regex(upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemRevisionIdRegExp),
+  "revisionNumber": zod.number().min(1).multipleOf(upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemRevisionNumberMultipleOf),
+  "title": zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemTitleMax),
+  "checksumSha256": zod.string().regex(upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesItemChecksumSha256RegExp)
+})).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneSopReferencesMax),
+  "dataNeeds": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneDataNeedsItemMax)).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneDataNeedsMax),
+  "integrationNeeds": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneIntegrationNeedsItemMax)).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneIntegrationNeedsMax),
+  "permissionRequests": zod.array(zod.object({
+  "capability": zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsItemCapabilityMax),
+  "reason": zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsItemReasonMax),
+  "required": zod.boolean()
+})).max(upsertVenomBuildTemplateResponseTwoExamplePackageOnePermissionRequestsMax),
+  "acceptanceChecks": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneAcceptanceChecksItemMax)).min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneAcceptanceChecksMax),
+  "launchConstraints": zod.array(zod.string().min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneLaunchConstraintsItemMax)).min(1).max(upsertVenomBuildTemplateResponseTwoExamplePackageOneLaunchConstraintsMax)
+}),zod.null()]),
+  "status": zod.enum(['active', 'retired']),
+  "networkImprovementCount": zod.number().min(upsertVenomBuildTemplateResponseTwoNetworkImprovementCountMin).multipleOf(upsertVenomBuildTemplateResponseTwoNetworkImprovementCountMultipleOf).describe('How many concept-level lessons this template has learned from the anonymous builder network (opted-in accounts only, each lesson seen across several distinct accounts). A plain count — never tenant traces.')
+}))
+
+
+/**
  * @summary List durable product-package generation runs
  */
-export const listVenomBuildRunsQueryAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ListVenomBuildRunsQueryParams = zod.object({
   "appId": zod.union([zod.coerce.string().regex(listVenomBuildRunsQueryAppIdOneRegExp),zod.null()]).optional()
 })
 
-export const listVenomBuildRunsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomBuildRunsResponseCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomBuildRunsResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomBuildRunsResponseTargetNameMax = 120;
-
-export const listVenomBuildRunsResponseProgressMin = 0;
-export const listVenomBuildRunsResponseProgressMax = 100;
-export const listVenomBuildRunsResponseProgressMultipleOf = 1;
-
-export const listVenomBuildRunsResponseCurrentRevisionNumberMin = 0;
-export const listVenomBuildRunsResponseCurrentRevisionNumberMultipleOf = 1;
-
-export const listVenomBuildRunsResponseApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listVenomBuildRunsResponseFailureMessageMax = 240;
-
-export const listVenomBuildRunsResponseCancelledReasonMax = 500;
 
 
 export const ListVenomBuildRunsResponseItem = zod.object({
@@ -5583,6 +8552,7 @@ export const ListVenomBuildRunsResponseItem = zod.object({
   "progress": zod.number().min(listVenomBuildRunsResponseProgressMin).max(listVenomBuildRunsResponseProgressMax).multipleOf(listVenomBuildRunsResponseProgressMultipleOf),
   "currentRevisionNumber": zod.number().min(listVenomBuildRunsResponseCurrentRevisionNumberMin).multipleOf(listVenomBuildRunsResponseCurrentRevisionNumberMultipleOf),
   "approvedRevisionId": zod.union([zod.string().regex(listVenomBuildRunsResponseApprovedRevisionIdOneRegExp),zod.null()]),
+  "templateId": zod.union([zod.string().regex(listVenomBuildRunsResponseTemplateIdOneRegExp),zod.null()]),
   "failureMessage": zod.string().max(listVenomBuildRunsResponseFailureMessageMax).nullable(),
   "cancelledReason": zod.string().max(listVenomBuildRunsResponseCancelledReasonMax).nullable(),
   "createdAt": zod.coerce.date(),
@@ -5594,26 +8564,6 @@ export const ListVenomBuildRunsResponse = zod.array(ListVenomBuildRunsResponseIt
 /**
  * @summary Queue a review-required product package generation run
  */
-export const createVenomBuildRunBodyTargetNameMax = 120;
-
-export const createVenomBuildRunBodyRequirementsMax = 8000;
-
-export const createVenomBuildRunBodyConstraintsMax = 4000;
-
-export const createVenomBuildRunBodyBrandDirectionMax = 3000;
-
-export const createVenomBuildRunBodyAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunBodySourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunBodyProjectIdMax = 120;
-
-export const createVenomBuildRunBodySopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunBodySopRevisionIdsMax = 20;
-
-export const createVenomBuildRunBodyIdempotencyKeyMin = 16;
-export const createVenomBuildRunBodyIdempotencyKeyMax = 120;
-
-
-export const createVenomBuildRunBodyIdempotencyKeyRegExp = new RegExp('^[A-Za-z0-9_-]+$');
 
 
 export const CreateVenomBuildRunBody = zod.object({
@@ -5626,134 +8576,10 @@ export const CreateVenomBuildRunBody = zod.object({
   "sourceVersionId": zod.union([zod.string().regex(createVenomBuildRunBodySourceVersionIdOneRegExp),zod.null()]),
   "projectId": zod.string().max(createVenomBuildRunBodyProjectIdMax).nullable(),
   "sopRevisionIds": zod.array(zod.string().regex(createVenomBuildRunBodySopRevisionIdsItemRegExp)).max(createVenomBuildRunBodySopRevisionIdsMax),
+  "templateId": zod.union([zod.string().regex(createVenomBuildRunBodyTemplateIdOneRegExp),zod.null()]).optional().describe('Optional template lineage for runs that started from a global template. When the run is pinned to an app that already carries template lineage, the app\'s lineage wins.'),
   "idempotencyKey": zod.string().min(createVenomBuildRunBodyIdempotencyKeyMin).max(createVenomBuildRunBodyIdempotencyKeyMax).regex(createVenomBuildRunBodyIdempotencyKeyRegExp)
 })
 
-export const createVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseOneTargetNameMax = 120;
-
-export const createVenomBuildRunResponseOneProgressMin = 0;
-export const createVenomBuildRunResponseOneProgressMax = 100;
-export const createVenomBuildRunResponseOneProgressMultipleOf = 1;
-
-export const createVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
-export const createVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
-
-export const createVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseOneFailureMessageMax = 240;
-
-export const createVenomBuildRunResponseOneCancelledReasonMax = 500;
-
-export const createVenomBuildRunResponseTwoRequestTargetNameMax = 120;
-
-export const createVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
-
-export const createVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
-
-export const createVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
-
-export const createVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseTwoRequestProjectIdMax = 120;
-
-export const createVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
-
-export const createVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
-
-export const createVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
-
-export const createVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const createVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
-
-export const createVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
-
-export const createVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const createVenomBuildRunResponseTwoRevisionsMax = 50;
-
-export const createVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createVenomBuildRunResponseTwoEventsItemProgressMin = 0;
-export const createVenomBuildRunResponseTwoEventsItemProgressMax = 100;
-export const createVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
-
-export const createVenomBuildRunResponseTwoEventsItemMessageMax = 240;
-
-export const createVenomBuildRunResponseTwoEventsMax = 200;
-
-export const createVenomBuildRunResponseTwoAttemptMax = 10;
-export const createVenomBuildRunResponseTwoAttemptMultipleOf = 1;
-
-export const createVenomBuildRunResponseTwoFailureCodeMax = 80;
 
 
 export const CreateVenomBuildRunResponse = zod.object({
@@ -5767,6 +8593,7 @@ export const CreateVenomBuildRunResponse = zod.object({
   "progress": zod.number().min(createVenomBuildRunResponseOneProgressMin).max(createVenomBuildRunResponseOneProgressMax).multipleOf(createVenomBuildRunResponseOneProgressMultipleOf),
   "currentRevisionNumber": zod.number().min(createVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(createVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
   "approvedRevisionId": zod.union([zod.string().regex(createVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "templateId": zod.union([zod.string().regex(createVenomBuildRunResponseOneTemplateIdOneRegExp),zod.null()]),
   "failureMessage": zod.string().max(createVenomBuildRunResponseOneFailureMessageMax).nullable(),
   "cancelledReason": zod.string().max(createVenomBuildRunResponseOneCancelledReasonMax).nullable(),
   "createdAt": zod.coerce.date(),
@@ -5784,7 +8611,8 @@ export const CreateVenomBuildRunResponse = zod.object({
   "sopRevisionIds": zod.array(zod.string().regex(createVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(createVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
   "baselineIterationId": zod.union([zod.string().regex(createVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
   "baselineRevisionId": zod.union([zod.string().regex(createVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
-  "changesSummary": zod.string().max(createVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+  "changesSummary": zod.string().max(createVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable(),
+  "templateId": zod.union([zod.string().regex(createVenomBuildRunResponseTwoRequestTemplateIdOneRegExp),zod.null()])
 }),
   "revisions": zod.array(zod.object({
   "id": zod.string().regex(createVenomBuildRunResponseTwoRevisionsItemIdRegExp),
@@ -5833,7 +8661,7 @@ export const CreateVenomBuildRunResponse = zod.object({
 })).max(createVenomBuildRunResponseTwoRevisionsMax),
   "events": zod.array(zod.object({
   "id": zod.string().regex(createVenomBuildRunResponseTwoEventsItemIdRegExp),
-  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "eventType": zod.enum(['queued', 'preparing', 'network_guidance', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
   "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
   "progress": zod.number().min(createVenomBuildRunResponseTwoEventsItemProgressMin).max(createVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(createVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
   "message": zod.string().min(1).max(createVenomBuildRunResponseTwoEventsItemMessageMax),
@@ -5849,138 +8677,11 @@ export const CreateVenomBuildRunResponse = zod.object({
 /**
  * @summary Inspect a generation run, package revisions, and activity
  */
-export const getVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const GetVenomBuildRunParams = zod.object({
   "buildRunId": zod.coerce.string().regex(getVenomBuildRunPathBuildRunIdRegExp)
 })
 
-export const getVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseOneTargetNameMax = 120;
-
-export const getVenomBuildRunResponseOneProgressMin = 0;
-export const getVenomBuildRunResponseOneProgressMax = 100;
-export const getVenomBuildRunResponseOneProgressMultipleOf = 1;
-
-export const getVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
-export const getVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
-
-export const getVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseOneFailureMessageMax = 240;
-
-export const getVenomBuildRunResponseOneCancelledReasonMax = 500;
-
-export const getVenomBuildRunResponseTwoRequestTargetNameMax = 120;
-
-export const getVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
-
-export const getVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
-
-export const getVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
-
-export const getVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseTwoRequestProjectIdMax = 120;
-
-export const getVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
-
-export const getVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
-
-export const getVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
-
-export const getVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const getVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
-
-export const getVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
-
-export const getVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const getVenomBuildRunResponseTwoRevisionsMax = 50;
-
-export const getVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getVenomBuildRunResponseTwoEventsItemProgressMin = 0;
-export const getVenomBuildRunResponseTwoEventsItemProgressMax = 100;
-export const getVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
-
-export const getVenomBuildRunResponseTwoEventsItemMessageMax = 240;
-
-export const getVenomBuildRunResponseTwoEventsMax = 200;
-
-export const getVenomBuildRunResponseTwoAttemptMax = 10;
-export const getVenomBuildRunResponseTwoAttemptMultipleOf = 1;
-
-export const getVenomBuildRunResponseTwoFailureCodeMax = 80;
 
 
 export const GetVenomBuildRunResponse = zod.object({
@@ -5994,6 +8695,7 @@ export const GetVenomBuildRunResponse = zod.object({
   "progress": zod.number().min(getVenomBuildRunResponseOneProgressMin).max(getVenomBuildRunResponseOneProgressMax).multipleOf(getVenomBuildRunResponseOneProgressMultipleOf),
   "currentRevisionNumber": zod.number().min(getVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(getVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
   "approvedRevisionId": zod.union([zod.string().regex(getVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "templateId": zod.union([zod.string().regex(getVenomBuildRunResponseOneTemplateIdOneRegExp),zod.null()]),
   "failureMessage": zod.string().max(getVenomBuildRunResponseOneFailureMessageMax).nullable(),
   "cancelledReason": zod.string().max(getVenomBuildRunResponseOneCancelledReasonMax).nullable(),
   "createdAt": zod.coerce.date(),
@@ -6011,7 +8713,8 @@ export const GetVenomBuildRunResponse = zod.object({
   "sopRevisionIds": zod.array(zod.string().regex(getVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(getVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
   "baselineIterationId": zod.union([zod.string().regex(getVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
   "baselineRevisionId": zod.union([zod.string().regex(getVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
-  "changesSummary": zod.string().max(getVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+  "changesSummary": zod.string().max(getVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable(),
+  "templateId": zod.union([zod.string().regex(getVenomBuildRunResponseTwoRequestTemplateIdOneRegExp),zod.null()])
 }),
   "revisions": zod.array(zod.object({
   "id": zod.string().regex(getVenomBuildRunResponseTwoRevisionsItemIdRegExp),
@@ -6060,7 +8763,7 @@ export const GetVenomBuildRunResponse = zod.object({
 })).max(getVenomBuildRunResponseTwoRevisionsMax),
   "events": zod.array(zod.object({
   "id": zod.string().regex(getVenomBuildRunResponseTwoEventsItemIdRegExp),
-  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "eventType": zod.enum(['queued', 'preparing', 'network_guidance', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
   "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
   "progress": zod.number().min(getVenomBuildRunResponseTwoEventsItemProgressMin).max(getVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(getVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
   "message": zod.string().min(1).max(getVenomBuildRunResponseTwoEventsItemMessageMax),
@@ -6076,145 +8779,17 @@ export const GetVenomBuildRunResponse = zod.object({
 /**
  * @summary Cancel a queued or preparing generation run
  */
-export const cancelVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const CancelVenomBuildRunParams = zod.object({
   "buildRunId": zod.coerce.string().regex(cancelVenomBuildRunPathBuildRunIdRegExp)
 })
 
-export const cancelVenomBuildRunBodyReasonMax = 500;
 
 
 export const CancelVenomBuildRunBody = zod.object({
   "reason": zod.string().min(1).max(cancelVenomBuildRunBodyReasonMax)
 })
 
-export const cancelVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseOneTargetNameMax = 120;
-
-export const cancelVenomBuildRunResponseOneProgressMin = 0;
-export const cancelVenomBuildRunResponseOneProgressMax = 100;
-export const cancelVenomBuildRunResponseOneProgressMultipleOf = 1;
-
-export const cancelVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
-export const cancelVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
-
-export const cancelVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseOneFailureMessageMax = 240;
-
-export const cancelVenomBuildRunResponseOneCancelledReasonMax = 500;
-
-export const cancelVenomBuildRunResponseTwoRequestTargetNameMax = 120;
-
-export const cancelVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
-
-export const cancelVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
-
-export const cancelVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
-
-export const cancelVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseTwoRequestProjectIdMax = 120;
-
-export const cancelVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
-
-export const cancelVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
-
-export const cancelVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const cancelVenomBuildRunResponseTwoRevisionsMax = 50;
-
-export const cancelVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelVenomBuildRunResponseTwoEventsItemProgressMin = 0;
-export const cancelVenomBuildRunResponseTwoEventsItemProgressMax = 100;
-export const cancelVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
-
-export const cancelVenomBuildRunResponseTwoEventsItemMessageMax = 240;
-
-export const cancelVenomBuildRunResponseTwoEventsMax = 200;
-
-export const cancelVenomBuildRunResponseTwoAttemptMax = 10;
-export const cancelVenomBuildRunResponseTwoAttemptMultipleOf = 1;
-
-export const cancelVenomBuildRunResponseTwoFailureCodeMax = 80;
 
 
 export const CancelVenomBuildRunResponse = zod.object({
@@ -6228,6 +8803,7 @@ export const CancelVenomBuildRunResponse = zod.object({
   "progress": zod.number().min(cancelVenomBuildRunResponseOneProgressMin).max(cancelVenomBuildRunResponseOneProgressMax).multipleOf(cancelVenomBuildRunResponseOneProgressMultipleOf),
   "currentRevisionNumber": zod.number().min(cancelVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(cancelVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
   "approvedRevisionId": zod.union([zod.string().regex(cancelVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "templateId": zod.union([zod.string().regex(cancelVenomBuildRunResponseOneTemplateIdOneRegExp),zod.null()]),
   "failureMessage": zod.string().max(cancelVenomBuildRunResponseOneFailureMessageMax).nullable(),
   "cancelledReason": zod.string().max(cancelVenomBuildRunResponseOneCancelledReasonMax).nullable(),
   "createdAt": zod.coerce.date(),
@@ -6245,7 +8821,8 @@ export const CancelVenomBuildRunResponse = zod.object({
   "sopRevisionIds": zod.array(zod.string().regex(cancelVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(cancelVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
   "baselineIterationId": zod.union([zod.string().regex(cancelVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
   "baselineRevisionId": zod.union([zod.string().regex(cancelVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
-  "changesSummary": zod.string().max(cancelVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+  "changesSummary": zod.string().max(cancelVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable(),
+  "templateId": zod.union([zod.string().regex(cancelVenomBuildRunResponseTwoRequestTemplateIdOneRegExp),zod.null()])
 }),
   "revisions": zod.array(zod.object({
   "id": zod.string().regex(cancelVenomBuildRunResponseTwoRevisionsItemIdRegExp),
@@ -6294,7 +8871,7 @@ export const CancelVenomBuildRunResponse = zod.object({
 })).max(cancelVenomBuildRunResponseTwoRevisionsMax),
   "events": zod.array(zod.object({
   "id": zod.string().regex(cancelVenomBuildRunResponseTwoEventsItemIdRegExp),
-  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "eventType": zod.enum(['queued', 'preparing', 'network_guidance', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
   "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
   "progress": zod.number().min(cancelVenomBuildRunResponseTwoEventsItemProgressMin).max(cancelVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(cancelVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
   "message": zod.string().min(1).max(cancelVenomBuildRunResponseTwoEventsItemMessageMax),
@@ -6310,138 +8887,11 @@ export const CancelVenomBuildRunResponse = zod.object({
 /**
  * @summary Safely retry a failed or cancelled generation run
  */
-export const retryVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const RetryVenomBuildRunParams = zod.object({
   "buildRunId": zod.coerce.string().regex(retryVenomBuildRunPathBuildRunIdRegExp)
 })
 
-export const retryVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseOneTargetNameMax = 120;
-
-export const retryVenomBuildRunResponseOneProgressMin = 0;
-export const retryVenomBuildRunResponseOneProgressMax = 100;
-export const retryVenomBuildRunResponseOneProgressMultipleOf = 1;
-
-export const retryVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
-export const retryVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
-
-export const retryVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseOneFailureMessageMax = 240;
-
-export const retryVenomBuildRunResponseOneCancelledReasonMax = 500;
-
-export const retryVenomBuildRunResponseTwoRequestTargetNameMax = 120;
-
-export const retryVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
-
-export const retryVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
-
-export const retryVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
-
-export const retryVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseTwoRequestProjectIdMax = 120;
-
-export const retryVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
-
-export const retryVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
-
-export const retryVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const retryVenomBuildRunResponseTwoRevisionsMax = 50;
-
-export const retryVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryVenomBuildRunResponseTwoEventsItemProgressMin = 0;
-export const retryVenomBuildRunResponseTwoEventsItemProgressMax = 100;
-export const retryVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
-
-export const retryVenomBuildRunResponseTwoEventsItemMessageMax = 240;
-
-export const retryVenomBuildRunResponseTwoEventsMax = 200;
-
-export const retryVenomBuildRunResponseTwoAttemptMax = 10;
-export const retryVenomBuildRunResponseTwoAttemptMultipleOf = 1;
-
-export const retryVenomBuildRunResponseTwoFailureCodeMax = 80;
 
 
 export const RetryVenomBuildRunResponse = zod.object({
@@ -6455,6 +8905,7 @@ export const RetryVenomBuildRunResponse = zod.object({
   "progress": zod.number().min(retryVenomBuildRunResponseOneProgressMin).max(retryVenomBuildRunResponseOneProgressMax).multipleOf(retryVenomBuildRunResponseOneProgressMultipleOf),
   "currentRevisionNumber": zod.number().min(retryVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(retryVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
   "approvedRevisionId": zod.union([zod.string().regex(retryVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "templateId": zod.union([zod.string().regex(retryVenomBuildRunResponseOneTemplateIdOneRegExp),zod.null()]),
   "failureMessage": zod.string().max(retryVenomBuildRunResponseOneFailureMessageMax).nullable(),
   "cancelledReason": zod.string().max(retryVenomBuildRunResponseOneCancelledReasonMax).nullable(),
   "createdAt": zod.coerce.date(),
@@ -6472,7 +8923,8 @@ export const RetryVenomBuildRunResponse = zod.object({
   "sopRevisionIds": zod.array(zod.string().regex(retryVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(retryVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
   "baselineIterationId": zod.union([zod.string().regex(retryVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
   "baselineRevisionId": zod.union([zod.string().regex(retryVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
-  "changesSummary": zod.string().max(retryVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+  "changesSummary": zod.string().max(retryVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable(),
+  "templateId": zod.union([zod.string().regex(retryVenomBuildRunResponseTwoRequestTemplateIdOneRegExp),zod.null()])
 }),
   "revisions": zod.array(zod.object({
   "id": zod.string().regex(retryVenomBuildRunResponseTwoRevisionsItemIdRegExp),
@@ -6521,7 +8973,7 @@ export const RetryVenomBuildRunResponse = zod.object({
 })).max(retryVenomBuildRunResponseTwoRevisionsMax),
   "events": zod.array(zod.object({
   "id": zod.string().regex(retryVenomBuildRunResponseTwoEventsItemIdRegExp),
-  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "eventType": zod.enum(['queued', 'preparing', 'network_guidance', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
   "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
   "progress": zod.number().min(retryVenomBuildRunResponseTwoEventsItemProgressMin).max(retryVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(retryVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
   "message": zod.string().min(1).max(retryVenomBuildRunResponseTwoEventsItemMessageMax),
@@ -6537,145 +8989,17 @@ export const RetryVenomBuildRunResponse = zod.object({
 /**
  * @summary Queue an immutable package revision for human review
  */
-export const reviseVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ReviseVenomBuildRunParams = zod.object({
   "buildRunId": zod.coerce.string().regex(reviseVenomBuildRunPathBuildRunIdRegExp)
 })
 
-export const reviseVenomBuildRunBodyInstructionMax = 3000;
 
 
 export const ReviseVenomBuildRunBody = zod.object({
   "instruction": zod.string().min(1).max(reviseVenomBuildRunBodyInstructionMax)
 })
 
-export const reviseVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseOneTargetNameMax = 120;
-
-export const reviseVenomBuildRunResponseOneProgressMin = 0;
-export const reviseVenomBuildRunResponseOneProgressMax = 100;
-export const reviseVenomBuildRunResponseOneProgressMultipleOf = 1;
-
-export const reviseVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
-export const reviseVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
-
-export const reviseVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseOneFailureMessageMax = 240;
-
-export const reviseVenomBuildRunResponseOneCancelledReasonMax = 500;
-
-export const reviseVenomBuildRunResponseTwoRequestTargetNameMax = 120;
-
-export const reviseVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
-
-export const reviseVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
-
-export const reviseVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
-
-export const reviseVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseTwoRequestProjectIdMax = 120;
-
-export const reviseVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
-
-export const reviseVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
-
-export const reviseVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const reviseVenomBuildRunResponseTwoRevisionsMax = 50;
-
-export const reviseVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const reviseVenomBuildRunResponseTwoEventsItemProgressMin = 0;
-export const reviseVenomBuildRunResponseTwoEventsItemProgressMax = 100;
-export const reviseVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
-
-export const reviseVenomBuildRunResponseTwoEventsItemMessageMax = 240;
-
-export const reviseVenomBuildRunResponseTwoEventsMax = 200;
-
-export const reviseVenomBuildRunResponseTwoAttemptMax = 10;
-export const reviseVenomBuildRunResponseTwoAttemptMultipleOf = 1;
-
-export const reviseVenomBuildRunResponseTwoFailureCodeMax = 80;
 
 
 export const ReviseVenomBuildRunResponse = zod.object({
@@ -6689,6 +9013,7 @@ export const ReviseVenomBuildRunResponse = zod.object({
   "progress": zod.number().min(reviseVenomBuildRunResponseOneProgressMin).max(reviseVenomBuildRunResponseOneProgressMax).multipleOf(reviseVenomBuildRunResponseOneProgressMultipleOf),
   "currentRevisionNumber": zod.number().min(reviseVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(reviseVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
   "approvedRevisionId": zod.union([zod.string().regex(reviseVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "templateId": zod.union([zod.string().regex(reviseVenomBuildRunResponseOneTemplateIdOneRegExp),zod.null()]),
   "failureMessage": zod.string().max(reviseVenomBuildRunResponseOneFailureMessageMax).nullable(),
   "cancelledReason": zod.string().max(reviseVenomBuildRunResponseOneCancelledReasonMax).nullable(),
   "createdAt": zod.coerce.date(),
@@ -6706,7 +9031,8 @@ export const ReviseVenomBuildRunResponse = zod.object({
   "sopRevisionIds": zod.array(zod.string().regex(reviseVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(reviseVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
   "baselineIterationId": zod.union([zod.string().regex(reviseVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
   "baselineRevisionId": zod.union([zod.string().regex(reviseVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
-  "changesSummary": zod.string().max(reviseVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+  "changesSummary": zod.string().max(reviseVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable(),
+  "templateId": zod.union([zod.string().regex(reviseVenomBuildRunResponseTwoRequestTemplateIdOneRegExp),zod.null()])
 }),
   "revisions": zod.array(zod.object({
   "id": zod.string().regex(reviseVenomBuildRunResponseTwoRevisionsItemIdRegExp),
@@ -6755,7 +9081,7 @@ export const ReviseVenomBuildRunResponse = zod.object({
 })).max(reviseVenomBuildRunResponseTwoRevisionsMax),
   "events": zod.array(zod.object({
   "id": zod.string().regex(reviseVenomBuildRunResponseTwoEventsItemIdRegExp),
-  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "eventType": zod.enum(['queued', 'preparing', 'network_guidance', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
   "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
   "progress": zod.number().min(reviseVenomBuildRunResponseTwoEventsItemProgressMin).max(reviseVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(reviseVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
   "message": zod.string().min(1).max(reviseVenomBuildRunResponseTwoEventsItemMessageMax),
@@ -6771,145 +9097,16 @@ export const ReviseVenomBuildRunResponse = zod.object({
 /**
  * @summary Approve one immutable revision for later provisioning
  */
-export const approveVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ApproveVenomBuildRunParams = zod.object({
   "buildRunId": zod.coerce.string().regex(approveVenomBuildRunPathBuildRunIdRegExp)
 })
-
-export const approveVenomBuildRunBodyRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const ApproveVenomBuildRunBody = zod.object({
   "revisionId": zod.string().regex(approveVenomBuildRunBodyRevisionIdRegExp)
 })
 
-export const approveVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseOneTargetNameMax = 120;
-
-export const approveVenomBuildRunResponseOneProgressMin = 0;
-export const approveVenomBuildRunResponseOneProgressMax = 100;
-export const approveVenomBuildRunResponseOneProgressMultipleOf = 1;
-
-export const approveVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
-export const approveVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
-
-export const approveVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseOneFailureMessageMax = 240;
-
-export const approveVenomBuildRunResponseOneCancelledReasonMax = 500;
-
-export const approveVenomBuildRunResponseTwoRequestTargetNameMax = 120;
-
-export const approveVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
-
-export const approveVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
-
-export const approveVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
-
-export const approveVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseTwoRequestProjectIdMax = 120;
-
-export const approveVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
-
-export const approveVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
-
-export const approveVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const approveVenomBuildRunResponseTwoRevisionsMax = 50;
-
-export const approveVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const approveVenomBuildRunResponseTwoEventsItemProgressMin = 0;
-export const approveVenomBuildRunResponseTwoEventsItemProgressMax = 100;
-export const approveVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
-
-export const approveVenomBuildRunResponseTwoEventsItemMessageMax = 240;
-
-export const approveVenomBuildRunResponseTwoEventsMax = 200;
-
-export const approveVenomBuildRunResponseTwoAttemptMax = 10;
-export const approveVenomBuildRunResponseTwoAttemptMultipleOf = 1;
-
-export const approveVenomBuildRunResponseTwoFailureCodeMax = 80;
 
 
 export const ApproveVenomBuildRunResponse = zod.object({
@@ -6923,6 +9120,7 @@ export const ApproveVenomBuildRunResponse = zod.object({
   "progress": zod.number().min(approveVenomBuildRunResponseOneProgressMin).max(approveVenomBuildRunResponseOneProgressMax).multipleOf(approveVenomBuildRunResponseOneProgressMultipleOf),
   "currentRevisionNumber": zod.number().min(approveVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(approveVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
   "approvedRevisionId": zod.union([zod.string().regex(approveVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "templateId": zod.union([zod.string().regex(approveVenomBuildRunResponseOneTemplateIdOneRegExp),zod.null()]),
   "failureMessage": zod.string().max(approveVenomBuildRunResponseOneFailureMessageMax).nullable(),
   "cancelledReason": zod.string().max(approveVenomBuildRunResponseOneCancelledReasonMax).nullable(),
   "createdAt": zod.coerce.date(),
@@ -6940,7 +9138,8 @@ export const ApproveVenomBuildRunResponse = zod.object({
   "sopRevisionIds": zod.array(zod.string().regex(approveVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(approveVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
   "baselineIterationId": zod.union([zod.string().regex(approveVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
   "baselineRevisionId": zod.union([zod.string().regex(approveVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
-  "changesSummary": zod.string().max(approveVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+  "changesSummary": zod.string().max(approveVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable(),
+  "templateId": zod.union([zod.string().regex(approveVenomBuildRunResponseTwoRequestTemplateIdOneRegExp),zod.null()])
 }),
   "revisions": zod.array(zod.object({
   "id": zod.string().regex(approveVenomBuildRunResponseTwoRevisionsItemIdRegExp),
@@ -6989,7 +9188,7 @@ export const ApproveVenomBuildRunResponse = zod.object({
 })).max(approveVenomBuildRunResponseTwoRevisionsMax),
   "events": zod.array(zod.object({
   "id": zod.string().regex(approveVenomBuildRunResponseTwoEventsItemIdRegExp),
-  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "eventType": zod.enum(['queued', 'preparing', 'network_guidance', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
   "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
   "progress": zod.number().min(approveVenomBuildRunResponseTwoEventsItemProgressMin).max(approveVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(approveVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
   "message": zod.string().min(1).max(approveVenomBuildRunResponseTwoEventsItemMessageMax),
@@ -7005,145 +9204,17 @@ export const ApproveVenomBuildRunResponse = zod.object({
 /**
  * @summary Reject a review-required package without executing it
  */
-export const rejectVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const RejectVenomBuildRunParams = zod.object({
   "buildRunId": zod.coerce.string().regex(rejectVenomBuildRunPathBuildRunIdRegExp)
 })
 
-export const rejectVenomBuildRunBodyReasonMax = 500;
 
 
 export const RejectVenomBuildRunBody = zod.object({
   "reason": zod.string().min(1).max(rejectVenomBuildRunBodyReasonMax)
 })
 
-export const rejectVenomBuildRunResponseOneIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseOneCorrelationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseOneAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseOneTargetNameMax = 120;
-
-export const rejectVenomBuildRunResponseOneProgressMin = 0;
-export const rejectVenomBuildRunResponseOneProgressMax = 100;
-export const rejectVenomBuildRunResponseOneProgressMultipleOf = 1;
-
-export const rejectVenomBuildRunResponseOneCurrentRevisionNumberMin = 0;
-export const rejectVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf = 1;
-
-export const rejectVenomBuildRunResponseOneApprovedRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseOneFailureMessageMax = 240;
-
-export const rejectVenomBuildRunResponseOneCancelledReasonMax = 500;
-
-export const rejectVenomBuildRunResponseTwoRequestTargetNameMax = 120;
-
-export const rejectVenomBuildRunResponseTwoRequestRequirementsMax = 8000;
-
-export const rejectVenomBuildRunResponseTwoRequestConstraintsMax = 4000;
-
-export const rejectVenomBuildRunResponseTwoRequestBrandDirectionMax = 3000;
-
-export const rejectVenomBuildRunResponseTwoRequestAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseTwoRequestSourceVersionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseTwoRequestProjectIdMax = 120;
-
-export const rejectVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseTwoRequestSopRevisionIdsMax = 20;
-
-export const rejectVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseTwoRequestChangesSummaryMax = 2000;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseTwoRevisionsItemRevisionNumberMultipleOf = 1;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemReasonMax = 1000;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageTitleMax = 160;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefSummaryMax = 3000;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceItemMax = 300;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefAudienceMax = 12;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesItemMax = 500;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageProductBriefOutcomesMax = 20;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeItemMax = 800;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageFunctionalScopeMax = 40;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionItemMax = 600;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageBrandDirectionMax = 30;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsItemMax = 600;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageContentRequirementsMax = 30;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsItemMax = 600;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageServiceFlowRequirementsMax = 30;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemAppNameMax = 120;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemVersionNumberMultipleOf = 1;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSourceReferencesMax = 1;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemRevisionNumberMultipleOf = 1;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemTitleMax = 160;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageSopReferencesMax = 20;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsItemMax = 600;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageDataNeedsMax = 30;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsItemMax = 600;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageIntegrationNeedsMax = 30;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemCapabilityMax = 160;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsItemReasonMax = 600;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackagePermissionRequestsMax = 30;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksItemMax = 800;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageAcceptanceChecksMax = 40;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsItemMax = 600;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemPackageLaunchConstraintsMax = 30;
-
-export const rejectVenomBuildRunResponseTwoRevisionsItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const rejectVenomBuildRunResponseTwoRevisionsMax = 50;
-
-export const rejectVenomBuildRunResponseTwoEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rejectVenomBuildRunResponseTwoEventsItemProgressMin = 0;
-export const rejectVenomBuildRunResponseTwoEventsItemProgressMax = 100;
-export const rejectVenomBuildRunResponseTwoEventsItemProgressMultipleOf = 1;
-
-export const rejectVenomBuildRunResponseTwoEventsItemMessageMax = 240;
-
-export const rejectVenomBuildRunResponseTwoEventsMax = 200;
-
-export const rejectVenomBuildRunResponseTwoAttemptMax = 10;
-export const rejectVenomBuildRunResponseTwoAttemptMultipleOf = 1;
-
-export const rejectVenomBuildRunResponseTwoFailureCodeMax = 80;
 
 
 export const RejectVenomBuildRunResponse = zod.object({
@@ -7157,6 +9228,7 @@ export const RejectVenomBuildRunResponse = zod.object({
   "progress": zod.number().min(rejectVenomBuildRunResponseOneProgressMin).max(rejectVenomBuildRunResponseOneProgressMax).multipleOf(rejectVenomBuildRunResponseOneProgressMultipleOf),
   "currentRevisionNumber": zod.number().min(rejectVenomBuildRunResponseOneCurrentRevisionNumberMin).multipleOf(rejectVenomBuildRunResponseOneCurrentRevisionNumberMultipleOf),
   "approvedRevisionId": zod.union([zod.string().regex(rejectVenomBuildRunResponseOneApprovedRevisionIdOneRegExp),zod.null()]),
+  "templateId": zod.union([zod.string().regex(rejectVenomBuildRunResponseOneTemplateIdOneRegExp),zod.null()]),
   "failureMessage": zod.string().max(rejectVenomBuildRunResponseOneFailureMessageMax).nullable(),
   "cancelledReason": zod.string().max(rejectVenomBuildRunResponseOneCancelledReasonMax).nullable(),
   "createdAt": zod.coerce.date(),
@@ -7174,7 +9246,8 @@ export const RejectVenomBuildRunResponse = zod.object({
   "sopRevisionIds": zod.array(zod.string().regex(rejectVenomBuildRunResponseTwoRequestSopRevisionIdsItemRegExp)).max(rejectVenomBuildRunResponseTwoRequestSopRevisionIdsMax),
   "baselineIterationId": zod.union([zod.string().regex(rejectVenomBuildRunResponseTwoRequestBaselineIterationIdOneRegExp),zod.null()]),
   "baselineRevisionId": zod.union([zod.string().regex(rejectVenomBuildRunResponseTwoRequestBaselineRevisionIdOneRegExp),zod.null()]),
-  "changesSummary": zod.string().max(rejectVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable()
+  "changesSummary": zod.string().max(rejectVenomBuildRunResponseTwoRequestChangesSummaryMax).nullable(),
+  "templateId": zod.union([zod.string().regex(rejectVenomBuildRunResponseTwoRequestTemplateIdOneRegExp),zod.null()])
 }),
   "revisions": zod.array(zod.object({
   "id": zod.string().regex(rejectVenomBuildRunResponseTwoRevisionsItemIdRegExp),
@@ -7223,7 +9296,7 @@ export const RejectVenomBuildRunResponse = zod.object({
 })).max(rejectVenomBuildRunResponseTwoRevisionsMax),
   "events": zod.array(zod.object({
   "id": zod.string().regex(rejectVenomBuildRunResponseTwoEventsItemIdRegExp),
-  "eventType": zod.enum(['queued', 'preparing', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
+  "eventType": zod.enum(['queued', 'preparing', 'network_guidance', 'review_required', 'revised', 'approved', 'ready_for_provisioning', 'cancelled', 'rejected', 'failed', 'retried']),
   "status": zod.enum(['queued', 'preparing', 'review_required', 'approved', 'cancelled', 'failed', 'ready_for_provisioning']),
   "progress": zod.number().min(rejectVenomBuildRunResponseTwoEventsItemProgressMin).max(rejectVenomBuildRunResponseTwoEventsItemProgressMax).multipleOf(rejectVenomBuildRunResponseTwoEventsItemProgressMultipleOf),
   "message": zod.string().min(1).max(rejectVenomBuildRunResponseTwoEventsItemMessageMax),
@@ -7239,81 +9312,12 @@ export const RejectVenomBuildRunResponse = zod.object({
 /**
  * @summary Export the latest package revision as JSON or Markdown
  */
-export const exportVenomBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ExportVenomBuildRunParams = zod.object({
   "buildRunId": zod.coerce.string().regex(exportVenomBuildRunPathBuildRunIdRegExp),
   "format": zod.enum(['json', 'markdown'])
 })
 
-export const exportVenomBuildRunResponseTitleMax = 160;
-
-export const exportVenomBuildRunResponseProductBriefSummaryMax = 3000;
-
-export const exportVenomBuildRunResponseProductBriefAudienceItemMax = 300;
-
-export const exportVenomBuildRunResponseProductBriefAudienceMax = 12;
-
-export const exportVenomBuildRunResponseProductBriefOutcomesItemMax = 500;
-
-export const exportVenomBuildRunResponseProductBriefOutcomesMax = 20;
-
-export const exportVenomBuildRunResponseFunctionalScopeItemMax = 800;
-
-export const exportVenomBuildRunResponseFunctionalScopeMax = 40;
-
-export const exportVenomBuildRunResponseBrandDirectionItemMax = 600;
-
-export const exportVenomBuildRunResponseBrandDirectionMax = 30;
-
-export const exportVenomBuildRunResponseContentRequirementsItemMax = 600;
-
-export const exportVenomBuildRunResponseContentRequirementsMax = 30;
-
-export const exportVenomBuildRunResponseServiceFlowRequirementsItemMax = 600;
-
-export const exportVenomBuildRunResponseServiceFlowRequirementsMax = 30;
-
-export const exportVenomBuildRunResponseSourceReferencesItemAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const exportVenomBuildRunResponseSourceReferencesItemAppNameMax = 120;
-
-export const exportVenomBuildRunResponseSourceReferencesItemSourceVersionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const exportVenomBuildRunResponseSourceReferencesItemVersionNumberMultipleOf = 1;
-
-export const exportVenomBuildRunResponseSourceReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const exportVenomBuildRunResponseSourceReferencesMax = 1;
-
-export const exportVenomBuildRunResponseSopReferencesItemSopIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const exportVenomBuildRunResponseSopReferencesItemRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const exportVenomBuildRunResponseSopReferencesItemRevisionNumberMultipleOf = 1;
-
-export const exportVenomBuildRunResponseSopReferencesItemTitleMax = 160;
-
-export const exportVenomBuildRunResponseSopReferencesItemChecksumSha256RegExp = new RegExp('^[a-f0-9]{64}$');
-export const exportVenomBuildRunResponseSopReferencesMax = 20;
-
-export const exportVenomBuildRunResponseDataNeedsItemMax = 600;
-
-export const exportVenomBuildRunResponseDataNeedsMax = 30;
-
-export const exportVenomBuildRunResponseIntegrationNeedsItemMax = 600;
-
-export const exportVenomBuildRunResponseIntegrationNeedsMax = 30;
-
-export const exportVenomBuildRunResponsePermissionRequestsItemCapabilityMax = 160;
-
-export const exportVenomBuildRunResponsePermissionRequestsItemReasonMax = 600;
-
-export const exportVenomBuildRunResponsePermissionRequestsMax = 30;
-
-export const exportVenomBuildRunResponseAcceptanceChecksItemMax = 800;
-
-export const exportVenomBuildRunResponseAcceptanceChecksMax = 40;
-
-export const exportVenomBuildRunResponseLaunchConstraintsItemMax = 600;
-
-export const exportVenomBuildRunResponseLaunchConstraintsMax = 30;
 
 
 export const ExportVenomBuildRunResponse = zod.object({
@@ -7358,21 +9362,6 @@ export const ExportVenomBuildRunResponse = zod.object({
 /**
  * @summary Report provisioning provider capability and permission summary
  */
-export const getProvisioningCapabilityResponseSummaryMax = 2000;
-
-export const getProvisioningCapabilityResponseRecoveryGuidanceMax = 2000;
-
-export const getProvisioningCapabilityResponseSupportedTargetTypesMax = 10;
-
-export const getProvisioningCapabilityResponsePermissionSummaryOneAllowedItemMax = 200;
-
-export const getProvisioningCapabilityResponsePermissionSummaryOneAllowedMax = 100;
-
-export const getProvisioningCapabilityResponsePermissionSummaryOneDeniedItemIntegrationMax = 200;
-
-export const getProvisioningCapabilityResponsePermissionSummaryOneDeniedItemReasonMax = 500;
-
-export const getProvisioningCapabilityResponsePermissionSummaryOneDeniedMax = 100;
 
 
 export const GetProvisioningCapabilityResponse = zod.object({
@@ -7395,21 +9384,11 @@ export const GetProvisioningCapabilityResponse = zod.object({
 /**
  * @summary Provision an approved immutable revision into a candidate
  */
-export const provisionBuildRunPathBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ProvisionBuildRunParams = zod.object({
   "buildRunId": zod.coerce.string().regex(provisionBuildRunPathBuildRunIdRegExp)
 })
 
-export const provisionBuildRunBodyApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const provisionBuildRunBodyIdempotencyKeyMax = 120;
-
-export const provisionBuildRunBodyTargetNameMax = 120;
-
-export const provisionBuildRunBodyRequestedIntegrationsItemMax = 200;
-
-export const provisionBuildRunBodyRequestedIntegrationsMax = 50;
 
 
 export const ProvisionBuildRunBody = zod.object({
@@ -7420,58 +9399,6 @@ export const ProvisionBuildRunBody = zod.object({
   "deploymentIntent": zod.enum(['create_candidate'])
 })
 
-export const provisionBuildRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const provisionBuildRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const provisionBuildRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const provisionBuildRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const provisionBuildRunResponseTargetNameMax = 120;
-
-export const provisionBuildRunResponseProgressMin = 0;
-export const provisionBuildRunResponseProgressMax = 100;
-export const provisionBuildRunResponseProgressMultipleOf = 1;
-
-export const provisionBuildRunResponseAttemptMin = 0;
-export const provisionBuildRunResponseAttemptMultipleOf = 1;
-
-export const provisionBuildRunResponseProviderProjectIdMax = 120;
-
-export const provisionBuildRunResponseProviderCandidateIdMax = 120;
-
-export const provisionBuildRunResponseFailureCodeMax = 200;
-
-export const provisionBuildRunResponseFailureMessageMax = 2000;
-
-export const provisionBuildRunResponseBlockedReasonMax = 2000;
-
-export const provisionBuildRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const provisionBuildRunResponseEventsItemProgressMin = 0;
-export const provisionBuildRunResponseEventsItemProgressMax = 100;
-export const provisionBuildRunResponseEventsItemProgressMultipleOf = 1;
-
-export const provisionBuildRunResponseEventsItemMessageMax = 2000;
-
-export const provisionBuildRunResponseEventsMax = 200;
-
-export const provisionBuildRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const provisionBuildRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const provisionBuildRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const provisionBuildRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const provisionBuildRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const provisionBuildRunResponseReleasesItemTargetNameMax = 120;
-
-export const provisionBuildRunResponseReleasesItemProviderProjectIdMax = 120;
-
-export const provisionBuildRunResponseReleasesItemProviderCandidateIdMax = 120;
-
-export const provisionBuildRunResponseReleasesItemProviderReleaseIdMax = 120;
-
-export const provisionBuildRunResponseReleasesItemLaunchUrlMax = 2048;
-
-export const provisionBuildRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
-
-export const provisionBuildRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
-
-export const provisionBuildRunResponseReleasesMax = 50;
 
 
 export const ProvisionBuildRunResponse = zod.object({
@@ -7529,37 +9456,12 @@ export const ProvisionBuildRunResponse = zod.object({
 /**
  * @summary List provisioning runs for the current user
  */
-export const listProvisioningRunsQueryBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listProvisioningRunsQueryAppIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const ListProvisioningRunsQueryParams = zod.object({
   "buildRunId": zod.coerce.string().regex(listProvisioningRunsQueryBuildRunIdRegExp).optional(),
   "appId": zod.coerce.string().regex(listProvisioningRunsQueryAppIdRegExp).optional()
 })
 
-export const listProvisioningRunsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listProvisioningRunsResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listProvisioningRunsResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listProvisioningRunsResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listProvisioningRunsResponseTargetNameMax = 120;
-
-export const listProvisioningRunsResponseProgressMin = 0;
-export const listProvisioningRunsResponseProgressMax = 100;
-export const listProvisioningRunsResponseProgressMultipleOf = 1;
-
-export const listProvisioningRunsResponseAttemptMin = 0;
-export const listProvisioningRunsResponseAttemptMultipleOf = 1;
-
-export const listProvisioningRunsResponseProviderProjectIdMax = 120;
-
-export const listProvisioningRunsResponseProviderCandidateIdMax = 120;
-
-export const listProvisioningRunsResponseFailureCodeMax = 200;
-
-export const listProvisioningRunsResponseFailureMessageMax = 2000;
-
-export const listProvisioningRunsResponseBlockedReasonMax = 2000;
 
 
 export const ListProvisioningRunsResponseItem = zod.object({
@@ -7586,65 +9488,11 @@ export const ListProvisioningRunsResponse = zod.array(ListProvisioningRunsRespon
 /**
  * @summary Get one provisioning run with events and releases
  */
-export const getProvisioningRunPathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const GetProvisioningRunParams = zod.object({
   "provisioningRunId": zod.coerce.string().regex(getProvisioningRunPathProvisioningRunIdRegExp)
 })
 
-export const getProvisioningRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getProvisioningRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getProvisioningRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getProvisioningRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getProvisioningRunResponseTargetNameMax = 120;
-
-export const getProvisioningRunResponseProgressMin = 0;
-export const getProvisioningRunResponseProgressMax = 100;
-export const getProvisioningRunResponseProgressMultipleOf = 1;
-
-export const getProvisioningRunResponseAttemptMin = 0;
-export const getProvisioningRunResponseAttemptMultipleOf = 1;
-
-export const getProvisioningRunResponseProviderProjectIdMax = 120;
-
-export const getProvisioningRunResponseProviderCandidateIdMax = 120;
-
-export const getProvisioningRunResponseFailureCodeMax = 200;
-
-export const getProvisioningRunResponseFailureMessageMax = 2000;
-
-export const getProvisioningRunResponseBlockedReasonMax = 2000;
-
-export const getProvisioningRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getProvisioningRunResponseEventsItemProgressMin = 0;
-export const getProvisioningRunResponseEventsItemProgressMax = 100;
-export const getProvisioningRunResponseEventsItemProgressMultipleOf = 1;
-
-export const getProvisioningRunResponseEventsItemMessageMax = 2000;
-
-export const getProvisioningRunResponseEventsMax = 200;
-
-export const getProvisioningRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getProvisioningRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getProvisioningRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getProvisioningRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const getProvisioningRunResponseReleasesItemTargetNameMax = 120;
-
-export const getProvisioningRunResponseReleasesItemProviderProjectIdMax = 120;
-
-export const getProvisioningRunResponseReleasesItemProviderCandidateIdMax = 120;
-
-export const getProvisioningRunResponseReleasesItemProviderReleaseIdMax = 120;
-
-export const getProvisioningRunResponseReleasesItemLaunchUrlMax = 2048;
-
-export const getProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
-
-export const getProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
-
-export const getProvisioningRunResponseReleasesMax = 50;
 
 
 export const GetProvisioningRunResponse = zod.object({
@@ -7702,72 +9550,17 @@ export const GetProvisioningRunResponse = zod.object({
 /**
  * @summary Cancel an in-flight provisioning run
  */
-export const cancelProvisioningRunPathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const CancelProvisioningRunParams = zod.object({
   "provisioningRunId": zod.coerce.string().regex(cancelProvisioningRunPathProvisioningRunIdRegExp)
 })
 
-export const cancelProvisioningRunBodyReasonMax = 500;
 
 
 export const CancelProvisioningRunBody = zod.object({
   "reason": zod.string().min(1).max(cancelProvisioningRunBodyReasonMax)
 })
 
-export const cancelProvisioningRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelProvisioningRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelProvisioningRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelProvisioningRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelProvisioningRunResponseTargetNameMax = 120;
-
-export const cancelProvisioningRunResponseProgressMin = 0;
-export const cancelProvisioningRunResponseProgressMax = 100;
-export const cancelProvisioningRunResponseProgressMultipleOf = 1;
-
-export const cancelProvisioningRunResponseAttemptMin = 0;
-export const cancelProvisioningRunResponseAttemptMultipleOf = 1;
-
-export const cancelProvisioningRunResponseProviderProjectIdMax = 120;
-
-export const cancelProvisioningRunResponseProviderCandidateIdMax = 120;
-
-export const cancelProvisioningRunResponseFailureCodeMax = 200;
-
-export const cancelProvisioningRunResponseFailureMessageMax = 2000;
-
-export const cancelProvisioningRunResponseBlockedReasonMax = 2000;
-
-export const cancelProvisioningRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelProvisioningRunResponseEventsItemProgressMin = 0;
-export const cancelProvisioningRunResponseEventsItemProgressMax = 100;
-export const cancelProvisioningRunResponseEventsItemProgressMultipleOf = 1;
-
-export const cancelProvisioningRunResponseEventsItemMessageMax = 2000;
-
-export const cancelProvisioningRunResponseEventsMax = 200;
-
-export const cancelProvisioningRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelProvisioningRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelProvisioningRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelProvisioningRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const cancelProvisioningRunResponseReleasesItemTargetNameMax = 120;
-
-export const cancelProvisioningRunResponseReleasesItemProviderProjectIdMax = 120;
-
-export const cancelProvisioningRunResponseReleasesItemProviderCandidateIdMax = 120;
-
-export const cancelProvisioningRunResponseReleasesItemProviderReleaseIdMax = 120;
-
-export const cancelProvisioningRunResponseReleasesItemLaunchUrlMax = 2048;
-
-export const cancelProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
-
-export const cancelProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
-
-export const cancelProvisioningRunResponseReleasesMax = 50;
 
 
 export const CancelProvisioningRunResponse = zod.object({
@@ -7825,65 +9618,11 @@ export const CancelProvisioningRunResponse = zod.object({
 /**
  * @summary Retry a failed provisioning run
  */
-export const retryProvisioningRunPathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const RetryProvisioningRunParams = zod.object({
   "provisioningRunId": zod.coerce.string().regex(retryProvisioningRunPathProvisioningRunIdRegExp)
 })
 
-export const retryProvisioningRunResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryProvisioningRunResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryProvisioningRunResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryProvisioningRunResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryProvisioningRunResponseTargetNameMax = 120;
-
-export const retryProvisioningRunResponseProgressMin = 0;
-export const retryProvisioningRunResponseProgressMax = 100;
-export const retryProvisioningRunResponseProgressMultipleOf = 1;
-
-export const retryProvisioningRunResponseAttemptMin = 0;
-export const retryProvisioningRunResponseAttemptMultipleOf = 1;
-
-export const retryProvisioningRunResponseProviderProjectIdMax = 120;
-
-export const retryProvisioningRunResponseProviderCandidateIdMax = 120;
-
-export const retryProvisioningRunResponseFailureCodeMax = 200;
-
-export const retryProvisioningRunResponseFailureMessageMax = 2000;
-
-export const retryProvisioningRunResponseBlockedReasonMax = 2000;
-
-export const retryProvisioningRunResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryProvisioningRunResponseEventsItemProgressMin = 0;
-export const retryProvisioningRunResponseEventsItemProgressMax = 100;
-export const retryProvisioningRunResponseEventsItemProgressMultipleOf = 1;
-
-export const retryProvisioningRunResponseEventsItemMessageMax = 2000;
-
-export const retryProvisioningRunResponseEventsMax = 200;
-
-export const retryProvisioningRunResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryProvisioningRunResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryProvisioningRunResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryProvisioningRunResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryProvisioningRunResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const retryProvisioningRunResponseReleasesItemTargetNameMax = 120;
-
-export const retryProvisioningRunResponseReleasesItemProviderProjectIdMax = 120;
-
-export const retryProvisioningRunResponseReleasesItemProviderCandidateIdMax = 120;
-
-export const retryProvisioningRunResponseReleasesItemProviderReleaseIdMax = 120;
-
-export const retryProvisioningRunResponseReleasesItemLaunchUrlMax = 2048;
-
-export const retryProvisioningRunResponseReleasesItemPublishIdempotencyKeyMax = 120;
-
-export const retryProvisioningRunResponseReleasesItemRollbackIdempotencyKeyMax = 120;
-
-export const retryProvisioningRunResponseReleasesMax = 50;
 
 
 export const RetryProvisioningRunResponse = zod.object({
@@ -7941,17 +9680,11 @@ export const RetryProvisioningRunResponse = zod.object({
 /**
  * @summary Publish a healthy candidate release as the primary deployment
  */
-export const publishProvisioningCandidatePathProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const PublishProvisioningCandidateParams = zod.object({
   "provisioningRunId": zod.coerce.string().regex(publishProvisioningCandidatePathProvisioningRunIdRegExp)
 })
 
-export const publishProvisioningCandidateBodyCandidateReleaseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishProvisioningCandidateBodyIdempotencyKeyMax = 120;
-
-export const publishProvisioningCandidateBodyConfirmTargetNameMax = 120;
 
 
 export const PublishProvisioningCandidateBody = zod.object({
@@ -7960,58 +9693,6 @@ export const PublishProvisioningCandidateBody = zod.object({
   "confirmTargetName": zod.string().min(1).max(publishProvisioningCandidateBodyConfirmTargetNameMax)
 })
 
-export const publishProvisioningCandidateResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishProvisioningCandidateResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishProvisioningCandidateResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishProvisioningCandidateResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishProvisioningCandidateResponseTargetNameMax = 120;
-
-export const publishProvisioningCandidateResponseProgressMin = 0;
-export const publishProvisioningCandidateResponseProgressMax = 100;
-export const publishProvisioningCandidateResponseProgressMultipleOf = 1;
-
-export const publishProvisioningCandidateResponseAttemptMin = 0;
-export const publishProvisioningCandidateResponseAttemptMultipleOf = 1;
-
-export const publishProvisioningCandidateResponseProviderProjectIdMax = 120;
-
-export const publishProvisioningCandidateResponseProviderCandidateIdMax = 120;
-
-export const publishProvisioningCandidateResponseFailureCodeMax = 200;
-
-export const publishProvisioningCandidateResponseFailureMessageMax = 2000;
-
-export const publishProvisioningCandidateResponseBlockedReasonMax = 2000;
-
-export const publishProvisioningCandidateResponseEventsItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishProvisioningCandidateResponseEventsItemProgressMin = 0;
-export const publishProvisioningCandidateResponseEventsItemProgressMax = 100;
-export const publishProvisioningCandidateResponseEventsItemProgressMultipleOf = 1;
-
-export const publishProvisioningCandidateResponseEventsItemMessageMax = 2000;
-
-export const publishProvisioningCandidateResponseEventsMax = 200;
-
-export const publishProvisioningCandidateResponseReleasesItemIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishProvisioningCandidateResponseReleasesItemProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishProvisioningCandidateResponseReleasesItemBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishProvisioningCandidateResponseReleasesItemApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishProvisioningCandidateResponseReleasesItemAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const publishProvisioningCandidateResponseReleasesItemTargetNameMax = 120;
-
-export const publishProvisioningCandidateResponseReleasesItemProviderProjectIdMax = 120;
-
-export const publishProvisioningCandidateResponseReleasesItemProviderCandidateIdMax = 120;
-
-export const publishProvisioningCandidateResponseReleasesItemProviderReleaseIdMax = 120;
-
-export const publishProvisioningCandidateResponseReleasesItemLaunchUrlMax = 2048;
-
-export const publishProvisioningCandidateResponseReleasesItemPublishIdempotencyKeyMax = 120;
-
-export const publishProvisioningCandidateResponseReleasesItemRollbackIdempotencyKeyMax = 120;
-
-export const publishProvisioningCandidateResponseReleasesMax = 50;
 
 
 export const PublishProvisioningCandidateResponse = zod.object({
@@ -8069,16 +9750,11 @@ export const PublishProvisioningCandidateResponse = zod.object({
 /**
  * @summary Roll back to a previous healthy release
  */
-export const rollbackProvisioningReleasePathReleaseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
 
 export const RollbackProvisioningReleaseParams = zod.object({
   "releaseId": zod.coerce.string().regex(rollbackProvisioningReleasePathReleaseIdRegExp)
 })
 
-export const rollbackProvisioningReleaseBodyIdempotencyKeyMax = 120;
-
-export const rollbackProvisioningReleaseBodyConfirmTargetNameMax = 120;
 
 
 export const RollbackProvisioningReleaseBody = zod.object({
@@ -8086,24 +9762,6 @@ export const RollbackProvisioningReleaseBody = zod.object({
   "confirmTargetName": zod.string().min(1).max(rollbackProvisioningReleaseBodyConfirmTargetNameMax)
 })
 
-export const rollbackProvisioningReleaseResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rollbackProvisioningReleaseResponseProvisioningRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rollbackProvisioningReleaseResponseBuildRunIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rollbackProvisioningReleaseResponseApprovedRevisionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rollbackProvisioningReleaseResponseAppIdOneRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const rollbackProvisioningReleaseResponseTargetNameMax = 120;
-
-export const rollbackProvisioningReleaseResponseProviderProjectIdMax = 120;
-
-export const rollbackProvisioningReleaseResponseProviderCandidateIdMax = 120;
-
-export const rollbackProvisioningReleaseResponseProviderReleaseIdMax = 120;
-
-export const rollbackProvisioningReleaseResponseLaunchUrlMax = 2048;
-
-export const rollbackProvisioningReleaseResponsePublishIdempotencyKeyMax = 120;
-
-export const rollbackProvisioningReleaseResponseRollbackIdempotencyKeyMax = 120;
 
 
 export const RollbackProvisioningReleaseResponse = zod.object({
@@ -8128,3 +9786,20 @@ export const RollbackProvisioningReleaseResponse = zod.object({
 })
 
 
+/**
+ * Unauthenticated. Resolves a share slug to the currently published, healthy release of the shared app. Unknown, disabled, and not-live shares all return the same uniform "unavailable" payload so public callers cannot distinguish them, and nothing about the owner or the underlying deployment provider is ever exposed.
+ * @summary Resolve a public app share link
+ */
+
+export const ResolvePublicAppShareParams = zod.object({
+  "slug": zod.coerce.string().regex(resolvePublicAppSharePathSlugRegExp)
+})
+
+
+
+export const ResolvePublicAppShareResponse = zod.object({
+  "status": zod.enum(['live', 'unavailable']),
+  "appName": zod.string().max(resolvePublicAppShareResponseAppNameMax).nullable(),
+  "viewMode": zod.union([zod.enum(['frame', 'redirect']),zod.null()]),
+  "frameUrl": zod.string().max(resolvePublicAppShareResponseFrameUrlMax).nullable()
+}).describe('Public resolution of a share slug. Never contains owner identity, provider identifiers, or release internals. All unavailable states (unknown slug, sharing disabled, no healthy published release) are indistinguishable.')

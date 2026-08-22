@@ -11,4 +11,5 @@ export type SharedWorkspaceAccessErrorCode = typeof SharedWorkspaceAccessErrorCo
 
 export const SharedWorkspaceAccessErrorCode = {
   workspace_access_denied: 'workspace_access_denied',
+  workspace_admin_required: 'workspace_admin_required',
 } as const;

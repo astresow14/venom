@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { AUTH_E2E_BASE_PATH } from '../support/auth-target';
 import {
+  authTestEmail,
   bypassBotProtection,
   deleteUserByEmail,
   ensureTestUser,
@@ -14,7 +15,8 @@ import { stubJsonGet, stubWorkspaceApis } from '../support/stubs';
  *
  * The hermetic suite runs in UI-test mode, which bypasses the signed-in
  * gate, so everything past the hosted form — credentials, session, the
- * redirect back into the workspace, and sign-out — was unverified there.
+ * redirect back into the workspace, sign-out, and password recovery — was
+ * unverified there.
  *
  * The server under test is mounted at a NON-ROOT base path (see
  * playwright.auth.config.ts). Every asserted URL carries that prefix, so a
@@ -37,18 +39,28 @@ const atApp = (path: string) =>
   new RegExp(`${escapeForRegex(base + path)}/?$`);
 
 // A retry lands in a fresh worker, so each worker mints its own credentials
-// and the sign-in account/password pair always match.
+// and the sign-in account/password pair always match. Addresses carry the
+// suite fingerprint that the global-setup sweep keys off.
 const runId = `${Date.now()}`;
-const password = `Task80!venom-${runId}-${process.pid}`;
-const signInEmail = `venom.task80.signin.${runId}+clerk_test@example.com`;
-const signUpEmail = `venom.task80.signup.${runId}+clerk_test@example.com`;
+const password = `VenomAuth!e2e-${runId}-${process.pid}`;
+const signInEmail = authTestEmail('signin', runId);
+const signUpEmail = authTestEmail('signup', runId);
+const resetEmail = authTestEmail('reset', runId);
+// Replacement credential for the forgot-password journey. The instance's
+// password policy requires >=15 characters; this stays well above it.
+const resetPassword = `VenomReset!e2e-${runId}-${process.pid}`;
 
 test.beforeAll(async () => {
-  await ensureTestUser(signInEmail, password);
+  await Promise.all([
+    ensureTestUser(signInEmail, password),
+    ensureTestUser(resetEmail, password),
+  ]);
 });
 
 test.afterAll(async () => {
-  await Promise.all([signInEmail, signUpEmail].map(deleteUserByEmail));
+  await Promise.all(
+    [signInEmail, signUpEmail, resetEmail].map(deleteUserByEmail),
+  );
 });
 
 /**
@@ -132,14 +144,23 @@ async function passCodeStepIfShown(page: Page) {
   // Clerk auto-submits a complete code; arrival is asserted by the caller.
 }
 
-/** Fill the sign-in form, tolerating one- and two-step layouts. */
-async function submitSignInForm(page: Page, email: string, pass: string) {
+/**
+ * Reach the password step for the given identifier, tolerating one- and
+ * two-step card layouts. Resolves to the visible password field.
+ */
+async function openPasswordStep(page: Page, email: string) {
   await fillClerkField(page, 'identifier', email);
   const passwordField = page.locator('input[name="password"]').first();
   if (!(await passwordField.isVisible())) {
     await primaryButton(page).click();
     await expect(passwordField).toBeVisible({ timeout: 30_000 });
   }
+  return passwordField;
+}
+
+/** Fill the sign-in form, tolerating one- and two-step layouts. */
+async function submitSignInForm(page: Page, email: string, pass: string) {
+  const passwordField = await openPasswordStep(page, email);
   await passwordField.fill(pass);
   await primaryButton(page).click();
 }
@@ -201,7 +222,7 @@ test('account creation lands straight in chat', async ({ page }) => {
   if (await firstName.isVisible()) {
     await firstName.fill('Venom');
     const lastName = page.locator('input[name="lastName"]').first();
-    if (await lastName.isVisible()) await lastName.fill('Task Eighty');
+    if (await lastName.isVisible()) await lastName.fill('Auth Suite');
   }
   await fillClerkField(page, 'password', password);
   await primaryButton(page).click();
@@ -212,4 +233,87 @@ test('account creation lands straight in chat', async ({ page }) => {
   await expect(page).toHaveURL(atApp('/workspace/chat'), { timeout: 90_000 });
   await expect(page.getByTestId('sidebar-desktop')).toBeVisible();
   await expect(page.getByTestId('form-composer')).toBeVisible();
+});
+
+test('forgot password resets the credential and lands back in chat', async ({
+  page,
+}) => {
+  await prepareAppPage(page);
+
+  await page.goto(`${base}/sign-in`);
+
+  // Submit the identifier ALONE. Clerk's current card shows email and
+  // password together on the first screen (so the password field being
+  // visible does not mean the password STEP is open); with the identifier
+  // submitted, both layouts advance to the factor-one step, and only that
+  // step carries the recovery entry point.
+  await fillClerkField(page, 'identifier', resetEmail);
+  await primaryButton(page).click();
+
+  const forgotAction = page
+    .locator('a, button')
+    .filter({ hasText: /forgot password/i })
+    .first();
+  await expect(forgotAction).toBeVisible({ timeout: 45_000 });
+  await forgotAction.click();
+
+  // Clerk's hosted steps route under the app's own sign-in path, so a
+  // dropped artifact prefix would surface right here.
+  await expect(page).toHaveURL(
+    new RegExp(`${escapeForRegex(`${base}/sign-in`)}(/|\\?|$)`),
+  );
+
+  // The recovery card offers the email-code reset; tolerate layouts that
+  // jump straight to code entry.
+  const sendResetCode = page
+    .getByRole('button', { name: /reset your password/i })
+    .first();
+  const codeInput = page
+    .locator('input[autocomplete="one-time-code"]')
+    .first();
+  await expect(sendResetCode.or(codeInput).first()).toBeVisible({
+    timeout: 45_000,
+  });
+  if (!(await codeInput.isVisible())) {
+    await sendResetCode.click();
+  }
+
+  // +clerk_test addresses always accept the fixed reset code.
+  await expect(codeInput).toBeVisible({ timeout: 45_000 });
+  await codeInput.click();
+  await page.keyboard.type(TEST_CODE, { delay: 60 });
+
+  // Set the replacement password (policy requires >=15 characters).
+  const newPasswordField = page
+    .locator('input[name="password"]:visible')
+    .first();
+  await expect(newPasswordField).toBeVisible({ timeout: 45_000 });
+  await newPasswordField.fill(resetPassword);
+  const confirmField = page
+    .locator('input[name="confirmPassword"]:visible')
+    .first();
+  if (await confirmField.isVisible()) {
+    await confirmField.fill(resetPassword);
+  }
+  await primaryButton(page).click();
+
+  // Completing the reset signs the user in; the redirect must land on
+  // chat with the artifact base path intact.
+  await expect(page).toHaveURL(atApp('/workspace/chat'), { timeout: 90_000 });
+  await expect(page.getByTestId('sidebar-desktop')).toBeVisible();
+  await expect(page.getByTestId('form-composer')).toBeVisible();
+
+  // The reset must really have replaced the credential: sign out, then a
+  // fresh sign-in with the NEW password also lands in chat.
+  await page.getByTestId('button-sign-out-desktop').click();
+  await expect(page.getByTestId('link-sign-in')).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.getByTestId('link-sign-in').click();
+  await expect(page).toHaveURL(atApp('/sign-in'));
+
+  await submitSignInForm(page, resetEmail, resetPassword);
+  await passCodeStepIfShown(page);
+  await expect(page).toHaveURL(atApp('/workspace/chat'), { timeout: 60_000 });
+  await expect(page.getByTestId('sidebar-desktop')).toBeVisible();
 });

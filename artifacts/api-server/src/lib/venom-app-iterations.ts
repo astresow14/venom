@@ -1,5 +1,6 @@
 import {
   db,
+  venomCandidateReleasesTable,
   venomOntologyConceptsTable,
   venomOntologyEvidenceTable,
   venomPortfolioAppIterationsTable,
@@ -377,6 +378,75 @@ export async function computeImprovementSignals(
   return signals;
 }
 
+/**
+ * The release an app is ACTUALLY serving, mapped back to the approved
+ * package iteration it shipped from. `iteration` is null when the live
+ * release predates package registration (an app first provisioned before
+ * any approval was pinned to it) — callers must surface that state rather
+ * than pretend the newest package is live.
+ */
+export type AppLiveReleaseFacts = {
+  release: VenomCandidateRelease;
+  iteration: VenomPortfolioAppIteration | null;
+};
+
+/**
+ * Batch-resolves each app's live-release pointer (`liveReleaseId`, written
+ * only by the provisioning publish/rollback transactions) into the release
+ * row and its shipped iteration. Apps with no live pointer, or a pointer
+ * whose release row cannot be loaded, are simply absent from the map.
+ */
+export async function loadLiveReleaseFacts(
+  userId: string,
+  apps: Pick<VenomPortfolioApp, "id" | "liveReleaseId">[],
+): Promise<Map<string, AppLiveReleaseFacts>> {
+  const facts = new Map<string, AppLiveReleaseFacts>();
+  const releaseIds = [
+    ...new Set(
+      apps
+        .map((app) => app.liveReleaseId)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  if (releaseIds.length === 0) return facts;
+  const releases = await db
+    .select()
+    .from(venomCandidateReleasesTable)
+    .where(
+      and(
+        eq(venomCandidateReleasesTable.clerkUserId, userId),
+        inArray(venomCandidateReleasesTable.id, releaseIds),
+      ),
+    );
+  if (releases.length === 0) return facts;
+  const releaseById = new Map(releases.map((release) => [release.id, release]));
+  const iterations = await db
+    .select()
+    .from(venomPortfolioAppIterationsTable)
+    .where(
+      and(
+        eq(venomPortfolioAppIterationsTable.clerkUserId, userId),
+        inArray(
+          venomPortfolioAppIterationsTable.buildRunId,
+          releases.map((release) => release.buildRunId),
+        ),
+      ),
+    );
+  const iterationByBuildRun = new Map(
+    iterations.map((iteration) => [iteration.buildRunId, iteration]),
+  );
+  for (const app of apps) {
+    if (!app.liveReleaseId) continue;
+    const release = releaseById.get(app.liveReleaseId);
+    if (!release) continue;
+    facts.set(app.id, {
+      release,
+      iteration: iterationByBuildRun.get(release.buildRunId) ?? null,
+    });
+  }
+  return facts;
+}
+
 export type TimelineEntryPayload = {
   id: string;
   kind:
@@ -476,12 +546,24 @@ export function assembleFullAppTimeline(input: {
     });
   }
 
+  // Releases are anchored to the approved package they shipped: the build
+  // run id ties a release back to exactly one iteration row, so release
+  // entries can say WHICH version went live (or was restored) instead of
+  // implying the newest package is the one serving traffic.
+  const iterationByBuildRun = new Map(
+    input.iterations.map((iteration) => [iteration.buildRunId, iteration]),
+  );
   for (const release of input.releases) {
+    const shipped = iterationByBuildRun.get(release.buildRunId) ?? null;
+    const shippedNumber = shipped?.iterationNumber ?? null;
     entries.push({
       id: `release_created:${release.id}`,
       kind: "release_created",
       occurredAt: release.createdAt.toISOString(),
-      title: "Release candidate created",
+      title:
+        shippedNumber !== null
+          ? `Release candidate created from package v${shippedNumber}`
+          : "Release candidate created",
       detail: (release.launchUrl
         ? `Candidate for ${release.targetName || "this app"} — ${release.launchUrl}`
         : `Candidate for ${release.targetName || "this app"}`
@@ -491,21 +573,24 @@ export function assembleFullAppTimeline(input: {
       buildRunId: release.buildRunId,
       releaseId: release.id,
       sourceVersionId: null,
-      iterationNumber: null,
+      iterationNumber: shippedNumber,
     });
     if (release.publishedAt) {
       entries.push({
         id: `release_published:${release.id}`,
         kind: "release_published",
         occurredAt: release.publishedAt.toISOString(),
-        title: "Release published",
+        title:
+          shippedNumber !== null
+            ? `Release published — package v${shippedNumber} live`
+            : "Release published",
         detail: release.launchUrl ? release.launchUrl.slice(0, 2000) : null,
         actor: "owner",
         status: "published",
         buildRunId: release.buildRunId,
         releaseId: release.id,
         sourceVersionId: null,
-        iterationNumber: null,
+        iterationNumber: shippedNumber,
       });
     }
     if (release.rolledBackAt) {
@@ -513,14 +598,18 @@ export function assembleFullAppTimeline(input: {
         id: `release_rolled_back:${release.id}`,
         kind: "release_rolled_back",
         occurredAt: release.rolledBackAt.toISOString(),
-        title: "Release rolled back",
-        detail: null,
+        title:
+          shippedNumber !== null
+            ? `Rolled back — package v${shippedNumber} live again`
+            : "Release rolled back",
+        detail:
+          "The live pointer was reset to this release; newer approved packages are no longer serving.",
         actor: "owner",
         status: "rolled_back",
         buildRunId: release.buildRunId,
         releaseId: release.id,
         sourceVersionId: null,
-        iterationNumber: null,
+        iterationNumber: shippedNumber,
       });
     }
   }

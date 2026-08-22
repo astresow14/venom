@@ -21,12 +21,21 @@ export type VoiceCaptureEvent =
   | { type: 'error'; code: VoiceCaptureErrorCode; message: string };
 
 export type VoiceCaptureHandle = {
-  /** Acquire the microphone and begin end-of-speech detection. */
+  /** Acquire the microphone and begin a user-controlled recording. */
   start(): Promise<void>;
-  /** Keep the mic session alive but stop cutting utterances. */
+  /** Finish the current recording and emit it as one utterance. */
+  finish(): void;
+  /** Keep the mic session alive but stop and discard an in-progress recording. */
   pause(): void;
-  /** Resume utterance detection after pause(). */
+  /** Resume a fresh user-controlled recording after pause(). */
   resume(): void;
+  /**
+   * Enter/refresh the ducking window with the current playback level (0..1),
+   * or leave it with null. While ducked, the speech detector is gated
+   * against playback bleed so the bot's own voice cannot start an
+   * utterance — the basis of hands-free barge-in.
+   */
+  setDucking(playbackLevel: number | null): void;
   /** Release the microphone entirely. */
   stop(): void;
 };

@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    // index.ts re-exports './clusterPlacement.ts' with an explicit extension
+    // because the apps' unit suites load this package's src directly under
+    // node --experimental-strip-types, which does not resolve extensionless
+    // specifiers. Legal here since the build emits declarations only.
+    "allowImportingTsExtensions": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../api-client-react" },
+    { "path": "../knowledge-text" }
+  ]
+}

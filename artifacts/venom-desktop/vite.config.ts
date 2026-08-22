@@ -1,7 +1,8 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
@@ -37,7 +38,8 @@ if (!basePath) {
  * only change when the dependency itself changes.
  *
  * Only packages that are already reachable from the entry are listed here.
- * Adding a route-only package would drag it back onto the critical path.
+ * Adding a route-only package would drag it back onto the critical path —
+ * scripts/check-bundle-budget.mjs fails the build when that happens.
  */
 function vendorChunk(id: string): string | undefined {
   const marker = 'node_modules/';
@@ -60,13 +62,106 @@ function vendorChunk(id: string): string | undefined {
   return undefined;
 }
 
-export default defineConfig({
+const artifactRoot = path.resolve(import.meta.dirname);
+const repoRoot = path.resolve(import.meta.dirname, '..', '..');
+
+/**
+ * Make module ids stable across machines so the composition report (and the
+ * budget baseline derived from it) can be compared between local builds and
+ * CI: package code becomes `npm:<subpath>`, workspace code becomes a
+ * repo-relative path, Rollup/Vite synthetic modules become `virtual:<id>`.
+ */
+function normalizeModuleId(id: string): string {
+  let cleaned = id;
+  let virtual = false;
+  if (cleaned.startsWith('\0')) {
+    virtual = true;
+    cleaned = cleaned.slice(1);
+  }
+
+  const marker = 'node_modules/';
+  const index = cleaned.lastIndexOf(marker);
+  if (index !== -1) return `npm:${cleaned.slice(index + marker.length)}`;
+  if (virtual) return `virtual:${cleaned}`;
+
+  if (cleaned.startsWith(artifactRoot + path.sep)) {
+    return path.relative(artifactRoot, cleaned).split(path.sep).join('/');
+  }
+  if (cleaned.startsWith(repoRoot + path.sep)) {
+    return path.relative(repoRoot, cleaned).split(path.sep).join('/');
+  }
+  return cleaned;
+}
+
+/**
+ * Record what every emitted JS chunk is made of.
+ *
+ * The report lands at dist/bundle-composition.json — next to, not inside, the
+ * served dist/public output — and is what lets the critical-path budget check
+ * (scripts/check-bundle-budget.mjs) say *which module* grew instead of just
+ * "the entry chunk is bigger". `renderedLength` is measured before
+ * minification, so the numbers are for attribution, not download size.
+ */
+function bundleCompositionReport(): Plugin {
+  const reportPath = path.join(artifactRoot, 'dist', 'bundle-composition.json');
+  let mode = 'unknown';
+  let nodeEnv = 'unknown';
+
+  return {
+    name: 'venom:bundle-composition-report',
+    apply: 'build',
+    configResolved(config) {
+      mode = config.mode;
+      nodeEnv = process.env.NODE_ENV ?? '(unset)';
+    },
+    generateBundle(_options, bundle) {
+      const chunks = [];
+      for (const [fileName, output] of Object.entries(bundle)) {
+        if (output.type !== 'chunk') continue;
+        const modules: Record<string, number> = {};
+        for (const [id, mod] of Object.entries(output.modules)) {
+          const key = normalizeModuleId(id);
+          modules[key] = (modules[key] ?? 0) + mod.renderedLength;
+        }
+        chunks.push({
+          fileName,
+          name: output.name,
+          isEntry: output.isEntry,
+          isDynamicEntry: output.isDynamicEntry,
+          imports: output.imports,
+          modules,
+        });
+      }
+
+      mkdirSync(path.dirname(reportPath), { recursive: true });
+      writeFileSync(
+        reportPath,
+        JSON.stringify(
+          { mode, nodeEnv, generatedAt: new Date().toISOString(), chunks },
+          null,
+          2,
+        ),
+      );
+    },
+  };
+}
+
+export default defineConfig(async ({ command }) => ({
   base: basePath,
   plugins: [
     react(),
-    tailwindcss({ optimize: false }),
+    // Default options on purpose: during `vite build` the plugin runs its
+    // Lightning CSS optimize/minify pass on the emitted stylesheet (dev serve
+    // never optimizes either way). The stylesheet is the one render-blocking
+    // file on first paint, so don't pass `optimize: false` here — that ships
+    // a meaningfully larger CSS download to every visitor.
+    tailwindcss(),
     runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== 'production' &&
+    // Dev-only tooling is gated on `command` (not just NODE_ENV) so that a
+    // production build measures the same bundle no matter what environment it
+    // runs in — the bundle-budget check depends on builds being deterministic.
+    ...(command === 'serve' &&
+    process.env.NODE_ENV !== 'production' &&
     process.env.REPL_ID !== undefined
       ? [
           await import('@replit/vite-plugin-cartographer').then((m) =>
@@ -79,6 +174,7 @@ export default defineConfig({
           ),
         ]
       : []),
+    bundleCompositionReport(),
   ],
   resolve: {
     alias: {
@@ -116,4 +212,4 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: true,
   },
-});
+}));

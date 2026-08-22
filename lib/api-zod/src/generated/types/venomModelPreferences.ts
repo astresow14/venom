@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { VenomModelId } from './venomModelId';
+import type { VenomModelSelectionPolicy } from './venomModelSelectionPolicy';
 
 export interface VenomModelPreferences {
   /**
@@ -15,6 +16,7 @@ export interface VenomModelPreferences {
   enabledModelIds: VenomModelId[];
   defaultModelId: VenomModelId;
   activeModelId: VenomModelId;
+  selectionPolicy?: VenomModelSelectionPolicy;
   /** @minimum 0 */
   updatedAt: number;
 }

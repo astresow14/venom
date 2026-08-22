@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createSpeechDetector,
   DEFAULT_SPEECH_DETECTOR_OPTIONS,
+  NATIVE_SPEECH_DETECTOR_OPTIONS,
 } from "./voiceActivity.ts";
 
 const QUIET = 0.0;
@@ -112,6 +113,87 @@ test("reset abandons an in-flight utterance", () => {
   // No stray speech-end fires after a reset; silence is just silence.
   const events = feed(detector, QUIET, 350, 2_000);
   assert.equal(events.length, 0);
+});
+
+// ── Ducking window (hands-free barge-in) ────────────────────────────────────
+
+test("playback bleed during the ducking window never starts speech", () => {
+  const detector = createSpeechDetector();
+  detector.setDucking(0.6);
+
+  // Loud enough to start speech in a quiet room, but under the ducked gate
+  // (0.6 * duckPlaybackMultiplier). Two seconds of it must do nothing.
+  const events = feed(detector, 0.3, 0, 2_000);
+  assert.equal(events.length, 0);
+  assert.equal(detector.state(), "idle");
+});
+
+test("sustained real speech over the reply trips within the ~300ms budget", () => {
+  const detector = createSpeechDetector();
+  detector.setDucking(0.6);
+
+  let startAt = null;
+  for (let at = 0; at <= 600 && startAt === null; at += 50) {
+    if (detector.push(0.9, at) === "speech-start") startAt = at;
+  }
+  assert.ok(startAt !== null, "barge-in speech must start an utterance");
+  assert.ok(startAt <= 300, `speech-start fired at ${startAt}ms`);
+});
+
+test("the ducking gate follows the playback level", () => {
+  const detector = createSpeechDetector();
+
+  // A loud passage gates a level that a quiet passage lets through.
+  detector.setDucking(0.9);
+  assert.equal(feed(detector, 0.5, 0, 1_000).length, 0);
+  assert.equal(detector.state(), "idle");
+
+  detector.setDucking(0.1);
+  const events = feed(detector, 0.5, 1_050, 2_000);
+  assert.equal(events[0]?.event, "speech-start");
+});
+
+test("bleed cannot deafen the detector after the ducking window ends", () => {
+  const detector = createSpeechDetector();
+  const before = detector.speechThreshold();
+
+  detector.setDucking(0.6);
+  // Bleed sits above the un-ducked threshold for a long reply…
+  feed(detector, 0.3, 0, 10_000);
+  detector.setDucking(null);
+
+  // …yet the floor learned nothing from it: sensitivity is unchanged and
+  // ordinary speech still starts a turn under the normal timing.
+  assert.equal(detector.speechThreshold(), before);
+  const events = feed(detector, 0.2, 10_050, 11_000);
+  assert.equal(events[0]?.event, "speech-start");
+  assert.ok(
+    events[0].at - 10_050 <= DEFAULT_SPEECH_DETECTOR_OPTIONS.minSpeechMs + 50,
+    "post-duck speech uses the normal minSpeechMs, not the ducked one",
+  );
+});
+
+test("reset() keeps the ducking window in place", () => {
+  const detector = createSpeechDetector();
+  detector.setDucking(0.6);
+  detector.reset(); // capture pause/resume mid-reply must not drop the gate
+
+  const events = feed(detector, 0.3, 0, 1_500);
+  assert.equal(events.length, 0);
+  assert.equal(detector.state(), "idle");
+});
+
+test("native calibration releases an iPhone-like quiet room promptly", () => {
+  const detector = createSpeechDetector(NATIVE_SPEECH_DETECTOR_OPTIONS);
+
+  feed(detector, 0.5, 0, 300);
+  assert.equal(detector.state(), "speaking");
+
+  // A phone's quiet-room floor can sit above the shared web profile's very
+  // gentle hold threshold. The native profile deliberately releases it.
+  const events = feed(detector, 0.05, 350, 1_500);
+  assert.deepEqual(events, [{ event: "speech-end", at: 950 }]);
+  assert.equal(detector.state(), "idle");
 });
 
 test("garbage levels are clamped instead of crashing detection", () => {

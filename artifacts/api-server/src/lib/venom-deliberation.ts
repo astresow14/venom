@@ -15,12 +15,14 @@
  * and per-voice statuses only.
  */
 
-import type { VenomManagedModel, VenomModelId } from "./venom-models";
+import { providerLabel, type VenomManagedModel, type VenomModelId } from "./venom-models";
 import {
+  PROVIDER_ACCOUNT_ERROR_MESSAGE,
   ProviderError,
   streamVenomResponse,
   streamWithSingleRetry,
   type VenomMessage,
+  type VenomStreamUsage,
 } from "./venom-provider-adapters";
 import {
   createCitationStreamFilter,
@@ -84,37 +86,175 @@ export type PlannedVoice = DeliberationVoice & {
   modelName: string;
 };
 
+/** An explicit request-level choice of which model plays a given voice. */
+export type VenomVoiceModelPick = {
+  voiceId: VenomVoiceId;
+  modelId: VenomModelId;
+};
+
+/**
+ * Thrown when explicit per-voice picks would seat opposing voices on the same
+ * LLM provider — a model can't argue itself. The message is user-facing and
+ * stable; routes map it to a 400.
+ */
+export class InvalidVoiceAssignment extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidVoiceAssignment";
+  }
+}
+
 /**
  * Assign voices to genuinely different providers when their keys are
- * configured. The requested model anchors the first take (and the synthesis);
- * remaining voices take other available models in catalog order and fall back
- * to the anchor when nothing distinct is configured.
+ * configured. Explicit per-voice picks are honored first — after the
+ * argue-itself rule below — and the remaining voices are auto-assigned: the
+ * requested model anchors the first take (and the synthesis); other voices
+ * take available models in catalog order, preferring providers no seated
+ * voice already uses, and fall back to the anchor when nothing distinct is
+ * configured. A model whose provider account is failing billing-class checks
+ * is never picked automatically — it would fail its take on every turn —
+ * while the anchor stays the user's explicit choice; an explicit pick of such
+ * a model quietly returns that one voice to automatic assignment.
+ *
+ * The provider rule judges stated intent before any availability fallback:
+ * First take and Skeptic explicitly picked onto the same provider are
+ * rejected even when one of them is unusable, so the outcome never depends on
+ * provider uptime. Evidence is a neutral role and may share a provider.
  */
 export function planDeliberationVoices(
   anchorModelId: VenomModelId,
   catalog: VenomManagedModel[],
+  voiceModels?: VenomVoiceModelPick[],
 ): PlannedVoice[] {
   const anchor = catalog.find((model) => model.id === anchorModelId);
   if (!anchor) {
     throw new ProviderError("The selected model is not available.", 502, true);
   }
-  const alternates = catalog.filter(
-    (model) => model.available && model.id !== anchorModelId,
-  );
-  const assignments = [anchor, alternates[0] ?? anchor, alternates[1] ?? anchor];
 
-  return DELIBERATION_VOICES.map((voice, index) => {
-    const model = assignments[index] ?? anchor;
+  // Explicit picks: the last entry per voice wins. Model ids outside the
+  // catalog cannot appear (the request schema pins them), but stay defensive.
+  const picked = new Map<VenomVoiceId, VenomManagedModel>();
+  for (const pick of voiceModels ?? []) {
+    const model = catalog.find((entry) => entry.id === pick.modelId);
+    if (model) picked.set(pick.voiceId, model);
+  }
+
+  const pickedDirect = picked.get("direct");
+  const pickedSkeptic = picked.get("skeptic");
+  if (pickedDirect && pickedSkeptic) {
+    if (pickedDirect.id === pickedSkeptic.id) {
+      throw new InvalidVoiceAssignment(
+        `${pickedDirect.name} can't argue itself — pick a different model for Skeptic.`,
+      );
+    }
+    if (pickedDirect.provider === pickedSkeptic.provider) {
+      throw new InvalidVoiceAssignment(
+        `${pickedDirect.name} and ${pickedSkeptic.name} both run on ${providerLabel(pickedDirect.provider)} — pick a different provider for Skeptic.`,
+      );
+    }
+  }
+
+  // An explicit pick that cannot answer right now falls back to automatic
+  // assignment for that one voice instead of failing the whole message.
+  const usable = (model: VenomManagedModel) =>
+    model.available && model.accountHealth !== "unfunded";
+  for (const [voiceId, model] of [...picked]) {
+    if (!usable(model)) picked.delete(voiceId);
+  }
+
+  const usableAlternates = catalog.filter(
+    (model) => usable(model) && model.id !== anchorModelId,
+  );
+  const anchorTail = usable(anchor) ? [anchor] : [];
+
+  const assigned = new Map<VenomVoiceId, VenomManagedModel>();
+  const autoPick = (
+    base: VenomManagedModel[],
+    hardAvoid: Set<string>,
+    softAvoid: Set<string>,
+  ): VenomManagedModel => {
+    const used = new Set(
+      [...assigned.values(), ...picked.values()].map((model) => model.id),
+    );
+    const fresh = (model: VenomManagedModel) => !used.has(model.id);
+    // Prefer an unseated model on an unseated provider; degrade one
+    // constraint at a time. When every usable model is already seated the
+    // anchor absorbs the voice — same fallback the planner has always used.
+    return (
+      base.find(
+        (model) =>
+          fresh(model) &&
+          !hardAvoid.has(model.provider) &&
+          !softAvoid.has(model.provider),
+      ) ??
+      base.find((model) => fresh(model) && !hardAvoid.has(model.provider)) ??
+      base.find((model) => fresh(model)) ??
+      anchor
+    );
+  };
+
+  const providerOf = (model: VenomManagedModel | undefined) =>
+    model ? new Set([model.provider]) : new Set<string>();
+
+  for (const voice of DELIBERATION_VOICES) {
+    const explicit = picked.get(voice.id);
+    if (explicit) {
+      assigned.set(voice.id, explicit);
+      continue;
+    }
+    if (voice.id === "direct") {
+      // The anchor keeps the first take — it is the user's chosen model, even
+      // shared with a neutral Evidence pick — unless it would argue the
+      // explicitly picked Skeptic; then another provider steps in when one
+      // exists. (Dropped unusable picks no longer constrain anything, so read
+      // the live map, not the pre-drop snapshot.)
+      const hard = providerOf(picked.get("skeptic"));
+      assigned.set(
+        "direct",
+        hard.has(anchor.provider)
+          ? autoPick([anchor, ...usableAlternates], hard, new Set())
+          : anchor,
+      );
+    } else if (voice.id === "skeptic") {
+      assigned.set(
+        "skeptic",
+        autoPick(
+          [...usableAlternates, ...anchorTail],
+          providerOf(assigned.get("direct")),
+          providerOf(picked.get("evidence")),
+        ),
+      );
+    } else {
+      // Evidence is neutral: spread onto a third provider when possible, but
+      // sharing is allowed.
+      const soft = new Set<string>();
+      for (const seated of [assigned.get("direct"), assigned.get("skeptic")]) {
+        if (seated) soft.add(seated.provider);
+      }
+      assigned.set(
+        "evidence",
+        autoPick([...usableAlternates, ...anchorTail], new Set(), soft),
+      );
+    }
+  }
+
+  return DELIBERATION_VOICES.map((voice) => {
+    const model = assigned.get(voice.id) ?? anchor;
     return { ...voice, modelId: model.id, modelName: model.name };
   });
 }
 
 /** Sanitized availability payload for clients, next to the model catalog. */
 export function buildDeliberationAvailability(catalog: VenomManagedModel[]) {
-  const availableCount = catalog.filter((model) => model.available).length;
+  // A model with a billing-dead provider account would fail every voice
+  // pass, so it neither makes deliberation available nor counts as a
+  // genuinely distinct model.
+  const usableCount = catalog.filter(
+    (model) => model.available && model.accountHealth !== "unfunded",
+  ).length;
   return {
-    available: availableCount > 0,
-    distinctModels: availableCount > 1,
+    available: usableCount > 0,
+    distinctModels: usableCount > 1,
     voices: DELIBERATION_VOICES.map((voice) => ({
       voiceId: voice.id,
       name: voice.name,
@@ -274,6 +414,12 @@ export type DeliberationOutcome = {
 
 type StreamModel = typeof streamVenomResponse;
 
+/** One metered provider call inside a deliberation. */
+export type DeliberationUsageEvent = {
+  stage: "voice" | "synthesis";
+  modelId: VenomModelId;
+  usage: VenomStreamUsage;
+};
 type RunDeliberationOptions = {
   /** Fully assembled ordinary chat messages, system prompt first. */
   baseMessages: VenomMessage[];
@@ -299,11 +445,18 @@ type RunDeliberationOptions = {
   voiceTimeoutMs?: number;
   retryDelayMs?: number;
   streamModel?: StreamModel;
+  /**
+   * Metering hook: fires once per provider stream attempt — every voice
+   * pass and the synthesis — so the caller can ledger each call against
+   * the asking account. Retried attempts report separately.
+   */
+  onUsage?: (event: DeliberationUsageEvent) => void;
 };
 
 async function runVoicePass(
   voice: PlannedVoice,
   options: RunDeliberationOptions,
+  failures?: { billing: number; other: number },
 ): Promise<VoiceTakeRecord> {
   const {
     baseMessages,
@@ -314,6 +467,7 @@ async function runVoicePass(
     voiceTimeoutMs = DELIBERATION_VOICE_TIMEOUT_MS,
     retryDelayMs,
     streamModel = streamVenomResponse,
+    onUsage,
   } = options;
 
   const controller = new AbortController();
@@ -328,6 +482,7 @@ async function runVoicePass(
   );
   let content = "";
   let errored = false;
+  let caught: unknown;
 
   const forward = (chunk: string) => {
     if (!chunk) return;
@@ -342,6 +497,12 @@ async function runVoicePass(
           voice.modelId,
           withVoicePrompt(baseMessages, voice),
           controller.signal,
+          onUsage
+            ? {
+                onUsage: (usage) =>
+                  onUsage({ stage: "voice", modelId: voice.modelId, usage }),
+              }
+            : undefined,
         ),
       controller.signal,
       retryDelayMs,
@@ -356,10 +517,11 @@ async function runVoicePass(
       forward(filter.push(token));
     }
     if (!signal.aborted) forward(filter.flush());
-  } catch {
+  } catch (error) {
     // A voice that dies with a partial take still contributes it; a voice
     // that produced nothing is reported failed and the turn continues.
     errored = true;
+    caught = error;
     if (content.length > 0 && !signal.aborted) forward(filter.flush());
   } finally {
     clearTimeout(timer);
@@ -371,6 +533,16 @@ async function runVoicePass(
   const finalContent = content.trim().slice(0, DELIBERATION_TAKE_MAX_CHARS);
   const ok = finalContent.length > 0;
   void errored;
+  if (!ok && failures) {
+    // Only a voice whose stream died billing-class counts toward the
+    // account verdict; a silent empty stream stays an unknown (generic)
+    // cause so the aggregate never overstates what it knows.
+    if (caught instanceof ProviderError && caught.kind === "account_billing") {
+      failures.billing += 1;
+    } else {
+      failures.other += 1;
+    }
+  }
   const record: VoiceTakeRecord = {
     voiceId: voice.id,
     name: voice.name,
@@ -390,7 +562,8 @@ async function runVoicePass(
  * parallel voice passes, then a streamed synthesis whose text goes out as
  * ordinary `content` events. Completes from the remaining voices when some
  * fail, and falls back to the strongest take if the synthesis itself dies.
- * Throws (retryable) only when every voice fails.
+ * Throws only when every voice fails: retryable for transient faults, or the
+ * fixed non-retryable account error when every voice died billing-class.
  */
 export async function runDeliberation(
   options: RunDeliberationOptions,
@@ -406,10 +579,12 @@ export async function runDeliberation(
     weights,
     retryDelayMs,
     streamModel = streamVenomResponse,
+    onUsage,
   } = options;
 
+  const failures = { billing: 0, other: 0 };
   const takes = await Promise.all(
-    voices.map((voice) => runVoicePass(voice, options)),
+    voices.map((voice) => runVoicePass(voice, options, failures)),
   );
 
   const usable = takes.filter((take) => take.status === "ok");
@@ -437,6 +612,17 @@ export async function runDeliberation(
     return { content: "", takes, disagreements: [], synthesisFellBack: false };
   }
   if (usable.length === 0) {
+    if (failures.billing === takes.length) {
+      // Every voice died because the provider account cannot pay. Saying
+      // "retry" would promise recovery that never comes — surface the
+      // account problem with the fixed safe copy instead.
+      throw new ProviderError(
+        PROVIDER_ACCOUNT_ERROR_MESSAGE,
+        402,
+        false,
+        "account_billing",
+      );
+    }
     throw new ProviderError(
       "No deliberation voice completed a take.",
       502,
@@ -467,6 +653,16 @@ export async function runDeliberation(
           synthesisModelId,
           buildSynthesisMessages(baseMessages, synthesisTakes),
           signal,
+          onUsage
+            ? {
+                onUsage: (usage) =>
+                  onUsage({
+                    stage: "synthesis",
+                    modelId: synthesisModelId,
+                    usage,
+                  }),
+              }
+            : undefined,
         ),
       signal,
       retryDelayMs,

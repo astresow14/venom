@@ -7,14 +7,19 @@
  * fresh, refreshed when stale, and deleted as soon as the auth provider
  * reports the user gone (the lazy equivalent of "remove personal data when
  * the user is deleted" — the next resolve attempt performs the cleanup).
+ * Because a deleted account may never be resolved again, a retention sweep
+ * (sweepStaleVenomIdentities, run at boot and periodically by
+ * venom-identity-retention.ts) re-verifies rows that have gone unrefreshed
+ * for a long window and deletes the ones whose accounts are gone upstream.
  *
  * PII discipline: display name and email are personal data. They are
  * bounded before writing, returned only to the account they belong to (or
  * joined onto that account's own evidence), and NEVER logged. This module
- * intentionally performs no logging at all; keep it that way.
+ * intentionally performs no logging at all; keep it that way — the sweep
+ * reports plain counts for exactly this reason.
  */
 import { clerkClient } from "@clerk/express";
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import { db, venomIdentitiesTable, type VenomIdentityRow } from "@workspace/db";
 
 export const VENOM_IDENTITY_BOUNDS = {
@@ -26,6 +31,16 @@ export const VENOM_IDENTITY_BOUNDS = {
 
 /** How long a resolved identity stays fresh before the next use re-checks. */
 export const VENOM_IDENTITY_REFRESH_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Rows unrefreshed for this long are re-verified against the auth provider
+ * by the retention sweep, so a deleted account's name and email cannot
+ * outlive this window merely because nobody resolved the identity again.
+ */
+export const VENOM_IDENTITY_SWEEP_STALE_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Upper bound of rows re-verified per sweep, oldest first. */
+export const VENOM_IDENTITY_SWEEP_BATCH_LIMIT = 500;
 
 export type VenomIdentity = {
   userId: string;
@@ -100,24 +115,18 @@ export type ResolveIdentityOptions = {
   now?: number;
 };
 
-async function refreshIdentity(
+/**
+ * Write the outcome of a successful auth-provider check: an upsert of the
+ * bounded profile fields, or removal of the row when the provider reports
+ * the user gone. Shared by on-demand refreshes and the retention sweep so
+ * both paths delete personal data under exactly the same condition — the
+ * provider's explicit "user gone" answer, never a transient failure.
+ */
+async function applyAuthProfile(
   userId: string,
-  staleRow: VenomIdentityRow | undefined,
-  options: ResolveIdentityOptions,
+  profile: AuthProfile,
+  now: number,
 ): Promise<VenomIdentity> {
-  const fetchProfile = options.fetchProfile ?? fetchClerkProfile;
-  const now = options.now ?? Date.now();
-
-  let profile: AuthProfile;
-  try {
-    profile = await fetchProfile(userId);
-  } catch {
-    // Auth provider unavailable. Serve the stale record when there is one;
-    // otherwise an all-null identity. Nothing personal may reach a log, so
-    // the error itself is deliberately dropped.
-    return staleRow ? identityFromRow(userId, staleRow) : emptyIdentity(userId);
-  }
-
   if (profile === null) {
     // The user was deleted upstream: remove their personal data.
     await db
@@ -143,6 +152,96 @@ async function refreshIdentity(
     });
 
   return { userId, displayName, email, provider };
+}
+
+async function refreshIdentity(
+  userId: string,
+  staleRow: VenomIdentityRow | undefined,
+  options: ResolveIdentityOptions,
+): Promise<VenomIdentity> {
+  const fetchProfile = options.fetchProfile ?? fetchClerkProfile;
+  const now = options.now ?? Date.now();
+
+  let profile: AuthProfile;
+  try {
+    profile = await fetchProfile(userId);
+  } catch {
+    // Auth provider unavailable. Serve the stale record when there is one;
+    // otherwise an all-null identity. Nothing personal may reach a log, so
+    // the error itself is deliberately dropped.
+    return staleRow ? identityFromRow(userId, staleRow) : emptyIdentity(userId);
+  }
+  return applyAuthProfile(userId, profile, now);
+}
+
+export type VenomIdentitySweepResult = {
+  /** Long-unrefreshed rows picked up by this sweep. */
+  scanned: number;
+  /** Rows deleted because the auth provider reports the account gone. */
+  deleted: number;
+  /** Rows re-verified alive and re-stamped, so the next sweep skips them. */
+  refreshed: number;
+  /** Rows left untouched because the auth-provider check failed. */
+  failed: number;
+};
+
+/**
+ * Retention sweep over identity rows unrefreshed for
+ * VENOM_IDENTITY_SWEEP_STALE_MS: re-verify each against the auth provider,
+ * delete the ones whose accounts are gone upstream, and re-stamp the ones
+ * still alive. A failed check deletes nothing — the row is counted as
+ * `failed` and left for the next sweep.
+ *
+ * Both refreshedAt and createdAt must predate the cutoff. In production
+ * the two never drift more than milliseconds apart at insert time, so the
+ * extra conjunct changes nothing there — but it keeps integration fixtures
+ * (rows written moments ago with a rewound refreshedAt) invisible to the
+ * live dev server's sweep, which shares the database with test runs.
+ *
+ * Returns counts only; per the module contract, nothing here logs.
+ */
+export async function sweepStaleVenomIdentities(
+  options: ResolveIdentityOptions = {},
+): Promise<VenomIdentitySweepResult> {
+  const fetchProfile = options.fetchProfile ?? fetchClerkProfile;
+  const now = options.now ?? Date.now();
+  const cutoff = new Date(now - VENOM_IDENTITY_SWEEP_STALE_MS);
+
+  const rows = await db
+    .select({ clerkUserId: venomIdentitiesTable.clerkUserId })
+    .from(venomIdentitiesTable)
+    .where(
+      and(
+        lt(venomIdentitiesTable.refreshedAt, cutoff),
+        lt(venomIdentitiesTable.createdAt, cutoff),
+      ),
+    )
+    .orderBy(asc(venomIdentitiesTable.refreshedAt))
+    .limit(VENOM_IDENTITY_SWEEP_BATCH_LIMIT);
+
+  const result: VenomIdentitySweepResult = {
+    scanned: rows.length,
+    deleted: 0,
+    refreshed: 0,
+    failed: 0,
+  };
+
+  // Sequential on purpose: background work must not turn a backlog into a
+  // burst of auth-provider calls.
+  for (const { clerkUserId } of rows) {
+    let profile: AuthProfile;
+    try {
+      profile = await fetchProfile(clerkUserId);
+    } catch {
+      result.failed += 1;
+      continue;
+    }
+    await applyAuthProfile(clerkUserId, profile, now);
+    if (profile === null) result.deleted += 1;
+    else result.refreshed += 1;
+  }
+
+  return result;
 }
 
 /**

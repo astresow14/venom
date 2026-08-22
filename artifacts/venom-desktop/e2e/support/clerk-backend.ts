@@ -103,6 +103,86 @@ export async function deleteUserByEmail(email: string): Promise<void> {
 }
 
 /**
+ * Address fingerprint for every account this suite mints. The stale-user
+ * sweep keys off it, so it must stay distinct from the tags other live
+ * harnesses use (scripts/live/* mint venom.task1xx.* accounts that may be
+ * in use while this suite runs).
+ */
+const TEST_EMAIL_PREFIX = 'venom.desktop.auth.';
+
+/** Tags earlier revisions of this suite used; their leftovers still get swept. */
+const LEGACY_TEST_EMAIL_PREFIXES = ['venom.task80.', 'venom.auth.reset.'] as const;
+
+/** Test address for one journey of one run — always a +clerk_test account. */
+export function authTestEmail(
+  kind: 'signin' | 'signup' | 'reset',
+  runId: string,
+): string {
+  return `${TEST_EMAIL_PREFIX}${kind}.${runId}+clerk_test@example.com`;
+}
+
+/**
+ * Delete leftovers from earlier runs whose afterAll cleanup never ran
+ * (crashed or killed suite). Only this suite's own fingerprints are
+ * touched, and only accounts old enough that no live run — retries
+ * included — could still be using them. Runs from global setup on every
+ * invocation, so the per-task-completion cadence cannot accumulate users
+ * on the dev instance.
+ *
+ * Best-effort by design: hygiene must never mask the login signal this
+ * suite exists to produce, so failures warn loudly instead of throwing.
+ */
+export async function sweepStaleTestUsers(
+  maxAgeMs = 2 * 60 * 60 * 1000,
+): Promise<void> {
+  const cutoff = Date.now() - maxAgeMs;
+  const prefixes = [TEST_EMAIL_PREFIX, ...LEGACY_TEST_EMAIL_PREFIXES];
+  try {
+    const stale = new Map<string, string>(); // user id -> email
+    for (const prefix of prefixes) {
+      const response = await backend(
+        `/users?query=${encodeURIComponent(prefix)}&limit=100`,
+      );
+      if (!response.ok) {
+        console.warn(
+          `[auth-e2e sweep] user listing failed (${response.status}); ` +
+            'leftover test users may be accumulating on the dev instance.',
+        );
+        continue;
+      }
+      const users = (await response.json()) as Array<{
+        id: string;
+        created_at: number;
+        email_addresses?: Array<{ email_address?: string }>;
+      }>;
+      for (const user of users) {
+        const email = user.email_addresses?.find((entry) =>
+          entry.email_address?.startsWith(prefix),
+        )?.email_address;
+        if (!email || !email.includes('+clerk_test@')) continue;
+        if (user.created_at >= cutoff) continue; // possibly still in use
+        stale.set(user.id, email);
+      }
+    }
+    for (const [id, email] of stale) {
+      const deleted = await backend(`/users/${id}`, { method: 'DELETE' });
+      if (deleted.ok) {
+        console.log(`[auth-e2e sweep] removed stale test user ${email}`);
+      } else {
+        console.warn(
+          `[auth-e2e sweep] could not delete ${email} (${deleted.status})`,
+        );
+      }
+    }
+  } catch (error) {
+    console.warn(
+      '[auth-e2e sweep] failed; leftover test users may be accumulating ' +
+        `on the dev instance: ${String(error)}`,
+    );
+  }
+}
+
+/**
  * Force clerk-js to skip its client-side CAPTCHA orchestration.
  *
  * FAPI skips captcha VALIDATION for requests carrying the testing token

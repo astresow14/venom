@@ -61,6 +61,24 @@ export type HeuristicVerdict = {
   confident: boolean;
 };
 
+// ── Tunable thresholds ───────────────────────────────────────────────────────
+// Named so the decision-report endpoint can echo the values in force and the
+// evidence in venom_voice_decisions can argue for moving them. How to read
+// the numbers against each knob: see venom-voice-restraint-tuning.md.
+
+/** Utterances at or above this many words always get a full reply. */
+export const LONG_UTTERANCE_WORDS = 12;
+/** A turn this short made only of backchannel/filler tokens is a backchannel. */
+export const BACKCHANNEL_MAX_WORDS = 6;
+/** Thanks at or under this many words earns a one-line acknowledgment. */
+export const SHORT_GRATITUDE_MAX_WORDS = 5;
+/** A turn this short right after the bot asked a question reads as its answer. */
+export const BOT_ANSWER_MAX_WORDS = 8;
+/** User turns at or under this many words count as "short" for momentum. */
+export const SHORT_TURN_MAX_WORDS = 4;
+/** Trailing short user turns needed before a backchannel reads as dying momentum. */
+export const WIND_DOWN_TRAILING_SHORT_TURNS = 1;
+
 // ── Lexicons ─────────────────────────────────────────────────────────────────
 
 const INTERROGATIVE_STARTS = new Set([
@@ -184,13 +202,13 @@ export function extractVoiceTurnSignals(
     .reverse()
     .find((turn) => turn.role === "assistant");
   const answeringBotQuestion =
-    wordCount <= 8 &&
+    wordCount <= BOT_ANSWER_MAX_WORDS &&
     typeof lastAssistantTurn?.content === "string" &&
     /\?\s*$/.test(lastAssistantTurn.content.trim());
 
   const backchannel =
     wordCount > 0 &&
-    wordCount <= 6 &&
+    wordCount <= BACKCHANNEL_MAX_WORDS &&
     tokens.every(
       (token) => BACKCHANNEL_TOKENS.has(token) || FILLER_TOKENS.has(token),
     );
@@ -209,7 +227,7 @@ export function extractVoiceTurnSignals(
   for (let index = recentTurns.length - 1; index >= 0; index -= 1) {
     const turn = recentTurns[index]!;
     if (turn.role !== "user") continue;
-    if (countWords(turn.content) <= 4) {
+    if (countWords(turn.content) <= SHORT_TURN_MAX_WORDS) {
       trailingShortUserTurns += 1;
     } else {
       break;
@@ -232,9 +250,6 @@ export function extractVoiceTurnSignals(
 }
 
 // ── Heuristic decision ───────────────────────────────────────────────────────
-
-/** Utterances at or above this many words always get a full reply. */
-export const LONG_UTTERANCE_WORDS = 12;
 
 export function decideFromHeuristics(
   signals: VoiceTurnSignals,
@@ -267,14 +282,15 @@ export function decideFromHeuristics(
   }
 
   // 5. Short thanks gets a warm one-liner, not a paragraph.
-  if (signals.gratitude && signals.wordCount <= 5) {
+  if (signals.gratitude && signals.wordCount <= SHORT_GRATITUDE_MAX_WORDS) {
     return { decision: "acknowledge", windDown: false, confident: true };
   }
 
   // 6. Pure backchannel ("okay yeah", "hm, makes sense"): silence or a nod.
   //    Consecutive minimal remarks mean the conversation is winding down.
   if (signals.backchannel) {
-    const windDown = signals.trailingShortUserTurns >= 1;
+    const windDown =
+      signals.trailingShortUserTurns >= WIND_DOWN_TRAILING_SHORT_TURNS;
     if (talkativeness === "chatty") {
       return { decision: "acknowledge", windDown, confident: true };
     }
@@ -348,6 +364,16 @@ export type VoiceJudgeInput = {
   talkativeness: VoiceTalkativeness;
   /** What the heuristics would do — the judge refines, never bootstraps. */
   heuristicDecision: VoiceTurnDecisionKind;
+  /**
+   * Metering hook: a judge that actually called a model reports the tokens
+   * it consumed here (estimated when the provider omitted usage metadata).
+   * Judges that answer without a model call simply never invoke it.
+   */
+  onUsage?: (usage: {
+    promptTokens: number;
+    outputTokens: number;
+    estimated: boolean;
+  }) => void;
 };
 
 export type VoiceJudgeVerdict = {

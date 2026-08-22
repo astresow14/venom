@@ -536,7 +536,11 @@ test("build run routes isolate accounts and keep approvals immutable", async () 
       })
       .returning();
     scheduled.length = 0;
-    await reconcileVenomBuildRunQueueForTests();
+    // Rescue only claims rows older than the grace period. Run reconcile on a
+    // future clock so this fresh fixture qualifies inside this invocation
+    // only — backdating createdAt instead would expose the row to the live
+    // dev server's reconcile loop on the shared database.
+    await reconcileVenomBuildRunQueueForTests(Date.now() + 3 * 60_000);
     assert.ok(scheduled.includes(recoveredQueuedRun.id));
 
     assert.ok(!JSON.stringify(capturedLogs).includes(marker));

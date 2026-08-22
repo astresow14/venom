@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { VenomTaskStatus } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -20,14 +20,83 @@ import {
 import { useVenomWorkspace } from "@/context/venom-workspace";
 import { motion, AnimatePresence } from "framer-motion";
 
+/**
+ * Where keyboard focus should land after a task row is deleted: the closest
+ * surviving row's controls in the same column, or the column's empty state
+ * when the deletion left the column without rows. Mirrors the phone board's
+ * BoardFocusTarget.
+ */
+type TaskFocusTarget =
+  | { kind: "task"; taskId: string }
+  | { kind: "emptyColumn"; columnId: VenomTaskStatus };
+
 export default function TasksPage() {
   const { state, addTask, updateTaskStatus, deleteTask } = useVenomWorkspace();
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
 
+  // Deleting a row unmounts the delete button that holds keyboard focus, and
+  // the browser would drop focus back to the page body — forcing keyboard and
+  // screen-reader users to tab in from the top after every deletion. Register
+  // each row's focusable control and each column's empty state so the delete
+  // handler can aim focus at a surviving neighbour instead.
+  const taskControlRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const emptyColumnRefs = useRef<Map<VenomTaskStatus, HTMLDivElement>>(
+    new Map(),
+  );
+  const pendingFocusRef = useRef<TaskFocusTarget | null>(null);
+
+  const registerTaskControl =
+    (taskId: string) => (node: HTMLButtonElement | null) => {
+      if (node) {
+        taskControlRefs.current.set(taskId, node);
+      } else {
+        taskControlRefs.current.delete(taskId);
+      }
+    };
+
+  const registerEmptyColumn =
+    (columnId: VenomTaskStatus) => (node: HTMLDivElement | null) => {
+      if (node) {
+        emptyColumnRefs.current.set(columnId, node);
+      } else {
+        emptyColumnRefs.current.delete(columnId);
+      }
+    };
+
+  // Runs after the delete commit renders: the surviving neighbour (or the
+  // empty state that just mounted) is in the DOM by then, while the removed
+  // row may still be exit-animating — focus must not wait for that unmount.
+  useEffect(() => {
+    const target = pendingFocusRef.current;
+    if (!target) return;
+    pendingFocusRef.current = null;
+    if (target.kind === "task") {
+      taskControlRefs.current.get(target.taskId)?.focus();
+      return;
+    }
+    emptyColumnRefs.current.get(target.columnId)?.focus();
+  });
+
   const activeProjectId = state?.activeProjectId;
-  const activeProject = state?.projects.find(
+
+  // One board for everything: with no global scope switcher (Task #281),
+  // every project — personal or shared with a company — contributes its
+  // to-dos. The active project narrows the board; richer cross-scope
+  // sorting is deliberately out of scope here.
+  const scopeProjects = useMemo(() => {
+    if (!state) return [];
+    return state.projects || [];
+  }, [state]);
+
+  // The active project narrows the board only while it belongs to the
+  // current scope; otherwise every project in scope contributes its tasks.
+  const activeProject = scopeProjects.find(
     (project) => project.id === activeProjectId,
+  );
+  const boardProjects = useMemo(
+    () => (activeProject ? [activeProject] : scopeProjects),
+    [activeProject, scopeProjects],
   );
   const availableStatuses = useMemo(
     () => (activeProject ? availableTaskStatuses(activeProject) : []),
@@ -35,23 +104,38 @@ export default function TasksPage() {
   );
   const canAddTask = availableStatuses.includes("todo");
 
-  const tasks = useMemo(() => {
-    if (!state) return [];
-
-    let relevantProjects = state.projects || [];
-    if (activeProjectId) {
-      const active = relevantProjects.find((p) => p.id === activeProjectId);
-      if (active) relevantProjects = [active];
+  // Which columns exist per project — a task can only move to stages its
+  // own project actually has, even when several projects share the board.
+  const statusesByProject = useMemo(
+    () =>
+      new Map(
+        boardProjects.map((project) => [
+          project.id,
+          availableTaskStatuses(project),
+        ]),
+      ),
+    [boardProjects],
+  );
+  const visibleStatuses = useMemo(() => {
+    const present = new Set<VenomTaskStatus>();
+    for (const statuses of statusesByProject.values()) {
+      for (const status of statuses) present.add(status);
     }
+    return present;
+  }, [statusesByProject]);
 
-    return relevantProjects.flatMap((project) =>
-      (project.tasks || []).map((task) => ({
-        ...task,
-        projectId: project.id,
-        status: taskStatusForProject(project, task),
-      })),
-    );
-  }, [state, activeProjectId]);
+  const tasks = useMemo(
+    () =>
+      boardProjects.flatMap((project) =>
+        (project.tasks || []).map((task) => ({
+          ...task,
+          projectId: project.id,
+          projectName: project.name,
+          status: taskStatusForProject(project, task),
+        })),
+      ),
+    [boardProjects],
+  );
 
   const columns: {
     id: VenomTaskStatus;
@@ -89,10 +173,13 @@ export default function TasksPage() {
       <header className="mb-6 flex shrink-0 flex-col justify-between gap-4 border-b border-border pb-5 md:flex-row md:items-end">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">To-Do</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {activeProjectId
-              ? `Project: ${state.projects?.find((p) => p.id === activeProjectId)?.name}`
-              : "Global workspace"}
+          <p
+            className="mt-1 text-sm text-muted-foreground"
+            data-testid="text-todo-scope"
+          >
+            {activeProject
+              ? `Project: ${activeProject.name}`
+              : "All projects"}
           </p>
         </div>
 
@@ -134,8 +221,16 @@ export default function TasksPage() {
 
       {/* Kanban Board */}
       <div className="flex-1 flex gap-6 md:gap-8 overflow-x-auto pb-6 snap-x snap-mandatory hide-scrollbar">
+        {scopeProjects.length === 0 && (
+          <div
+            data-testid="empty-scope-projects"
+            className="flex-1 flex items-center justify-center border border-dashed border-border/60 rounded-2xl text-sm text-muted-foreground font-medium px-8 text-center"
+          >
+            No projects yet. Create a project to start a to-do list.
+          </div>
+        )}
         {columns
-          .filter((col) => availableStatuses.includes(col.id))
+          .filter((col) => visibleStatuses.has(col.id))
           .map((col) => {
             const colTasks = tasks
               .filter((t) => t.status === col.id)
@@ -169,7 +264,10 @@ export default function TasksPage() {
                   role="list"
                 >
                   <AnimatePresence>
-                    {colTasks.map((task) => (
+                    {colTasks.map((task) => {
+                      const rowStatuses =
+                        statusesByProject.get(task.projectId) ?? [];
+                      return (
                       <motion.div
                         key={task.id}
                         layout
@@ -198,7 +296,13 @@ export default function TasksPage() {
                           </p>
 
                           <div className="flex items-center justify-between mt-2 pt-4 border-t border-border/60 group-hover:border-foreground/20 transition-colors">
-                            <span className="text-xs font-medium text-muted-foreground">
+                            <span
+                              className="text-xs font-medium text-muted-foreground truncate max-w-[180px]"
+                              data-testid={`text-task-meta-${task.id}`}
+                            >
+                              {boardProjects.length > 1
+                                ? `${task.projectName} · `
+                                : ""}
                               {new Date(task.createdAt).toLocaleDateString(
                                 undefined,
                                 { month: "short", day: "numeric" },
@@ -208,7 +312,7 @@ export default function TasksPage() {
                             {/* Quick Actions */}
                             <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                               {col.id !== "todo" &&
-                                availableStatuses.includes("todo") && (
+                                rowStatuses.includes("todo") && (
                                   <button
                                     onClick={() =>
                                       updateTaskStatus(
@@ -225,7 +329,7 @@ export default function TasksPage() {
                                   </button>
                                 )}
                               {col.id !== "in_progress" &&
-                                availableStatuses.includes("in_progress") && (
+                                rowStatuses.includes("in_progress") && (
                                   <button
                                     onClick={() =>
                                       updateTaskStatus(
@@ -242,7 +346,7 @@ export default function TasksPage() {
                                   </button>
                                 )}
                               {col.id !== "done" &&
-                                availableStatuses.includes("done") && (
+                                rowStatuses.includes("done") && (
                                   <button
                                     onClick={() =>
                                       updateTaskStatus(
@@ -260,12 +364,31 @@ export default function TasksPage() {
                                 )}
                               <div className="w-[1px] h-4 bg-border mx-1" />
                               <button
+                                ref={registerTaskControl(task.id)}
                                 onClick={() => {
                                   if (
                                     window.confirm(
                                       `Delete task: "${task.title}"?`,
                                     )
                                   ) {
+                                    // The row below inherits focus, the row
+                                    // above when the bottom row goes, and the
+                                    // column's empty state when this was the
+                                    // column's last row.
+                                    const index = colTasks.findIndex(
+                                      (item) => item.id === task.id,
+                                    );
+                                    const neighbour =
+                                      index >= 0
+                                        ? (colTasks[index + 1] ??
+                                          colTasks[index - 1])
+                                        : undefined;
+                                    pendingFocusRef.current = neighbour
+                                      ? { kind: "task", taskId: neighbour.id }
+                                      : {
+                                          kind: "emptyColumn",
+                                          columnId: col.id,
+                                        };
                                     deleteTask(task.projectId, task.id);
                                   }
                                 }}
@@ -279,12 +402,19 @@ export default function TasksPage() {
                           </div>
                         </div>
                       </motion.div>
-                    ))}
+                      );
+                    })}
                   </AnimatePresence>
 
                   {colTasks.length === 0 && (
-                    <div className="h-24 flex items-center justify-center border border-dashed border-border/60 rounded-xl bg-background/20 text-sm text-muted-foreground font-medium">
+                    <div
+                      ref={registerEmptyColumn(col.id)}
+                      tabIndex={-1}
+                      data-testid={`empty-column-${col.id}`}
+                      className="h-24 flex items-center justify-center border border-dashed border-border/60 rounded-xl bg-background/20 text-sm text-muted-foreground font-medium transition-colors focus:border-foreground/60 focus:text-foreground"
+                    >
                       No tasks yet
+                      <span className="sr-only"> in {col.title}</span>
                     </div>
                   )}
                 </div>

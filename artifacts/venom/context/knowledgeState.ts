@@ -1,8 +1,34 @@
-import type {
-  SourceCitation,
-  VenomArchivedCitation,
-} from "@workspace/api-client-react";
-import { messageCitationPlainText } from "./messageCitations.ts";
+/**
+ * Knowledge display text is shared with the desktop workspace: the rules live
+ * in @workspace/knowledge-text so a wording or parsing change lands on both
+ * platforms at once (citationRules.test.mjs asserts these bindings ARE the
+ * shared implementations).
+ */
+export {
+  knowledgeDisplayText,
+  type KnowledgeCitationLookup,
+} from "@workspace/knowledge-text";
+
+/**
+ * Chat-cluster map placement is shared with the desktop workspace the same
+ * way: the spacing floor, the legacy label hash, clearance-aware placement
+ * and the stacked-position repair live in @workspace/venom-workspace-merge,
+ * and workspaceMergeRules.test.mjs asserts these bindings ARE the shared
+ * implementations — a hand-rolled local copy on either app fails the suite.
+ */
+export {
+  CLUSTER_PLACEMENT_CLEARANCE,
+  CLUSTER_SPACING_FLOOR,
+  hashPositionForLabel,
+  placeClusterPosition,
+  positionForNewCluster,
+  separateStackedClusters,
+  type ClusterMapPoint,
+} from "@workspace/venom-workspace-merge";
+import {
+  positionForNewCluster,
+  separateStackedClusters,
+} from "@workspace/venom-workspace-merge";
 
 export type TaskStatus = "todo" | "in_progress" | "done";
 
@@ -114,51 +140,6 @@ export const initialVenomState: VenomState = {
 
 const normalizeLabel = (label: string) => label.trim().toLocaleLowerCase();
 
-/**
- * The citations a Brain note's text can point at: the live ones of the note's
- * project, plus the archived record of any a refresh or disconnect retired.
- */
-export type KnowledgeCitationLookup = {
-  citationsById: Map<string, SourceCitation>;
-  archivedById?: Map<string, VenomArchivedCitation>;
-};
-
-const NO_LIVE_CITATIONS: Map<string, SourceCitation> = new Map();
-
-/**
- * Renders a cluster summary or source excerpt as a reader sees it. Both are
- * summarized from conversation text, so they can carry the same inline
- * `[source:...]` markers an assistant answer stores — from the extraction
- * model echoing one, or from a saved answer used verbatim as the excerpt. A
- * marker never belongs on screen: a live one reads as its source title, and
- * one whose source was refreshed away or disconnected reads as the archived
- * reference the chat bubble shows.
- */
-export function knowledgeDisplayText(
-  text: string,
-  lookup?: KnowledgeCitationLookup,
-): string {
-  if (!text) return "";
-  return messageCitationPlainText(
-    text,
-    lookup?.citationsById ?? NO_LIVE_CITATIONS,
-    lookup?.archivedById,
-  );
-}
-
-function positionForLabel(label: string, index: number) {
-  const hash = [...label].reduce(
-    (value, char) => (value * 31 + char.charCodeAt(0)) >>> 0,
-    17,
-  );
-  const angle = (hash % 360) * (Math.PI / 180);
-  const radius = 80 + ((hash >>> 8) % 4) * 42 + (index % 3) * 18;
-  return {
-    x: Math.round(Math.cos(angle) * radius),
-    y: Math.round(Math.sin(angle) * radius),
-  };
-}
-
 export function pruneKnowledgeSources(
   clusters: KnowledgeCluster[],
   shouldRemove: (source: KnowledgeSource) => boolean,
@@ -254,7 +235,11 @@ export function migrateKnowledgeClusters(
 
     let groupIndex = 0;
     for (const sources of sourceGroups.values()) {
-      const position = positionForLabel(rawCluster.label, migrated.length);
+      const position = positionForNewCluster(
+        rawCluster.label,
+        migrated.length,
+        migrated,
+      );
       migrated.push({
         id: groupIndex === 0 ? rawCluster.id : `${rawCluster.id}_${groupIndex}`,
         projectId: sources[0].projectId,
@@ -291,7 +276,9 @@ export function migrateKnowledgeClusters(
     }
   }
 
-  return pruneKnowledgeSources(migrated, () => false);
+  // Legacy snapshots may carry stored positions that bury each other; the
+  // shared repair separates them the same way both apps do on sync.
+  return separateStackedClusters(pruneKnowledgeSources(migrated, () => false));
 }
 
 export function hydrateVenomState(rawState: unknown): Partial<VenomState> {
@@ -459,7 +446,7 @@ export function applyKnowledgeInsightsToState({
         ),
       ].slice(0, 8);
     } else {
-      const position = positionForLabel(label, clusters.length);
+      const position = positionForNewCluster(label, clusters.length, clusters);
       const created: KnowledgeCluster = {
         id: generateId("cluster"),
         projectId: liveConversation.projectId,
@@ -578,10 +565,15 @@ export function applyFiledClustersToState({
       linkSets.get(target)?.add(cluster.id);
     }
   }
-  const reconciled = clusters.map((cluster) => ({
-    ...cluster,
-    links: [...(linkSets.get(cluster.id) ?? [])],
-  }));
+  // Server-filed records are canonical for content, but an older server may
+  // still file a position that buries an existing dot; separate here so the
+  // new topic is tappable the moment it appears.
+  const reconciled = separateStackedClusters(
+    clusters.map((cluster) => ({
+      ...cluster,
+      links: [...(linkSets.get(cluster.id) ?? [])],
+    })),
+  );
 
   const projectConversationIds = new Set(
     reconciled

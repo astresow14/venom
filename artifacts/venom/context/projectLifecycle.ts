@@ -31,7 +31,7 @@ export function createFallbackWorkspaceProject(
 ): VenomProject {
   return {
     id,
-    name: 'Global Workspace',
+    name: 'General',
     description: 'Uncategorized intelligence',
     accent: '#73736f',
     sourceCount: 0,

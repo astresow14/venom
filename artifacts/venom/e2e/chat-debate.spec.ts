@@ -205,7 +205,13 @@ test("debates a round with named voices on the mobile chat", async ({
       body: sseBody(respondBodies.length === 1 ? firstRound : secondRound),
     });
   });
+  const extractBodies: Array<{
+    messages: Array<{ role: string; content: string }>;
+  }> = [];
   await page.route("**/api/venom/knowledge/extract", async (route) => {
+    extractBodies.push(
+      route.request().postDataJSON() as (typeof extractBodies)[number],
+    );
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -313,6 +319,12 @@ test("debates a round with named voices on the mobile chat", async ({
       exact: false,
     }),
   ).toBeVisible();
+
+  // Neither round produced a settled conclusion — the first round's closing
+  // voice failed, and the follow-up round ended before its closing turn —
+  // so no debate text reached the Brain.
+  await page.waitForTimeout(300);
+  expect(extractBodies).toHaveLength(0);
 });
 
 test("one enabled model with a full server catalog debates as personas", async ({
@@ -430,7 +442,13 @@ test("one enabled model with a full server catalog debates as personas", async (
       body: sseBody(personaRound),
     });
   });
+  const extractBodies: Array<{
+    messages: Array<{ role: string; content: string }>;
+  }> = [];
   await page.route("**/api/venom/knowledge/extract", async (route) => {
+    extractBodies.push(
+      route.request().postDataJSON() as (typeof extractBodies)[number],
+    );
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -481,4 +499,348 @@ test("one enabled model with a full server catalog debates as personas", async (
   await expect(speakerChips).toHaveCount(2);
   await expect(speakerChips.first()).toContainText("First take");
   await expect(speakerChips.last()).toContainText("Skeptic");
+
+  // The settled round feeds the Brain exactly once: the closing take is
+  // mined as the answer alongside the user's question, and the sparring
+  // before it never reaches the extractor.
+  await expect.poll(() => extractBodies.length).toBe(1);
+  const extraction = extractBodies[0];
+  const extractedAssistants = extraction.messages.filter(
+    (message) => message.role === "assistant",
+  );
+  expect(extractedAssistants).toHaveLength(1);
+  expect(extractedAssistants[0].content).toBe("Ship it behind a flag.");
+  expect(
+    extraction.messages.some((message) =>
+      message.content.includes("Risk first"),
+    ),
+  ).toBe(false);
+  expect(
+    extraction.messages.some(
+      (message) =>
+        message.role === "user" &&
+        message.content.includes("Do we ship this week?"),
+    ),
+  ).toBe(true);
+});
+
+test("default debate corners skip a model whose account can't pay", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "desktop-chromium",
+    "The mobile debate journey is covered at the mobile viewport.",
+  );
+
+  // Four enabled models, but Claude's provider account is billing-dead:
+  // still available (retry is the recovery path) yet flagged unfunded, so
+  // the pad must not auto-seat it — the corners double as the debate roster
+  // the server honors verbatim.
+  const catalogWithUnfunded = [
+    catalog[0],
+    {
+      ...catalog[1],
+      availabilityText: "Provider account issue",
+      accountHealth: "unfunded",
+    },
+    catalog[2],
+    {
+      id: "venom-grok",
+      provider: "openrouter",
+      name: "Venom Grok",
+      family: "Grok",
+      summary: "OpenRouter managed model",
+      available: true,
+      availabilityText: "Ready",
+    },
+  ];
+  const healthyRoster = [
+    debateRoster[0],
+    debateRoster[2],
+    {
+      voiceId: "venom-grok",
+      name: "Venom Grok",
+      modelId: "venom-grok",
+      modelName: "Venom Grok",
+    },
+  ];
+
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "@venom_state_v2:venom-ui-test",
+      JSON.stringify({
+        projects: [],
+        conversations: [],
+        clusters: [],
+        sources: [],
+        activeProjectId: null,
+        activeConversationId: null,
+        modelPreferences: {
+          enabledModelIds: [
+            "venom-gpt",
+            "venom-claude",
+            "venom-gemini",
+            "venom-grok",
+          ],
+          defaultModelId: "venom-gpt",
+          activeModelId: "venom-gpt",
+          updatedAt: 1,
+        },
+      }),
+    );
+  });
+
+  const respondBodies: RespondBody[] = [];
+
+  await page.route("**/api/venom/models", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(catalogWithUnfunded),
+    });
+  });
+  await page.route("**/api/venom/deliberation", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        available: true,
+        mode: "models",
+        voices: healthyRoster.map(({ voiceId, name }) => ({
+          voiceId,
+          name,
+          tagline: "",
+        })),
+      }),
+    });
+  });
+  await page.route("**/api/venom/respond", async (route) => {
+    const body = route.request().postDataJSON() as RespondBody;
+    respondBodies.push(body);
+    await route.fulfill({
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+      },
+      body: sseBody([
+        {
+          modelId: "venom-gpt",
+          modelName: "Venom GPT",
+          debate: { voices: healthyRoster, turns: 3 },
+        },
+        {
+          debateTurn: {
+            index: 0,
+            of: 3,
+            voiceId: "venom-gpt",
+            name: "Venom GPT",
+            modelId: "venom-gpt",
+            modelName: "Venom GPT",
+          },
+        },
+        { turn: 0, content: "Healthy corners only." },
+        { turn: 0, turnStatus: "ok" },
+        { done: true },
+      ]),
+    });
+  });
+  const extractBodies: unknown[] = [];
+  await page.route("**/api/venom/knowledge/extract", async (route) => {
+    extractBodies.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ clusters: [] }),
+    });
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByTestId("mode-switch")).toBeVisible();
+  await page.getByTestId("mode-option-debate").click();
+  await expect(page.getByTestId("blend-pad")).toBeVisible();
+
+  // The healthy trio takes the corners; the unfunded model never appears.
+  await expect(page.getByTestId("blend-weight-venom-gpt")).toHaveText("33%");
+  await expect(page.getByTestId("blend-weight-venom-gemini")).toHaveText(
+    "33%",
+  );
+  await expect(page.getByTestId("blend-weight-venom-grok")).toHaveText("33%");
+  await expect(page.getByTestId("blend-weight-venom-claude")).toHaveCount(0);
+  await expect(page.getByTestId("blend-pad")).not.toContainText(
+    "Venom Claude",
+  );
+
+  await page.getByTestId("chat-input").fill("Who takes the corners?");
+  await page.getByTestId("send-message-button").click();
+
+  // The default request roster carries only models whose account can pay —
+  // the server treats these ids as an explicit roster, so the client must
+  // never volunteer a billing-dead model it picked by default.
+  await expect.poll(() => respondBodies.length).toBe(1);
+  const body = respondBodies[0];
+  expect(body.mode).toBe("debate");
+  const blendIds = (body.blend ?? []).map((entry) => entry.id);
+  expect(blendIds).toEqual(["venom-gpt", "venom-gemini", "venom-grok"]);
+  expect(blendIds).not.toContain("venom-claude");
+
+  // The round still renders normally on the healthy roster.
+  await expect(
+    page
+      .getByTestId("workspace-chat")
+      .getByText("Healthy corners only.", { exact: false }),
+  ).toBeVisible();
+
+  // The round ran one turn of three and ended before its closing turn: an
+  // unsettled debate, so nothing reached the Brain.
+  await page.waitForTimeout(300);
+  expect(extractBodies).toHaveLength(0);
+});
+
+test("collapses the mixer — corner picker included — and debates on the committed blend", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "desktop-chromium",
+    "The mobile debate journey is covered at the mobile viewport.",
+  );
+
+  // Four healthy enabled models: the corner picker is available, so folding
+  // the mixer must put it away too.
+  const fourModelCatalog = [
+    ...catalog,
+    {
+      id: "venom-grok",
+      provider: "openrouter",
+      name: "Venom Grok",
+      family: "Grok",
+      summary: "OpenRouter managed model",
+      available: true,
+      availabilityText: "Ready",
+    },
+  ];
+
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "@venom_state_v2:venom-ui-test",
+      JSON.stringify({
+        projects: [],
+        conversations: [],
+        clusters: [],
+        sources: [],
+        activeProjectId: null,
+        activeConversationId: null,
+        modelPreferences: {
+          enabledModelIds: [
+            "venom-gpt",
+            "venom-claude",
+            "venom-gemini",
+            "venom-grok",
+          ],
+          defaultModelId: "venom-gpt",
+          activeModelId: "venom-gpt",
+          updatedAt: 1,
+        },
+      }),
+    );
+  });
+
+  const respondBodies: RespondBody[] = [];
+
+  await page.route("**/api/venom/models", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(fourModelCatalog),
+    });
+  });
+  await page.route("**/api/venom/deliberation", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        available: true,
+        mode: "models",
+        voices: debateRoster.map(({ voiceId, name }) => ({
+          voiceId,
+          name,
+          tagline: "",
+        })),
+      }),
+    });
+  });
+  await page.route("**/api/venom/respond", async (route) => {
+    respondBodies.push(route.request().postDataJSON() as RespondBody);
+    await route.fulfill({
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+      },
+      body: sseBody(firstRound),
+    });
+  });
+  await page.route("**/api/venom/knowledge/extract", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ clusters: [] }),
+    });
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByTestId("mode-switch")).toBeVisible();
+  await page.getByTestId("mode-option-debate").click();
+  await expect(page.getByTestId("blend-pad")).toBeVisible();
+
+  // Favor GPT and open the corner picker — the two pieces of mixer state a
+  // collapse has to handle.
+  await page.getByTestId("button-blend-favor-venom-gpt").click();
+  await expect(page.getByTestId("blend-weight-venom-gpt")).toHaveText("70%");
+  await page.getByTestId("button-blend-corners").click();
+  await expect(page.getByTestId("blend-corner-picker")).toBeVisible();
+
+  // Fold the mixer: the pad and the corner picker leave together while
+  // Debate stays selected, and the chip names the favored voice.
+  await page.getByTestId("button-blend-collapse").click();
+  await expect(page.getByTestId("blend-pad")).toHaveCount(0);
+  await expect(page.getByTestId("blend-corner-picker")).toHaveCount(0);
+  await expect(page.getByTestId("mode-option-debate")).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  const summaryChip = page.getByTestId("button-blend-summary");
+  await expect(summaryChip).toBeVisible();
+  await expect(summaryChip).toContainText("Favoring Venom GPT");
+
+  // Reopen: weights intact, and the corner picker stayed put away.
+  await summaryChip.click();
+  await expect(page.getByTestId("blend-pad")).toBeVisible();
+  await expect(page.getByTestId("blend-weight-venom-gpt")).toHaveText("70%");
+  await expect(page.getByTestId("blend-corner-picker")).toHaveCount(0);
+
+  // Fold again and send: the request still declares debate mode and carries
+  // the favored blend.
+  await page.getByTestId("button-blend-collapse").click();
+  await expect(page.getByTestId("blend-pad")).toHaveCount(0);
+  await page.getByTestId("chat-input").fill("Ship the migration now?");
+  await page.getByTestId("send-message-button").click();
+  await expect.poll(() => respondBodies.length).toBe(1);
+  expect(respondBodies[0].mode).toBe("debate");
+  const favored = respondBodies[0].blend?.find(
+    (entry) => entry.id === "venom-gpt",
+  );
+  expect(favored?.weight ?? 0).toBeGreaterThan(0.6);
+
+  // The round lands normally while the mixer stays folded — no spring-back
+  // once the debate settles into the thread.
+  await expect(
+    page
+      .getByTestId("workspace-chat")
+      .getByText("stage the migration first", { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByTestId("blend-pad")).toHaveCount(0);
+  await expect(summaryChip).toBeVisible();
 });

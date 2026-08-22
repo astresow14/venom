@@ -39,6 +39,51 @@ exists only inside the hands-free voice loop.
   `voicePreferences` object — it rides the whole-object updatedAt merge, so
   never split it into its own top-level field.
 
+## Decision overlap (latency)
+
+- **A slow decide overlaps the reply instead of delaying it.** The client
+  races decide against a short grace (250ms prod). If the grace elapses, the
+  turn files the user's words and starts the respond stream *held*: text and
+  sentences buffer on the turn, and every surfacing site (live-text set,
+  speech pump, audio close) checks the turn's hold flag. Respond/fail-open →
+  release (flush text, pump, close); quiet → discard (finalize, clear the
+  speak queue, abort the stream, clear live text) — nothing was shown,
+  spoken, or filed for the assistant, so semantics match the serialized
+  paths exactly.
+  **Why:** the pre-reply gap is where voice UX is most sensitive; the judge
+  path used to cost up to ~3s right there.
+  **How to apply:** any new surface a reply can reach (UI, audio, filing)
+  must check the hold gate, or a quiet decision can leak a half-reply.
+- **Stream failures park while held.** If the optimistic stream errors or
+  truncates before the decision lands, the failure is stored on the turn
+  instead of running the normal error path — that path files the partial
+  reply and tears the session down, making a late quiet decision
+  unenforceable (a completion review rejected exactly this). Release
+  presents the parked failure with serialized semantics (keep-text notice /
+  session failure); discard erases it wholesale, error and all.
+- **Finalize is the discard choke point.** Every exit path (overlay close,
+  interrupt, session failure) funnels into turn finalization, which files
+  buffered assistant text — so finalization of a still-held turn must be
+  discard-only (no message, no transcript, no extraction; user words are
+  already filed). Release clears the hold flag *before* finalizing, which
+  is what lets legitimized turns keep filing normally.
+- **UI-test builds serialize by default.** The grace resolver returns 60s in
+  UI-test bundles — stubbed decides are instant, and a CPU-stalled runner
+  must not flip existing restraint specs onto the optimistic path. Overlap
+  specs opt in with `window.__venomVoiceDecideGraceMs = 0`.
+- **Held-turn e2e must also raise the decide abort.** The client fails open
+  after a bounded decide round-trip (4s default,
+  `window.__venomVoiceDecideTimeoutMs` override). A spec that holds /decide
+  open past that watches the turn release itself mid-assertion — raise the
+  override (e.g. 30s) alongside grace 0.
+- **Playwright gotcha:** `expect(locator).not.toContainText()` FAILS on zero
+  elements ("element(s) not found") — scope negative text assertions to an
+  always-present ancestor (the voice overlay), not a conditionally rendered
+  bubble.
+- The decide route logs one info line per decision (source/decision/
+  windDown/durable/totalMs/judgeMs — never transcript content), so p50/p95
+  is measurable straight from server logs.
+
 ## Logging
 
 - **Retention is two-path by design.** A scheduled global sweep enforces the

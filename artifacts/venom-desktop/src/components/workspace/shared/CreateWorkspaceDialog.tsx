@@ -15,12 +15,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { useSharedWorkspace } from "@/context/shared-workspace";
 import { Loader2 } from "lucide-react";
 
 /**
- * Creates a shared workspace and switches straight into it. The creator
- * becomes the first admin server-side.
+ * Creates a shared workspace. The creator becomes the first admin
+ * server-side; there is no scope switch to flip — new knowledge reaches the
+ * workspace by topic, and its Brain is read through the Brain page filter.
  */
 export default function CreateWorkspaceDialog({
   children,
@@ -31,7 +31,6 @@ export default function CreateWorkspaceDialog({
   const [name, setName] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { selectWorkspace } = useSharedWorkspace();
 
   const createWorkspace = useCreateSharedWorkspace();
 
@@ -47,7 +46,6 @@ export default function CreateWorkspaceDialog({
           await queryClient.invalidateQueries({
             queryKey: getListSharedWorkspacesQueryKey(),
           });
-          selectWorkspace(workspace.id);
           toast({
             title: "Shared workspace created",
             description: `${workspace.name} is live. Add members to share knowledge and SOPs.`,

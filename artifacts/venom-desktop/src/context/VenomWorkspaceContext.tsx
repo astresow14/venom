@@ -20,24 +20,37 @@ import { useAuth } from '@clerk/react';
 import {
   ApiError,
   getGetVenomWorkspaceQueryKey,
+  getVenomOrgProjects,
+  getVenomOrgs,
   saveVenomWorkspace,
   useGetVenomWorkspace,
+  type VenomOrg,
+  type VenomOrgInviteForMe,
+  type VenomOrgSharedProject,
   type VenomMessage,
   type VenomMessageStatus,
   type VenomConversationBlend,
   type VenomResponseMode,
   type VenomTask,
+  type VenomVoiceModelPick,
   type VenomTaskStatus,
   type VenomWorkspaceSnapshot,
 } from '@workspace/api-client-react';
 import {
   applyFiledClustersToState,
   applyKnowledgeInsightsToState,
+  applyOrgProjectSync,
+  captureProjectRestoreSnapshot,
   clearConversationKnowledge,
+  createDefaultBoardStages,
   createDefaultState,
   createDeletionMarkers,
   createEmptyTombstones,
+  deleteProjectFromState,
+  fileConversationToProjectInState,
   generateId,
+  PROJECT_RESTORE_WINDOW_MS,
+  restoreProjectFromSnapshot,
   isWorkspaceState,
   mergeKnowledgeSources,
   mergeWorkspaceStates,
@@ -56,13 +69,36 @@ import {
   type KnowledgeSource,
   type ModelPreferences,
   type Project,
+  type ProjectRestoreSnapshot,
   type SyncStatus,
   type VenomModelId,
   type VoicePreferences,
   type WorkspaceState,
 } from '@/lib/workspaceState';
-import { IS_UI_TEST } from '@/lib/ui-test';
+import { normalizeConversationVoiceModels } from '@/lib/blend';
+import {
+  IS_ORG_UI_TEST,
+  IS_UI_TEST,
+  IS_WORKSPACE_SYNC_UI_TEST,
+} from '@/lib/ui-test';
 
+// UI-test builds normally pin the workspace to a synced, local-only state so
+// browser specs never wait on cloud endpoints. The workspace-sync opt-in
+// (`?venomWorkspaceSyncTest=true`) lifts that pin: the real hydrate → debounce
+// → save machinery runs against Playwright-stubbed endpoints, which is how
+// failed-save UI (the chat device-only notice, the sidebar retry) is exercised
+// end to end. Everything else about UI-test mode — the placeholder account,
+// the quiet org machinery — stays as it is.
+const SYNC_MACHINERY_STUBBED = IS_UI_TEST && !IS_WORKSPACE_SYNC_UI_TEST;
+
+/** What the undo-delete affordance needs to render, nothing more. */
+export type PendingProjectRestore = {
+  /** Unique per deletion, so the UI can tell one pending undo from the next. */
+  key: string;
+  projectName: string;
+  /** Epoch ms when the restore window closes and the snapshot is dropped. */
+  expiresAt: number;
+};
 export type VenomWorkspaceContextType = {
   state: WorkspaceState;
   isReady: boolean;
@@ -71,12 +107,40 @@ export type VenomWorkspaceContextType = {
   retrySync: () => void;
   refreshWorkspace: () => void;
 
+  // Company (organization) state
+  orgs: VenomOrg[];
+  orgInvites: VenomOrgInviteForMe[];
+  refreshOrgs: () => void;
+
   // Project ops
   setActiveProject: (id: string | null) => void;
+  addProject: (
+    project: Omit<
+      Project,
+      'id' | 'updatedAt' | 'tasks' | 'boardStages' | 'fieldDefinitions'
+    >,
+  ) => string;
+  deleteProject: (id: string) => void;
+  /**
+   * Undo affordance for the most recent project deletion, alive only while
+   * its restore window is open. The deletion itself is already committed —
+   * tombstones and all — so this is a fresh-id rebuild, not a rollback.
+   */
+  pendingProjectRestore: PendingProjectRestore | null;
+  /**
+   * Rebuilds the just-deleted project from its snapshot under fresh ids and
+   * returns to it. The tombstoned ids stay dead everywhere, so the deletion
+   * still propagates while the restored copy syncs as new work. Returns
+   * false when the restore window has already closed.
+   */
+  restoreDeletedProject: () => boolean;
+  /** Drops the pending snapshot early (the undo control was dismissed). */
+  dismissProjectRestore: () => void;
 
   // Conversation ops
   setActiveConversation: (id: string | null) => void;
   createNewConversation: (projectId: string | null) => string;
+  fileConversationToProject: (conversationId: string, projectId: string) => void;
   addMessage: (
     conversationId: string | null,
     message: Omit<VenomMessage, 'id' | 'createdAt'> & { id?: string },
@@ -98,6 +162,9 @@ export type VenomWorkspaceContextType = {
     conversation: Pick<Conversation, 'id' | 'title' | 'projectId'>,
     filed: KnowledgeCluster[],
   ) => void;
+  /** "Keep personal" on an Unsorted item: clear the holding-area flag so the
+   * concept joins the sorted personal Brain on every device. */
+  markKnowledgeClusterSorted: (clusterId: string) => void;
   renameKnowledgeCluster: (clusterId: string, label: string) => void;
   deleteKnowledgeCluster: (clusterId: string) => void;
   mergeKnowledgeClusters: (targetClusterId: string, sourceClusterId: string) => void;
@@ -109,6 +176,8 @@ export type VenomWorkspaceContextType = {
       responseMode?: VenomResponseMode;
       /** New pad position; null clears the stored blend. */
       blend?: VenomConversationBlend | null;
+      /** Per-voice model picks for verify; null clears them. */
+      voiceModels?: VenomVoiceModelPick[] | null;
     },
   ) => void;
 
@@ -172,9 +241,9 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
 
   // ── core state ────────────────────────────────────────────────────────────
   const [state, setState] = useState<WorkspaceState>(createInitialWorkspaceState);
-  const [isReady, setIsReady] = useState(IS_UI_TEST);
+  const [isReady, setIsReady] = useState(SYNC_MACHINERY_STUBBED);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(
-    IS_UI_TEST ? 'synced' : 'loading',
+    SYNC_MACHINERY_STUBBED ? 'synced' : 'loading',
   );
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
@@ -192,6 +261,32 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
 
   const syncControllerRef = useRef<SyncController | null>(null);
 
+  // ── undo-delete window ────────────────────────────────────────────────────
+  // The heavy captured content lives in a ref (it never drives rendering);
+  // the small render-facing descriptor lives in state. One pending restore at
+  // a time: a newer delete simply replaces the previous snapshot.
+  const [pendingProjectRestore, setPendingProjectRestore] =
+    useState<PendingProjectRestore | null>(null);
+  const pendingRestoreRef = useRef<{
+    key: string;
+    userId: string | null;
+    snapshot: ProjectRestoreSnapshot;
+    fallbackProjectId: string | null;
+  } | null>(null);
+  const restoreExpiryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  /** Drops the pending snapshot iff it is still the one `key` names. */
+  const clearPendingRestore = useCallback((key: string) => {
+    if (pendingRestoreRef.current?.key === key) {
+      pendingRestoreRef.current = null;
+    }
+    setPendingProjectRestore((current) =>
+      current?.key === key ? null : current,
+    );
+  }, []);
+
   // ── reset on user change ──────────────────────────────────────────────────
   // Run this synchronously during render so stale completions are rejected
   // immediately when the userId reference changes.
@@ -199,12 +294,30 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
     activeUserIdRef.current = userId ?? null;
     // Invalidate any in-flight controller so its completion is rejected
     syncControllerRef.current = null;
+    // An undo window never crosses an account boundary.
+    pendingRestoreRef.current = null;
   }
+
+  // The render-phase reset above cannot touch React state; finish clearing
+  // the undo affordance (and its timer) once the user change commits.
+  useEffect(() => {
+    setPendingProjectRestore((current) =>
+      current && pendingRestoreRef.current === null ? null : current,
+    );
+  }, [userId]);
+  useEffect(
+    () => () => {
+      if (restoreExpiryTimerRef.current !== null) {
+        clearTimeout(restoreExpiryTimerRef.current);
+      }
+    },
+    [],
+  );
 
   // ── cloud query – enabled only when signed in ─────────────────────────────
   const workspaceQuery = useGetVenomWorkspace({
     query: {
-      enabled: Boolean(userId) && !IS_UI_TEST,
+      enabled: Boolean(userId) && !SYNC_MACHINERY_STUBBED,
       queryKey: [...getGetVenomWorkspaceQueryKey(), userId ?? 'signed-out'],
       retry: 2,
       refetchOnMount: 'always',
@@ -313,7 +426,7 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
 
   // ── initialise / reset when userId changes ────────────────────────────────
   useEffect(() => {
-    if (IS_UI_TEST) return;
+    if (SYNC_MACHINERY_STUBBED) return;
 
     if (!userId) {
       // Signed out – reset everything immediately
@@ -341,7 +454,7 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
 
   // ── hydrate once cloud query settles ─────────────────────────────────────
   useEffect(() => {
-    if (IS_UI_TEST) return;
+    if (SYNC_MACHINERY_STUBBED) return;
 
     if (
       !userId ||
@@ -421,15 +534,17 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
   // ── browser-test persistence ─────────────────────────────────────────────
   // The UI-test build has no account and no cloud sync, but reloading must
   // still keep the session. Mirror state into the same local store the cloud
-  // path writes through, so a refresh rehydrates rather than resets.
+  // path writes through, so a refresh rehydrates rather than resets. (When
+  // the sync machinery runs — real sessions or the workspace-sync test mode —
+  // the debounced sync effect below writes this mirror itself.)
   useEffect(() => {
-    if (!IS_UI_TEST) return;
+    if (!SYNC_MACHINERY_STUBBED) return;
     writeLocalState(UI_TEST_USER_ID, state);
   }, [state]);
 
   // ── debounced sync on state changes ──────────────────────────────────────
   useEffect(() => {
-    if (IS_UI_TEST) return;
+    if (SYNC_MACHINERY_STUBBED) return;
     if (!isReady || !userId || hydratedUserRef.current !== userId) return;
 
     const serialized = JSON.stringify(state);
@@ -510,15 +625,318 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
     });
   }, [isReady, retrySync, userId, workspaceQuery]);
 
+  // ── company (organization) directory + shared-project mirroring ──────────
+  const [orgs, setOrgs] = useState<VenomOrg[]>([]);
+  const [orgInvites, setOrgInvites] = useState<VenomOrgInviteForMe[]>([]);
+  const [orgsNonce, setOrgsNonce] = useState(0);
+
+  /** Re-poll the company directory now (after invites, removals, …). */
+  const refreshOrgs = useCallback(() => setOrgsNonce((nonce) => nonce + 1), []);
+
+  useEffect(() => {
+    if ((IS_UI_TEST && !IS_ORG_UI_TEST) || !userId) {
+      setOrgs([]);
+      setOrgInvites([]);
+      return;
+    }
+    let cancelled = false;
+
+    const tick = async () => {
+      let directory;
+      try {
+        directory = await getVenomOrgs();
+      } catch {
+        // Offline or a transient failure: keep the last known memberships
+        // instead of flapping the layer switcher.
+        return;
+      }
+      if (cancelled || activeUserIdRef.current !== userId) return;
+      setOrgs(directory.orgs);
+      setOrgInvites(directory.invites);
+
+      const sharedByOrg = new Map<string, VenomOrgSharedProject[]>();
+      const fetchedOrgIds = new Set<string>();
+      await Promise.all(
+        directory.orgs.map(async (org) => {
+          try {
+            const list = await getVenomOrgProjects(org.id);
+            sharedByOrg.set(org.id, list.projects);
+            fetchedOrgIds.add(org.id);
+          } catch {
+            // Transient failure: this company's mirrors stay untouched.
+          }
+        }),
+      );
+      if (cancelled || activeUserIdRef.current !== userId) return;
+      if (hydratedUserRef.current !== userId) return;
+      setState((current) =>
+        applyOrgProjectSync(current, directory.orgs, sharedByOrg, fetchedOrgIds),
+      );
+    };
+
+    void tick();
+    const interval = window.setInterval(() => void tick(), 25_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [userId, isReady, orgsNonce]);
+
+  // Live revocation push. Removal, leaving elsewhere, or company deletion
+  // must clear this device NOW, not at the next 25s poll — the Brain layer
+  // renders company concepts from memory, so the poll gap is a real
+  // disclosure window. The optimistic drop hides the company instantly
+  // (cascading: layer falls back to My Brain, org state clears) and the
+  // directory refetch that follows is authoritative — it also prunes the
+  // mirrored shared projects. A dropped stream degrades to the poll; the
+  // server remains the authorization fence either way.
+  useEffect(() => {
+    if ((IS_UI_TEST && !IS_ORG_UI_TEST) || !userId) return;
+    const controller = new AbortController();
+    let retryTimer: number | undefined;
+
+    const handleFrame = (frame: string) => {
+      const data = frame
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim())
+        .join('');
+      if (!data) return;
+      try {
+        const event: unknown = JSON.parse(data);
+        if (
+          typeof event === 'object' &&
+          event !== null &&
+          (event as { type?: unknown }).type === 'membership-changed' &&
+          typeof (event as { orgId?: unknown }).orgId === 'string'
+        ) {
+          const endedOrgId = (event as { orgId: string }).orgId;
+          setOrgs((current) =>
+            current.some((org) => org.id === endedOrgId)
+              ? current.filter((org) => org.id !== endedOrgId)
+              : current,
+          );
+          refreshOrgs();
+        }
+      } catch {
+        // Malformed frame: ignore it; polling remains the fallback.
+      }
+    };
+
+    const connect = async (): Promise<void> => {
+      try {
+        const response = await fetch('/api/venom/orgs/events', {
+          credentials: 'include',
+          headers: { accept: 'text/event-stream' },
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) {
+          throw new Error(`events unavailable (${response.status})`);
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split(/\r?\n\r?\n/);
+          buffer = frames.pop() ?? '';
+          for (const frame of frames) handleFrame(frame);
+        }
+      } catch {
+        // Aborted (unmount) or transport failure; the retry below decides.
+      }
+      if (!controller.signal.aborted) {
+        retryTimer = window.setTimeout(() => void connect(), 15_000);
+      }
+    };
+
+    void connect();
+    return () => {
+      controller.abort();
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    };
+  }, [userId, refreshOrgs]);
+
   // ── state mutation helpers ────────────────────────────────────────────────
 
+  // A chat session belongs to the project it was written in, so switching
+  // project has to move the chat too: otherwise the next message is filed
+  // under the project that was selected when the session started, not the one
+  // on screen. A session with no project stays out of every project — it is
+  // never adopted by the one being opened. Switching back reopens that
+  // project's own latest session, and a project with no session yet starts
+  // empty so the first message opens one under it. Mirrors the mobile app's
+  // setActiveProject (artifacts/venom/context/VenomContext.tsx).
   const setActiveProject = useCallback((id: string | null) => {
-    setState((current) => ({ ...current, activeProjectId: id }));
+    setState((current) => {
+      if (current.activeProjectId === id) return current;
+
+      const activeConversation = current.conversations.find(
+        (conversation) => conversation.id === current.activeConversationId,
+      );
+      if (activeConversation && activeConversation.projectId === id) {
+        return { ...current, activeProjectId: id };
+      }
+
+      const latestForProject = current.conversations.reduce<Conversation | null>(
+        (latest, conversation) => {
+          if (conversation.projectId !== id) return latest;
+          if (!latest || conversation.updatedAt > latest.updatedAt) {
+            return conversation;
+          }
+          return latest;
+        },
+        null,
+      );
+
+      return {
+        ...current,
+        activeProjectId: id,
+        activeConversationId: latestForProject?.id ?? null,
+      };
+    });
   }, []);
+
+  // Same creation the phone performs (artifacts/venom/context/VenomContext.tsx
+  // addProject): fresh id, updatedAt stamp, and default board stages seeded
+  // under the new id, so the project merges cleanly across devices. Returns
+  // the id so callers can switch straight into the new project.
+  const addProject = useCallback(
+    (
+      project: Omit<
+        Project,
+        'id' | 'updatedAt' | 'tasks' | 'boardStages' | 'fieldDefinitions'
+      >,
+    ) => {
+      const id = generateId('proj');
+      const now = Date.now();
+      const newProject: Project = {
+        ...project,
+        id,
+        updatedAt: now,
+        tasks: [],
+        boardStages: createDefaultBoardStages(id, now),
+        fieldDefinitions: [],
+      };
+      setState((current) => ({
+        ...current,
+        projects: [...current.projects, newProject],
+      }));
+      return id;
+    },
+    [],
+  );
+
+  // Same deletion the phone performs: tombstones for the project and every
+  // record inside it, plus the mobile landing rules (most recently updated
+  // remaining project, or a fresh fallback workspace when none remain).
+  //
+  // The deletion commits immediately — the undo affordance works on a content
+  // snapshot captured at the moment of the delete, and restoring rebuilds
+  // that content under fresh ids. The tombstones written here are never
+  // rolled back, so sync semantics stay exactly as they were.
+  const deleteProject = useCallback((id: string) => {
+    const project = latestStateRef.current.projects.find(
+      (entry) => entry.id === id,
+    );
+    const deletedAt = Date.now();
+    const key = generateId('restore');
+    setState((current) => {
+      const snapshot = captureProjectRestoreSnapshot(current, id, deletedAt);
+      const next = deleteProjectFromState({
+        state: current,
+        projectId: id,
+        deletedAt,
+        generateId,
+      });
+      if (snapshot) {
+        // Assigned inside the updater so the snapshot is exactly what this
+        // delete removed. StrictMode double-invokes updaters; the last run
+        // wins and matches the committed state (same precedent as genId
+        // inside deleteProjectFromState).
+        pendingRestoreRef.current = {
+          key,
+          userId: activeUserIdRef.current,
+          snapshot,
+          // Deleting the last project seeds the fallback workspace inside
+          // deleteProjectFromState, so the only project left standing is it.
+          fallbackProjectId: snapshot.wasLastProject
+            ? (next.projects[0]?.id ?? null)
+            : null,
+        };
+      }
+      return next;
+    });
+    if (!project) return;
+    setPendingProjectRestore({
+      key,
+      projectName: project.name,
+      expiresAt: deletedAt + PROJECT_RESTORE_WINDOW_MS,
+    });
+    if (restoreExpiryTimerRef.current !== null) {
+      clearTimeout(restoreExpiryTimerRef.current);
+    }
+    restoreExpiryTimerRef.current = setTimeout(() => {
+      restoreExpiryTimerRef.current = null;
+      clearPendingRestore(key);
+    }, PROJECT_RESTORE_WINDOW_MS);
+  }, [clearPendingRestore]);
+
+  const restoreDeletedProject = useCallback((): boolean => {
+    const pending = pendingRestoreRef.current;
+    if (!pending) return false;
+    // An undo belongs to the account that deleted; never restore across a
+    // sign-out/sign-in boundary, and never after the window lapsed.
+    if (
+      pending.userId !== activeUserIdRef.current ||
+      Date.now() >= pending.snapshot.deletedAt + PROJECT_RESTORE_WINDOW_MS
+    ) {
+      clearPendingRestore(pending.key);
+      return false;
+    }
+    clearPendingRestore(pending.key);
+    setState(
+      (current) =>
+        restoreProjectFromSnapshot({
+          state: current,
+          snapshot: pending.snapshot,
+          restoredAt: Date.now(),
+          generateId,
+          fallbackProjectId: pending.fallbackProjectId,
+        }).state,
+    );
+    return true;
+  }, [clearPendingRestore]);
+
+  const dismissProjectRestore = useCallback(() => {
+    const pending = pendingRestoreRef.current;
+    if (pending) clearPendingRestore(pending.key);
+  }, [clearPendingRestore]);
 
   const setActiveConversation = useCallback((id: string | null) => {
     setState((current) => ({ ...current, activeConversationId: id }));
   }, []);
+
+  // A session with no project is never adopted implicitly — reopening it
+  // leaves it project-less. Filing is the one deliberate way to give a
+  // stranded session a home: it rewrites projectId through the same synced
+  // state every other edit uses, with a monotonic updatedAt stamp so the
+  // newest-copy-wins cross-device merge carries the new home instead of
+  // reviving the stranded copy from another device (see
+  // fileConversationToProjectInState for the rules and guards). Mirrors the
+  // mobile app's fileConversationToProject
+  // (artifacts/venom/context/VenomContext.tsx).
+  const fileConversationToProject = useCallback(
+    (conversationId: string, projectId: string) => {
+      setState((current) =>
+        fileConversationToProjectInState(current, conversationId, projectId),
+      );
+    },
+    [],
+  );
 
   const createNewConversation = useCallback((projectId: string | null) => {
     const id = generateId('conv');
@@ -742,6 +1160,27 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
     [],
   );
 
+  // The author sorted an Unsorted item into their own Brain. Clearing the
+  // flag locally and bumping `lastUpdatedAt` is the whole job: the server
+  // deliberately lets `unsorted` survive snapshot round-trips, so this syncs
+  // like any other cluster edit and wins the cross-device merge.
+  const markKnowledgeClusterSorted = useCallback((clusterId: string) => {
+    const updatedAt = Date.now();
+    setState((current) => {
+      const cluster = current.clusters.find((c) => c.id === clusterId);
+      if (!cluster || cluster.unsorted !== true) return current;
+      return {
+        ...current,
+        clusters: current.clusters.map((c) => {
+          if (c.id !== clusterId) return c;
+          const next = { ...c, lastUpdatedAt: updatedAt };
+          delete next.unsorted;
+          return next;
+        }),
+      };
+    });
+  }, []);
+
   const renameKnowledgeCluster = useCallback((clusterId: string, label: string) => {
     const cleanedLabel = label.trim();
     if (!cleanedLabel) return;
@@ -799,6 +1238,7 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
       prefs: {
         responseMode?: VenomResponseMode;
         blend?: VenomConversationBlend | null;
+        voiceModels?: VenomVoiceModelPick[] | null;
       },
     ) => {
       setState((current) => {
@@ -816,6 +1256,18 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
           delete next.blend;
         } else if (prefs.blend !== undefined) {
           next.blend = prefs.blend;
+        }
+        if (prefs.voiceModels === null) {
+          delete next.voiceModels;
+        } else if (prefs.voiceModels !== undefined) {
+          // Store the canonical bounded form so a snapshot save can never be
+          // rejected for an oversized or duplicated picks array.
+          const picks = normalizeConversationVoiceModels(prefs.voiceModels);
+          if (picks) {
+            next.voiceModels = picks;
+          } else {
+            delete next.voiceModels;
+          }
         }
         return {
           ...current,
@@ -934,9 +1386,18 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
       lastSyncedAt,
       retrySync,
       refreshWorkspace,
+      orgs,
+      orgInvites,
+      refreshOrgs,
       setActiveProject,
+      addProject,
+      deleteProject,
+      pendingProjectRestore,
+      restoreDeletedProject,
+      dismissProjectRestore,
       setActiveConversation,
       createNewConversation,
+      fileConversationToProject,
       addMessage,
       updateMessage,
       clearConversation,
@@ -945,6 +1406,7 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
       deleteTask,
       applyKnowledgeInsights,
       applyFiledKnowledge,
+      markKnowledgeClusterSorted,
       renameKnowledgeCluster,
       deleteKnowledgeCluster,
       mergeKnowledgeClusters,
@@ -960,9 +1422,18 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
       lastSyncedAt,
       retrySync,
       refreshWorkspace,
+      orgs,
+      orgInvites,
+      refreshOrgs,
       setActiveProject,
+      addProject,
+      deleteProject,
+      pendingProjectRestore,
+      restoreDeletedProject,
+      dismissProjectRestore,
       setActiveConversation,
       createNewConversation,
+      fileConversationToProject,
       addMessage,
       updateMessage,
       clearConversation,
@@ -971,6 +1442,7 @@ export function VenomWorkspaceProvider({ children }: { children: React.ReactNode
       deleteTask,
       applyKnowledgeInsights,
       applyFiledKnowledge,
+      markKnowledgeClusterSorted,
       renameKnowledgeCluster,
       deleteKnowledgeCluster,
       mergeKnowledgeClusters,

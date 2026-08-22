@@ -10,6 +10,7 @@ import {
   mergeConversationResponsePrefs,
   normalizeConversationBlend,
   normalizeConversationResponsePrefs,
+  normalizeConversationVoiceModels,
   normalizeWeights,
   nudgeWeights,
   pinToWeights,
@@ -113,6 +114,75 @@ test('normalizeConversationBlend rejects malformed blocks', () => {
     normalizeConversationBlend({ corners: ['a', 'b', 'c'], weights: [1, 0, 'x'] }),
     undefined,
   );
+});
+
+test('normalizeConversationVoiceModels drops junk, dedupes last-wins, orders canonically', () => {
+  assert.equal(normalizeConversationVoiceModels(undefined), undefined);
+  assert.equal(normalizeConversationVoiceModels({}), undefined);
+  assert.equal(normalizeConversationVoiceModels([]), undefined);
+  // Unknown voices, unknown models, and non-object entries disappear.
+  assert.equal(
+    normalizeConversationVoiceModels([
+      { voiceId: 'narrator', modelId: 'venom-gpt' },
+      { voiceId: 'skeptic', modelId: 'gpt-4o' },
+      'junk',
+      42,
+    ]),
+    undefined,
+  );
+  // The last pick per voice wins; output rides canonical voice order.
+  assert.deepEqual(
+    normalizeConversationVoiceModels([
+      { voiceId: 'skeptic', modelId: 'venom-claude' },
+      { voiceId: 'direct', modelId: 'venom-gpt' },
+      { voiceId: 'skeptic', modelId: 'venom-gemini' },
+    ]),
+    [
+      { voiceId: 'direct', modelId: 'venom-gpt' },
+      { voiceId: 'skeptic', modelId: 'venom-gemini' },
+    ],
+  );
+});
+
+test('voice picks ride the preference block through normalization', () => {
+  const junk = normalizeConversationResponsePrefs({
+    id: 'c1',
+    voiceModels: [{ voiceId: 'skeptic', modelId: 'gpt-4o' }],
+    modeUpdatedAt: 42,
+  });
+  assert.equal(junk.voiceModels, undefined);
+  // A block that is only junk keeps no stamp either.
+  assert.equal(junk.modeUpdatedAt, undefined);
+
+  const valid = normalizeConversationResponsePrefs({
+    id: 'c2',
+    voiceModels: [{ voiceId: 'skeptic', modelId: 'venom-claude' }],
+    modeUpdatedAt: 42,
+  });
+  // Picks alone are a real preference block: they keep their stamp.
+  assert.deepEqual(valid.voiceModels, [{ voiceId: 'skeptic', modelId: 'venom-claude' }]);
+  assert.equal(valid.modeUpdatedAt, 42);
+});
+
+test('voice picks move with the winning block in merges — and are wiped by a newer block without them', () => {
+  const base = { id: 'c' };
+  const withPicks = {
+    responseMode: 'verify',
+    voiceModels: [{ voiceId: 'skeptic', modelId: 'venom-claude' }],
+    modeUpdatedAt: 200,
+  };
+  const older = { responseMode: 'talk', modeUpdatedAt: 120 };
+
+  // The newer block carries its picks in.
+  const kept = mergeConversationResponsePrefs(base, withPicks, older);
+  assert.deepEqual(kept.voiceModels, [{ voiceId: 'skeptic', modelId: 'venom-claude' }]);
+  assert.equal(kept.modeUpdatedAt, 200);
+
+  // A newer block WITHOUT picks wins whole: the old picks do not leak through.
+  const newerNoPicks = { responseMode: 'talk', modeUpdatedAt: 300 };
+  const wiped = mergeConversationResponsePrefs(base, withPicks, newerNoPicks);
+  assert.equal(wiped.voiceModels, undefined);
+  assert.equal(wiped.responseMode, 'talk');
 });
 
 test('normalizeConversationResponsePrefs strips junk and keeps valid blocks', () => {

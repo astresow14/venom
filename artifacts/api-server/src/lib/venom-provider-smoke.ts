@@ -16,10 +16,16 @@
  */
 import {
   buildVenomCatalog,
+  geminiDirectCredentialInUse,
+  verifyGeminiDirectCapability,
   type VenomModelId,
   type VenomManagedModel,
 } from "./venom-models";
-import { streamVenomResponse, type VenomMessage } from "./venom-provider-adapters";
+import {
+  isBillingClassProviderError,
+  streamVenomResponse,
+  type VenomMessage,
+} from "./venom-provider-adapters";
 
 /** Neutral prompt: short, deterministic, and free of any project content. */
 const SMOKE_MESSAGES: VenomMessage[] = [
@@ -43,6 +49,12 @@ export type SmokeVerdict = {
 
 function safeFailureReason(error: unknown, timedOut: boolean): string {
   if (timedOut) return "Timed out before completing a response";
+  // Name the account problem so the verdict points at billing, not code.
+  // Running this smoke also primes the in-process catalog overlay (the
+  // adapters record billing-class evidence on every live call).
+  if (isBillingClassProviderError(error)) {
+    return "Provider account cannot cover requests (billing-class failure)";
+  }
   if (error && typeof error === "object") {
     const candidate = error as { status?: unknown; statusCode?: unknown };
     const status =
@@ -144,6 +156,19 @@ export function formatVerdict(verdict: SmokeVerdict): string {
 }
 
 async function main(): Promise<void> {
+  // Whenever a direct Gemini key is present the client uses it — even if the
+  // managed pair is also configured — so resolve the capability check first;
+  // the catalog below reflects the real gate. Managed-only environments have
+  // nothing to verify (availability stays presence-based, like the others).
+  if (geminiDirectCredentialInUse()) {
+    const capability = await verifyGeminiDirectCapability();
+    console.log(
+      capability.ok
+        ? "Gemini capability check: passed"
+        : `Gemini capability check: failed (${capability.reason})`,
+    );
+  }
+
   const verdicts = await runVenomProviderSmoke();
   for (const verdict of verdicts) {
     console.log(formatVerdict(verdict));

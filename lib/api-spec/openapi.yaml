@@ -83,6 +83,79 @@ paths:
                 $ref: "#/components/schemas/VenomDeliberationAvailability"
         "401":
           description: Authentication required
+  /venom/files/uploads:
+    post:
+      operationId: createVenomChatFileUpload
+      tags: [venom]
+      summary: Start a chat file upload and get a one-time signed upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomChatFileUploadRequest"
+      responses:
+        "200":
+          description: Pending file record plus the signed PUT URL for the bytes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomChatFileUploadTicket"
+        "400":
+          description: Unsupported file type or size
+        "401":
+          description: Authentication required
+        "429":
+          description: Too many upload requests
+  /venom/files/uploads/{fileId}/complete:
+    post:
+      operationId: completeVenomChatFileUpload
+      tags: [venom]
+      summary: Verify an uploaded chat file and extract its text for context
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9-]{1,64}$"
+      responses:
+        "200":
+          description: The verified, ready file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomChatFile"
+        "400":
+          description: The uploaded bytes failed verification (missing or oversized)
+        "401":
+          description: Authentication required
+        "404":
+          description: No pending upload with this id belongs to the caller
+  /venom/files/{fileId}:
+    get:
+      operationId: downloadVenomChatFile
+      tags: [venom]
+      summary: Download a chat file the caller owns
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9-]{1,64}$"
+      responses:
+        "200":
+          description: The file bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Authentication required
+        "404":
+          description: No ready file with this id belongs to the caller
   /venom/voice/catalog:
     get:
       operationId: getVenomVoices
@@ -211,6 +284,112 @@ paths:
           description: Authentication required
         "429":
           description: Too many outcome reports
+  /venom/voice/decisions/summary:
+    get:
+      operationId: getVenomVoiceDecisionSummary
+      tags: [venom]
+      summary: Aggregate your speak/stay-quiet decisions against their observed outcomes
+      description: >-
+        Evidence view over the signed-in account's own logged voice restraint
+        decisions: counts for every observed talkativeness x decision x
+        outcome combination in the window, plus the headline rates the
+        restraint thresholds are tuned from — how often silence was followed
+        by a re-ask, how often spoken replies were interrupted, how often
+        goodbyes wound down cleanly. The heuristic thresholds in force are
+        echoed so the numbers can be read against them; interpretation notes
+        live in artifacts/api-server/src/lib/venom-voice-restraint-tuning.md.
+      parameters:
+        - name: windowDays
+          in: query
+          required: false
+          description: >-
+            How many days back to aggregate. Bounded by the 90-day retention
+            cap; defaults to 30.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+            default: 30
+      responses:
+        "200":
+          description: Aggregated decision/outcome evidence for the window
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomVoiceDecisionSummary"
+        "400":
+          description: Invalid report request
+        "401":
+          description: Authentication required
+        "429":
+          description: Too many report requests
+        "500":
+          description: The decision log could not be read
+  /venom/voice/decisions/export:
+    get:
+      operationId: exportVenomVoiceDecisions
+      tags: [venom]
+      summary: Download your logged voice decisions as a JSONL training dataset
+      description: >-
+        One JSON object per line, oldest first: the context signals each
+        decision was derived from, the decision and which layer made it, the
+        talkativeness in force, and the observed outcome once reported.
+        Contains only what the decision log stores — bounded transcript
+        previews and signals, never audio.
+      parameters:
+        - name: windowDays
+          in: query
+          required: false
+          description: >-
+            How many days back to export. Bounded by the 90-day retention
+            cap; defaults to 90 (everything retained).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+            default: 90
+      responses:
+        "200":
+          description: >-
+            JSONL attachment, one decision record per line. Served as
+            text/plain so generated clients return the body string; the
+            .jsonl filename travels in Content-Disposition.
+          content:
+            text/plain:
+              schema: { type: string, maxLength: 2000000 }
+        "400":
+          description: Invalid export request
+        "401":
+          description: Authentication required
+        "429":
+          description: Too many export requests
+        "500":
+          description: The decision log could not be read
+  /venom/usage/summary:
+    get:
+      operationId: getVenomUsageSummary
+      tags: [venom]
+      summary: Your own AI usage and spend for the current month
+      description: >-
+        Personal metering view over the signed-in account's recorded AI
+        calls: current calendar month (UTC) totals in dollars, a per-day
+        trend, and a per-model breakdown under Venom-branded model names.
+        Costs are computed server-side from a private pricing table, so
+        provider SKUs and raw per-token rates never appear in the payload.
+        Calls whose provider omitted exact token counts are folded in as
+        flagged character-based estimates, and the audio legs of voice mode
+        carry a flat documented per-request estimate.
+      responses:
+        "200":
+          description: The caller's usage summary for the current month
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomUsageSummary"
+        "401":
+          description: Authentication required
+        "500":
+          description: The usage ledger could not be read
   /venom/knowledge/extract:
     post:
       operationId: extractVenomKnowledge
@@ -231,13 +410,161 @@ paths:
                 $ref: "#/components/schemas/KnowledgeExtraction"
         "401":
           description: Authentication required
+        "429":
+          description: Too many extraction requests
+  /venom/knowledge/moves:
+    get:
+      operationId: listVenomKnowledgeMoves
+      tags: [venom]
+      summary: List your automatic knowledge-move notices and pending suggestions
+      description: >-
+        Author-scoped ledger of automatic filing decisions: undoable notices
+        for knowledge that auto-filed or re-filed into a workspace (or back
+        to personal), plus pending personal-to-workspace suggestions that
+        wait for explicit consent.
+      responses:
+        "200":
+          description: The caller's notices and pending suggestions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomKnowledgeMoves"
+        "401":
+          description: Authentication required
+  /venom/knowledge/moves/{moveId}/undo:
+    post:
+      operationId: undoVenomKnowledgeMove
+      tags: [venom]
+      summary: Undo an automatic knowledge filing or re-file
+      description: >-
+        Reverses the recorded move: workspace stores return to their prior
+        state and the affected clusters land in the author's private
+        Unsorted area (for auto-filings) or their original store (for
+        re-files). Needs no live membership, so it keeps working after
+        leaving the workspace.
+      parameters:
+        - name: moveId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      responses:
+        "200":
+          description: The move was reversed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomKnowledgeMoveUndo"
+        "401":
+          description: Authentication required
+        "404":
+          description: No such move for this account
+        "409":
+          description: The move was already undone
+  /venom/knowledge/moves/{moveId}/accept:
+    post:
+      operationId: acceptVenomKnowledgeSuggestion
+      tags: [venom]
+      summary: Accept a personal-to-workspace sharing suggestion
+      description: >-
+        The consent step that widens visibility: moves the suggested
+        personal concept into the workspace's shared Brain. Membership is
+        re-checked at this moment, never assumed from the suggestion.
+      parameters:
+        - name: moveId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      responses:
+        "200":
+          description: The concept now lives in the workspace's Brain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomKnowledgeMoveResult"
+        "401":
+          description: Authentication required
         "403":
-          description: The caller requested a shared workspace they are not currently a member of
+          description: The caller is not currently a member of that workspace
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
-        "429":
-          description: Too many extraction requests
+        "404":
+          description: No such pending suggestion (or its concept is gone)
+        "409":
+          description: The suggestion was already resolved
+  /venom/knowledge/moves/{moveId}/dismiss:
+    post:
+      operationId: dismissVenomKnowledgeSuggestion
+      tags: [venom]
+      summary: Dismiss a personal-to-workspace sharing suggestion
+      parameters:
+        - name: moveId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      responses:
+        "200":
+          description: The suggestion will not be offered again soon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomKnowledgeSuggestionDismissal"
+        "401":
+          description: Authentication required
+        "404":
+          description: No such pending suggestion for this account
+        "409":
+          description: The suggestion was already resolved
+  /venom/knowledge/unsorted/{conceptId}/move:
+    post:
+      operationId: moveVenomUnsortedConcept
+      tags: [venom]
+      summary: File an Unsorted concept into a workspace Brain
+      description: >-
+        Explicit filing from the Unsorted review. Only concepts currently in
+        the author's Unsorted holding area qualify; membership in the target
+        workspace is re-checked here.
+      parameters:
+        - name: conceptId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomUnsortedMoveInput"
+      responses:
+        "200":
+          description: The concept now lives in the workspace's Brain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomKnowledgeMoveResult"
+        "401":
+          description: Authentication required
+        "403":
+          description: The caller is not currently a member of that workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "404":
+          description: No such concept in the caller's personal Brain
+        "409":
+          description: The concept is not in the Unsorted holding area
   /venom/ontology/search:
     get:
       operationId: searchVenomOntology
@@ -251,6 +578,16 @@ paths:
             type: string
             minLength: 1
             maxLength: 200
+        - name: org
+          in: query
+          required: false
+          description: >-
+            Company id. When present, searches that company's shared Brain
+            instead of the personal ontology; the caller must be a member.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
         - name: limit
           in: query
           required: false
@@ -282,6 +619,16 @@ paths:
             type: string
             minLength: 1
             maxLength: 120
+        - name: org
+          in: query
+          required: false
+          description: >-
+            Company id. When present, resolves the concept inside that
+            company's shared Brain; the caller must be a member.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
       responses:
         "200":
           description: The concept, its linked neighbors, and its evidence
@@ -293,6 +640,36 @@ paths:
           description: Authentication required
         "404":
           description: Concept not found
+  /venom/conversations/{conversationId}:
+    get:
+      operationId: getVenomConversation
+      tags: [venom]
+      summary: Read one conversation from the synced workspace snapshot
+      description: >-
+        Serves a cited conversation for read-only viewing on a device that
+        does not hold it locally. Brain evidence on a server-side concept can
+        reference conversations that only exist in the cloud snapshot; this
+        lookup completes that trail of proof. Owner-scoped - it only ever
+        reads the signed-in user's own snapshot.
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+      responses:
+        "200":
+          description: The conversation as last synced, labeled with its project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomRemoteConversation"
+        "401":
+          description: Authentication required
+        "404":
+          description: No synced conversation with this id
   /venom/identity:
     get:
       operationId: getVenomIdentity
@@ -311,6 +688,763 @@ paths:
                 $ref: "#/components/schemas/VenomIdentity"
         "401":
           description: Authentication required
+  /venom/canon/teachings:
+    get:
+      operationId: listVenomCanonTeachings
+      tags: [venom]
+      summary: List every canon teaching (super admins only)
+      description: >-
+        The full curated canon, active and retired, with provenance. Callers
+        without the super admin role receive the opaque canon access error
+        regardless of whether any teachings exist.
+      responses:
+        "200":
+          description: All canon teachings, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 1000
+                items: { $ref: "#/components/schemas/VenomCanonTeaching" }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not a super admin
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomCanonAccessError" }
+    post:
+      operationId: commitVenomCanonTeaching
+      tags: [venom]
+      summary: Commit a confirmed teaching into the canon (super admins only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommitVenomCanonTeachingInput" }
+      responses:
+        "201":
+          description: The teaching now in canon, with Venom's acknowledgment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomCanonCommitResult" }
+        "400": { description: The draft could not be normalized into a teaching }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not a super admin
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomCanonAccessError" }
+        "409": { description: The canon is at capacity }
+  /venom/canon/teachings/{teachingId}:
+    patch:
+      operationId: updateVenomCanonTeaching
+      tags: [venom]
+      summary: Edit or retire/restore a canon teaching (super admins only)
+      parameters:
+        - name: teachingId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 60 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateVenomCanonTeachingInput" }
+      responses:
+        "200":
+          description: The teaching after the update
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomCanonTeaching" }
+        "400": { description: No usable fields in the update }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not a super admin
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomCanonAccessError" }
+        "404": { description: No teaching with this id }
+  /venom/canon/propose:
+    post:
+      operationId: proposeVenomCanonTeaching
+      tags: [venom]
+      summary: Distill a chat message into a draft teaching (super admins only)
+      description: >-
+        Detects teach intent in a super admin's chat message and distills it
+        into a draft teaching for confirmation. Ambiguous or non-teaching
+        messages return teachIntent=false so the client falls back to an
+        ordinary chat turn. Nothing is stored until the draft is committed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProposeVenomCanonTeachingInput" }
+      responses:
+        "200":
+          description: The distilled draft, or a no-intent verdict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProposeVenomCanonTeachingResult" }
+        "400": { description: Invalid proposal request }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not a super admin
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomCanonAccessError" }
+        "429": { description: Too many proposal requests }
+  /venom/canon/admins:
+    get:
+      operationId: listVenomCanonAdmins
+      tags: [venom]
+      summary: List super admins (super admins only)
+      responses:
+        "200":
+          description: Current super admins
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 200
+                items: { $ref: "#/components/schemas/VenomCanonAdmin" }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not a super admin
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomCanonAccessError" }
+    post:
+      operationId: grantVenomCanonAdmin
+      tags: [venom]
+      summary: Grant the super admin role to another account (super admins only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GrantVenomCanonAdminInput" }
+      responses:
+        "201":
+          description: The account now holds the super admin role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomCanonAdmin" }
+        "400": { description: No account with this id }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not a super admin
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomCanonAccessError" }
+        "409": { description: Already a super admin }
+  /venom/canon/admins/{adminUserId}:
+    delete:
+      operationId: revokeVenomCanonAdmin
+      tags: [venom]
+      summary: Revoke another account's super admin role (super admins only)
+      description: >-
+        Self-revocation is refused, and the last remaining super admin can
+        never be removed, so the canon always keeps at least one steward.
+      parameters:
+        - name: adminUserId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 120 }
+      responses:
+        "204": { description: Role revoked }
+        "400": { description: You cannot revoke your own role }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not a super admin
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomCanonAccessError" }
+        "404": { description: That account is not a super admin }
+        "409": { description: The last super admin cannot be removed }
+  /venom/orgs:
+    get:
+      operationId: getVenomOrgs
+      tags: [venom]
+      summary: List the signed-in user's companies and pending invites
+      responses:
+        "200":
+          description: Companies the user belongs to, plus invites waiting on their email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomOrgDirectory"
+        "401":
+          description: Authentication required
+    post:
+      operationId: createVenomOrg
+      tags: [venom]
+      summary: Create a company workspace with the signed-in user as admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVenomOrgInput"
+      responses:
+        "200":
+          description: The created company
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomOrg"
+        "400":
+          description: Invalid company name
+        "401":
+          description: Authentication required
+  /venom/orgs/{orgId}:
+    delete:
+      operationId: deleteVenomOrg
+      tags: [venom]
+      summary: Delete a company and purge its shared Brain
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+      responses:
+        "204":
+          description: Company deleted
+        "401":
+          description: Authentication required
+        "403":
+          description: Only company admins can delete a company
+        "404":
+          description: Company not found
+  /venom/orgs/{orgId}/members:
+    get:
+      operationId: getVenomOrgMembers
+      tags: [venom]
+      summary: List a company's members and outstanding invites
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+      responses:
+        "200":
+          description: Members and pending invites
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomOrgMemberDirectory"
+        "401":
+          description: Authentication required
+        "403":
+          description: Caller is not a member of this company
+        "404":
+          description: Company not found
+  /venom/orgs/{orgId}/members/{memberUserId}:
+    delete:
+      operationId: removeVenomOrgMember
+      tags: [venom]
+      summary: Remove a member (admins) or leave the company (self)
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+        - name: memberUserId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      responses:
+        "204":
+          description: Membership ended
+        "401":
+          description: Authentication required
+        "403":
+          description: Caller may not remove this member
+        "404":
+          description: Company or member not found
+        "409":
+          description: The last admin cannot be removed; delete the company instead
+  /venom/orgs/{orgId}/invites:
+    post:
+      operationId: inviteVenomOrgMember
+      tags: [venom]
+      summary: Invite a teammate by email (admins only)
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteVenomOrgMemberInput"
+      responses:
+        "200":
+          description: The teammate was added directly or an invite is now pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteVenomOrgMemberResult"
+        "400":
+          description: Invalid email address
+        "401":
+          description: Authentication required
+        "403":
+          description: Only company admins can invite members
+        "404":
+          description: Company not found
+        "409":
+          description: Already a member or already invited
+  /venom/orgs/{orgId}/invites/{inviteId}:
+    delete:
+      operationId: revokeVenomOrgInvite
+      tags: [venom]
+      summary: Revoke a pending invite (admins only)
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+        - $ref: "#/components/parameters/VenomOrgInviteId"
+      responses:
+        "204":
+          description: Invite revoked
+        "401":
+          description: Authentication required
+        "403":
+          description: Only company admins can revoke invites
+        "404":
+          description: Invite not found
+  /venom/org-invites/{inviteId}/accept:
+    post:
+      operationId: acceptVenomOrgInvite
+      tags: [venom]
+      summary: Accept a company invite addressed to one of my verified emails
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgInviteId"
+      responses:
+        "200":
+          description: Joined; the company as seen by the new member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomOrg"
+        "401":
+          description: Authentication required
+        "403":
+          description: Invite is addressed to a different email
+        "404":
+          description: Invite not found
+  /venom/org-invites/{inviteId}/decline:
+    post:
+      operationId: declineVenomOrgInvite
+      tags: [venom]
+      summary: Decline a company invite addressed to one of my verified emails
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgInviteId"
+      responses:
+        "204":
+          description: Invite declined
+        "401":
+          description: Authentication required
+        "403":
+          description: Invite is addressed to a different email
+        "404":
+          description: Invite not found
+  /venom/master/contribution:
+    get:
+      operationId: getVenomMasterContribution
+      tags: [venom]
+      summary: Read the signed-in user's knowledge-network contribution setting
+      responses:
+        "200":
+          description: Whether this account shares anonymous concept signals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomMasterContribution"
+        "401":
+          description: Authentication required
+    put:
+      operationId: updateVenomMasterContribution
+      tags: [venom]
+      summary: Turn anonymous knowledge-network contribution on or off
+      description: >-
+        Off by default. Turning it off is retroactive: the account's past
+        concept signals are removed from all future aggregates before the
+        response returns.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVenomMasterContributionInput"
+      responses:
+        "200":
+          description: The saved setting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomMasterContribution"
+        "400":
+          description: Invalid body
+        "401":
+          description: Authentication required
+  /venom/orgs/{orgId}/contribution:
+    get:
+      operationId: getVenomOrgMasterContribution
+      tags: [venom]
+      summary: Read a company's knowledge-network contribution setting
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+      responses:
+        "200":
+          description: Whether this company shares anonymous concept signals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomMasterContribution"
+        "401":
+          description: Authentication required
+        "403":
+          description: Caller is not a member of this company
+        "404":
+          description: Company not found
+    put:
+      operationId: updateVenomOrgMasterContribution
+      tags: [venom]
+      summary: Company admins turn anonymous contribution on or off
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVenomMasterContributionInput"
+      responses:
+        "200":
+          description: The saved setting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomMasterContribution"
+        "400":
+          description: Invalid body
+        "401":
+          description: Authentication required
+        "403":
+          description: Only company admins can change this setting
+        "404":
+          description: Company not found
+  /venom/master/brain:
+    get:
+      operationId: getVenomMasterBrain
+      tags: [venom]
+      summary: Explore the anonymous Venom master knowledge map
+      description: >-
+        Aggregate concepts and connection patterns learned across opted-in
+        accounts and companies. Contains labels, categories, and normalized
+        weights only — never names, excerpts, or tenant traces — and a
+        concept appears only once seen across the minimum number of
+        distinct contributors.
+      responses:
+        "200":
+          description: The master map
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomMasterBrain"
+        "401":
+          description: Authentication required
+  /venom/master/suggestions:
+    get:
+      operationId: getVenomMasterSuggestions
+      tags: [venom]
+      summary: Concepts commonly related to this Brain across the Venom network
+      parameters:
+        - name: org
+          in: query
+          required: false
+          description: >-
+            Company id. When present, suggestions are computed against that
+            company's shared Brain; the caller must be a member.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      responses:
+        "200":
+          description: Dismissible suggestions drawn from the master ontology
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomMasterSuggestionList"
+        "401":
+          description: Authentication required
+        "403":
+          description: Caller is not a member of this company
+        "404":
+          description: Company not found
+  /venom/master/suggestions/dismiss:
+    post:
+      operationId: dismissVenomMasterSuggestion
+      tags: [venom]
+      summary: Hide a Venom network suggestion for this account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DismissVenomMasterSuggestionInput"
+      responses:
+        "200":
+          description: The suggestion will not be offered to this account again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomMasterSuggestionDismissal"
+        "400":
+          description: Invalid body
+        "401":
+          description: Authentication required
+  /venom/master/suggestions/apply:
+    post:
+      operationId: applyVenomMasterSuggestion
+      tags: [venom]
+      summary: Add a Venom network suggestion to a Brain
+      description: >-
+        Files the suggested concept into the caller's personal Brain, or —
+        when orgId is present and the caller is a member — into that
+        company's shared Brain.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyVenomMasterSuggestionInput"
+      responses:
+        "200":
+          description: Where the concept was filed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomMasterSuggestionApplied"
+        "400":
+          description: Invalid body
+        "401":
+          description: Authentication required
+        "403":
+          description: Caller is not a member of this company
+        "404":
+          description: Company not found
+  /venom/orgs/{orgId}/brain:
+    get:
+      operationId: getVenomOrgBrain
+      tags: [venom]
+      summary: Read the company's shared Brain with its contribution audit
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+      responses:
+        "200":
+          description: Shared concepts plus the most recent contributions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomOrgBrain"
+        "401":
+          description: Authentication required
+        "403":
+          description: Caller is not a member of this company
+        "404":
+          description: Company not found
+  /venom/orgs/{orgId}/projects:
+    get:
+      operationId: getVenomOrgProjects
+      tags: [venom]
+      summary: List the company's shared projects
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+      responses:
+        "200":
+          description: Projects members work on together
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomOrgProjectList"
+        "401":
+          description: Authentication required
+        "403":
+          description: Caller is not a member of this company
+        "404":
+          description: Company not found
+  /venom/orgs/{orgId}/projects/{projectId}:
+    put:
+      operationId: shareVenomOrgProject
+      tags: [venom]
+      summary: Mark one of my projects as company-shared (admins only)
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShareVenomOrgProjectInput"
+      responses:
+        "200":
+          description: The shared project registry entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomOrgSharedProject"
+        "400":
+          description: Invalid project details
+        "401":
+          description: Authentication required
+        "403":
+          description: Only company admins can share projects
+        "404":
+          description: Company not found
+        "409":
+          description: Project is already shared with a different company
+    delete:
+      operationId: unshareVenomOrgProject
+      tags: [venom]
+      summary: Stop sharing a project with the company
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "204":
+          description: Project is personal again; already-filed knowledge stays in the company Brain
+        "401":
+          description: Authentication required
+        "403":
+          description: Only company admins or the sharer can unshare a project
+        "404":
+          description: Company or shared project not found
+  /venom/orgs/{orgId}/sources:
+    get:
+      operationId: getVenomOrgSources
+      tags: [venom]
+      summary: List the company's connected knowledge sources
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+      responses:
+        "200":
+          description: Sources feeding the company Brain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomOrgSourceList"
+        "401":
+          description: Authentication required
+        "403":
+          description: Caller is not a member of this company
+        "404":
+          description: Company not found
+  /venom/orgs/{orgId}/sources/github:
+    post:
+      operationId: connectVenomOrgGitHubSource
+      tags: [venom]
+      summary: Connect a GitHub repository as a company knowledge source (admins only)
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitHubSourceInput"
+      responses:
+        "200":
+          description: Connected company source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomOrgSource"
+        "400":
+          description: Invalid repository identifier
+        "401":
+          description: Authentication required
+        "403":
+          description: Only company admins may connect sources, and the workspace GitHub connection must authorize them
+        "404":
+          description: Company or repository not found
+        "502":
+          description: GitHub connection unavailable
+  /venom/orgs/{orgId}/sources/website:
+    post:
+      operationId: connectVenomOrgWebsiteSource
+      tags: [venom]
+      summary: Connect a public website as a company knowledge source (admins only)
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebsiteSourceInput"
+      responses:
+        "200":
+          description: Connected company source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomOrgSource"
+        "400":
+          description: Invalid or unsafe website URL
+        "401":
+          description: Authentication required
+        "403":
+          description: Only company admins can connect sources
+        "404":
+          description: Company not found
+        "422":
+          description: Website content could not be read
+        "502":
+          description: Website could not be reached
+  /venom/orgs/{orgId}/sources/{sourceId}:
+    delete:
+      operationId: removeVenomOrgSource
+      tags: [venom]
+      summary: Disconnect a company knowledge source and retire its concepts
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+        - $ref: "#/components/parameters/VenomOrgSourceId"
+      responses:
+        "204":
+          description: Source removed and its Brain concepts retired
+        "401":
+          description: Authentication required
+        "403":
+          description: Only company admins can remove sources
+        "404":
+          description: Company or source not found
+  /venom/orgs/{orgId}/promote:
+    post:
+      operationId: promoteVenomConceptToOrg
+      tags: [venom]
+      summary: Promote a personal Brain concept into the company Brain
+      description: >-
+        The explicit, member-initiated action that lifts one personal concept
+        (with its evidence) into the company's shared Brain. Nothing personal
+        enters a company Brain without this call or work done inside shared
+        projects and company sources.
+      parameters:
+        - $ref: "#/components/parameters/VenomOrgId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromoteVenomConceptInput"
+      responses:
+        "200":
+          description: The concept as it now exists in the company Brain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoteVenomConceptResult"
+        "400":
+          description: Invalid concept payload
+        "401":
+          description: Authentication required
+        "403":
+          description: Caller is not a member of this company
+        "404":
+          description: Company not found
   /venom/notes/improve:
     post:
       operationId: improveVenomNote
@@ -544,6 +1678,39 @@ paths:
         "404": { description: No account matches the supplied user ID }
         "409": { description: The account is already a member }
   /venom/workspaces/{workspaceId}/members/{memberUserId}:
+    patch:
+      operationId: updateSharedWorkspaceMemberRole
+      tags: [venom]
+      summary: Change a member's role in place; their access never lapses (admins only)
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+        - name: memberUserId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 160
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SharedWorkspaceMemberRoleInput" }
+      responses:
+        "200":
+          description: The member with their updated role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceMember" }
+        "400": { description: Invalid role payload }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "404": { description: The account is not a member of this workspace }
+        "409": { description: The last admin cannot be demoted }
     delete:
       operationId: removeSharedWorkspaceMember
       tags: [venom]
@@ -668,6 +1835,248 @@ paths:
               schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
         "404": { description: SOP not found in this workspace }
         "409": { description: Archived SOPs cannot be published }
+  /venom/workspaces/{workspaceId}/settings:
+    get:
+      operationId: getSharedWorkspaceSettings
+      tags: [venom]
+      summary: Read the workspace's security settings (admins only)
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+      responses:
+        "200":
+          description: Current workspace settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceSettings" }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+    put:
+      operationId: updateSharedWorkspaceSettings
+      tags: [venom]
+      summary: Update the workspace's security settings (admins only)
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SharedWorkspaceSettings" }
+      responses:
+        "200":
+          description: Settings saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceSettings" }
+        "400": { description: Invalid settings payload }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+  /venom/workspaces/{workspaceId}/knowledge/{conceptId}/sensitivity:
+    patch:
+      operationId: setSharedWorkspaceConceptSensitivity
+      tags: [venom]
+      summary: Lock or unlock a workspace knowledge cluster (members only)
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+        - $ref: "#/components/parameters/WorkspaceConceptId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SensitivityUpdateInput" }
+      responses:
+        "200":
+          description: Updated cluster with its new sensitivity state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomKnowledgeCluster" }
+        "400": { description: Invalid sensitivity payload }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not currently a member of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "404": { description: Knowledge cluster not found in this workspace }
+  /venom/workspaces/{workspaceId}/knowledge/{conceptId}/evidence/{conversationId}/sensitivity:
+    patch:
+      operationId: setSharedWorkspaceEvidenceSensitivity
+      tags: [venom]
+      summary: Lock or unlock a single evidence entry (members only)
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+        - $ref: "#/components/parameters/WorkspaceConceptId"
+        - $ref: "#/components/parameters/WorkspaceConversationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SensitivityUpdateInput" }
+      responses:
+        "200":
+          description: Updated cluster containing the evidence entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomKnowledgeCluster" }
+        "400": { description: Invalid sensitivity payload }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not currently a member of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "404": { description: Evidence entry not found in this workspace }
+  /venom/workspaces/{workspaceId}/sops/{sopId}/sensitivity:
+    patch:
+      operationId: setSharedWorkspaceSopSensitivity
+      tags: [venom]
+      summary: Lock or unlock a workspace SOP (members only)
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+        - $ref: "#/components/parameters/SopId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SensitivityUpdateInput" }
+      responses:
+        "200":
+          description: Updated SOP with its new sensitivity state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceSop" }
+        "400": { description: Invalid sensitivity payload }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not currently a member of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "404": { description: SOP not found in this workspace }
+  /venom/workspaces/{workspaceId}/knowledge/{conceptId}/restriction:
+    patch:
+      operationId: setSharedWorkspaceConceptRestriction
+      tags: [venom]
+      summary: Restrict a workspace knowledge cluster to admins (admins only)
+      description: >-
+        Marks or unmarks a cluster as admin-only. Restricted clusters are
+        enforced server-side per request, like membership: they never appear
+        in member knowledge reads, member chat context, member citations, or
+        member exports. Non-admin callers get the same opaque 403 as
+        non-members.
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+        - $ref: "#/components/parameters/WorkspaceConceptId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RestrictionUpdateInput" }
+      responses:
+        "200":
+          description: Updated cluster with its new restriction state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomKnowledgeCluster" }
+        "400": { description: Invalid restriction payload }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "404": { description: Knowledge cluster not found in this workspace }
+  /venom/workspaces/{workspaceId}/sops/{sopId}/restriction:
+    patch:
+      operationId: setSharedWorkspaceSopRestriction
+      tags: [venom]
+      summary: Restrict a workspace SOP to admins (admins only)
+      description: >-
+        Marks or unmarks a SOP as admin-only. Restricted SOPs are enforced
+        server-side per request, like membership: they never appear in member
+        SOP reads, member chat context, or member exports. Non-admin callers
+        get the same opaque 403 as non-members.
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+        - $ref: "#/components/parameters/SopId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RestrictionUpdateInput" }
+      responses:
+        "200":
+          description: Updated SOP with its new restriction state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceSop" }
+        "400": { description: Invalid restriction payload }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not an admin of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+        "404": { description: SOP not found in this workspace }
+  /venom/workspaces/{workspaceId}/export/{kind}:
+    get:
+      operationId: exportSharedWorkspaceMarkdown
+      tags: [venom]
+      summary: Download workspace knowledge or SOPs as Markdown (members only)
+      description: >-
+        The export policy is enforced here, server-side. When the workspace
+        forbids sensitive exports, locked items are excluded and the file
+        states how many were withheld — never a silent gap. Non-members get
+        no workspace content at all.
+      parameters:
+        - $ref: "#/components/parameters/SharedWorkspaceId"
+        - $ref: "#/components/parameters/VenomExportKind"
+      responses:
+        "200":
+          description: Markdown attachment
+          content:
+            text/markdown:
+              schema: { type: string, maxLength: 400000 }
+        "401": { description: Authentication required }
+        "403":
+          description: The caller is not currently a member of this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedWorkspaceAccessError" }
+  /venom/exports/{kind}:
+    get:
+      operationId: exportVenomPersonalMarkdown
+      tags: [venom]
+      summary: Download your personal Brain notes or SOPs as Markdown
+      description: >-
+        Always scoped to the requesting account's personal tier; contains no
+        workspace content, so it keeps working after leaving a workspace.
+      parameters:
+        - $ref: "#/components/parameters/VenomExportKind"
+        - name: scope
+          in: query
+          required: false
+          description: >-
+            Brain exports only. `sorted` limits the download to knowledge
+            outside the Unsorted holding area; `unsorted` downloads just the
+            Unsorted items. Omit for everything.
+          schema:
+            type: string
+            enum: [sorted, unsorted]
+      responses:
+        "200":
+          description: Markdown attachment
+          content:
+            text/markdown:
+              schema: { type: string, maxLength: 400000 }
+        "401": { description: Authentication required }
   /venom/apps:
     get:
       operationId: listVenomApps
@@ -758,6 +2167,140 @@ paths:
       responses:
         "204":
           description: App deleted
+        "401":
+          description: Authentication required
+        "404":
+          description: App not found
+  /venom/apps/{appId}/sharing:
+    get:
+      operationId: getVenomAppSharing
+      tags: [venom]
+      summary: Get the public sharing state for an app
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      responses:
+        "200":
+          description: Owner-visible sharing state for the app
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomAppSharingState"
+        "401":
+          description: Authentication required
+        "404":
+          description: App not found
+    put:
+      operationId: updateVenomAppSharing
+      tags: [venom]
+      summary: Enable or disable public sharing for an app
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomAppSharingUpdate"
+      responses:
+        "200":
+          description: Updated sharing state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomAppSharingState"
+        "400":
+          description: Invalid sharing update
+        "401":
+          description: Authentication required
+        "404":
+          description: App not found
+  /venom/apps/{appId}/ai:
+    get:
+      operationId: getVenomAppAi
+      tags: [venom]
+      summary: Owner view of an app's whitelabeled AI usage and controls
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      responses:
+        "200":
+          description: Month-to-date usage, spend controls, and credential summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomAppAiOverview"
+        "401":
+          description: Authentication required
+        "404":
+          description: App not found
+  /venom/apps/{appId}/ai/settings:
+    put:
+      operationId: updateVenomAppAiSettings
+      tags: [venom]
+      summary: Set the app's monthly AI spending cap and pause switch
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenomAppAiSettingsUpdate"
+      responses:
+        "200":
+          description: Updated AI overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomAppAiOverview"
+        "400":
+          description: Invalid settings update
+        "401":
+          description: Authentication required
+        "404":
+          description: App not found
+  /venom/apps/{appId}/ai/credential/rotate:
+    post:
+      operationId: rotateVenomAppAiCredential
+      tags: [venom]
+      summary: Rotate the app's AI gateway credential
+      description: >-
+        Revokes the current credential and mints a replacement in one step.
+        The new secret is delivered into the provisioned app's secret storage
+        through the provisioning provider — it never appears in this API. If
+        immediate delivery is not possible, the credential is delivered at
+        the next provisioning handoff and the overview reports it as not yet
+        delivered.
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      responses:
+        "200":
+          description: AI overview reflecting the fresh credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomAppAiOverview"
+        "401":
+          description: Authentication required
+        "404":
+          description: App not found
+  /venom/apps/{appId}/ai/credential/revoke:
+    post:
+      operationId: revokeVenomAppAiCredential
+      tags: [venom]
+      summary: Revoke the app's AI gateway credential
+      description: >-
+        Server-side kill switch: the deployed app's AI stops immediately and
+        stays off until a rotate or the next provisioning handoff mints a
+        replacement.
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      responses:
+        "200":
+          description: AI overview with no active credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomAppAiOverview"
         "401":
           description: Authentication required
         "404":
@@ -1599,6 +3142,106 @@ paths:
           description: Authentication required
         "404":
           description: Notification not found
+  /venom/sources/sync-alerts:
+    get:
+      operationId: listVenomSourceSyncAlerts
+      tags: [venom]
+      summary: List active scheduled source sync alerts for the signed-in user
+      responses:
+        "200":
+          description: Sources whose scheduled server-side syncs keep failing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomSourceSyncAlertList"
+        "401":
+          description: Authentication required
+  /venom/sources/sync-alerts/read-all:
+    post:
+      operationId: markAllVenomSourceSyncAlertsRead
+      tags: [venom]
+      summary: Mark all of the signed-in user's source sync alerts as read
+      responses:
+        "200":
+          description: Number of alerts marked read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomSourceSyncAlertMarkAllResult"
+        "401":
+          description: Authentication required
+  /venom/build-templates:
+    get:
+      operationId: listVenomBuildTemplates
+      tags: [venom]
+      summary: Browse the global catalog of curated build templates
+      responses:
+        "200":
+          description: Active global templates, gallery ordering
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 200
+                items: { $ref: "#/components/schemas/VenomBuildTemplateSummary" }
+        "401": { description: Authentication required }
+  /venom/build-templates/{templateId}:
+    get:
+      operationId: getVenomBuildTemplate
+      tags: [venom]
+      summary: Inspect one template, including its pre-filled build inputs
+      parameters:
+        - $ref: "#/components/parameters/BuildTemplateId"
+      responses:
+        "200":
+          description: Template detail with prefill fields and optional example package
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomBuildTemplate" }
+        "401": { description: Authentication required }
+        "404": { description: Template not found }
+  /venom/build-templates/{templateId}/use:
+    post:
+      operationId: useVenomBuildTemplate
+      tags: [venom]
+      summary: Create a portfolio app from this template plus a pre-filled build run request
+      parameters:
+        - $ref: "#/components/parameters/BuildTemplateId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VenomBuildTemplateUseInput" }
+      responses:
+        "201":
+          description: App created with template lineage; prefill for the build form
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomBuildTemplateUseResult" }
+        "400": { description: Invalid request }
+        "401": { description: Authentication required }
+        "404": { description: Template not found }
+  /venom/build-templates/by-slug/{slug}:
+    put:
+      operationId: upsertVenomBuildTemplate
+      tags: [venom]
+      summary: Create or update a global template (super admins only)
+      parameters:
+        - $ref: "#/components/parameters/BuildTemplateSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VenomBuildTemplateUpsert" }
+      responses:
+        "200":
+          description: Upserted template
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenomBuildTemplate" }
+        "400": { description: Invalid template }
+        "401": { description: Authentication required }
+        "403": { description: Access denied }
   /venom/build-runs:
     get:
       operationId: listVenomBuildRuns
@@ -1934,6 +3577,30 @@ paths:
         "404": { description: Release not found }
         "409": { description: Rollback conflict }
         "500": { description: Rollback failed }
+  /public/app-shares/{slug}:
+    get:
+      operationId: resolvePublicAppShare
+      tags: [venom]
+      summary: Resolve a public app share link
+      description: >-
+        Unauthenticated. Resolves a share slug to the currently published,
+        healthy release of the shared app. Unknown, disabled, and not-live
+        shares all return the same uniform "unavailable" payload so public
+        callers cannot distinguish them, and nothing about the owner or the
+        underlying deployment provider is ever exposed.
+      parameters:
+        - $ref: "#/components/parameters/AppShareSlug"
+      responses:
+        "200":
+          description: Public share resolution (uniform for unavailable states)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenomPublicAppShare"
+        "400":
+          description: Malformed slug
+        "429":
+          description: Too many requests
 components:
   parameters:
     ProjectId:
@@ -1951,6 +3618,13 @@ components:
       schema:
         type: string
         pattern: "^[0-9a-fA-F-]{36}$"
+    AppShareSlug:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-z0-9]{10,60}$"
     ImportJobId:
       name: importJobId
       in: path
@@ -1994,6 +3668,20 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/Uuid" }
+    BuildTemplateId:
+      name: templateId
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Uuid" }
+    BuildTemplateSlug:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 80
+        pattern: "^[a-z0-9][a-z0-9-]*$"
     BuildExportFormat:
       name: format
       in: path
@@ -2001,6 +3689,29 @@ components:
       schema:
         type: string
         enum: [json, markdown]
+    VenomExportKind:
+      name: kind
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [brain, sops]
+    WorkspaceConceptId:
+      name: conceptId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 120
+    WorkspaceConversationId:
+      name: conversationId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 120
     ProvisioningRunId:
       name: provisioningRunId
       in: path
@@ -2011,6 +3722,30 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/Uuid" }
+    VenomOrgId:
+      name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+    VenomOrgInviteId:
+      name: inviteId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+    VenomOrgSourceId:
+      name: sourceId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 160
   schemas:
     VenomAppStatus:
       type: string
@@ -2075,10 +3810,30 @@ components:
           type: number
           multipleOf: 1
           minimum: 0
+        liveReleaseId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        liveIterationNumber:
+          oneOf:
+            - type: number
+              multipleOf: 1
+              minimum: 1
+            - type: "null"
+        livePublishedAt:
+          type: [string, "null"]
+          format: date-time
         improvementSignal:
           oneOf:
             - $ref: "#/components/schemas/VenomAppImprovementSignal"
             - type: "null"
+        templateId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        templateName:
+          type: [string, "null"]
+          maxLength: 120
         createdAt:
           type: string
           format: date-time
@@ -2086,7 +3841,7 @@ components:
           type: string
           format: date-time
       required:
-        [id, name, purpose, brand, status, detectedStack, sourceType, sourceVersion, deploymentUrl, importStatus, sourceUpdatedAt, linkedProjectId, linkedProjectName, latestIterationNumber, improvementSignal, createdAt, updatedAt]
+        [id, name, purpose, brand, status, detectedStack, sourceType, sourceVersion, deploymentUrl, importStatus, sourceUpdatedAt, linkedProjectId, linkedProjectName, latestIterationNumber, liveReleaseId, liveIterationNumber, livePublishedAt, improvementSignal, templateId, templateName, createdAt, updatedAt]
     VenomAppInput:
       type: object
       additionalProperties: false
@@ -2383,9 +4138,14 @@ components:
               multipleOf: 1
               minimum: 1
             - type: "null"
+        releaseId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        isLive: { type: boolean }
         createdBy: { type: string, minLength: 1, maxLength: 200 }
         createdAt: { type: string, format: date-time }
-      required: [id, iterationNumber, buildRunId, revisionId, packageTitle, packageChecksum, runKind, reason, changesSummary, baselineIterationNumber, createdBy, createdAt]
+      required: [id, iterationNumber, buildRunId, revisionId, packageTitle, packageChecksum, runKind, reason, changesSummary, baselineIterationNumber, releaseId, isLive, createdBy, createdAt]
     VenomAppTimelineEntry:
       type: object
       additionalProperties: false
@@ -2439,6 +4199,42 @@ components:
         sourceChanges: { type: number, multipleOf: 1, minimum: 0 }
         summary: { type: string, minLength: 1, maxLength: 1500 }
       required: [since, knowledgeChanges, sourceChanges, summary]
+    VenomAppLiveRelease:
+      type: object
+      additionalProperties: false
+      properties:
+        releaseId: { $ref: "#/components/schemas/Uuid" }
+        iterationId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        iterationNumber:
+          oneOf:
+            - type: number
+              multipleOf: 1
+              minimum: 1
+            - type: "null"
+        packageTitle: { type: [string, "null"], maxLength: 160 }
+        publishedAt: { type: [string, "null"], format: date-time }
+        restoredByRollback: { type: boolean }
+        resolvable: { type: boolean }
+        baselineSelectable: { type: boolean }
+        changes:
+          oneOf:
+            - $ref: "#/components/schemas/VenomAppIterationChanges"
+            - type: "null"
+      required:
+        [
+          releaseId,
+          iterationId,
+          iterationNumber,
+          packageTitle,
+          publishedAt,
+          restoredByRollback,
+          resolvable,
+          baselineSelectable,
+          changes,
+        ]
     VenomAppIterationContext:
       type: object
       additionalProperties: false
@@ -2484,13 +4280,22 @@ components:
           oneOf:
             - $ref: "#/components/schemas/VenomAppIterationChanges"
             - type: "null"
+        live:
+          oneOf:
+            - $ref: "#/components/schemas/VenomAppLiveRelease"
+            - type: "null"
+        divergence:
+          oneOf:
+            - type: string
+              enum: [in_sync, live_behind, live_ahead, live_unversioned]
+            - type: "null"
         canIterate: { type: boolean }
         blockedReason:
           oneOf:
             - type: string
               enum: [no_baseline, baseline_unresolvable]
             - type: "null"
-      required: [appId, appName, linkedProject, baseline, latestSourceVersion, suggestedSops, changes, canIterate, blockedReason]
+      required: [appId, appName, linkedProject, baseline, latestSourceVersion, suggestedSops, changes, live, divergence, canIterate, blockedReason]
     VenomAppIterationInput:
       type: object
       additionalProperties: false
@@ -2507,6 +4312,7 @@ components:
           minLength: 16
           maxLength: 120
           pattern: "^[A-Za-z0-9_-]+$"
+        baselineIterationId: { $ref: "#/components/schemas/Uuid" }
       required: [instruction, idempotencyKey]
     VenomImportInput:
       type: object
@@ -2577,6 +4383,14 @@ components:
           maxItems: 20
           uniqueItems: true
           items: { $ref: "#/components/schemas/Uuid" }
+        templateId:
+          description: >-
+            Optional template lineage for runs that started from a global
+            template. When the run is pinned to an app that already carries
+            template lineage, the app's lineage wins.
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
         idempotencyKey:
           type: string
           minLength: 16
@@ -2616,8 +4430,12 @@ components:
             - $ref: "#/components/schemas/Uuid"
             - type: "null"
         changesSummary: { type: [string, "null"], maxLength: 2000 }
+        templateId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
       required:
-        [targetType, targetName, requirements, constraints, brandDirection, appId, sourceVersionId, projectId, sopRevisionIds, baselineIterationId, baselineRevisionId, changesSummary]
+        [targetType, targetName, requirements, constraints, brandDirection, appId, sourceVersionId, projectId, sopRevisionIds, baselineIterationId, baselineRevisionId, changesSummary, templateId]
     VenomBuildSourceReference:
       type: object
       additionalProperties: false
@@ -2736,7 +4554,7 @@ components:
         id: { $ref: "#/components/schemas/Uuid" }
         eventType:
           type: string
-          enum: [queued, preparing, review_required, revised, approved, ready_for_provisioning, cancelled, rejected, failed, retried]
+          enum: [queued, preparing, network_guidance, review_required, revised, approved, ready_for_provisioning, cancelled, rejected, failed, retried]
         status: { $ref: "#/components/schemas/VenomBuildRunStatus" }
         progress: { type: number, multipleOf: 1, minimum: 0, maximum: 100 }
         message: { type: string, minLength: 1, maxLength: 240 }
@@ -2762,12 +4580,16 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Uuid"
             - type: "null"
+        templateId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
         failureMessage: { type: [string, "null"], maxLength: 240 }
         cancelledReason: { type: [string, "null"], maxLength: 500 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
       required:
-        [id, correlationId, appId, runKind, targetType, targetName, status, progress, currentRevisionNumber, approvedRevisionId, failureMessage, cancelledReason, createdAt, updatedAt]
+        [id, correlationId, appId, runKind, targetType, targetName, status, progress, currentRevisionNumber, approvedRevisionId, templateId, failureMessage, cancelledReason, createdAt, updatedAt]
     VenomBuildRun:
       allOf:
         - $ref: "#/components/schemas/VenomBuildRunSummary"
@@ -2789,6 +4611,114 @@ components:
             completedAt: { type: [string, "null"], format: date-time }
           required:
             [request, revisions, events, attempt, failureCode, startedAt, completedAt]
+    VenomBuildTemplateCategory:
+      type: string
+      enum: [app, widget]
+    VenomBuildTemplateStatus:
+      type: string
+      enum: [active, retired]
+    VenomBuildTemplateSummary:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { $ref: "#/components/schemas/Uuid" }
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: "^[a-z0-9][a-z0-9-]*$"
+        name: { type: string, minLength: 1, maxLength: 120 }
+        category: { $ref: "#/components/schemas/VenomBuildTemplateCategory" }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        targetType: { $ref: "#/components/schemas/VenomBuildTargetType" }
+        hasExamplePackage: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+      required:
+        [id, slug, name, category, description, targetType, hasExamplePackage, updatedAt]
+    VenomBuildTemplate:
+      allOf:
+        - $ref: "#/components/schemas/VenomBuildTemplateSummary"
+        - type: object
+          additionalProperties: false
+          properties:
+            previewSummary: { type: string, maxLength: 2000 }
+            targetName: { type: string, minLength: 1, maxLength: 120 }
+            requirements: { type: string, minLength: 1, maxLength: 8000 }
+            constraints: { type: string, maxLength: 4000 }
+            brandDirection: { type: string, maxLength: 3000 }
+            acceptanceChecks:
+              type: array
+              maxItems: 40
+              items: { type: string, minLength: 1, maxLength: 800 }
+            examplePackage:
+              oneOf:
+                - $ref: "#/components/schemas/VenomBuildPackage"
+                - type: "null"
+            status: { $ref: "#/components/schemas/VenomBuildTemplateStatus" }
+            networkImprovementCount:
+              type: number
+              multipleOf: 1
+              minimum: 0
+              description: >-
+                How many concept-level lessons this template has learned from
+                the anonymous builder network (opted-in accounts only, each
+                lesson seen across several distinct accounts). A plain count —
+                never tenant traces.
+          required:
+            [previewSummary, targetName, requirements, constraints, brandDirection, acceptanceChecks, examplePackage, status, networkImprovementCount]
+    VenomBuildTemplatePrefill:
+      type: object
+      additionalProperties: false
+      description: Ready-to-edit build-run form values derived from a template.
+      properties:
+        targetType: { $ref: "#/components/schemas/VenomBuildTargetType" }
+        targetName: { type: string, minLength: 1, maxLength: 120 }
+        requirements: { type: string, minLength: 1, maxLength: 8000 }
+        constraints: { type: string, maxLength: 4000 }
+        brandDirection: { type: string, maxLength: 3000 }
+      required: [targetType, targetName, requirements, constraints, brandDirection]
+    VenomBuildTemplateUseInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Optional app name override; defaults to the template's target name.
+    VenomBuildTemplateUseResult:
+      type: object
+      additionalProperties: false
+      properties:
+        app: { $ref: "#/components/schemas/VenomApp" }
+        templateId: { $ref: "#/components/schemas/Uuid" }
+        templateName: { type: string, minLength: 1, maxLength: 120 }
+        prefill: { $ref: "#/components/schemas/VenomBuildTemplatePrefill" }
+      required: [app, templateId, templateName, prefill]
+    VenomBuildTemplateUpsert:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        category: { $ref: "#/components/schemas/VenomBuildTemplateCategory" }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        previewSummary: { type: string, maxLength: 2000 }
+        targetType: { $ref: "#/components/schemas/VenomBuildTargetType" }
+        targetName: { type: string, minLength: 1, maxLength: 120 }
+        requirements: { type: string, minLength: 1, maxLength: 8000 }
+        constraints: { type: string, maxLength: 4000 }
+        brandDirection: { type: string, maxLength: 3000 }
+        acceptanceChecks:
+          type: array
+          maxItems: 40
+          items: { type: string, minLength: 1, maxLength: 800 }
+        examplePackage:
+          oneOf:
+            - $ref: "#/components/schemas/VenomBuildPackage"
+            - type: "null"
+        status: { $ref: "#/components/schemas/VenomBuildTemplateStatus" }
+        sortOrder: { type: number, multipleOf: 1, minimum: 0, maximum: 10000 }
+      required: [name, category, description, targetType, targetName, requirements]
     VenomBuildCancellationInput:
       type: object
       additionalProperties: false
@@ -2828,6 +4758,17 @@ components:
           enum: [user, assistant]
         content:
           type: string
+        attachmentIds:
+          type: array
+          maxItems: 5
+          uniqueItems: true
+          description: >-
+            Ids of ready chat files attached to this message. The server
+            re-verifies ownership against the file store; unknown or foreign
+            ids are ignored rather than rejected.
+          items:
+            type: string
+            pattern: "^[A-Za-z0-9-]{1,64}$"
       required:
         - role
         - content
@@ -2848,8 +4789,6 @@ components:
           type: string
           minLength: 1
           maxLength: 160
-        workspaceId:
-          $ref: "#/components/schemas/Uuid"
         modelId:
           $ref: "#/components/schemas/VenomModelId"
         sourceCitationIds:
@@ -2878,6 +4817,19 @@ components:
             Favoring weights for the participating voices in verify and debate.
             Omitted means an even blend. Weights favor a voice; they never
             silence the others.
+        voiceModels:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/VenomVoiceModelPick"
+          description: >-
+            Explicit per-voice model choices for verify mode: which model plays
+            First take, Skeptic, and Evidence. Voices left out keep automatic
+            assignment, and a pick naming a model that is currently unusable
+            falls back to automatic assignment for that voice. First take and
+            Skeptic must land on different LLM providers — a model can't argue
+            itself — while Evidence is neutral and may share. Debate corners
+            are chosen through `blend` entry ids instead. Ignored in talk mode.
       required:
         - messages
         - projectId
@@ -2904,9 +4856,137 @@ components:
           minimum: 0
           maximum: 1
       required: [id, weight]
+    VenomVoiceModelPick:
+      type: object
+      additionalProperties: false
+      description: >-
+        Assigns one deliberation voice to a specific managed model. Opposing
+        voices must run on different LLM providers; the server rejects picks
+        that would make a model argue itself.
+      properties:
+        voiceId:
+          type: string
+          enum: [direct, skeptic, evidence]
+        modelId:
+          $ref: "#/components/schemas/VenomModelId"
+      required: [voiceId, modelId]
     VenomModelId:
       type: string
       enum: [venom-gpt, venom-claude, venom-gemini, venom-grok]
+    VenomChatFileKind:
+      type: string
+      enum: [upload, generated]
+      description: upload = host gave Venom a file; generated = Venom authored it.
+    VenomChatFileStatus:
+      type: string
+      enum: [pending, ready]
+    VenomChatFile:
+      type: object
+      additionalProperties: false
+      description: >-
+        A file exchanged through chat — uploaded by the host or generated by
+        Venom. Extracted text never leaves the server; clients fetch the
+        original bytes through the owner-checked download route.
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        contentType:
+          type: string
+          minLength: 1
+          maxLength: 100
+        size:
+          type: number
+          multipleOf: 1
+          minimum: 0
+          maximum: 10485760
+        kind:
+          $ref: "#/components/schemas/VenomChatFileKind"
+        status:
+          $ref: "#/components/schemas/VenomChatFileStatus"
+        textExtracted:
+          type: boolean
+          description: Whether readable text was extracted for model context.
+        createdAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+      required: [id, name, contentType, size, kind, status, textExtracted, createdAt]
+    VenomChatFileUploadRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        contentType:
+          type: string
+          minLength: 1
+          maxLength: 100
+        size:
+          type: number
+          multipleOf: 1
+          minimum: 1
+          maximum: 10485760
+      required: [name, contentType, size]
+    VenomChatFileUploadTicket:
+      type: object
+      additionalProperties: false
+      properties:
+        file:
+          $ref: "#/components/schemas/VenomChatFile"
+        uploadUrl:
+          type: string
+          maxLength: 8192
+        maxBytes:
+          type: number
+          const: 10485760
+      required: [file, uploadUrl, maxBytes]
+    VenomMessageAttachment:
+      type: object
+      additionalProperties: false
+      description: >-
+        Compact attachment stamp carried on a chat message. The id resolves to
+        a VenomChatFile; display metadata is denormalized so history renders
+        without a lookup. Attachment stamps ride the synced workspace blob, so
+        they must stay tiny.
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        contentType:
+          type: string
+          minLength: 1
+          maxLength: 100
+        size:
+          type: number
+          multipleOf: 1
+          minimum: 0
+          maximum: 10485760
+        kind:
+          $ref: "#/components/schemas/VenomChatFileKind"
+        thumbnail:
+          type: string
+          minLength: 1
+          maxLength: 24000
+          pattern: "^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$"
+          description: >-
+            Tiny inline preview (JPEG/PNG/WEBP data URL) for image
+            attachments, generated client-side at attach time. Bounded hard
+            because stamps ride the synced workspace blob; full image bytes
+            never sync.
+      required: [id, name, contentType, size, kind]
     VenomVoiceId:
       type: string
       enum: [direct, skeptic, evidence]
@@ -2966,8 +5046,35 @@ components:
           type: string
           minLength: 1
           maxLength: 160
+        accountHealth:
+          type: string
+          enum: [ok, unfunded]
+          description: >-
+            Account-level health observed on live provider calls. "unfunded"
+            means the credential is configured but the account behind it
+            cannot pay for replies (billing-class failures), so the model is
+            available yet not plainly Ready. Absent means no such evidence.
+        costTier:
+          $ref: "#/components/schemas/VenomModelCostTier"
       required:
         [id, provider, name, family, summary, available, availabilityText]
+    VenomModelCostTier:
+      type: string
+      enum: ["$", "$$", "$$$"]
+      description: >-
+        Coarse relative running cost of a managed model, for comparing models
+        against each other only. Deliberately never a price, currency amount,
+        or provider SKU.
+    VenomModelSelectionPolicy:
+      type: string
+      enum: [manual, auto-cheapest, auto-max-power]
+      description: >-
+        Account-level model selection policy. "manual" (and absent) keeps the
+        user's explicit model picks exactly as before. In the auto modes the
+        server chooses the serving models on every request — cheapest healthy
+        models for "auto-cheapest", the most capable for "auto-max-power" —
+        and keeps that choice current as availability and account health
+        change.
     VenomModelPreferences:
       type: object
       additionalProperties: false
@@ -2983,6 +5090,8 @@ components:
           $ref: "#/components/schemas/VenomModelId"
         activeModelId:
           $ref: "#/components/schemas/VenomModelId"
+        selectionPolicy:
+          $ref: "#/components/schemas/VenomModelSelectionPolicy"
         updatedAt:
           type: number
           multipleOf: 1
@@ -3139,6 +5248,299 @@ components:
         recorded:
           type: boolean
       required: [recorded]
+    VenomVoiceOutcomeRate:
+      type: object
+      additionalProperties: false
+      description: >-
+        A proportion together with the sample it was computed from. "settled"
+        counts only decisions whose outcome landed in one of the two buckets
+        being compared; "hits" is how many landed in the tracked bucket. rate
+        is hits/settled, or null when nothing has settled yet — no data is
+        never reported as 0%.
+      properties:
+        settled:
+          type: number
+          minimum: 0
+        hits:
+          type: number
+          minimum: 0
+        rate:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+      required: [settled, hits, rate]
+    VenomVoiceDecisionRateBlock:
+      type: object
+      additionalProperties: false
+      description: >-
+        Decision/outcome evidence for one slice of the log. quietRegret reads
+        silent non-wind-down decisions (re-ask within the follow-up window vs
+        stayed quiet); spokenInterruption reads respond/acknowledge non-wind-
+        down decisions (reply interrupted vs completed); windDownClean reads
+        wind-down-flagged decisions (session eased closed vs the user
+        re-engaging).
+      properties:
+        decisions:
+          type: number
+          minimum: 0
+        withOutcome:
+          type: number
+          minimum: 0
+        outcomeCoverage:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Share of decisions whose outcome was reported; 0 when the slice is empty.
+        decisionCounts:
+          type: object
+          additionalProperties: false
+          properties:
+            respond: { type: number, minimum: 0 }
+            acknowledge: { type: number, minimum: 0 }
+            silent: { type: number, minimum: 0 }
+          required: [respond, acknowledge, silent]
+        sourceCounts:
+          type: object
+          additionalProperties: false
+          properties:
+            heuristic: { type: number, minimum: 0 }
+            model: { type: number, minimum: 0 }
+            fallback: { type: number, minimum: 0 }
+          required: [heuristic, model, fallback]
+        windDownFlagged:
+          type: number
+          minimum: 0
+        quietRegret:
+          $ref: "#/components/schemas/VenomVoiceOutcomeRate"
+        spokenInterruption:
+          $ref: "#/components/schemas/VenomVoiceOutcomeRate"
+        windDownClean:
+          $ref: "#/components/schemas/VenomVoiceOutcomeRate"
+      required:
+        [
+          decisions,
+          withOutcome,
+          outcomeCoverage,
+          decisionCounts,
+          sourceCounts,
+          windDownFlagged,
+          quietRegret,
+          spokenInterruption,
+          windDownClean,
+        ]
+    VenomVoiceTalkativenessRates:
+      type: object
+      additionalProperties: false
+      properties:
+        talkativeness:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: chatty, balanced, or reserved (unrecognized historical values pass through verbatim).
+        rates:
+          $ref: "#/components/schemas/VenomVoiceDecisionRateBlock"
+      required: [talkativeness, rates]
+    VenomVoiceDecisionCell:
+      type: object
+      additionalProperties: false
+      description: >-
+        One observed talkativeness x decision x outcome combination and how
+        often it occurred. windDown and source ride along so goodbye cells
+        and judge-made cells can be read separately; outcome is "pending"
+        for decisions still awaiting their outcome report.
+      properties:
+        talkativeness:
+          type: string
+          minLength: 1
+          maxLength: 32
+        decision:
+          type: string
+          minLength: 1
+          maxLength: 32
+        windDown:
+          type: boolean
+        source:
+          type: string
+          minLength: 1
+          maxLength: 32
+        outcome:
+          type: string
+          minLength: 1
+          maxLength: 32
+        count:
+          type: number
+          minimum: 1
+      required: [talkativeness, decision, windDown, source, outcome, count]
+    VenomVoiceRestraintThresholds:
+      type: object
+      additionalProperties: false
+      description: >-
+        The heuristic thresholds in force when the summary was generated
+        (named constants in venom-voice-restraint.ts and the decision store),
+        echoed so aggregate numbers are always read against the rules that
+        produced them.
+      properties:
+        longUtteranceWords: { type: number, minimum: 1 }
+        backchannelMaxWords: { type: number, minimum: 1 }
+        shortGratitudeMaxWords: { type: number, minimum: 1 }
+        botAnswerMaxWords: { type: number, minimum: 1 }
+        shortTurnMaxWords: { type: number, minimum: 1 }
+        windDownTrailingShortTurns: { type: number, minimum: 0 }
+        retentionDays: { type: number, minimum: 1 }
+        maxRowsPerUser: { type: number, minimum: 1 }
+        transcriptPreviewChars: { type: number, minimum: 1 }
+      required:
+        [
+          longUtteranceWords,
+          backchannelMaxWords,
+          shortGratitudeMaxWords,
+          botAnswerMaxWords,
+          shortTurnMaxWords,
+          windDownTrailingShortTurns,
+          retentionDays,
+          maxRowsPerUser,
+          transcriptPreviewChars,
+        ]
+    VenomVoiceDecisionSummary:
+      type: object
+      additionalProperties: false
+      properties:
+        windowDays:
+          type: number
+          minimum: 1
+          maximum: 90
+        since:
+          type: string
+          format: date-time
+          description: Decisions created at or after this moment were aggregated.
+        generatedAt:
+          type: string
+          format: date-time
+        overall:
+          $ref: "#/components/schemas/VenomVoiceDecisionRateBlock"
+        byTalkativeness:
+          type: array
+          maxItems: 12
+          items:
+            $ref: "#/components/schemas/VenomVoiceTalkativenessRates"
+        cells:
+          type: array
+          maxItems: 400
+          description: Decisions x outcomes x talkativeness counts, deterministic order, observed combinations only.
+          items:
+            $ref: "#/components/schemas/VenomVoiceDecisionCell"
+        thresholds:
+          $ref: "#/components/schemas/VenomVoiceRestraintThresholds"
+      required:
+        [
+          windowDays,
+          since,
+          generatedAt,
+          overall,
+          byTalkativeness,
+          cells,
+          thresholds,
+        ]
+    VenomUsageSummary:
+      type: object
+      additionalProperties: false
+      required: [periodStart, periodEnd, totals, hasEstimates, daily, models]
+      properties:
+        periodStart:
+          type: string
+          format: date
+          description: First day of the summarized period (UTC), inclusive.
+        periodEnd:
+          type: string
+          format: date
+          description: End day of the summarized period (UTC), exclusive.
+        totals:
+          $ref: "#/components/schemas/VenomUsageTotals"
+        hasEstimates:
+          type: boolean
+          description: >-
+            True when any entry in the period is a flagged estimate rather
+            than provider-reported usage (interrupted streams, providers
+            that omit usage metadata, and voice audio legs).
+        daily:
+          type: array
+          maxItems: 31
+          description: Per-day spend, oldest first; days without usage are omitted.
+          items:
+            $ref: "#/components/schemas/VenomUsageDay"
+        models:
+          type: array
+          maxItems: 40
+          description: Per-model breakdown under Venom-branded names, highest spend first.
+          items:
+            $ref: "#/components/schemas/VenomUsageModelBreakdown"
+    VenomUsageTotals:
+      type: object
+      additionalProperties: false
+      required: [costUsd, requests, promptTokens, outputTokens]
+      properties:
+        costUsd:
+          type: number
+          minimum: 0
+          description: Dollars, rounded to micro-dollar precision.
+        requests:
+          type: number
+          minimum: 0
+        promptTokens:
+          type: number
+          minimum: 0
+        outputTokens:
+          type: number
+          minimum: 0
+    VenomUsageDay:
+      type: object
+      additionalProperties: false
+      required: [date, costUsd, requests]
+      properties:
+        date:
+          type: string
+          format: date
+        costUsd:
+          type: number
+          minimum: 0
+        requests:
+          type: number
+          minimum: 0
+    VenomUsageModelBreakdown:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          modelId,
+          modelName,
+          costUsd,
+          requests,
+          promptTokens,
+          outputTokens,
+          hasEstimates,
+        ]
+      properties:
+        modelId:
+          type: string
+          maxLength: 80
+          description: Venom-branded model alias — never a provider SKU.
+        modelName:
+          type: string
+          maxLength: 120
+        costUsd:
+          type: number
+          minimum: 0
+        requests:
+          type: number
+          minimum: 0
+        promptTokens:
+          type: number
+          minimum: 0
+        outputTokens:
+          type: number
+          minimum: 0
+        hasEstimates:
+          type: boolean
     KnowledgeConversation:
       type: object
       additionalProperties: false
@@ -3189,9 +5591,10 @@ components:
           description: >-
             When true, the server files the extracted insights into the
             signed-in user's ontology store and returns the touched concepts
-            in `filed`. Clients that omit this keep filing locally.
-        workspaceId:
-          $ref: "#/components/schemas/Uuid"
+            in `filed`. The server decides scope per cluster (personal,
+            a workspace the caller belongs to, or the private Unsorted
+            holding area); clients no longer pick a destination. Clients
+            that omit this keep filing locally.
     KnowledgeCandidate:
       type: object
       additionalProperties: false
@@ -3248,8 +5651,352 @@ components:
             created, strengthened, or re-linked, with canonical ids.
           items:
             $ref: "#/components/schemas/VenomKnowledgeCluster"
-        filedWorkspaceId:
+        filedScope:
+          $ref: "#/components/schemas/VenomFiledScope"
+        workspaceFilings:
+          type: array
+          maxItems: 8
+          description: >-
+            Workspaces the extraction auto-filed clusters into, one entry
+            per workspace, each carrying the ledger row id that lets the
+            author undo the filing. The clusters themselves are not
+            returned: workspace records never merge into personal state.
+          items:
+            $ref: "#/components/schemas/VenomWorkspaceFiling"
+    VenomWorkspaceFiling:
+      type: object
+      additionalProperties: false
+      required: [noticeId, workspaceId, workspaceName, labels]
+      properties:
+        noticeId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        workspaceId:
           $ref: "#/components/schemas/Uuid"
+        workspaceName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        labels:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+    VenomKnowledgeMoves:
+      type: object
+      additionalProperties: false
+      required: [notices, suggestions]
+      properties:
+        notices:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/VenomKnowledgeMoveNotice"
+        suggestions:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/VenomKnowledgeSuggestion"
+    VenomKnowledgeMoveNotice:
+      type: object
+      additionalProperties: false
+      description: >-
+        One automatic filing decision, kept author-private. `auto_file`
+        rows come from extraction filing straight into a workspace;
+        `refile` rows come from the re-filing pass, with `direction`
+        telling which way the concept moved.
+      required: [id, kind, status, labels, createdAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        kind:
+          type: string
+          enum: [auto_file, refile]
+        status:
+          type: string
+          enum: [active, undone]
+        direction:
+          type: string
+          enum: [unsorted_to_workspace, workspace_to_personal]
+        workspaceId:
+          type: [string, "null"]
+          maxLength: 64
+        workspaceName:
+          type: [string, "null"]
+          maxLength: 120
+        labels:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+        createdAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+    VenomKnowledgeSuggestion:
+      type: object
+      additionalProperties: false
+      description: >-
+        A pending personal-to-workspace sharing suggestion. Nothing moves
+        until the author accepts; accepting widens visibility to the
+        workspace's members.
+      required: [id, workspaceId, workspaceName, conceptId, label, createdAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        workspaceId:
+          $ref: "#/components/schemas/Uuid"
+        workspaceName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        conceptId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        label:
+          type: string
+          minLength: 1
+          maxLength: 200
+        createdAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+    VenomKnowledgeMoveUndo:
+      type: object
+      additionalProperties: false
+      required: [restored]
+      properties:
+        restored:
+          type: array
+          maxItems: 80
+          description: >-
+            Personal-store records the undo created or restored (for
+            auto-file undos these carry `unsorted: true`). Empty when the
+            undo only touched workspace stores.
+          items:
+            $ref: "#/components/schemas/VenomKnowledgeCluster"
+    VenomKnowledgeMoveResult:
+      type: object
+      additionalProperties: false
+      required: [workspaceId, workspaceName, conceptId, movedConceptId, merged]
+      properties:
+        workspaceId:
+          $ref: "#/components/schemas/Uuid"
+        workspaceName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        conceptId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        movedConceptId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        merged:
+          type: boolean
+    VenomKnowledgeSuggestionDismissal:
+      type: object
+      additionalProperties: false
+      required: [dismissed]
+      properties:
+        dismissed:
+          type: boolean
+    VenomUnsortedMoveInput:
+      type: object
+      additionalProperties: false
+      required: [workspaceId]
+      properties:
+        workspaceId:
+          $ref: "#/components/schemas/Uuid"
+    VenomFiledScope:
+      type: object
+      additionalProperties: false
+      description: >-
+        Where server-side filing landed. Conversations in company-shared
+        projects file into that company's Brain; everything else stays in
+        the personal ontology. When ownerType is "org" the concepts in
+        `filed` belong to the company layer and must not be merged into the
+        caller's personal clusters.
+      required: [ownerType]
+      properties:
+        ownerType:
+          type: string
+          enum: [user, org]
+        orgId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        orgName:
+          type: string
+          minLength: 1
+          maxLength: 80
+    VenomMasterContribution:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+    UpdateVenomMasterContributionInput:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+    VenomMasterConcept:
+      type: object
+      additionalProperties: false
+      description: >-
+        An aggregate concept in the anonymous master ontology. Carries a
+        label, a category, and a normalized prevalence weight only; it
+        exists only once the concept was seen across the minimum number of
+        distinct accounts or companies, and never carries names, excerpts,
+        or per-contributor traces.
+      required: [id, label, category, strength, x, y]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 160
+        label:
+          type: string
+          minLength: 1
+          maxLength: 64
+        category:
+          type: string
+          minLength: 1
+          maxLength: 32
+        strength:
+          type: number
+          minimum: 0
+          maximum: 1
+        x:
+          type: number
+        y:
+          type: number
+    VenomMasterLink:
+      type: object
+      additionalProperties: false
+      required: [a, b, strength]
+      properties:
+        a:
+          type: string
+          minLength: 1
+          maxLength: 160
+        b:
+          type: string
+          minLength: 1
+          maxLength: 160
+        strength:
+          type: number
+          minimum: 0
+          maximum: 1
+    VenomMasterBrain:
+      type: object
+      additionalProperties: false
+      required: [concepts, links]
+      properties:
+        concepts:
+          type: array
+          maxItems: 300
+          items:
+            $ref: "#/components/schemas/VenomMasterConcept"
+        links:
+          type: array
+          maxItems: 900
+          items:
+            $ref: "#/components/schemas/VenomMasterLink"
+    VenomMasterSuggestion:
+      type: object
+      additionalProperties: false
+      required: [label, category, strength, relatedToLabels]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 64
+        category:
+          type: string
+          minLength: 1
+          maxLength: 32
+        strength:
+          type: number
+          minimum: 0
+          maximum: 1
+        relatedToLabels:
+          type: array
+          maxItems: 3
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+    VenomMasterSuggestionList:
+      type: object
+      additionalProperties: false
+      required: [suggestions]
+      properties:
+        suggestions:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/VenomMasterSuggestion"
+    DismissVenomMasterSuggestionInput:
+      type: object
+      additionalProperties: false
+      required: [label]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 64
+    VenomMasterSuggestionDismissal:
+      type: object
+      additionalProperties: false
+      required: [dismissed]
+      properties:
+        dismissed:
+          type: boolean
+    ApplyVenomMasterSuggestionInput:
+      type: object
+      additionalProperties: false
+      required: [label]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 64
+        orgId:
+          type: string
+          minLength: 1
+          maxLength: 64
+    VenomMasterSuggestionApplied:
+      type: object
+      additionalProperties: false
+      required: [filedScope]
+      properties:
+        filedScope:
+          $ref: "#/components/schemas/VenomFiledScope"
+        filed:
+          type: array
+          maxItems: 80
+          description: >-
+            Present for personal filings only. Company concepts stay in the
+            company layer and are never mirrored into personal clusters.
+          items:
+            $ref: "#/components/schemas/VenomKnowledgeCluster"
     VenomOntologySearchResult:
       type: object
       additionalProperties: false
@@ -3348,7 +6095,7 @@ components:
     VenomIdentity:
       type: object
       additionalProperties: false
-      required: [userId, displayName, email, provider]
+      required: [userId, displayName, email, provider, superAdmin]
       properties:
         userId:
           type: string
@@ -3366,6 +6113,576 @@ components:
             "password". Null when the provider is unknown.
           type: [string, "null"]
           maxLength: 60
+        superAdmin:
+          description: >-
+            Whether this account holds the platform super admin role. Derived
+            server-side from the durable designation table on every request —
+            never from a client claim — and re-verified on the server for
+            every privileged call, so this flag only ever gates what the UI
+            offers to show.
+          type: boolean
+    VenomCanonAccessError:
+      type: object
+      additionalProperties: false
+      properties:
+        error: { type: string }
+        code:
+          type: string
+          # One opaque body for every refusal — non-admin callers, unknown
+          # teaching ids, malformed params — so nothing about the canon
+          # surface (or who holds the role) can be probed from outside it.
+          enum: [canon_access_denied]
+      required: [error, code]
+    VenomCanonDraft:
+      type: object
+      additionalProperties: false
+      description: >-
+        A distilled teaching awaiting confirmation. Nothing is stored until
+        the super admin commits it.
+      properties:
+        domain:
+          type: string
+          minLength: 1
+          maxLength: 48
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        principles:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items:
+            type: string
+            minLength: 1
+            maxLength: 360
+      required: [domain, title, principles]
+    VenomCanonTeaching:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, minLength: 1, maxLength: 60 }
+        domain:
+          type: string
+          minLength: 1
+          maxLength: 48
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        principles:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items:
+            type: string
+            minLength: 1
+            maxLength: 360
+        status:
+          type: string
+          enum: [active, retired]
+        taughtByUserId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        taughtByName:
+          description: Display label for the admin who taught it.
+          type: [string, "null"]
+          maxLength: 200
+        conversationTitle:
+          type: [string, "null"]
+          maxLength: 200
+        taughtAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        [
+          id,
+          domain,
+          title,
+          principles,
+          status,
+          taughtByUserId,
+          taughtByName,
+          conversationTitle,
+          taughtAt,
+          updatedAt,
+        ]
+    ProposeVenomCanonTeachingInput:
+      type: object
+      additionalProperties: false
+      properties:
+        message:
+          description: The super admin's chat message, verbatim.
+          type: string
+          minLength: 1
+          maxLength: 20000
+        conversationId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        conversationTitle:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required: [message]
+    ProposeVenomCanonTeachingResult:
+      type: object
+      additionalProperties: false
+      description: >-
+        teachIntent=false means the message reads as ordinary chat and the
+        client must fall back to a normal turn; the draft is present exactly
+        when teachIntent is true.
+      properties:
+        teachIntent: { type: boolean }
+        draft: { $ref: "#/components/schemas/VenomCanonDraft" }
+      required: [teachIntent]
+    CommitVenomCanonTeachingInput:
+      type: object
+      additionalProperties: false
+      properties:
+        domain:
+          type: string
+          minLength: 1
+          maxLength: 48
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        principles:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items:
+            type: string
+            minLength: 1
+            maxLength: 360
+        conversationId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        conversationTitle:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required: [domain, title, principles]
+    VenomCanonCommitResult:
+      type: object
+      additionalProperties: false
+      properties:
+        teaching: { $ref: "#/components/schemas/VenomCanonTeaching" }
+        acknowledgment:
+          description: Venom's in-voice confirmation line for the chat thread.
+          type: string
+          minLength: 1
+          maxLength: 500
+      required: [teaching, acknowledgment]
+    UpdateVenomCanonTeachingInput:
+      type: object
+      additionalProperties: false
+      description: At least one field must be present.
+      properties:
+        domain:
+          type: string
+          minLength: 1
+          maxLength: 48
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        principles:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items:
+            type: string
+            minLength: 1
+            maxLength: 360
+        status:
+          type: string
+          enum: [active, retired]
+    VenomCanonAdmin:
+      type: object
+      additionalProperties: false
+      properties:
+        userId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        name:
+          description: Display label from the identity record, if known.
+          type: [string, "null"]
+          maxLength: 200
+        grantedByUserId:
+          description: Null for the bootstrap designation.
+          type: [string, "null"]
+          maxLength: 120
+        grantedAt: { type: string, format: date-time }
+      required: [userId, name, grantedByUserId, grantedAt]
+    GrantVenomCanonAdminInput:
+      type: object
+      additionalProperties: false
+      properties:
+        userId:
+          description: Auth-provider account id to designate.
+          type: string
+          minLength: 1
+          maxLength: 120
+      required: [userId]
+    VenomOrgRole:
+      type: string
+      enum: [admin, member]
+    VenomOrg:
+      type: object
+      additionalProperties: false
+      required: [id, name, role, memberCount, createdAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        role:
+          $ref: "#/components/schemas/VenomOrgRole"
+        memberCount:
+          type: number
+          multipleOf: 1
+          minimum: 1
+        createdAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+    VenomOrgInviteForMe:
+      type: object
+      additionalProperties: false
+      required: [id, orgId, orgName, email, role, invitedByName, createdAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        orgId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        orgName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        email:
+          type: string
+          minLength: 3
+          maxLength: 320
+        role:
+          $ref: "#/components/schemas/VenomOrgRole"
+        invitedByName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        createdAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+    VenomOrgDirectory:
+      type: object
+      additionalProperties: false
+      required: [orgs, invites]
+      properties:
+        orgs:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/VenomOrg"
+        invites:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/VenomOrgInviteForMe"
+    CreateVenomOrgInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+    VenomOrgMember:
+      type: object
+      additionalProperties: false
+      required: [userId, name, role, isSelf]
+      properties:
+        userId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        email:
+          type: ["string", "null"]
+          maxLength: 320
+        role:
+          $ref: "#/components/schemas/VenomOrgRole"
+        isSelf:
+          type: boolean
+    VenomOrgPendingInvite:
+      type: object
+      additionalProperties: false
+      required: [id, email, role, invitedByName, createdAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        email:
+          type: string
+          minLength: 3
+          maxLength: 320
+        role:
+          $ref: "#/components/schemas/VenomOrgRole"
+        invitedByName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        createdAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+    VenomOrgMemberDirectory:
+      type: object
+      additionalProperties: false
+      required: [members, invites]
+      properties:
+        members:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/VenomOrgMember"
+        invites:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/VenomOrgPendingInvite"
+    InviteVenomOrgMemberInput:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          minLength: 3
+          maxLength: 320
+        role:
+          $ref: "#/components/schemas/VenomOrgRole"
+    InviteVenomOrgMemberResult:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [added, invited]
+        member:
+          $ref: "#/components/schemas/VenomOrgMember"
+        invite:
+          $ref: "#/components/schemas/VenomOrgPendingInvite"
+    VenomOrgSharedProject:
+      type: object
+      additionalProperties: false
+      required:
+        [projectId, orgId, name, description, accent, sharedByUserId, sharedByName, sharedAt, updatedAt]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        orgId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 1000
+        accent:
+          type: string
+          maxLength: 32
+        sharedByUserId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sharedByName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        sharedAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        updatedAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+    VenomOrgProjectList:
+      type: object
+      additionalProperties: false
+      required: [projects]
+      properties:
+        projects:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/VenomOrgSharedProject"
+    ShareVenomOrgProjectInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 1000
+        accent:
+          type: string
+          maxLength: 32
+    VenomOrgSource:
+      type: object
+      additionalProperties: false
+      required:
+        [id, orgId, provider, name, url, summary, context, citations, connectedByUserId, connectedByName, syncedAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 160
+        orgId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        provider:
+          type: string
+          enum: [github, website]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 300
+        url:
+          type: string
+          maxLength: 2048
+        summary:
+          type: string
+          maxLength: 1000
+        context:
+          type: string
+          minLength: 1
+          maxLength: 8000
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/SourceCitation"
+        connectedByUserId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        connectedByName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        syncedAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+    VenomOrgSourceList:
+      type: object
+      additionalProperties: false
+      required: [sources]
+      properties:
+        sources:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/VenomOrgSource"
+    VenomOrgAuditEntry:
+      type: object
+      additionalProperties: false
+      required: [id, action, conceptId, conceptLabel, actorUserId, actorName, createdAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        action:
+          type: string
+          enum: [promoted]
+        conceptId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        conceptLabel:
+          type: string
+          minLength: 1
+          maxLength: 200
+        actorUserId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        actorName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        createdAt:
+          type: number
+          multipleOf: 1
+          minimum: 0
+    VenomOrgBrain:
+      type: object
+      additionalProperties: false
+      required: [orgId, orgName, concepts, audit]
+      properties:
+        orgId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        orgName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        concepts:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/VenomKnowledgeCluster"
+        audit:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/VenomOrgAuditEntry"
+    PromoteVenomConceptInput:
+      type: object
+      additionalProperties: false
+      required: [concept]
+      properties:
+        concept:
+          $ref: "#/components/schemas/VenomKnowledgeCluster"
+    PromoteVenomConceptResult:
+      type: object
+      additionalProperties: false
+      required: [concept]
+      properties:
+        concept:
+          $ref: "#/components/schemas/VenomKnowledgeCluster"
     VenomNoteInput:
       type: object
       additionalProperties: false
@@ -3741,6 +7058,20 @@ components:
           maxItems: 40
           items:
             $ref: "#/components/schemas/VenomKanbanField"
+        orgId:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: >-
+            Present when the project is shared with a company. On the
+            sharer's device it marks their own project as company-shared; on
+            other members' devices it marks the local mirror.
+        orgMirror:
+          type: boolean
+          description: >-
+            True when this project entry is a local mirror of a project
+            another member shared with the company, rather than a project
+            this account created.
       required: [id, name, description, accent, sourceCount, updatedAt, tasks, boardStages, fieldDefinitions]
     VenomDeliberationTake:
       type: object
@@ -3823,6 +7154,15 @@ components:
           minLength: 1
           maxLength: 80
           description: Display name of the debate voice behind this assistant turn.
+        attachments:
+          type: array
+          maxItems: 5
+          description: >-
+            Files carried by this message — uploads on user turns, generated
+            files on assistant turns. Optional, so older clients and existing
+            history remain valid.
+          items:
+            $ref: "#/components/schemas/VenomMessageAttachment"
       required: [id, role, content, createdAt, status]
     VenomConversation:
       type: object
@@ -3857,8 +7197,17 @@ components:
           multipleOf: 1
           minimum: 0
           description: >-
-            When the response mode or blend last changed on any device; the
-            newer block wins in cross-device merges.
+            When the response mode, blend, or voice picks last changed on any
+            device; the newer block wins in cross-device merges.
+        voiceModels:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/VenomVoiceModelPick"
+          description: >-
+            Per-conversation verify voice assignments. Part of the response-mode
+            preference block: it merges on modeUpdatedAt with mode and blend so
+            a pick made on one device survives another device's snapshot merge.
       required: [id, title, projectId, updatedAt, messages]
     VenomConversationBlend:
       type: object
@@ -3884,6 +7233,22 @@ components:
             minimum: 0
             maximum: 1
       required: [corners, weights]
+    VenomRemoteConversation:
+      type: object
+      additionalProperties: false
+      description: >-
+        A conversation served from the synced workspace snapshot for
+        read-only viewing. projectName is resolved against the snapshot's own
+        project list because the requesting device may not hold the project
+        either. Heavy per-message internals (deliberation transcripts) are
+        omitted; the payload is the readable exchange.
+      properties:
+        conversation:
+          $ref: "#/components/schemas/VenomConversation"
+        projectName:
+          type: [string, "null"]
+          maxLength: 200
+      required: [conversation, projectName]
     VenomKnowledgeSource:
       type: object
       additionalProperties: false
@@ -3930,6 +7295,14 @@ components:
           type: [number, "null"]
           multipleOf: 1
           minimum: 0
+        sensitive:
+          description: >-
+            Sensitivity lock on this evidence entry. Server-managed on
+            workspace-tier knowledge: set only through the sensitivity
+            endpoints, never through client snapshots. Locked evidence stays
+            visible to members but is withheld from exports when the
+            workspace's export policy forbids sensitive content leaving.
+          type: boolean
       required:
         [conversationId, projectId, conversationTitle, messageIds, excerpt, updatedAt]
     VenomKnowledgeCluster:
@@ -3985,6 +7358,33 @@ components:
           maxItems: 8
           items:
             $ref: "#/components/schemas/VenomKnowledgeSource"
+        sensitive:
+          description: >-
+            Sensitivity lock on the whole cluster. Server-managed on
+            workspace-tier knowledge: set only through the sensitivity
+            endpoints, never through client snapshots. Locked clusters stay
+            visible to members but are withheld from exports when the
+            workspace's export policy forbids sensitive content leaving.
+          type: boolean
+        adminOnly:
+          description: >-
+            Admin-only restriction on the whole cluster. Set only by
+            workspace admins through the restriction endpoint. Restricted
+            clusters are filtered out of member reads, member chat context,
+            member citations, and member exports server-side, so a non-admin
+            response never carries a restricted cluster at all — when this
+            flag is true, the reader is an admin.
+          type: boolean
+        unsorted:
+          description: >-
+            Author-private Unsorted holding state, used when scope
+            classification was not confident enough to file the cluster.
+            Lives only on personal-tier records: it syncs across the
+            author's own devices but never appears in workspace reads or
+            workspace exports. Cleared when the concept is clarified —
+            by a confident re-extraction, an automatic re-file, or the
+            author sorting it by hand.
+          type: boolean
       required:
         [id, projectId, label, category, strength, x, y, links, summary, mentionCount, lastUpdatedAt, sources]
     VenomDeletionMarker:
@@ -4151,6 +7551,218 @@ components:
     Uuid:
       type: string
       pattern: "^[0-9a-fA-F-]{36}$"
+    VenomAppSharingState:
+      type: object
+      additionalProperties: false
+      description: >-
+        Owner-only view of an app's public sharing state. The slug is stable
+        for the lifetime of the app: disabling sharing keeps it reserved so
+        re-enabling restores the same link. shareUrl/embedUrl/embedSnippet are
+        server-composed from the request origin and are null while sharing is
+        disabled.
+      required:
+        - appId
+        - enabled
+        - slug
+        - shareUrl
+        - embedUrl
+        - embedSnippet
+        - publicStatus
+        - liveIterationNumber
+        - livePublishedAt
+      properties:
+        appId: { $ref: "#/components/schemas/Uuid" }
+        enabled:
+          type: boolean
+        slug:
+          type: [string, "null"]
+          maxLength: 60
+        shareUrl:
+          type: [string, "null"]
+          maxLength: 2048
+        embedUrl:
+          type: [string, "null"]
+          maxLength: 2048
+        embedSnippet:
+          type: [string, "null"]
+          maxLength: 4096
+        publicStatus:
+          type: string
+          enum: [live, unavailable]
+        liveIterationNumber:
+          oneOf:
+            - type: number
+              multipleOf: 1
+              minimum: 1
+            - type: "null"
+        livePublishedAt:
+          type: [string, "null"]
+          format: date-time
+    VenomAppSharingUpdate:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+    VenomAppAiOverview:
+      type: object
+      additionalProperties: false
+      description: >-
+        Owner-only view of an app's whitelabeled AI: month-to-date usage from
+        the canonical ledger, spend controls, and a summary of the gateway
+        credential. Never contains the credential secret, provider names, or
+        per-token rates — costs are aggregated dollars and models are Venom
+        aliases only.
+      required:
+        - appId
+        - paused
+        - monthlyCapUsd
+        - safetyCapUsd
+        - credential
+        - usage
+        - ownerMonthUsd
+      properties:
+        appId: { $ref: "#/components/schemas/Uuid" }
+        paused:
+          type: boolean
+        monthlyCapUsd:
+          oneOf:
+            - type: number
+              minimum: 0
+            - type: "null"
+        safetyCapUsd:
+          type: number
+          minimum: 0
+        credential:
+          oneOf:
+            - $ref: "#/components/schemas/VenomAppAiCredentialSummary"
+            - type: "null"
+        usage:
+          $ref: "#/components/schemas/VenomAppAiUsage"
+        ownerMonthUsd:
+          type: number
+          minimum: 0
+    VenomAppAiCredentialSummary:
+      type: object
+      additionalProperties: false
+      description: >-
+        Display-safe credential summary. The prefix identifies the key for
+        the owner; the secret itself is only ever delivered into the
+        provisioned app's secret storage.
+      required: [displayPrefix, createdAt, lastUsedAt, delivered]
+      properties:
+        displayPrefix:
+          type: string
+          maxLength: 20
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: [string, "null"]
+          format: date-time
+        delivered:
+          type: boolean
+    VenomAppAiUsage:
+      type: object
+      additionalProperties: false
+      required:
+        - periodStart
+        - periodEnd
+        - costUsd
+        - requests
+        - promptTokens
+        - outputTokens
+        - hasEstimates
+        - models
+      properties:
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        costUsd:
+          type: number
+          minimum: 0
+        requests:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        promptTokens:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        outputTokens:
+          type: number
+          multipleOf: 1
+          minimum: 0
+        hasEstimates:
+          type: boolean
+        models:
+          type: array
+          maxItems: 40
+          items:
+            $ref: "#/components/schemas/VenomAppAiModelUsage"
+    VenomAppAiModelUsage:
+      type: object
+      additionalProperties: false
+      required: [modelId, modelName, costUsd, requests]
+      properties:
+        modelId:
+          type: string
+          maxLength: 80
+        modelName:
+          type: string
+          maxLength: 120
+        costUsd:
+          type: number
+          minimum: 0
+        requests:
+          type: number
+          multipleOf: 1
+          minimum: 0
+    VenomAppAiSettingsUpdate:
+      type: object
+      additionalProperties: false
+      description: >-
+        Full settings write: both fields are explicit on every update. The
+        cap is dollars per calendar month (UTC); null removes the owner cap
+        while the global safety cap keeps applying.
+      required: [monthlyCapUsd, paused]
+      properties:
+        monthlyCapUsd:
+          oneOf:
+            - type: number
+              minimum: 0.01
+              maximum: 100000
+            - type: "null"
+        paused:
+          type: boolean
+    VenomPublicAppShare:
+      type: object
+      additionalProperties: false
+      description: >-
+        Public resolution of a share slug. Never contains owner identity,
+        provider identifiers, or release internals. All unavailable states
+        (unknown slug, sharing disabled, no healthy published release) are
+        indistinguishable.
+      required: [status, appName, viewMode, frameUrl]
+      properties:
+        status:
+          type: string
+          enum: [live, unavailable]
+        appName:
+          type: [string, "null"]
+          maxLength: 120
+        viewMode:
+          oneOf:
+            - type: string
+              enum: [frame, redirect]
+            - type: "null"
+        frameUrl:
+          type: [string, "null"]
+          maxLength: 2048
     VenomSopLifecycle:
       type: string
       enum: [draft, active, archived]
@@ -4195,6 +7807,12 @@ components:
         userId: { type: string, minLength: 1, maxLength: 160 }
         role: { $ref: "#/components/schemas/SharedWorkspaceRole" }
       required: [userId]
+    SharedWorkspaceMemberRoleInput:
+      type: object
+      additionalProperties: false
+      properties:
+        role: { $ref: "#/components/schemas/SharedWorkspaceRole" }
+      required: [role]
     SharedWorkspaceAccessError:
       type: object
       additionalProperties: false
@@ -4202,7 +7820,12 @@ components:
         error: { type: string }
         code:
           type: string
-          enum: [workspace_access_denied]
+          # `workspace_access_denied` means the caller is not a member (or the
+          # workspace does not exist) — clients evict every cached read for the
+          # workspace. `workspace_admin_required` means the caller IS a member
+          # but lacks the admin role; clients must NOT treat it as access loss,
+          # so a demotion never feels like being kicked out.
+          enum: [workspace_access_denied, workspace_admin_required]
       required: [error, code]
     SharedWorkspaceKnowledge:
       type: object
@@ -4236,9 +7859,47 @@ components:
           type: [number, "null"]
           multipleOf: 1
           minimum: 1
+        sensitive:
+          description: >-
+            Sensitivity lock. Any member may set or clear it; locked SOPs
+            stay visible inside the workspace but are withheld from exports
+            when the workspace's export policy forbids sensitive content
+            leaving.
+          type: boolean
+        adminOnly:
+          description: >-
+            Admin-only restriction. Set only by workspace admins through the
+            restriction endpoint. Restricted SOPs are filtered out of member
+            reads, member chat context, and member exports server-side, so a
+            non-admin response never carries one — when this flag is true,
+            the reader is an admin.
+          type: boolean
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
       required: [id, title, lifecycle, category, tags, provenance, content, activeRevisionId, activeRevisionNumber, createdAt, updatedAt]
+    SharedWorkspaceSettings:
+      type: object
+      additionalProperties: false
+      properties:
+        allowSensitiveExport:
+          description: >-
+            Export policy. True (the default) lets exports include items
+            marked sensitive; false makes the server exclude them from every
+            export and state how many were withheld.
+          type: boolean
+      required: [allowSensitiveExport]
+    SensitivityUpdateInput:
+      type: object
+      additionalProperties: false
+      properties:
+        sensitive: { type: boolean }
+      required: [sensitive]
+    RestrictionUpdateInput:
+      type: object
+      additionalProperties: false
+      properties:
+        adminOnly: { type: boolean }
+      required: [adminOnly]
     VenomSopContent:
       type: object
       additionalProperties: false
@@ -4580,6 +8241,76 @@ components:
           minimum: 0
       required: [count]
     CommunityNotificationMarkAllResult:
+      type: object
+      additionalProperties: false
+      properties:
+        marked:
+          type: number
+          multipleOf: 1
+          minimum: 0
+      required: [marked]
+    VenomSourceSyncAlert:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-fA-F-]{36}$"
+        sourceId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        projectId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        provider:
+          type: string
+          enum: [github, website]
+        sourceName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        consecutiveFailures:
+          type: number
+          multipleOf: 1
+          minimum: 1
+        lastError:
+          type: string
+          maxLength: 300
+        firstFailedAt:
+          type: string
+          format: date-time
+        lastFailedAt:
+          type: string
+          format: date-time
+        readAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        [
+          id,
+          sourceId,
+          projectId,
+          provider,
+          sourceName,
+          consecutiveFailures,
+          lastError,
+          firstFailedAt,
+          lastFailedAt,
+          readAt,
+        ]
+    VenomSourceSyncAlertList:
+      type: object
+      additionalProperties: false
+      properties:
+        alerts:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/VenomSourceSyncAlert"
+      required: [alerts]
+    VenomSourceSyncAlertMarkAllResult:
       type: object
       additionalProperties: false
       properties:

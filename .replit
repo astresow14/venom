@@ -28,16 +28,28 @@ args = "scripts-test"
 task = "workflow.run"
 args = "api-server-test"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "desktop-bundle-budget"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "desktop-auth-e2e"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "codegen-freshness"
+
 [[workflows.workflow]]
 name = "test"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/venom run test"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/venom run test && pnpm --filter @workspace/venom-desktop run test && pnpm --filter @workspace/venom-desktop run test:web"
 
 [[workflows.workflow]]
 name = "scripts-test"
@@ -57,6 +69,39 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/api-server run test"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "desktop-bundle-budget"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/venom-desktop run check:bundle-budget"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "desktop-auth-e2e"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/venom-desktop run test:e2e:auth:validation"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "codegen-freshness"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-spec run check:freshness"
 
 [workflows.workflow.metadata]
 isValidation = true

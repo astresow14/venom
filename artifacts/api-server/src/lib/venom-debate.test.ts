@@ -15,22 +15,37 @@ import {
   type PlannedDebateVoice,
 } from "./venom-debate";
 import { buildSynthesisMessages } from "./venom-deliberation";
-import { type VenomMessage } from "./venom-provider-adapters";
+import {
+  PROVIDER_ACCOUNT_ERROR_MESSAGE,
+  ProviderError,
+  type VenomMessage,
+} from "./venom-provider-adapters";
 import type { VenomManagedModel } from "./venom-models";
+
+/** Production provider layout: every managed model on its own provider. */
+const MODEL_PROVIDERS: Record<VenomManagedModel["id"], VenomManagedModel["provider"]> = {
+  "venom-gpt": "openai",
+  "venom-claude": "anthropic",
+  "venom-gemini": "gemini",
+  "venom-grok": "openrouter",
+};
 
 function catalogEntry(
   id: VenomManagedModel["id"],
   name: string,
   available: boolean,
+  accountHealth?: VenomManagedModel["accountHealth"],
+  provider?: VenomManagedModel["provider"],
 ): VenomManagedModel {
   return {
     id,
-    provider: "openai",
+    provider: provider ?? MODEL_PROVIDERS[id],
     name,
     family: "GPT",
     summary: "",
     available,
     availabilityText: available ? "Ready" : "Not configured",
+    accountHealth,
   } as VenomManagedModel;
 }
 
@@ -156,6 +171,57 @@ test("three available providers debate as themselves, anchor first", () => {
   assert.ok(voices.every((voice) => voice.stance === null));
 });
 
+test("the automatic model trio never seats a billing-dead account", () => {
+  const catalog = [
+    catalogEntry("venom-gpt", "Venom GPT", true),
+    catalogEntry("venom-claude", "Venom Claude", true, "unfunded"),
+    catalogEntry("venom-gemini", "Venom Gemini", true),
+    catalogEntry("venom-grok", "Venom Grok", true),
+  ];
+  const voices = planDebateVoices("venom-gpt", catalog);
+  assert.deepEqual(
+    voices.map((voice) => voice.id),
+    ["venom-gpt", "venom-gemini", "venom-grok"],
+  );
+});
+
+test("an explicitly requested corner keeps its model even when the account is billing-dead", () => {
+  const catalog = [
+    catalogEntry("venom-gpt", "Venom GPT", true),
+    catalogEntry("venom-claude", "Venom Claude", true, "unfunded"),
+    catalogEntry("venom-gemini", "Venom Gemini", true),
+    catalogEntry("venom-grok", "Venom Grok", false),
+  ];
+  // The user's stated corners win: they get a warned model and a clear
+  // in-chat account error, never a silent reroute.
+  const voices = planDebateVoices("venom-gpt", catalog, [
+    "venom-claude",
+    "venom-gpt",
+    "venom-gemini",
+  ]);
+  assert.deepEqual(
+    voices.map((voice) => voice.id),
+    ["venom-claude", "venom-gpt", "venom-gemini"],
+  );
+});
+
+test("personas ride healthy models when billing deaths thin the field", () => {
+  const catalog = [
+    catalogEntry("venom-gpt", "Venom GPT", true),
+    catalogEntry("venom-claude", "Venom Claude", true, "unfunded"),
+    catalogEntry("venom-gemini", "Venom Gemini", true),
+    catalogEntry("venom-grok", "Venom Grok", false),
+  ];
+  // Only two healthy providers remain, so the plan falls back to personas —
+  // and the billing-dead model never appears among the assignments.
+  const voices = planDebateVoices("venom-gpt", catalog);
+  assert.deepEqual(
+    voices.map((voice) => voice.id),
+    ["direct", "skeptic", "evidence"],
+  );
+  assert.ok(voices.every((voice) => voice.modelId !== "venom-claude"));
+});
+
 test("a requested trio of available models is honored in order", () => {
   const voices = planDebateVoices("venom-gpt", FULL_CATALOG, [
     "venom-gemini",
@@ -166,6 +232,72 @@ test("a requested trio of available models is honored in order", () => {
     voices.map((voice) => voice.id),
     ["venom-gemini", "venom-claude", "venom-gpt"],
   );
+});
+
+test("a duplicated corner is rejected — a model can't argue itself", () => {
+  assert.throws(
+    () =>
+      planDebateVoices("venom-gpt", FULL_CATALOG, [
+        "venom-gpt",
+        "venom-gpt",
+        "venom-claude",
+      ]),
+    (error: unknown) =>
+      error instanceof InvalidDebateParticipants &&
+      /Venom GPT can't argue itself/.test(error.message),
+  );
+});
+
+test("two corners on one provider are rejected via provider metadata, not id equality", () => {
+  const catalog = [
+    catalogEntry("venom-gpt", "Venom GPT", true),
+    catalogEntry("venom-claude", "Venom Claude", true),
+    // Fabricate a second Anthropic-backed model: distinct ids, same account.
+    catalogEntry("venom-gemini", "Venom Gemini", true, undefined, "anthropic"),
+    catalogEntry("venom-grok", "Venom Grok", false),
+  ];
+  assert.throws(
+    () =>
+      planDebateVoices("venom-gpt", catalog, [
+        "venom-gpt",
+        "venom-claude",
+        "venom-gemini",
+      ]),
+    (error: unknown) =>
+      error instanceof InvalidDebateParticipants &&
+      /Venom Claude and Venom Gemini both run on Anthropic/.test(error.message),
+  );
+});
+
+test("automatic planning spreads corners across providers when it can", () => {
+  const catalog = [
+    catalogEntry("venom-gpt", "Venom GPT", true),
+    // A second OpenAI-backed model earlier in catalog order than the
+    // distinct-provider alternatives.
+    catalogEntry("venom-claude", "Venom Claude", true, undefined, "openai"),
+    catalogEntry("venom-gemini", "Venom Gemini", true),
+    catalogEntry("venom-grok", "Venom Grok", true),
+  ];
+  const voices = planDebateVoices("venom-gpt", catalog);
+  assert.deepEqual(
+    voices.map((voice) => voice.id),
+    ["venom-gpt", "venom-gemini", "venom-grok"],
+  );
+});
+
+test("too few distinct providers: automatic planning fills in catalog order, never rejects", () => {
+  const catalog = [
+    catalogEntry("venom-gpt", "Venom GPT", true, undefined, "openai"),
+    catalogEntry("venom-claude", "Venom Claude", true, undefined, "openai"),
+    catalogEntry("venom-gemini", "Venom Gemini", true, undefined, "openai"),
+    catalogEntry("venom-grok", "Venom Grok", false),
+  ];
+  const voices = planDebateVoices("venom-gpt", catalog);
+  assert.deepEqual(
+    voices.map((voice) => voice.id),
+    ["venom-gpt", "venom-claude", "venom-gemini"],
+  );
+  assert.ok(voices.every((voice) => voice.stance === null));
 });
 
 test("an unavailable requested model is rejected, never silently rerouted", () => {
@@ -504,6 +636,47 @@ test("a round where every voice fails throws a retryable error", async () => {
   });
   await assert.rejects(outcome, (error: unknown) => {
     assert.ok(error instanceof Error);
+    assert.match(error.message, /No debate voice completed a turn/);
+    return true;
+  });
+});
+
+function billingDeadError() {
+  return Object.assign(
+    new Error(
+      '400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}',
+    ),
+    { status: 400 },
+  );
+}
+
+test("a round where every voice dies billing-class names the account problem", async () => {
+  const { outcome } = collectDebate({
+    "Venom GPT": billingDeadError(),
+    "Venom Claude": billingDeadError(),
+    "Venom Gemini": billingDeadError(),
+  });
+  await assert.rejects(outcome, (error: unknown) => {
+    assert.ok(error instanceof ProviderError);
+    assert.equal(error.kind, "account_billing");
+    assert.equal(error.retryable, false);
+    assert.equal(error.message, PROVIDER_ACCOUNT_ERROR_MESSAGE);
+    // The provider's own wording never leaves the server.
+    assert.doesNotMatch(error.message, /credit balance|Anthropic/i);
+    return true;
+  });
+});
+
+test("a mixed all-failed round stays a generic retryable error", async () => {
+  const { outcome } = collectDebate({
+    "Venom GPT": billingDeadError(),
+    "Venom Claude": new Error("dead"),
+    "Venom Gemini": new Error("dead"),
+  });
+  await assert.rejects(outcome, (error: unknown) => {
+    assert.ok(error instanceof ProviderError);
+    assert.equal(error.kind, "generic");
+    assert.equal(error.retryable, true);
     assert.match(error.message, /No debate voice completed a turn/);
     return true;
   });

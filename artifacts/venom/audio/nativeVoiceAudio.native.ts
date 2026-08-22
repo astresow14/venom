@@ -2,12 +2,22 @@
  * nativeVoiceAudio.native.ts — Expo audio backend for iOS/Android builds.
  *
  * Same interface as the web backend, implemented with expo-audio:
- * - Capture: AudioRecorder with metering; the shared speech detector decides
- *   end-of-speech from metering levels, then the recorded file (m4a/mp4) is
- *   read as base64 and deleted. The server transcodes containers via ffmpeg.
+ * - Capture: AudioRecorder with metering; the user explicitly stops each
+ *   recording, then its file (m4a/mp4) is read as base64 and deleted. The
+ *   server transcodes containers via ffmpeg.
  * - Playback: streamed PCM16 chunks are grouped into short WAV segments in
  *   the cache directory and played back-to-back, so speech starts before the
  *   full reply exists. Segment files are deleted as they finish.
+ *
+ * Device-specific behavior handled here (not needed on web):
+ * - iOS routes play-and-record audio to the quiet earpiece receiver, and
+ *   expo-audio never adds `.defaultToSpeaker`. The session therefore drops
+ *   `allowsRecording` while capture is paused (exactly the transcribe →
+ *   think → speak window), which puts playback on the loud speaker, then
+ *   re-enters record mode when listening resumes.
+ * - Diagnostics: in dev builds every notable transition logs with a
+ *   `[voice-native]` prefix. Expo Go forwards these to Metro, so a phone
+ *   session leaves a tunable trace in the workflow console.
  *
  * Metro resolves this file only for native platforms; web bundles use the
  * stub in nativeVoiceAudio.ts.
@@ -15,16 +25,15 @@
 
 import {
   AudioModule,
-  RecordingPresets,
+  AudioQuality,
+  IOSOutputFormat,
   createAudioPlayer,
   setAudioModeAsync,
+  type AudioMode,
   type AudioPlayer,
+  type RecordingOptions,
 } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
-import {
-  createSpeechDetector,
-  type SpeechDetector,
-} from '../context/voiceActivity.ts';
 import type {
   VoiceAudioAdapter,
   VoiceCaptureEvent,
@@ -34,9 +43,12 @@ import type {
 } from './types.ts';
 
 const METER_INTERVAL_MS = 100;
-/** Cut a playable WAV segment once this much audio has buffered. */
-const SEGMENT_SECONDS = 1.6;
 
+/**
+ * WAV segment sizes: the first cut is small so the reply starts fast, later
+ * cuts grow so steady-state playback has fewer seams to gap on.
+ */
+const SEGMENT_SCHEDULE_SECONDS = [0.9, 1.6, 2.4] as const;
 const BASE64_ALPHABET =
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
@@ -112,11 +124,48 @@ function createNativeCapture(
 ): VoiceCaptureHandle {
   let recorder: InstanceType<typeof AudioModule.AudioRecorder> | null = null;
   let meterTimer: ReturnType<typeof setInterval> | null = null;
-  let detector: SpeechDetector = createSpeechDetector();
   let paused = false;
   let stopped = false;
   /** Serializes stop/restart transitions of the underlying recorder. */
   let transition: Promise<void> = Promise.resolve();
+
+  // Aggregated once-per-second level trace for on-device tuning.
+  let statWindow = {
+    startedAt: 0,
+    count: 0,
+    minDb: Infinity,
+    maxDb: -Infinity,
+    minLevel: Infinity,
+    maxLevel: 0,
+  };
+
+  const traceLevels = (dbfs: number | undefined, level: number, atMs: number) => {
+    if (!__DEV__) return;
+    const db = typeof dbfs === 'number' && Number.isFinite(dbfs) ? dbfs : -160;
+    if (statWindow.startedAt === 0) statWindow.startedAt = atMs;
+    statWindow.count += 1;
+    statWindow.minDb = Math.min(statWindow.minDb, db);
+    statWindow.maxDb = Math.max(statWindow.maxDb, db);
+    statWindow.minLevel = Math.min(statWindow.minLevel, level);
+    statWindow.maxLevel = Math.max(statWindow.maxLevel, level);
+    if (atMs - statWindow.startedAt >= 1000) {
+      voiceLog(
+        `levels 1s: n=${statWindow.count} db ${statWindow.minDb.toFixed(
+          1,
+        )}..${statWindow.maxDb.toFixed(1)} lvl ${statWindow.minLevel.toFixed(
+          3,
+          )}..${statWindow.maxLevel.toFixed(3)}`,
+      );
+      statWindow = {
+        startedAt: atMs,
+        count: 0,
+        minDb: Infinity,
+        maxDb: -Infinity,
+        minLevel: Infinity,
+        maxLevel: 0,
+      };
+    }
+  };
 
   const queueTransition = (work: () => Promise<void>) => {
     transition = transition.then(work).catch(() => {});
@@ -131,17 +180,26 @@ function createNativeCapture(
 
   const finishUtterance = () =>
     queueTransition(async () => {
-      if (!recorder || stopped) return;
+      if (!recorder || stopped || paused) return;
+      paused = true;
       const durationMs = recorder.getStatus().durationMillis ?? 0;
       await recorder.stop();
       const uri = recorder.uri;
       if (uri) {
         try {
           const audioBase64 = await new File(uri).base64();
-          if (audioBase64 && !stopped && !paused) {
+          if (audioBase64 && !stopped) {
+            await setAudioModeAsync(SPEAK_AUDIO_MODE).catch(() => {});
+            voiceLog('audio mode -> speak');
+            voiceLog(
+              `recording sent: ${durationMs}ms recorded, ${Math.round(
+                audioBase64.length / 1024,
+              )}KB base64`,
+            );
             onEvent({ type: 'utterance', audioBase64, durationMs });
           }
         } catch {
+          voiceLog('utterance read failed');
           onEvent({
             type: 'error',
             code: 'capture_failed',
@@ -151,7 +209,6 @@ function createNativeCapture(
           deleteQuietly(uri);
         }
       }
-      if (!stopped && !paused) await beginRecording();
     });
 
   const tick = () => {
@@ -159,13 +216,8 @@ function createNativeCapture(
     const status = recorder.getStatus();
     const level = meteringToLevel(status.metering);
     const atMs = Date.now();
+    traceLevels(status.metering, level, atMs);
     onEvent({ type: 'level', level, atMs });
-    const transitionEvent = detector.push(level, atMs);
-    if (transitionEvent === 'speech-start') {
-      onEvent({ type: 'speech-start' });
-    } else if (transitionEvent === 'speech-end') {
-      void finishUtterance();
-    }
   };
 
   return {
@@ -173,6 +225,9 @@ function createNativeCapture(
       if (recorder) return;
       stopped = false;
       const permission = await AudioModule.requestRecordingPermissionsAsync();
+      voiceLog(
+        `mic permission: granted=${permission.granted} status=${permission.status}`,
+      );
       if (!permission.granted) {
         onEvent({
           type: 'error',
@@ -182,19 +237,17 @@ function createNativeCapture(
         return;
       }
       try {
-        await setAudioModeAsync({
-          allowsRecording: true,
-          playsInSilentMode: true,
-        });
+        await setAudioModeAsync(RECORD_AUDIO_MODE);
+        voiceLog('audio mode -> record');
         recorder = new AudioModule.AudioRecorder({
-          ...RecordingPresets.HIGH_QUALITY,
+          ...VOICE_RECORDING_OPTIONS,
           isMeteringEnabled: true,
         });
-        detector = createSpeechDetector();
         paused = false;
         await queueTransition(beginRecording);
         meterTimer = setInterval(tick, METER_INTERVAL_MS);
       } catch {
+        voiceLog('capture start failed');
         onEvent({
           type: 'error',
           code: 'capture_failed',
@@ -205,21 +258,33 @@ function createNativeCapture(
     pause() {
       if (paused || stopped) return;
       paused = true;
-      detector.reset();
       void queueTransition(async () => {
         if (!recorder) return;
         if (recorder.isRecording) {
           await recorder.stop();
           deleteQuietly(recorder.uri);
         }
+        // Leaving record mode routes iOS playback to the loud speaker
+        // instead of the earpiece for the upcoming assistant reply.
+        await setAudioModeAsync(SPEAK_AUDIO_MODE).catch(() => {});
+        voiceLog('audio mode -> speak');
       });
+    },
+    finish() {
+      void finishUtterance();
     },
     resume() {
       if (!paused || stopped) return;
       paused = false;
-      detector.reset();
-      void queueTransition(beginRecording);
+      void queueTransition(async () => {
+        if (!recorder || stopped || paused) return;
+        await setAudioModeAsync(RECORD_AUDIO_MODE).catch(() => {});
+        voiceLog('audio mode -> record');
+        await beginRecording();
+      });
     },
+    // Explicit recordings never run during playback, so ducking is inactive.
+    setDucking() {},
     stop() {
       stopped = true;
       paused = false;
@@ -234,6 +299,7 @@ function createNativeCapture(
         }
         deleteQuietly(recorder.uri);
         recorder = null;
+        voiceLog('capture stopped');
         await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
       });
     },
@@ -246,18 +312,26 @@ function createNativePlayback(
   let sampleRate = 24_000;
   let buffered: Uint8Array[] = [];
   let bufferedBytes = 0;
-  let segmentQueue: string[] = [];
+  let segmentQueue: Array<{ uri: string; index: number }> = [];
   let player: AudioPlayer | null = null;
   let playerSubscription: { remove(): void } | null = null;
   let playing = false;
+  let currentUri: string | null = null;
   let ended = false;
   let stoppedFlag = false;
   let startedEmitted = false;
   let levelTimer: ReturnType<typeof setInterval> | null = null;
   let segmentIndex = 0;
+  let playedSegments = 0;
+  let lastSegmentFinishedAt = 0;
   const sessionId = `${Date.now().toString(36)}${Math.floor(
     Math.random() * 1e6,
   ).toString(36)}`;
+
+  const segmentTargetSeconds = () =>
+    SEGMENT_SCHEDULE_SECONDS[
+      Math.min(segmentIndex, SEGMENT_SCHEDULE_SECONDS.length - 1)
+    ];
 
   const clearLevelTimer = () => {
     if (levelTimer) {
@@ -290,26 +364,38 @@ function createNativePlayback(
       !stoppedFlag
     ) {
       clearLevelTimer();
+      voiceLog(`playback finished (${playedSegments} segments)`);
       onEvent({ type: 'finished' });
     }
   };
 
   const pump = () => {
     if (playing || stoppedFlag) return;
-    const nextUri = segmentQueue.shift();
-    if (!nextUri) {
+    const next = segmentQueue.shift();
+    if (!next) {
       maybeFinish();
       return;
     }
     playing = true;
+    currentUri = next.uri;
+    if (__DEV__) {
+      const gap =
+        lastSegmentFinishedAt > 0
+          ? `${Date.now() - lastSegmentFinishedAt}ms gap`
+          : 'first';
+      voiceLog(`segment #${next.index} play (${gap})`);
+    }
     cleanupPlayer();
-    player = createAudioPlayer({ uri: nextUri });
+    player = createAudioPlayer({ uri: next.uri });
     playerSubscription = player.addListener(
       'playbackStatusUpdate',
       (status) => {
         if (status.didJustFinish) {
           playing = false;
-          deleteQuietly(nextUri);
+          playedSegments += 1;
+          lastSegmentFinishedAt = Date.now();
+          if (currentUri === next.uri) currentUri = null;
+          deleteQuietly(next.uri);
           cleanupPlayer();
           pump();
         }
@@ -347,9 +433,10 @@ function createNativePlayback(
     bufferedBytes = 0;
     const wav = buildWav(pcm, sampleRate);
     try {
+      const index = segmentIndex++;
       const file = new File(
         Paths.cache,
-        `venom-voice-${sessionId}-${segmentIndex++}.wav`,
+        `venom-voice-${sessionId}-${index}.wav`,
       );
       try {
         file.create({ overwrite: true });
@@ -357,9 +444,15 @@ function createNativePlayback(
         // May already exist; write() below still replaces content.
       }
       file.write(wav);
-      segmentQueue.push(file.uri);
+      voiceLog(
+        `segment #${index} cut: ${(pcm.byteLength / (sampleRate * 2)).toFixed(
+          2,
+        )}s, queue=${segmentQueue.length + 1}`,
+      );
+      segmentQueue.push({ uri: file.uri, index });
       pump();
     } catch {
+      voiceLog('segment write failed');
       onEvent({ type: 'error', message: 'Audio playback failed.' });
     }
   };
@@ -377,6 +470,9 @@ function createNativePlayback(
       stoppedFlag = false;
       startedEmitted = false;
       segmentIndex = 0;
+      playedSegments = 0;
+      lastSegmentFinishedAt = 0;
+      voiceLog(`playback begin (${sampleRate}Hz)`);
     },
     enqueueChunk(base64Pcm16: string) {
       if (stoppedFlag) return;
@@ -385,7 +481,7 @@ function createNativePlayback(
       buffered.push(bytes);
       bufferedBytes += bytes.byteLength;
       const bufferedSeconds = bufferedBytes / (sampleRate * 2);
-      if (bufferedSeconds >= SEGMENT_SECONDS) cutSegment();
+      if (bufferedSeconds >= segmentTargetSeconds()) cutSegment();
     },
     end() {
       ended = true;
@@ -397,7 +493,7 @@ function createNativePlayback(
       ended = false;
       buffered = [];
       bufferedBytes = 0;
-      for (const uri of segmentQueue) deleteQuietly(uri);
+      for (const segment of segmentQueue) deleteQuietly(segment.uri);
       segmentQueue = [];
       clearLevelTimer();
       if (player) {
@@ -408,7 +504,10 @@ function createNativePlayback(
         }
       }
       cleanupPlayer();
+      deleteQuietly(currentUri);
+      currentUri = null;
       playing = false;
+      voiceLog('playback stopped (interrupt)');
     },
   };
 }
@@ -420,4 +519,63 @@ export const nativeVoiceAudioAdapter: VoiceAudioAdapter = {
   },
   createCapture: createNativeCapture,
   createPlayback: createNativePlayback,
+};
+
+/** Session mode while listening: mic active, silent-switch ignored. */
+const RECORD_AUDIO_MODE: Partial<AudioMode> = {
+  allowsRecording: true,
+  playsInSilentMode: true,
+  shouldRouteThroughEarpiece: false,
+  interruptionMode: 'doNotMix',
+};
+
+/**
+ * Session mode while the assistant speaks: leaving record mode puts iOS in
+ * the plain `.playback` category, which routes to the main speaker (the
+ * play-and-record category defaults to the earpiece receiver).
+ */
+const SPEAK_AUDIO_MODE: Partial<AudioMode> = {
+  allowsRecording: false,
+  playsInSilentMode: true,
+  shouldRouteThroughEarpiece: false,
+  interruptionMode: 'doNotMix',
+};
+
+/** Dev-only diagnostics; Expo Go streams these into the Metro console. */
+function voiceLog(message: string) {
+  if (__DEV__) {
+    // eslint-disable-next-line no-console
+    console.log(`[voice-native] ${message}`);
+  }
+}
+
+/**
+ * iOS gives us reliable, standard WAV from AVAudioRecorder. It avoids an
+ * unnecessary server-side M4A → WAV conversion before transcription and keeps
+ * every stopped turn small enough to upload. Android stays on compact AAC.
+ */
+const VOICE_RECORDING_OPTIONS: RecordingOptions = {
+  extension: '.wav',
+  sampleRate: 16_000,
+  numberOfChannels: 1,
+  bitRate: 256_000,
+  ios: {
+    extension: '.wav',
+    sampleRate: 16_000,
+    outputFormat: IOSOutputFormat.LINEARPCM,
+    audioQuality: AudioQuality.LOW,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  android: {
+    extension: '.m4a',
+    sampleRate: 16_000,
+    outputFormat: 'mpeg4',
+    audioEncoder: 'aac',
+  },
+  web: {
+    mimeType: 'audio/webm',
+    bitsPerSecond: 128_000,
+  },
 };

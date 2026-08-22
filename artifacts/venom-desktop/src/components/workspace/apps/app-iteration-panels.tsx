@@ -20,6 +20,7 @@ import {
   Hexagon,
   Link2,
   Loader2,
+  Radio,
   Rocket,
   RotateCcw,
   Sparkles,
@@ -287,6 +288,9 @@ export function ImproveAppDialog({
   const [open, setOpen] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [constraints, setConstraints] = useState("");
+  const [baselineChoice, setBaselineChoice] = useState<"latest" | "live">(
+    "latest",
+  );
   const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -305,8 +309,26 @@ export function ImproveAppDialog({
     setOpen(next);
     if (next) {
       setIdempotencyKey(newIdempotencyKey());
+      setBaselineChoice("latest");
     }
   };
+
+  // What the app is actually serving may differ from the newest approved
+  // package (published earlier, or restored by a rollback). When the live
+  // version is a valid alternative baseline, the owner chooses consciously.
+  const live = context?.live ?? null;
+  const divergence = context?.divergence ?? null;
+  const liveBaselineOffered = Boolean(
+    live?.baselineSelectable &&
+      (divergence === "live_behind" || divergence === "live_ahead"),
+  );
+  const usingLiveBaseline = liveBaselineOffered && baselineChoice === "live";
+  const effectiveChanges = usingLiveBaseline
+    ? (live?.changes ?? null)
+    : (context?.changes ?? null);
+  const effectiveSinceNumber = usingLiveBaseline
+    ? live?.iterationNumber
+    : context?.baseline?.iterationNumber;
 
   const canSubmit =
     !!context?.canIterate &&
@@ -321,6 +343,9 @@ export function ImproveAppDialog({
         data: {
           instruction: instruction.trim(),
           ...(constraints.trim() ? { constraints: constraints.trim() } : {}),
+          ...(usingLiveBaseline && live?.iterationId
+            ? { baselineIterationId: live.iterationId }
+            : {}),
           idempotencyKey,
         },
       });
@@ -425,19 +450,96 @@ export function ImproveAppDialog({
                   </div>
                 )}
 
+                {/* Live-release divergence */}
+                {live && divergence && divergence !== "in_sync" ? (
+                  <div
+                    className="border border-foreground/25 bg-foreground/[0.03] rounded-lg p-3.5"
+                    role="status"
+                    data-testid="panel-live-divergence"
+                  >
+                    <p className="text-xs font-semibold flex items-center gap-1.5">
+                      <Radio className="h-3.5 w-3.5" aria-hidden="true" />
+                      {divergence === "live_unversioned"
+                        ? "Live release predates package tracking"
+                        : `Approved v${context.baseline?.iterationNumber ?? "?"}, but v${live.iterationNumber ?? "?"} is live`}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      {divergence === "live_unversioned"
+                        ? "What's serving right now isn't tied to any approved package, so it can't be offered as a baseline. Iterations start from the newest approved package."
+                        : divergence === "live_ahead"
+                          ? "The live release maps to a newer package than the newest approved one on record."
+                          : live.restoredByRollback
+                            ? "A rollback reset this app to the older version — users are seeing it now."
+                            : "The newest approved package was never published, so users are still on the older version."}
+                    </p>
+                    {liveBaselineOffered ? (
+                      <fieldset className="mt-3 space-y-1.5">
+                        <legend className="sr-only">
+                          Baseline for this iteration
+                        </legend>
+                        <label className="flex items-start gap-2 text-xs cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`baseline-choice-${app.id}`}
+                            checked={baselineChoice === "latest"}
+                            onChange={() => setBaselineChoice("latest")}
+                            className="mt-0.5 accent-foreground"
+                            data-testid="radio-baseline-latest"
+                          />
+                          <span>
+                            <span className="font-medium">
+                              Newest approved — v
+                              {context.baseline?.iterationNumber}
+                            </span>{" "}
+                            <span className="text-muted-foreground">
+                              includes work that never went live
+                            </span>
+                          </span>
+                        </label>
+                        <label className="flex items-start gap-2 text-xs cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`baseline-choice-${app.id}`}
+                            checked={baselineChoice === "live"}
+                            onChange={() => setBaselineChoice("live")}
+                            className="mt-0.5 accent-foreground"
+                            data-testid="radio-baseline-live"
+                          />
+                          <span>
+                            <span className="font-medium">
+                              Live now — v{live.iterationNumber}
+                            </span>{" "}
+                            <span className="text-muted-foreground">
+                              what users are seeing
+                              {live.restoredByRollback
+                                ? " (restored by rollback)"
+                                : ""}
+                            </span>
+                          </span>
+                        </label>
+                      </fieldset>
+                    ) : divergence !== "live_unversioned" ? (
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                        The live package can no longer be resolved as a
+                        baseline, so this iteration continues from the newest
+                        approved package.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {/* What's new */}
-                {context.changes ? (
+                {effectiveChanges ? (
                   <div
                     className="border border-border/60 rounded-lg p-3.5"
                     data-testid="panel-iteration-changes"
                   >
                     <p className="text-xs font-semibold mb-1 flex items-center gap-1.5">
                       <BrainCircuit className="h-3.5 w-3.5" aria-hidden="true" />
-                      What's new since v
-                      {context.baseline?.iterationNumber ?? "?"}
+                      What's new since v{effectiveSinceNumber ?? "?"}
                     </p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      {context.changes.summary}
+                      {effectiveChanges.summary}
                     </p>
                   </div>
                 ) : context.linkedProject ? null : (

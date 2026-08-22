@@ -1,6 +1,6 @@
 ---
 name: Knowledge map projection and layering
-description: Two recurring bugs in the brain map — escaped stacking context, and a projection that is neither centred nor fitted.
+description: Recurring brain-map traps — escaped stacking context, a projection that is neither centred nor fitted, and map nodes that e2e taps cannot reach.
 ---
 
 ## Depth-sorted nodes need an isolated container
@@ -35,3 +35,17 @@ Two independent geometry bugs produced clipped nodes and labels:
 `height/reference`, clamped to a floor and to 1 so large viewports are
 unaffected. Verify at 390px wide, not just desktop — and remember labels extend
 well past their node, so a node inside the bounds is not proof its label is.
+
+## In e2e, open clusters through Brain search, not node taps
+
+On the mobile symbiote map, a hash-positioned node (especially one added at
+runtime by knowledge extraction) can project outside the viewport. Playwright
+then loops forever on "element is outside of the viewport" — the node sits in
+an absolutely-positioned stage, so auto-scroll can never bring it in.
+
+**Why:** node placement hashes the label and the camera does not re-fit for a
+tap target; whether a given label lands on-screen at 390px is luck.
+
+**How to apply:** in browser tests, reach a cluster's detail panel through the
+Brain search field — its result rows select the cluster directly. Reserve
+direct node taps for fixture clusters already proven tappable.

@@ -30,6 +30,26 @@ come out low-res and "fixing" them by tuning constants is a trap.
 
 **Test hooks:** in UI-test mode both apps publish `__venomSlime` (window /
 globalThis) with `{scale, initialScale, minScale, changes, frames,
-bufferWidth}`. The e2e proof pins `slimeTier=full` on the dense fixture so
-SwiftShader must degrade, then asserts frames keep advancing — degrade *and*
-liveness, not one or the other.
+bufferWidth}`; mobile also publishes `bufferFraction` (buffer width ÷ full map
+surface). The e2e proof pins a rich tier on the dense fixture so SwiftShader
+must degrade, then asserts frames keep advancing — degrade *and* liveness,
+not one or the other. Medium proves the shed contract identically to full at
+a fraction of the per-frame cost; only the tier-compile spec needs full.
+
+**Snapshot-race rule:** never baseline a "before" telemetry snapshot to prove
+a shed reached the buffer. Cheap tiers shed before the first `frames > 0`
+poll returns, so the "initial" reading is already post-shed and
+`bufferWidth < initialWidth` becomes unsatisfiable (mobile hit exactly this
+when slime-adaptive moved full → medium). Assert the end state instead:
+`bufferFraction <= initialScale * 0.8` proves the buffer sits below the
+unshed surface without any capture ordering. The desktop app's own suite
+still uses a before/after compare and passes only because its frames are
+slow enough to lose the race — same trap if its tier gets cheaper.
+
+**Pause contract:** neither loop runs for unseen pixels — desktop parks on
+document.hidden, mobile parks whenever the Brain tab is not the active
+workspace (pages stay mounted, so unmount never fires). Resuming calls
+quality reset() so the parked gap is never measured as a frame. Mobile
+telemetry carries `paused`; specs must activate the Brain tab before waiting
+on `frames`, and "frames stopped" assertions should wait for `paused` first
+— after it flips, the counter is final.

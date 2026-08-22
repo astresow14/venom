@@ -22,11 +22,47 @@
  * skip and re-evaluate next pass. Since dueness is measured from
  * lastAttemptAt, a claimed source is no longer due, which is what prevents a
  * double sync of work a client just did.
+ *
+ * Churn: an apply write bumps the workspace revision, and every signed-in
+ * device reacts by re-merging and re-uploading state. When the freshly
+ * fetched snapshot is identical to the stored one (a daily schedule on a
+ * static site, most days), the worker therefore skips the apply write —
+ * see scheduledSourceSnapshotUnchanged. The claim already stamped
+ * lastAttemptAt, which both re-paces the cadence and lets the source card
+ * say the server checked recently.
+ *
+ * Pacing under load: the pass measures before it spends. Every scanned
+ * workspace is read and its due sources counted, then the per-pass sync
+ * budget grows with the number of due workspaces (scheduledSyncBudget) up to
+ * a hard ceiling, and every pass logs a due/synced/deferred summary — so a
+ * growing backlog is visible in the API server logs while it is still
+ * minutes deep, not after users notice late dailies. The pass is bounded in
+ * time as well as in count: due workspaces sync through a small pool of
+ * parallel claims, and no new sync launches after the launch deadline — so
+ * even a surge of worst-case slow fetches ends near one interval instead of
+ * monopolizing several ticks, and a tick that does land mid-pass logs that
+ * it was skipped. Degraded upstreams defer work loudly rather than silently
+ * suppressing the very passes that would report them. Fairness holds
+ * throughout: at most one source per user per pass, and because each claim
+ * write bumps the workspace's updated_at, a serviced user rotates behind the
+ * still-waiting ones in the updated_at-ascending scan. Scanning itself
+ * rotates too: each pass reads the front page of that order first, then
+ * continues from a cursor that advances across passes while pages return
+ * full — so workspaces whose schedules are simply not due yet (weeklies
+ * mid-cycle, say) can camp at the front, unrewritten, without ever
+ * permanently hiding overdue work beyond the window.
  */
+import { isDeepStrictEqual } from "node:util";
+
 import {
   ConnectGitHubSourceResponse,
   ConnectWebsiteSourceResponse,
 } from "@workspace/api-zod";
+import {
+  createDeletionMarkers,
+  mergeDeletionMarkers,
+  TOMBSTONE_LIMITS,
+} from "@workspace/venom-workspace-merge";
 import {
   asRepositoryPath,
   fetchGitHubConnectedSource,
@@ -60,12 +96,61 @@ const CADENCE_INTERVAL_MS: Record<string, number> = {
 export const FAILED_SYNC_RETRY_MS = HOUR_MS;
 
 const SOURCE_SCHEDULE_ERROR_MAX_CHARS = 300;
-const MAX_SOURCE_TOMBSTONES = 2000;
 
-/** How many workspaces one pass will even look at. */
+/**
+ * How many workspaces one scan page returns. This is also the measurement
+ * unit: the pass reads every scanned workspace to count due sources before
+ * spending any sync budget, so it must stay above MAX_SYNCS_PER_PASS or a
+ * backlog could saturate the budget without ever being measured as one.
+ */
 export const MAX_WORKSPACES_PER_PASS = 50;
-/** How many syncs (successful or failed) one pass will run in total. */
-export const MAX_SYNCS_PER_PASS = 5;
+/**
+ * How many pages one pass may scan. The first page is always the front of
+ * the updated_at-ascending order — the longest-unserviced workspaces — and
+ * later pages continue from the rotating cursor, so a front camped with
+ * scheduled-but-not-yet-due sources (which nothing ever rewrites) cannot
+ * permanently hide overdue work behind it. Also the read bound: a pass
+ * fetches at most MAX_SCAN_PAGES_PER_PASS × MAX_WORKSPACES_PER_PASS
+ * workspaces while measuring.
+ */
+export const MAX_SCAN_PAGES_PER_PASS = 4;
+
+/**
+ * How many syncs (successful or failed) one pass runs while the measured
+ * backlog fits within it — the steady-state pace (300/hour at the 60-second
+ * interval), deliberately gentle on GitHub and website hosts.
+ */
+export const BASE_SYNCS_PER_PASS = 5;
+/**
+ * The hard ceiling one backlogged pass may drain to — cover for bursts like
+ * everyone's daily schedules maturing in the same hour. Its unit is
+ * throughput, not time: the pass's wall clock is bounded separately by
+ * SCHEDULED_SYNC_LAUNCH_DEADLINE_MS, so this ceiling says how much a healthy
+ * fast pass may do, never how long a degraded one may run.
+ */
+export const MAX_SYNCS_PER_PASS = 20;
+
+/**
+ * Due workspaces sync through this many parallel claims. Every in-flight
+ * sync is a different user's workspace (one source per user per pass) and
+ * the revision CAS already fences concurrent writers — including other
+ * server instances — so modest in-process parallelism adds no new races. It
+ * exists because fetches are allowed to be slow (websites get a 10-second
+ * timeout each): run serially, a full surge of those would hold the
+ * single-flight worker for ~200 seconds and swallow the ticks in between.
+ */
+export const SCHEDULED_SYNC_CONCURRENCY = 4;
+/**
+ * No new sync launches once a pass has run this long; whatever remains due
+ * is deferred to the next tick and counted — and warned about — in the pass
+ * summary. Sized under SCHEDULED_SOURCE_SYNC_INTERVAL_MS so a fully degraded
+ * pass (launches up to the deadline, plus the straggling in-flight fetches
+ * it never aborts) still ends around a single interval, keeping the
+ * every-minute summary heartbeat alive exactly when upstreams misbehave.
+ * The elapsed clock starts before the measurement reads, so a slow store
+ * shrinks the launch window too.
+ */
+export const SCHEDULED_SYNC_LAUNCH_DEADLINE_MS = 45_000;
 const MAX_SAVE_ATTEMPTS = 3;
 
 /** Mirrors the message the client showed for a source it cannot re-request. */
@@ -140,14 +225,24 @@ function scheduleInterval(schedule: StoredSourceSchedule): number | null {
   return CADENCE_INTERVAL_MS[schedule.cadence] ?? null;
 }
 
-function scheduleAttemptAt(schedule: StoredSourceSchedule): number | null {
+/**
+ * Reads the last attempt exactly like the shared lib's scheduleAttemptAt,
+ * but against the loosely typed stored blob (the shared signature requires
+ * the validated client schedule shape, which stored data has not earned).
+ * The test suite asserts fixture-for-fixture agreement with the shared
+ * reader, so this copy cannot drift silently.
+ */
+export function scheduleAttemptAt(
+  schedule: StoredSourceSchedule,
+): number | null {
   return typeof schedule.lastAttemptAt === "number" &&
     Number.isFinite(schedule.lastAttemptAt)
     ? schedule.lastAttemptAt
     : null;
 }
 
-function scheduleUpdatedAt(schedule: StoredSourceSchedule): number {
+/** Stored-blob twin of the shared scheduleUpdatedAt; parity-guarded too. */
+export function scheduleUpdatedAt(schedule: StoredSourceSchedule): number {
   return typeof schedule.updatedAt === "number" &&
     Number.isFinite(schedule.updatedAt)
     ? schedule.updatedAt
@@ -210,6 +305,23 @@ export function nextDueScheduledSource(
   return due.length ? due[0].source : null;
 }
 
+/**
+ * Every due source in one workspace, not just the one a pass would sync
+ * next. This is the backlog unit the pass summary reports: it includes
+ * sources queued behind the one-per-user rule, which is exactly the depth
+ * that predicts how late a burst of "daily" schedules will run.
+ */
+export function countDueScheduledSources(
+  sources: StoredProjectSource[],
+  now: number,
+): number {
+  let due = 0;
+  for (const source of sources) {
+    const dueAt = scheduledSyncDueAt(source);
+    if (dueAt !== null && dueAt <= now) due += 1;
+  }
+  return due;
+}
 const REPOSITORY_PATH_PATTERN = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 
 function githubRepositoryPath(source: StoredProjectSource): string | null {
@@ -368,35 +480,65 @@ export function applyRefreshedScheduledSource(
   };
 }
 
-function isReplacementMarker(marker: SourceDeletionMarker): boolean {
-  return marker.replaced === true;
+/** A source with the volatile bookkeeping fields removed, for comparison. */
+function comparableSnapshot(
+  source: StoredProjectSource,
+): Record<string, unknown> {
+  const { syncedAt: _syncedAt, schedule: _schedule, ...content } = source;
+  return content;
 }
 
-/** Mirrors the client's boundSourceDeletionMarkers eviction order. */
-function boundSourceDeletionMarkers(
-  markers: SourceDeletionMarker[],
-  limit: number,
-): SourceDeletionMarker[] {
-  const newestFirst = [...markers].sort(
-    (left, right) => right.deletedAt - left.deletedAt,
+/**
+ * Whether applying the freshly fetched snapshot would change nothing a device
+ * could see besides syncedAt. The comparison covers the whole snapshot —
+ * name, context, citations, clusters, summary, attestation, and any other
+ * stored field — so the write is only skipped when it is provably a no-op;
+ * a stored field the replay would drop still forces the write. Two
+ * exceptions keep the semantics of a successful sync intact:
+ *
+ * - a pending schedule.lastError must still be cleared by an apply write, or
+ *   the card would show a stale failure (and the retry window would keep
+ *   re-fetching hourly) forever, and
+ * - a snapshot whose deterministic id moved is never "unchanged", because the
+ *   old source must be retired with a tombstone.
+ */
+export function scheduledSourceSnapshotUnchanged(
+  previous: StoredProjectSource,
+  refreshed: StoredProjectSource,
+): boolean {
+  if (previous.id !== refreshed.id) return false;
+  if (previous.projectId !== refreshed.projectId) return false;
+  if (isRecord(previous.schedule) && previous.schedule.lastError) return false;
+
+  return isDeepStrictEqual(
+    comparableSnapshot(previous),
+    comparableSnapshot(refreshed),
   );
-  if (newestFirst.length <= limit) return newestFirst;
-
-  const replaced = newestFirst.filter(isReplacementMarker);
-  if (replaced.length >= limit) return replaced.slice(0, limit);
-
-  const deleted = newestFirst.filter((marker) => !isReplacementMarker(marker));
-  const kept = new Set([
-    ...replaced,
-    ...deleted.slice(0, limit - replaced.length),
-  ]);
-  return newestFirst.filter((marker) => kept.has(marker));
 }
+
+/**
+ * The tombstone rules themselves — the replacement marker semantics, the
+ * newest-deletedAt-per-id merge, and the replacement-aware cap — are NOT
+ * defined here. They are the shared cross-device rules from
+ * @workspace/venom-workspace-merge, the exact functions the phone and desktop
+ * apps run, re-exported so this module's test suite can assert identity the
+ * same way the apps' suites do. A hand-written server copy is how a scheduled
+ * server sync ends up reviving a source a device retired; do not reintroduce
+ * one.
+ */
+export {
+  createDeletionMarkers,
+  isReplacementMarker,
+  mergeDeletionMarkers,
+  TOMBSTONE_LIMITS,
+} from "@workspace/venom-workspace-merge";
 
 /**
  * Writes the `replaced: true` tombstone for a retired source id so no device
  * can hand the refreshed-away source back. Only needed when the deterministic
- * id changed, which the connect replay makes rare by construction.
+ * id changed, which the connect replay makes rare by construction. The marker,
+ * the per-id merge, and the sources cap all come from the shared rules, so a
+ * server-written tombstone can never disagree with what a device would write.
  */
 export function withReplacedSourceTombstone(
   state: StoredWorkspaceState,
@@ -407,32 +549,65 @@ export function withReplacedSourceTombstone(
   const existing = Array.isArray(tombstones.sources)
     ? (tombstones.sources.filter(isRecord) as SourceDeletionMarker[])
     : [];
-  const marker: SourceDeletionMarker = {
-    id: retiredSourceId,
-    deletedAt,
-    replaced: true,
-  };
   return {
     ...state,
     tombstones: {
       ...tombstones,
-      sources: boundSourceDeletionMarkers(
-        [...existing.filter((item) => item.id !== retiredSourceId), marker],
-        MAX_SOURCE_TOMBSTONES,
+      sources: mergeDeletionMarkers(
+        TOMBSTONE_LIMITS.sources,
+        existing,
+        createDeletionMarkers([retiredSourceId], deletedAt, {
+          replaced: true,
+        }),
       ),
     },
   };
 }
 
 type ScheduledSyncLogger = {
+  debug: (context: Record<string, unknown>, message: string) => void;
   info: (context: Record<string, unknown>, message: string) => void;
   warn: (context: Record<string, unknown>, message: string) => void;
   error: (context: Record<string, unknown>, message: string) => void;
 };
 
+/**
+ * Where persistent-failure alerts are kept. The card on the source (see
+ * recordScheduledSourceSyncFailure) only helps someone who opens Settings;
+ * the sink is what lets repeated unattended failures reach the notification
+ * bell of a user who relies on the scheduler precisely because they are not
+ * around. Alert bookkeeping is strictly best-effort: a sink error is logged
+ * and swallowed so it can never break the sync itself.
+ */
+export type ScheduledSourceSyncAlertSink = {
+  /** One failed attempt, called only after the card write landed. */
+  recordFailure(input: {
+    userId: string;
+    source: StoredProjectSource;
+    message: string;
+    failedAt: number;
+  }): Promise<void>;
+  /** A sync succeeded; covers the previous and refreshed source ids. */
+  recordSuccess(input: { userId: string; sourceIds: string[] }): Promise<void>;
+};
+/** One row of the scheduled-workspace scan, keyed for keyset pagination. */
+export type ScheduledScanRow = {
+  userId: string;
+  /** The workspace's updated_at in epoch milliseconds — the scan-order key. */
+  updatedAtMs: number;
+};
+export type ScheduledScanCursor = ScheduledScanRow;
+
 export type ScheduledSourceSyncDeps = {
-  /** Workspaces whose stored state contains at least one scheduled source. */
-  listScheduledWorkspaceUserIds: (limit: number) => Promise<string[]>;
+  /**
+   * One page of workspaces whose stored state contains at least one
+   * scheduled source, in (updated_at, user id) ascending order — strictly
+   * after the cursor when one is given.
+   */
+  listScheduledWorkspaceUserIds: (
+    limit: number,
+    after?: ScheduledScanCursor,
+  ) => Promise<ScheduledScanRow[]>;
   store: WorkspaceStore;
   /** Same gate the GitHub connect route applies before proxying. */
   isWorkspaceMember: (userId: string) => boolean;
@@ -441,25 +616,87 @@ export type ScheduledSourceSyncDeps = {
   fetchWebsite: WebsiteFetcher;
   createAttestation: SourceAttestationSigner;
   log: ScheduledSyncLogger;
+  alerts?: ScheduledSourceSyncAlertSink;
   now?: () => number;
 };
 
 export type ScheduledSyncPassSummary = {
+  /** Workspaces the scan window returned, due or not. */
   workspaces: number;
+  /** Workspaces that held at least one due source when the pass read them. */
+  dueWorkspaces: number;
+  /** Due sources across every scanned workspace, queued ones included. */
+  dueSources: number;
   synced: number;
   failed: number;
+  /** Due workspaces the budget could not attempt; the next pass retries. */
+  deferred: number;
 };
 
-type WorkspaceOutcome = "synced" | "failed" | "skipped";
+type WorkspaceOutcome = "synced" | "unchanged" | "failed" | "skipped";
 
 export function createVenomScheduledSourceSyncWorker(
   deps: ScheduledSourceSyncDeps,
 ) {
   const now = deps.now ?? Date.now;
   let running = false;
+  let passStartedAt = 0;
+  /**
+   * Where scanning resumes after the front page. Advances while pages come
+   * back full, resets once a pass reaches the end of the order — in-memory
+   * on purpose: a restart merely restarts the rotation, and the CAS claims
+   * keep a second instance's overlapping scans harmless.
+   */
+  let scanCursor: ScheduledScanCursor | null = null;
 
   function logContext(extra: Record<string, unknown>) {
     return { operation: "venom_scheduled_source_sync", ...extra };
+  }
+
+  /** Best-effort alert bookkeeping; a sink failure never breaks the sync. */
+  async function notifyAlertFailure(
+    userId: string,
+    source: StoredProjectSource,
+    message: string,
+  ): Promise<void> {
+    if (!deps.alerts) return;
+    try {
+      await deps.alerts.recordFailure({
+        userId,
+        source,
+        message,
+        failedAt: now(),
+      });
+    } catch (error) {
+      deps.log.warn(
+        logContext({
+          userId,
+          sourceId: source.id,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        }),
+        "scheduled source sync could not record the failure alert",
+      );
+    }
+  }
+
+  /** Best-effort alert clearing; a sink failure never breaks the sync. */
+  async function notifyAlertSuccess(
+    userId: string,
+    sourceIds: string[],
+  ): Promise<void> {
+    if (!deps.alerts) return;
+    try {
+      await deps.alerts.recordSuccess({ userId, sourceIds });
+    } catch (error) {
+      deps.log.warn(
+        logContext({
+          userId,
+          sourceIds,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        }),
+        "scheduled source sync could not clear the source sync alerts",
+      );
+    }
   }
 
   /**
@@ -543,8 +780,9 @@ export function createVenomScheduledSourceSyncWorker(
       const record = await deps.store.get(userId);
       if (!record || !isRecord(record.state)) return;
       const state = record.state as StoredWorkspaceState;
+      const sources = workspaceSources(state);
       const failed = recordScheduledSourceSyncFailure(
-        workspaceSources(state),
+        sources,
         sourceId,
         now(),
         message,
@@ -558,7 +796,13 @@ export function createVenomScheduledSourceSyncWorker(
         record.revision,
         new Date(now()),
       );
-      if (updated) return;
+      if (updated) {
+        // Count the streak only for failures that actually reached the card,
+        // so the alert can never claim more than Settings would show.
+        const source = sources.find((item) => item.id === sourceId);
+        if (source) await notifyAlertFailure(userId, source, message);
+        return;
+      }
     }
     deps.log.warn(
       logContext({ userId, sourceId }),
@@ -570,6 +814,9 @@ export function createVenomScheduledSourceSyncWorker(
    * CAS loop that swaps the refreshed snapshot in. Re-reads and re-applies on
    * every conflict so a workspace the user is actively editing never gets
    * clobbered — the replace rules re-run against the fresh state each time.
+   * A snapshot identical to the stored one short-circuits without writing:
+   * the claim already re-paced the schedule, so a no-op apply would only bump
+   * the revision and make every signed-in device re-download the workspace.
    */
   async function applyRefresh(
     userId: string,
@@ -581,8 +828,17 @@ export function createVenomScheduledSourceSyncWorker(
     for (let attempt = 0; attempt < MAX_SAVE_ATTEMPTS; attempt += 1) {
       if (!record || !isRecord(record.state)) return "skipped";
       const state = record.state as StoredWorkspaceState;
+      const sources = workspaceSources(state);
+
+      const previous = sources.find(
+        (source) => source.id === previousSourceId,
+      );
+      if (previous && scheduledSourceSnapshotUnchanged(previous, refreshed)) {
+        return "unchanged";
+      }
+
       const applied = applyRefreshedScheduledSource(
-        workspaceSources(state),
+        sources,
         previousSourceId,
         refreshed,
         now(),
@@ -692,42 +948,234 @@ export function createVenomScheduledSourceSyncWorker(
         logContext({ userId, sourceId: due.id, provider: request.provider }),
         "scheduled source re-synced on the server",
       );
+      // The streak is over. The refresh may have retired due.id for a new
+      // deterministic id, so clear alerts under both.
+      await notifyAlertSuccess(userId, [...new Set([due.id, refreshed.id])]);
+    }
+    if (outcome === "unchanged") {
+      deps.log.info(
+        logContext({ userId, sourceId: due.id, provider: request.provider }),
+        "scheduled source snapshot unchanged; skipped the workspace write",
+      );
     }
     return outcome;
   }
 
   async function runPass(): Promise<ScheduledSyncPassSummary> {
-    if (running) return { workspaces: 0, synced: 0, failed: 0 };
-    running = true;
-    try {
-      const userIds = await deps.listScheduledWorkspaceUserIds(
-        MAX_WORKSPACES_PER_PASS,
+    if (running) {
+      // A tick that lands while the previous pass still runs would otherwise
+      // vanish without a trace — and that silence hits exactly when slow
+      // upstreams make backlog visibility matter most. The launch deadline
+      // makes this rare; when it happens anyway, say so.
+      deps.log.warn(
+        logContext({ runningForMs: now() - passStartedAt }),
+        "scheduled source sync tick skipped; previous pass still running",
       );
+      return {
+        workspaces: 0,
+        dueWorkspaces: 0,
+        dueSources: 0,
+        synced: 0,
+        failed: 0,
+        deferred: 0,
+      };
+    }
+    running = true;
+    passStartedAt = now();
+    try {
+      // Measure before spending: scan pages of workspaces and count what is
+      // actually due. A pass that only counted what it had budget to attempt
+      // would hide exactly the backlog growth this summary exists to expose.
+      // The first page is always the front of the updated_at order; when it
+      // yields less due work than the surge ceiling, later pages continue
+      // from the rotating cursor. The cursor advances monotonically while
+      // pages return full, so a front camped with not-yet-due schedules is
+      // only ever a delay for the workspaces behind it, never a wall. (Due
+      // work a pass finds but defers past its budget re-enters through the
+      // front page or within one rotation — claims bump updated_at, so
+      // whatever was actually attempted rotates to the back on its own.)
       let synced = 0;
       let failed = 0;
-      for (const userId of userIds) {
-        if (synced + failed >= MAX_SYNCS_PER_PASS) break;
-        try {
-          const outcome = await syncWorkspace(userId);
-          if (outcome === "synced") synced += 1;
-          if (outcome === "failed") failed += 1;
-        } catch (error) {
-          // One workspace whose store reads blow up must not stall the rest.
-          failed += 1;
-          deps.log.error(
-            logContext({
-              userId,
-              errorName: error instanceof Error ? error.name : "UnknownError",
-            }),
-            "scheduled source sync pass failed for a workspace",
-          );
+      let dueSources = 0;
+      let scannedWorkspaces = 0;
+      let pagesScanned = 0;
+      let reachedEnd = false;
+      const seenUserIds = new Set<string>();
+      const dueUserIds: string[] = [];
+      let continueAfter = scanCursor;
+      while (pagesScanned < MAX_SCAN_PAGES_PER_PASS) {
+        const page = await deps.listScheduledWorkspaceUserIds(
+          MAX_WORKSPACES_PER_PASS,
+          pagesScanned === 0 ? undefined : continueAfter ?? undefined,
+        );
+        pagesScanned += 1;
+        for (const row of page) {
+          if (seenUserIds.has(row.userId)) continue;
+          seenUserIds.add(row.userId);
+          scannedWorkspaces += 1;
+          try {
+            const record = await deps.store.get(row.userId);
+            if (!record || !isRecord(record.state)) continue;
+            const due = countDueScheduledSources(
+              workspaceSources(record.state as StoredWorkspaceState),
+              now(),
+            );
+            if (due === 0) continue;
+            dueSources += due;
+            dueUserIds.push(row.userId);
+          } catch (error) {
+            // One workspace whose store reads blow up must not stall the
+            // rest.
+            failed += 1;
+            deps.log.error(
+              logContext({
+                userId: row.userId,
+                errorName:
+                  error instanceof Error ? error.name : "UnknownError",
+              }),
+              "scheduled source sync pass failed for a workspace",
+            );
+          }
         }
+        if (page.length < MAX_WORKSPACES_PER_PASS) {
+          // The order is exhausted; the next pass rotates back to the front.
+          reachedEnd = true;
+          break;
+        }
+        const tail = page[page.length - 1];
+        continueAfter = laterScanCursor(continueAfter, {
+          updatedAtMs: tail.updatedAtMs,
+          userId: tail.userId,
+        });
+        // More due work than the surge ceiling could ever attempt already
+        // fills the pass; further reads would only refine counts the
+        // scanSaturated flag marks as floors anyway.
+        if (dueUserIds.length >= MAX_SYNCS_PER_PASS) break;
       }
-      return { workspaces: userIds.length, synced, failed };
+      scanCursor = reachedEnd ? null : continueAfter;
+
+      // The budget follows the measured backlog, so a burst of same-hour
+      // daily schedules drains at surge pace instead of quietly running
+      // hours late. syncWorkspace re-reads and CAS-claims before fetching,
+      // so acting on a measurement that meanwhile went stale only costs a
+      // skip, never a double sync. A small pool of parallel claims keeps a
+      // surge inside the pass's time budget, and the launch deadline stops
+      // new work when it is not — deferring the remainder out loud instead
+      // of holding the worker through the next ticks.
+      const budget = scheduledSyncBudget(dueUserIds.length);
+      let cursor = 0;
+      let inFlight = 0;
+      let deadlineHit = false;
+      const syncNext = async (): Promise<void> => {
+        while (cursor < dueUserIds.length) {
+          // In-flight syncs count against the budget pessimistically; a skip
+          // (lost claim race) refunds its slot when it settles, and this
+          // worker keeps draining, so skips still consume no budget.
+          if (synced + failed + inFlight >= budget) return;
+          if (now() - passStartedAt >= SCHEDULED_SYNC_LAUNCH_DEADLINE_MS) {
+            deadlineHit = true;
+            return;
+          }
+          const userId = dueUserIds[cursor];
+          cursor += 1;
+          inFlight += 1;
+          try {
+            const outcome = await syncWorkspace(userId);
+            // An unchanged check still ran a full fetch, so it spends a slot
+            // in the pass budget like any other completed sync.
+            if (outcome === "synced" || outcome === "unchanged") synced += 1;
+            if (outcome === "failed") failed += 1;
+          } catch (error) {
+            failed += 1;
+            deps.log.error(
+              logContext({
+                userId,
+                errorName:
+                  error instanceof Error ? error.name : "UnknownError",
+              }),
+              "scheduled source sync pass failed for a workspace",
+            );
+          } finally {
+            inFlight -= 1;
+          }
+        }
+      };
+      await Promise.all(
+        Array.from(
+          { length: Math.min(SCHEDULED_SYNC_CONCURRENCY, dueUserIds.length) },
+          () => syncNext(),
+        ),
+      );
+      const deferred = dueUserIds.length - cursor;
+
+      const summary: ScheduledSyncPassSummary = {
+        workspaces: scannedWorkspaces,
+        dueWorkspaces: dueUserIds.length,
+        dueSources,
+        synced,
+        failed,
+        deferred,
+      };
+      // Deferred work means the pass could not attempt everything due —
+      // the backlog outgrew the surge budget, or slow fetches hit the launch
+      // deadline. Either deserves a warning while the lag is still minutes,
+      // not hours, deep. A busy pass logs at info; an idle pass keeps the
+      // same heartbeat at debug so steady state does not write a line every
+      // minute.
+      const context = logContext({
+        ...summary,
+        budget,
+        deadlineHit,
+        passMs: now() - passStartedAt,
+        pagesScanned,
+        scanLimit: MAX_WORKSPACES_PER_PASS,
+        // A scan that stopped before the end of the order means the due
+        // counts are floors, not totals: more scheduled workspaces are
+        // waiting beyond what this pass could read.
+        scanSaturated: !reachedEnd,
+      });
+      const message = "scheduled source sync pass summary";
+      if (deferred > 0) {
+        deps.log.warn(context, message);
+      } else if (dueSources > 0 || synced > 0 || failed > 0) {
+        deps.log.info(context, message);
+      } else if (!reachedEnd) {
+        // Nothing due in what was read — but the read was cut short, so
+        // this is not a certified-idle pass and must not hide at debug.
+        deps.log.info(context, message);
+      } else {
+        deps.log.debug(context, message);
+      }
+      return summary;
     } finally {
       running = false;
     }
   }
 
   return { runPass };
+}
+
+/**
+ * How many syncs the current pass may run: the steady-state pace while the
+ * measured backlog fits inside it, then one slot per due workspace — a pass
+ * never syncs two sources for the same user, so a larger budget would be
+ * unusable — capped at the per-pass ceiling.
+ */
+export function scheduledSyncBudget(dueWorkspaceCount: number): number {
+  return Math.min(
+    Math.max(BASE_SYNCS_PER_PASS, dueWorkspaceCount),
+    MAX_SYNCS_PER_PASS,
+  );
+}
+
+/** The later of two scan positions in (updated_at, user id) order. */
+function laterScanCursor(
+  a: ScheduledScanCursor | null,
+  b: ScheduledScanCursor,
+): ScheduledScanCursor {
+  if (!a) return b;
+  if (a.updatedAtMs !== b.updatedAtMs) {
+    return a.updatedAtMs > b.updatedAtMs ? a : b;
+  }
+  return a.userId > b.userId ? a : b;
 }

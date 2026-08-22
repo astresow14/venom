@@ -5,9 +5,12 @@ import {
   db,
   venomBuildPackageRevisionsTable,
   venomBuildRunsTable,
+  venomCandidateReleasesTable,
   venomOntologyConceptsTable,
+  venomPortfolioAppIterationsTable,
   venomPortfolioAppsTable,
   venomPortfolioSourceVersionsTable,
+  venomProvisioningRunsTable,
   venomSopRevisionsTable,
   venomSopsTable,
   venomWorkspacesTable,
@@ -704,5 +707,474 @@ test("app iteration loop: linking, baselines, signals, and approvals", async () 
     await db
       .delete(venomOntologyConceptsTable)
       .where(inArray(venomOntologyConceptsTable.ownerId, [ownerA, ownerB]));
+  }
+});
+
+test("live release anchoring: divergence, baseline choice, and rollback visibility", async () => {
+  const suffix = randomUUID();
+  const owner = `app-live-${suffix}`;
+  let activeUserId = owner;
+  const restorePortfolioAuth = overrideVenomAppPortfolioUserIdResolverForTests(
+    () => activeUserId,
+  );
+  const restoreBuildAuth = overrideVenomBuildRunUserIdResolverForTests(
+    () => activeUserId,
+  );
+  const scheduled: string[] = [];
+  const restoreScheduler = overrideVenomBuildRunSchedulerForTests(
+    (_userId, runId) => scheduled.push(runId),
+  );
+  const app = express();
+  app.use(express.json());
+  app.use((request, _response, next) => {
+    request.log = {
+      info: () => undefined,
+      warn: () => undefined,
+      error: () => undefined,
+    } as unknown as typeof request.log;
+    next();
+  });
+  app.use(portfolioRouter);
+  app.use(buildRunsRouter);
+  const server = app.listen(0);
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  async function request(
+    path: string,
+    options: RequestInit = {},
+  ): Promise<TestResponse> {
+    const response = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers: { "content-type": "application/json", ...options.headers },
+    });
+    const rawBody = await response.text();
+    let body: unknown = null;
+    if (rawBody) {
+      try {
+        body = JSON.parse(rawBody);
+      } catch {
+        body = rawBody;
+      }
+    }
+    return { status: response.status, body };
+  }
+
+  try {
+    // An app with two approved package versions, registered directly the way
+    // approval does. No linked project: divergence must not depend on it.
+    const [portfolioApp] = await db
+      .insert(venomPortfolioAppsTable)
+      .values({
+        clerkUserId: owner,
+        name: "Anchor App",
+        purpose: "Proves live-release anchoring",
+        brand: "Monochrome",
+      })
+      .returning();
+    const [runOne] = await db
+      .insert(venomBuildRunsTable)
+      .values({
+        clerkUserId: owner,
+        idempotencyKey: randomUUID().replaceAll("-", "_"),
+        appId: portfolioApp.id,
+        targetType: "website",
+        targetName: "Anchor App",
+        requirements: "Build v1.",
+        constraints: "",
+        brandDirection: "",
+        sopRevisionIds: [],
+        status: "complete",
+        progress: 100,
+        currentRevisionNumber: 1,
+      })
+      .returning();
+    const [revOne] = await db
+      .insert(venomBuildPackageRevisionsTable)
+      .values({
+        runId: runOne.id,
+        clerkUserId: owner,
+        revisionNumber: 1,
+        reason: "Initial package",
+        package: testPackage("Anchor v1"),
+        checksumSha256: "1".repeat(64),
+      })
+      .returning();
+    const [runTwo] = await db
+      .insert(venomBuildRunsTable)
+      .values({
+        clerkUserId: owner,
+        idempotencyKey: randomUUID().replaceAll("-", "_"),
+        appId: portfolioApp.id,
+        targetType: "website",
+        targetName: "Anchor App",
+        requirements: "Build v2.",
+        constraints: "",
+        brandDirection: "",
+        sopRevisionIds: [],
+        status: "complete",
+        progress: 100,
+        currentRevisionNumber: 1,
+      })
+      .returning();
+    const [revTwo] = await db
+      .insert(venomBuildPackageRevisionsTable)
+      .values({
+        runId: runTwo.id,
+        clerkUserId: owner,
+        revisionNumber: 1,
+        reason: "Improved package",
+        package: testPackage("Anchor v2"),
+        checksumSha256: "2".repeat(64),
+      })
+      .returning();
+    const [iterOne] = await db
+      .insert(venomPortfolioAppIterationsTable)
+      .values({
+        appId: portfolioApp.id,
+        clerkUserId: owner,
+        iterationNumber: 1,
+        buildRunId: runOne.id,
+        revisionId: revOne.id,
+        packageTitle: "Anchor v1",
+        packageChecksum: "1".repeat(64),
+        runKind: "standard",
+        reason: "Approved build package",
+        createdBy: owner,
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      })
+      .returning();
+    const [iterTwo] = await db
+      .insert(venomPortfolioAppIterationsTable)
+      .values({
+        appId: portfolioApp.id,
+        clerkUserId: owner,
+        iterationNumber: 2,
+        buildRunId: runTwo.id,
+        revisionId: revTwo.id,
+        packageTitle: "Anchor v2",
+        packageChecksum: "2".repeat(64),
+        runKind: "app_iteration",
+        reason: "Owner-requested improvement",
+        createdBy: owner,
+        createdAt: new Date(Date.now() - 30 * 60 * 1000),
+      })
+      .returning();
+
+    // Provisioning history: v1's release published an hour ago; v2 approved
+    // but never published. The app is serving v1 — live lags approved.
+    const [provRun] = await db
+      .insert(venomProvisioningRunsTable)
+      .values({
+        clerkUserId: owner,
+        buildRunId: runOne.id,
+        approvedRevisionId: revOne.id,
+        appId: portfolioApp.id,
+        idempotencyKey: randomUUID().replaceAll("-", "_"),
+        targetName: "Anchor App",
+        status: "published",
+        progress: 100,
+      })
+      .returning();
+    const publishedAtV1 = new Date(Date.now() - 60 * 60 * 1000);
+    const [releaseOne] = await db
+      .insert(venomCandidateReleasesTable)
+      .values({
+        clerkUserId: owner,
+        provisioningRunId: provRun.id,
+        buildRunId: runOne.id,
+        approvedRevisionId: revOne.id,
+        appId: portfolioApp.id,
+        targetName: "Anchor App",
+        providerCandidateId: "cand-anchor-1",
+        launchUrl: "https://example.com/anchor",
+        status: "published",
+        publishedAt: publishedAtV1,
+      })
+      .returning();
+    await db
+      .update(venomPortfolioAppIterationsTable)
+      .set({ releaseId: releaseOne.id })
+      .where(eq(venomPortfolioAppIterationsTable.id, iterOne.id));
+    await db
+      .update(venomPortfolioAppsTable)
+      .set({ liveReleaseId: releaseOne.id })
+      .where(eq(venomPortfolioAppsTable.id, portfolioApp.id));
+
+    // --- App payloads surface the live pointer ---
+    const list = await request("/venom/apps");
+    assertStatus(list, 200);
+    const listed = list.body.find(
+      (item: { id: string }) => item.id === portfolioApp.id,
+    );
+    assert.equal(listed.liveReleaseId, releaseOne.id);
+    assert.equal(listed.liveIterationNumber, 1);
+    assert.equal(listed.livePublishedAt, publishedAtV1.toISOString());
+
+    const detail = await request(`/venom/apps/${portfolioApp.id}`);
+    assertStatus(detail, 200);
+    assert.equal(detail.body.app.liveReleaseId, releaseOne.id);
+    assert.equal(detail.body.app.liveIterationNumber, 1);
+    assert.equal(detail.body.app.livePublishedAt, publishedAtV1.toISOString());
+    const iterationsById = new Map<string, any>(
+      detail.body.iterations.map((item: { id: string }) => [item.id, item]),
+    );
+    assert.equal(iterationsById.get(iterOne.id)!.releaseId, releaseOne.id);
+    assert.equal(iterationsById.get(iterOne.id)!.isLive, true);
+    assert.equal(iterationsById.get(iterTwo.id)!.releaseId, null);
+    assert.equal(iterationsById.get(iterTwo.id)!.isLive, false);
+    const publishedEntry = detail.body.timeline.find(
+      (entry: { id: string }) =>
+        entry.id === `release_published:${releaseOne.id}`,
+    );
+    assert.ok(publishedEntry);
+    assert.equal(publishedEntry.title, "Release published — package v1 live");
+    assert.equal(publishedEntry.iterationNumber, 1);
+    const createdEntry = detail.body.timeline.find(
+      (entry: { id: string }) =>
+        entry.id === `release_created:${releaseOne.id}`,
+    );
+    assert.ok(createdEntry);
+    assert.equal(
+      createdEntry.title,
+      "Release candidate created from package v1",
+    );
+
+    // --- Context reports live_behind with a selectable live baseline ---
+    const behindContext = await request(
+      `/venom/apps/${portfolioApp.id}/iteration-context`,
+    );
+    assertStatus(behindContext, 200);
+    assert.equal(behindContext.body.canIterate, true);
+    assert.equal(behindContext.body.divergence, "live_behind");
+    assert.equal(behindContext.body.baseline.iterationNumber, 2);
+    assert.equal(behindContext.body.baseline.resolvable, true);
+    assert.equal(behindContext.body.live.releaseId, releaseOne.id);
+    assert.equal(behindContext.body.live.iterationId, iterOne.id);
+    assert.equal(behindContext.body.live.iterationNumber, 1);
+    assert.equal(behindContext.body.live.packageTitle, "Anchor v1");
+    assert.equal(
+      behindContext.body.live.publishedAt,
+      publishedAtV1.toISOString(),
+    );
+    assert.equal(behindContext.body.live.restoredByRollback, false);
+    assert.equal(behindContext.body.live.resolvable, true);
+    assert.equal(behindContext.body.live.baselineSelectable, true);
+    assert.equal(behindContext.body.live.changes, null);
+
+    // --- POST honors a conscious live-version baseline ---
+    const liveBaselineRun = await request(
+      `/venom/apps/${portfolioApp.id}/iterations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          instruction: "Improve from what is actually live.",
+          idempotencyKey: randomUUID().replaceAll("-", "_"),
+          baselineIterationId: iterOne.id,
+        }),
+      },
+    );
+    assertStatus(liveBaselineRun, 201);
+    assert.equal(liveBaselineRun.body.runKind, "app_iteration");
+    assert.equal(liveBaselineRun.body.request.baselineRevisionId, revOne.id);
+    assert.ok(scheduled.includes(liveBaselineRun.body.id));
+    const [liveBaselineRow] = await db
+      .select()
+      .from(venomBuildRunsTable)
+      .where(eq(venomBuildRunsTable.id, liveBaselineRun.body.id));
+    assert.equal(liveBaselineRow.baselineIterationId, iterOne.id);
+    assert.equal(liveBaselineRow.baselineRevisionId, revOne.id);
+    await db
+      .update(venomBuildRunsTable)
+      .set({ status: "cancelled" })
+      .where(eq(venomBuildRunsTable.id, liveBaselineRun.body.id));
+
+    // --- Arbitrary historical baselines stay rejected ---
+    const arbitraryBaseline = await request(
+      `/venom/apps/${portfolioApp.id}/iterations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          instruction: "Use a random baseline.",
+          idempotencyKey: randomUUID().replaceAll("-", "_"),
+          baselineIterationId: randomUUID(),
+        }),
+      },
+    );
+    assertStatus(arbitraryBaseline, 409);
+    assert.match(
+      String(arbitraryBaseline.body.error),
+      /newest approved package or the version that is live/,
+    );
+
+    // --- A rollback-restored release is visibly marked ---
+    await db
+      .update(venomCandidateReleasesTable)
+      .set({ rolledBackAt: new Date() })
+      .where(eq(venomCandidateReleasesTable.id, releaseOne.id));
+    const restoredContext = await request(
+      `/venom/apps/${portfolioApp.id}/iteration-context`,
+    );
+    assertStatus(restoredContext, 200);
+    assert.equal(restoredContext.body.divergence, "live_behind");
+    assert.equal(restoredContext.body.live.restoredByRollback, true);
+    const rolledDetail = await request(`/venom/apps/${portfolioApp.id}`);
+    assertStatus(rolledDetail, 200);
+    const rolledEntry = rolledDetail.body.timeline.find(
+      (entry: { id: string }) =>
+        entry.id === `release_rolled_back:${releaseOne.id}`,
+    );
+    assert.ok(rolledEntry);
+    assert.equal(rolledEntry.title, "Rolled back — package v1 live again");
+    assert.equal(rolledEntry.iterationNumber, 1);
+    assert.match(String(rolledEntry.detail), /live pointer was reset/);
+
+    // --- in_sync once the newest package is what's live ---
+    const [releaseTwo] = await db
+      .insert(venomCandidateReleasesTable)
+      .values({
+        clerkUserId: owner,
+        provisioningRunId: provRun.id,
+        buildRunId: runTwo.id,
+        approvedRevisionId: revTwo.id,
+        appId: portfolioApp.id,
+        targetName: "Anchor App",
+        providerCandidateId: "cand-anchor-2",
+        launchUrl: "https://example.com/anchor",
+        status: "published",
+        publishedAt: new Date(),
+      })
+      .returning();
+    await db
+      .update(venomPortfolioAppIterationsTable)
+      .set({ releaseId: releaseTwo.id })
+      .where(eq(venomPortfolioAppIterationsTable.id, iterTwo.id));
+    await db
+      .update(venomPortfolioAppsTable)
+      .set({ liveReleaseId: releaseTwo.id })
+      .where(eq(venomPortfolioAppsTable.id, portfolioApp.id));
+    const syncContext = await request(
+      `/venom/apps/${portfolioApp.id}/iteration-context`,
+    );
+    assertStatus(syncContext, 200);
+    assert.equal(syncContext.body.divergence, "in_sync");
+    assert.equal(syncContext.body.live.iterationId, iterTwo.id);
+    assert.equal(syncContext.body.live.iterationNumber, 2);
+    assert.equal(syncContext.body.live.baselineSelectable, false);
+    const syncDetail = await request(`/venom/apps/${portfolioApp.id}`);
+    assertStatus(syncDetail, 200);
+    const syncIterations = new Map<string, any>(
+      syncDetail.body.iterations.map((item: { id: string }) => [
+        item.id,
+        item,
+      ]),
+    );
+    assert.equal(syncIterations.get(iterTwo.id)!.isLive, true);
+    // The superseded iteration keeps naming the release it shipped as.
+    assert.equal(syncIterations.get(iterOne.id)!.isLive, false);
+    assert.equal(syncIterations.get(iterOne.id)!.releaseId, releaseOne.id);
+    // Explicitly choosing the newest baseline is always accepted.
+    const latestExplicit = await request(
+      `/venom/apps/${portfolioApp.id}/iterations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          instruction: "Iterate on the newest package.",
+          idempotencyKey: randomUUID().replaceAll("-", "_"),
+          baselineIterationId: iterTwo.id,
+        }),
+      },
+    );
+    assertStatus(latestExplicit, 201);
+    assert.equal(latestExplicit.body.request.baselineRevisionId, revTwo.id);
+    await db
+      .update(venomBuildRunsTable)
+      .set({ status: "cancelled" })
+      .where(eq(venomBuildRunsTable.id, latestExplicit.body.id));
+
+    // --- live_unversioned when the live release maps to no known package ---
+    const [releaseThree] = await db
+      .insert(venomCandidateReleasesTable)
+      .values({
+        clerkUserId: owner,
+        provisioningRunId: provRun.id,
+        buildRunId: randomUUID(),
+        approvedRevisionId: randomUUID(),
+        appId: portfolioApp.id,
+        targetName: "Anchor App",
+        providerCandidateId: "cand-anchor-3",
+        launchUrl: "https://example.com/anchor",
+        status: "published",
+        publishedAt: new Date(),
+      })
+      .returning();
+    await db
+      .update(venomPortfolioAppsTable)
+      .set({ liveReleaseId: releaseThree.id })
+      .where(eq(venomPortfolioAppsTable.id, portfolioApp.id));
+    const unversionedContext = await request(
+      `/venom/apps/${portfolioApp.id}/iteration-context`,
+    );
+    assertStatus(unversionedContext, 200);
+    assert.equal(unversionedContext.body.divergence, "live_unversioned");
+    assert.equal(unversionedContext.body.live.releaseId, releaseThree.id);
+    assert.equal(unversionedContext.body.live.iterationId, null);
+    assert.equal(unversionedContext.body.live.iterationNumber, null);
+    assert.equal(unversionedContext.body.live.packageTitle, null);
+    assert.equal(unversionedContext.body.live.resolvable, false);
+    assert.equal(unversionedContext.body.live.baselineSelectable, false);
+    assert.equal(unversionedContext.body.canIterate, true);
+    const unversionedDetail = await request(`/venom/apps/${portfolioApp.id}`);
+    assertStatus(unversionedDetail, 200);
+    assert.equal(unversionedDetail.body.app.liveReleaseId, releaseThree.id);
+    assert.equal(unversionedDetail.body.app.liveIterationNumber, null);
+    // The previously-live version is no longer a valid conscious baseline...
+    const staleChoice = await request(
+      `/venom/apps/${portfolioApp.id}/iterations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          instruction: "Baseline on a version that is no longer live.",
+          idempotencyKey: randomUUID().replaceAll("-", "_"),
+          baselineIterationId: iterOne.id,
+        }),
+      },
+    );
+    assertStatus(staleChoice, 409);
+    // ...but the default newest-package path still works in the split state.
+    const defaultRun = await request(
+      `/venom/apps/${portfolioApp.id}/iterations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          instruction: "Iterate normally despite the unversioned release.",
+          idempotencyKey: randomUUID().replaceAll("-", "_"),
+        }),
+      },
+    );
+    assertStatus(defaultRun, 201);
+    assert.equal(defaultRun.body.request.baselineRevisionId, revTwo.id);
+  } finally {
+    server.close();
+    restorePortfolioAuth();
+    restoreBuildAuth();
+    restoreScheduler();
+    await db
+      .delete(venomCandidateReleasesTable)
+      .where(eq(venomCandidateReleasesTable.clerkUserId, owner));
+    await db
+      .delete(venomProvisioningRunsTable)
+      .where(eq(venomProvisioningRunsTable.clerkUserId, owner));
+    await db
+      .delete(venomBuildPackageRevisionsTable)
+      .where(eq(venomBuildPackageRevisionsTable.clerkUserId, owner));
+    await db
+      .delete(venomBuildRunsTable)
+      .where(eq(venomBuildRunsTable.clerkUserId, owner));
+    await db
+      .delete(venomPortfolioAppsTable)
+      .where(eq(venomPortfolioAppsTable.clerkUserId, owner));
   }
 });

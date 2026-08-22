@@ -23,4 +23,5 @@ export interface VenomAppIterationInput {
      * @pattern ^[A-Za-z0-9_-]+$
      */
   idempotencyKey: string;
+  baselineIterationId?: Uuid;
 }

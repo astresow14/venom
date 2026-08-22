@@ -22,7 +22,7 @@ import {
   SymbioteAuthBackdrop,
   useSymbioteInteraction,
 } from '@/components/SymbioteAuthBackdrop';
-import { VenomWordmark } from '@/components/VenomWordmark';
+import { VenomWordmarkReveal } from '@/components/VenomWordmarkReveal';
 import { useColors } from '@/hooks/useColors';
 
 type AuthScreenShellProps = {
@@ -117,11 +117,10 @@ export function AuthScreenShell({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Reveal>
-          <View style={styles.brand}>
-            <VenomWordmark color={colors.symbioteHighlight} height={32} />
-          </View>
-        </Reveal>
+        {/* The brand row tags itself on (one-time wipe) instead of fading. */}
+        <View style={styles.brand}>
+          <VenomWordmarkReveal color={colors.symbioteHighlight} height={32} />
+        </View>
 
         <View key={stateKey} style={styles.body}>
           {hero ? (

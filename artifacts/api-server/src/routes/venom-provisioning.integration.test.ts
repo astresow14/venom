@@ -21,9 +21,11 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import {
   db,
+  venomAppAiCredentialsTable,
   venomBuildPackageRevisionsTable,
   venomBuildRunsTable,
   venomCandidateReleasesTable,
+  venomPortfolioAppIterationsTable,
   venomPortfolioAppsTable,
   venomPortfolioSourceVersionsTable,
   venomProvisioningEventsTable,
@@ -98,6 +100,11 @@ type FakeProviderConfig = {
   startBuildWaitForAbort?: boolean;
   onCreateProject?: () => void;
   onHandoff?: (handoff: unknown) => void;
+  onDeliverRuntimeCredentials?: (opts: {
+    providerProjectId: string;
+    credentials: { envVars: Record<string, string> };
+  }) => void;
+  deliverRuntimeCredentialsError?: Error;
   onPublish?: () => void;
   onRollback?: () => void;
   onCancel?: () => void;
@@ -119,6 +126,7 @@ function makeFakeProvider(config: FakeProviderConfig = {}): ProvisioningProvider
         supportedTargetTypes: health === "healthy" ? ["app", "website"] : [],
         rollbackSupported: config.rollbackSupportedResult ?? false,
         publishSupported: health === "healthy",
+        frameEmbeddingSupported: true,
       };
     },
     async validatePermissions(
@@ -147,6 +155,15 @@ function makeFakeProvider(config: FakeProviderConfig = {}): ProvisioningProvider
     async handOffPackage(opts): Promise<void> {
       config.onHandoff?.(opts.handoff);
       if (config.handOffError) throw config.handOffError;
+    },
+    async deliverRuntimeCredentials(opts): Promise<void> {
+      config.onDeliverRuntimeCredentials?.({
+        providerProjectId: opts.providerProjectId,
+        credentials: opts.credentials,
+      });
+      if (config.deliverRuntimeCredentialsError) {
+        throw config.deliverRuntimeCredentialsError;
+      }
     },
     async startBuild(opts): Promise<ProviderBuildResult> {
       if (config.startBuildWaitForAbort) {
@@ -774,6 +791,33 @@ test("provisioning routes: comprehensive backend coverage", async () => {
     assert.equal(publishedRelease.launchUrl, "https://example.com/live");
     assert.ok(publishedRelease.publishedAt);
 
+    // The publish transaction anchored the app's live pointer to the release.
+    const [appAfterPublish] = await db
+      .select()
+      .from(venomPortfolioAppsTable)
+      .where(eq(venomPortfolioAppsTable.id, publishedRelease.appId!));
+    assert.equal(appAfterPublish.liveReleaseId, successReleaseId);
+
+    // Register the first run's package iteration only AFTER its release
+    // published — history that predates release stamping. Publish could not
+    // stamp it, so the rollback later in this test must backfill the stamp.
+    const [iterationOne] = await db
+      .insert(venomPortfolioAppIterationsTable)
+      .values({
+        appId: publishedRelease.appId!,
+        clerkUserId: ownerA,
+        iterationNumber: 1,
+        buildRunId: successBuildRun.id,
+        revisionId: successBuildRun.approvedRevisionId!,
+        packageTitle: "Test App",
+        packageChecksum: "a".repeat(64),
+        runKind: "standard",
+        reason: "Approved build package",
+        createdBy: ownerA,
+      })
+      .returning();
+    assert.equal(iterationOne.releaseId, null);
+
     // ── Test 18: Failed publish preserves healthy deployment ─────────────────
     const { run: failPubBuildRun } = await createApprovedBuildRun(
       ownerA,
@@ -837,6 +881,31 @@ test("provisioning routes: comprehensive backend coverage", async () => {
       .where(eq(venomCandidateReleasesTable.id, successReleaseId));
     assert.equal(stillPublished.status, "published");
 
+    // A failed publish must not move the live pointer either.
+    const [appAfterFailedPublish] = await db
+      .select()
+      .from(venomPortfolioAppsTable)
+      .where(eq(venomPortfolioAppsTable.id, publishedRelease.appId!));
+    assert.equal(appAfterFailedPublish.liveReleaseId, successReleaseId);
+
+    // The second run's package iteration is registered BEFORE its release
+    // publishes, the way approval normally precedes provisioning.
+    const [iterationTwo] = await db
+      .insert(venomPortfolioAppIterationsTable)
+      .values({
+        appId: publishedRelease.appId!,
+        clerkUserId: ownerA,
+        iterationNumber: 2,
+        buildRunId: failPubBuildRun.id,
+        revisionId: failPubBuildRun.approvedRevisionId!,
+        packageTitle: "Test App",
+        packageChecksum: "b".repeat(64),
+        runKind: "app_iteration",
+        reason: "Owner-requested improvement",
+        createdBy: ownerA,
+      })
+      .returning();
+
     // Retry the failed publish with the same operation key after the provider
     // recovers. This must publish the existing candidate and supersede the
     // previous healthy release without creating another candidate.
@@ -867,6 +936,29 @@ test("provisioning routes: comprehensive backend coverage", async () => {
       .from(venomCandidateReleasesTable)
       .where(eq(venomCandidateReleasesTable.id, successReleaseId));
     assert.equal(nowSuperseded.status, "superseded");
+
+    // The live pointer moved to the newly published release, whose iteration
+    // is stamped with the release it shipped as. The other run's iteration
+    // stays untouched.
+    const [appAfterRecovered] = await db
+      .select()
+      .from(venomPortfolioAppsTable)
+      .where(eq(venomPortfolioAppsTable.id, publishedRelease.appId!));
+    assert.equal(appAfterRecovered.liveReleaseId, failPubReleaseId);
+    const [iterationTwoStamped] = await db
+      .select()
+      .from(venomPortfolioAppIterationsTable)
+      .where(eq(venomPortfolioAppIterationsTable.id, iterationTwo.id));
+    assert.equal(iterationTwoStamped.releaseId, failPubReleaseId);
+    const [iterationOneUnstamped] = await db
+      .select()
+      .from(venomPortfolioAppIterationsTable)
+      .where(eq(venomPortfolioAppIterationsTable.id, iterationOne.id));
+    assert.equal(
+      iterationOneUnstamped.releaseId,
+      null,
+      "publishing one run must not stamp another run's iteration",
+    );
 
     // ── Test 19: Rollback — supported ────────────────────────────────────────
     let rollbackCalls = 0;
@@ -927,6 +1019,25 @@ test("provisioning routes: comprehensive backend coverage", async () => {
       .where(eq(venomCandidateReleasesTable.id, failPubReleaseId));
     assert.equal(supersededAfterRollback.status, "superseded");
     restoreRollback();
+
+    // The rollback visibly reset the live pointer to the restored release
+    // and backfilled the stamp on its pre-stamping iteration, while the
+    // superseded iteration keeps naming the release it actually shipped as.
+    const [appAfterRollback] = await db
+      .select()
+      .from(venomPortfolioAppsTable)
+      .where(eq(venomPortfolioAppsTable.id, publishedRelease.appId!));
+    assert.equal(appAfterRollback.liveReleaseId, successReleaseId);
+    const [iterationOneRestamped] = await db
+      .select()
+      .from(venomPortfolioAppIterationsTable)
+      .where(eq(venomPortfolioAppIterationsTable.id, iterationOne.id));
+    assert.equal(iterationOneRestamped.releaseId, successReleaseId);
+    const [iterationTwoAfterRollback] = await db
+      .select()
+      .from(venomPortfolioAppIterationsTable)
+      .where(eq(venomPortfolioAppIterationsTable.id, iterationTwo.id));
+    assert.equal(iterationTwoAfterRollback.releaseId, failPubReleaseId);
 
     // ── Test 20: Rollback — not supported ────────────────────────────────────
     // Set rollbackSupported = false
@@ -1172,7 +1283,11 @@ test("provisioning routes: comprehensive backend coverage", async () => {
     createdRunIds.push(queuedProv.id);
 
     scheduled.length = 0;
-    await reconcileProvisioningQueueForTests();
+    // Rescue only claims rows older than the grace period. Run reconcile on a
+    // future clock so this fresh fixture qualifies inside this invocation
+    // only — backdating createdAt instead would expose the row to the live
+    // dev server's reconcile loop on the shared database.
+    await reconcileProvisioningQueueForTests(Date.now() + 3 * 60_000);
     assert.ok(scheduled.some((s) => s.runId === queuedProv.id));
 
     // ── Test 26: Secret redaction — no sensitive data in logs ────────────────
@@ -1190,6 +1305,7 @@ test("provisioning routes: comprehensive backend coverage", async () => {
         supportedTargetTypes: ["app" as const, "website" as const],
         rollbackSupported: false,
         publishSupported: true,
+        frameEmbeddingSupported: true,
       }),
       validatePermissions: async (integrations) => ({
         allowed: integrations,
@@ -1201,6 +1317,7 @@ test("provisioning routes: comprehensive backend coverage", async () => {
         );
       },
       handOffPackage: async () => {},
+      deliverRuntimeCredentials: async () => {},
       startBuild: async () => ({ providerBuildId: "x", status: "started" as const }),
       getBuildStatus: async () => ({
         providerBuildId: "x",
@@ -1872,5 +1989,244 @@ test("provisioning routes: comprehensive backend coverage", async () => {
       .where(
         inArray(venomPortfolioAppsTable.clerkUserId, [ownerA, ownerB]),
       );
+  }
+});
+
+test("provisioning delivers whitelabeled AI runtime credentials", async () => {
+  const suffix = randomUUID().replace(/-/g, "").slice(0, 12);
+  const owner = `prov-ai-${suffix}`;
+
+  const restoreAuth = overrideProvisioningUserIdResolverForTests(() => owner);
+  const restoreScheduler = overrideProvisioningSchedulerForTests(() => {});
+
+  const handoffs: any[] = [];
+  const deliveries: Array<{
+    providerProjectId: string;
+    credentials: { envVars: Record<string, string> };
+  }> = [];
+  const makeAiProvider = (projectId: string): ProvisioningProvider =>
+    makeFakeProvider({
+      capabilityHealth: "healthy",
+      projectIdToReturn: projectId,
+      onHandoff: (handoff) => handoffs.push(handoff),
+      onDeliverRuntimeCredentials: (opts) => deliveries.push(opts),
+    });
+  let restoreProvider = overrideProvisioningProviderForTests(
+    makeAiProvider("ai-cred-project-1"),
+  );
+
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    req.log = {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    } as unknown as typeof req.log;
+    next();
+  });
+  app.use(router);
+  const server = app.listen(0);
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const addr = server.address();
+  assert.ok(addr && typeof addr === "object");
+  const baseUrl = `http://127.0.0.1:${addr.port}`;
+
+  const request = async (
+    path: string,
+    options: RequestInit = {},
+  ): Promise<TestResponse> => {
+    const resp = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers: { "content-type": "application/json", ...options.headers },
+    });
+    const raw = await resp.text();
+    let body: any = null;
+    if (raw) {
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        body = raw;
+      }
+    }
+    return { status: resp.status, body };
+  };
+
+  const createdBuildRunIds: string[] = [];
+  const createdRunIds: string[] = [];
+  let appId: string | null = null;
+
+  const provisionAndProcess = async (
+    buildRunId: string,
+    approvedRevisionId: string | null,
+    targetName: string,
+  ): Promise<TestResponse> => {
+    const created = await request(
+      `/venom/build-runs/${buildRunId}/provision`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          approvedRevisionId,
+          idempotencyKey: randomUUID().replaceAll("-", "_").slice(0, 20),
+          targetName,
+          requestedIntegrations: [],
+          deploymentIntent: "create_candidate",
+        }),
+      },
+    );
+    assertStatus(created, 201);
+    createdRunIds.push(created.body.id);
+    await processProvisioningRunForTests(owner, created.body.id);
+    const detail = await request(
+      `/venom/provisioning/runs/${created.body.id}`,
+    );
+    assertStatus(detail, 200);
+    return detail;
+  };
+
+  try {
+    // First provisioning: the app record does not exist yet at handoff time,
+    // so the handoff itself carries no credentials — the mint happens after
+    // the app row is created and goes out through the dedicated provider
+    // delivery call instead.
+    const { run: firstRun } = await createApprovedBuildRun(owner);
+    createdBuildRunIds.push(firstRun.id);
+    const firstDetail = await provisionAndProcess(
+      firstRun.id,
+      firstRun.approvedRevisionId,
+      firstRun.targetName,
+    );
+    assert.equal(firstDetail.body.status, "candidate_ready");
+    appId = firstDetail.body.appId;
+    assert.ok(appId);
+
+    assert.equal(handoffs.length, 1);
+    assert.equal(handoffs[0].runtimeCredentials, null);
+    assert.equal(deliveries.length, 1);
+    assert.equal(deliveries[0].providerProjectId, "ai-cred-project-1");
+    const firstKey = deliveries[0].credentials.envVars.VENOM_AI_GATEWAY_KEY;
+    const firstUrl = deliveries[0].credentials.envVars.VENOM_AI_GATEWAY_URL;
+    assert.match(firstKey, /^vak_[0-9a-f]{40}$/);
+    assert.ok(firstUrl.endsWith("/api/app-gateway/v1"));
+
+    const firstCreds = await db
+      .select()
+      .from(venomAppAiCredentialsTable)
+      .where(eq(venomAppAiCredentialsTable.appId, appId));
+    assert.equal(firstCreds.length, 1);
+    assert.equal(firstCreds[0].status, "active");
+    assert.equal(firstCreds[0].clerkUserId, owner);
+    assert.ok(firstCreds[0].deliveredAt);
+    assert.equal(
+      firstCreds[0].deliveredProviderProjectId,
+      "ai-cred-project-1",
+    );
+    assert.match(firstCreds[0].tokenHash, /^[0-9a-f]{64}$/);
+    assert.equal(firstCreds[0].displayPrefix, firstKey.slice(0, 12));
+    assert.equal(
+      JSON.stringify(firstDetail.body).includes("vak_"),
+      false,
+      "credential secrets must never appear in run payloads",
+    );
+
+    // Iteration handoff to the SAME provider project: the secret storage
+    // already holds the credential, so nothing rides along and no remint
+    // happens.
+    const { run: secondRun } = await createApprovedBuildRun(
+      owner,
+      "app",
+      appId,
+    );
+    createdBuildRunIds.push(secondRun.id);
+    const secondDetail = await provisionAndProcess(
+      secondRun.id,
+      secondRun.approvedRevisionId,
+      secondRun.targetName,
+    );
+    assert.equal(secondDetail.body.status, "candidate_ready");
+    assert.equal(handoffs.length, 2);
+    assert.equal(handoffs[1].runtimeCredentials, null);
+    assert.equal(deliveries.length, 1);
+    const unchanged = await db
+      .select()
+      .from(venomAppAiCredentialsTable)
+      .where(eq(venomAppAiCredentialsTable.appId, appId));
+    assert.equal(unchanged.length, 1, "same-project re-handoff must not remint");
+
+    // The same app landing on a NEW provider project: a fresh credential is
+    // minted (the old one revoked) and delivered through the dedicated
+    // provider call right after the package handoff. The package itself
+    // never carries the secret — every provider secret write goes through
+    // the serialized credential-lifecycle guard.
+    restoreProvider();
+    restoreProvider = overrideProvisioningProviderForTests(
+      makeAiProvider("ai-cred-project-2"),
+    );
+    const { run: thirdRun } = await createApprovedBuildRun(owner, "app", appId);
+    createdBuildRunIds.push(thirdRun.id);
+    const thirdDetail = await provisionAndProcess(
+      thirdRun.id,
+      thirdRun.approvedRevisionId,
+      thirdRun.targetName,
+    );
+    assert.equal(thirdDetail.body.status, "candidate_ready");
+    assert.equal(handoffs.length, 3);
+    assert.equal(
+      handoffs[2].runtimeCredentials,
+      null,
+      "the package handoff must never carry the gateway secret",
+    );
+    assert.equal(deliveries.length, 2, "project move re-delivers via the dedicated call");
+    assert.equal(deliveries[1].providerProjectId, "ai-cred-project-2");
+    const thirdKey = deliveries[1].credentials.envVars.VENOM_AI_GATEWAY_KEY;
+    assert.match(thirdKey, /^vak_[0-9a-f]{40}$/);
+    assert.notEqual(thirdKey, firstKey);
+
+    const finalCreds = await db
+      .select()
+      .from(venomAppAiCredentialsTable)
+      .where(eq(venomAppAiCredentialsTable.appId, appId));
+    assert.equal(finalCreds.length, 2);
+    const active = finalCreds.filter((row) => row.status === "active");
+    assert.equal(active.length, 1);
+    assert.equal(active[0].deliveredProviderProjectId, "ai-cred-project-2");
+    assert.equal(active[0].displayPrefix, thirdKey.slice(0, 12));
+    const revoked = finalCreds.find((row) => row.status === "revoked");
+    assert.ok(revoked?.revokedAt, "old credential must be revoked on remint");
+  } finally {
+    restoreProvider();
+    restoreScheduler();
+    restoreAuth();
+    server.close();
+    if (createdRunIds.length > 0) {
+      await db
+        .delete(venomProvisioningEventsTable)
+        .where(
+          inArray(venomProvisioningEventsTable.provisioningRunId, createdRunIds),
+        );
+      await db
+        .delete(venomCandidateReleasesTable)
+        .where(
+          inArray(venomCandidateReleasesTable.provisioningRunId, createdRunIds),
+        );
+      await db
+        .delete(venomProvisioningRunsTable)
+        .where(inArray(venomProvisioningRunsTable.id, createdRunIds));
+    }
+    if (appId) {
+      await db
+        .delete(venomPortfolioAppsTable)
+        .where(eq(venomPortfolioAppsTable.id, appId));
+    }
+    if (createdBuildRunIds.length > 0) {
+      await db
+        .delete(venomBuildPackageRevisionsTable)
+        .where(
+          inArray(venomBuildPackageRevisionsTable.runId, createdBuildRunIds),
+        );
+      await db
+        .delete(venomBuildRunsTable)
+        .where(inArray(venomBuildRunsTable.id, createdBuildRunIds));
+    }
   }
 });

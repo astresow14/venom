@@ -10,8 +10,10 @@ import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 import {
   createAdaptiveQuality,
   createEmptyField,
+  createSlimeBloom,
   createSlimeEmphasis,
   createSlimeLife,
+  createSlimeMomentum,
   createSlimeRenderer,
   packSlimeField,
   type SlimeCapacity,
@@ -98,7 +100,32 @@ type SlimeTelemetry = {
   changes: number;
   bufferWidth: number;
   bufferHeight: number;
+  /** First real drawing-buffer width, before adaptation can shrink it. */
+  initialBufferWidth: number;
+  /**
+   * Buffer width expressed as a fraction of the full map surface (mapSize ×
+   * pixel ratio). Lets a test prove a shed layout fraction actually reached
+   * the drawing buffer without racing to snapshot the pre-shed size.
+   */
+  bufferFraction: number;
+  /** The capacity tier this context actually compiled. */
+  capacity: { blobs: number; links: number; drops: number };
+  /** Droplets packed into the most recently rendered frame. */
+  dropCount: number;
+  /** True while the loop is parked because the hosting tab is off screen. */
+  paused: boolean;
 };
+
+/**
+ * A throttled telemetry snapshot handed to `onTelemetry`, for surfaces that
+ * want to show a human the adaptation live (the dev goo HUD on a phone).
+ * `fps` is the raw shaded-frame rate over the sample window — an eyeball
+ * number, not the trimmed mean the controller decides with.
+ */
+export type SlimeTelemetrySample = SlimeTelemetry & { fps: number };
+
+/** Milliseconds between `onTelemetry` samples. */
+const TELEMETRY_SAMPLE_MS = 500;
 
 type SymbioteSlimeProps = {
   /** Nodes already projected into map space, matching the node layer above. */
@@ -106,6 +133,12 @@ type SymbioteSlimeProps = {
   edges: readonly SlimeEdge[];
   /** Width and height of the square map these coordinates belong to. */
   mapSize: number;
+  /**
+   * Whether the workspace hosting this map is the one on screen. Workspace
+   * pages stay mounted while the user is on other tabs, so when this goes
+   * false the rAF loop parks entirely instead of shading unseen pixels.
+   */
+  isActive?: boolean;
   reduceMotion?: boolean;
   /** Concept the user has committed to; the mass swells hardest around it. */
   selectedId?: string | null;
@@ -120,6 +153,13 @@ type SymbioteSlimeProps = {
   surfaceFractionOverride?: number | null;
   /** Test hook: publish adaptation counters on `globalThis.__venomSlime`. */
   exposeTelemetry?: boolean;
+  /**
+   * Live diagnostics hook: receives a throttled telemetry sample (~2/s of
+   * shaded time) so a dev HUD can show the adaptation working on a real
+   * device. Read per sample, so it may appear or disappear while the
+   * context lives.
+   */
+  onTelemetry?: ((sample: SlimeTelemetrySample) => void) | null;
 };
 
 /**
@@ -134,12 +174,14 @@ export function SymbioteSlime({
   nodes,
   edges,
   mapSize,
+  isActive = true,
   reduceMotion = false,
   selectedId = null,
   touchedId = null,
   capacityOverride = null,
   surfaceFractionOverride = null,
   exposeTelemetry = false,
+  onTelemetry = null,
 }: SymbioteSlimeProps) {
   const boundsRef = useRef(surfaceBounds());
   const [fraction, setFraction] = useState(() => {
@@ -156,6 +198,42 @@ export function SymbioteSlime({
   // WebGL must get no surface rather than a crashed map.
   const [webGLAvailable] = useState(canServeWebGL);
 
+  // Written during render (like sceneRef) so a context created while the tab
+  // is off screen never starts drawing; read by the loop on every frame.
+  const activeRef = useRef(isActive);
+  activeRef.current = isActive;
+  /** start/pause controls for the live GL loop, once a context exists. */
+  const loopRef = useRef<{ start: () => void; pause: () => void } | null>(
+    null,
+  );
+  // Expo GL web's Canvas wrapper normally mirrors layout into the canvas
+  // buffer. Under a saturated software rasterizer, its layout effect can be
+  // starved after an adaptive resize, leaving WebGL at the old buffer size.
+  // Keep the real canvas handle only on web and mirror the committed fraction
+  // ourselves; native still relies exclusively on GLView's layout resize.
+  const webCanvasRef = useRef<{ width: number; height: number } | null>(null);
+  const setWebCanvasRef = useCallback((canvas: unknown) => {
+    if (Platform.OS !== "web") return;
+    const nextCanvas = canvas as { width: number; height: number } | null;
+    webCanvasRef.current = nextCanvas;
+    if (!nextCanvas) return;
+    const scale = PixelRatio.get() || 1;
+    const width = Math.round(mapSize * fractionRef.current * scale);
+    if (nextCanvas.width !== width) nextCanvas.width = width;
+    if (nextCanvas.height !== width) nextCanvas.height = width;
+  }, [mapSize]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const canvas = webCanvasRef.current;
+    if (!canvas) return;
+    const scale = PixelRatio.get() || 1;
+    const width = Math.round(mapSize * fraction * scale);
+    const height = Math.round(mapSize * fraction * scale);
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
+  }, [fraction, mapSize]);
+
   const sceneRef = useRef({
     nodes,
     edges,
@@ -166,6 +244,7 @@ export function SymbioteSlime({
     capacityOverride,
     surfaceFractionOverride,
     exposeTelemetry,
+    onTelemetry,
   });
   const teardownRef = useRef<(() => void) | null>(null);
 
@@ -179,9 +258,17 @@ export function SymbioteSlime({
     capacityOverride,
     surfaceFractionOverride,
     exposeTelemetry,
+    onTelemetry,
   };
 
   useEffect(() => () => teardownRef.current?.(), []);
+
+  // Workspace pages stay mounted while the user is on other tabs; drive the
+  // loop from the tab selection so the goo only shades frames someone sees.
+  useEffect(() => {
+    if (isActive) loopRef.current?.start();
+    else loopRef.current?.pause();
+  }, [isActive]);
 
   const onContextCreate = useCallback((gl: ExpoWebGLRenderingContext) => {
     teardownRef.current?.();
@@ -205,6 +292,13 @@ export function SymbioteSlime({
     // Touch emphasis: the mass swells around the selected concept and the
     // one under the user's finger.
     const emphasis = createSlimeEmphasis();
+    // Camera momentum: the mass trails an orbit or fling and settles instead
+    // of reprojecting rigidly with the gesture.
+    const momentum = createSlimeMomentum();
+    // Bloom-in: a concept absorbed while the map is open grows out of the
+    // mass instead of popping in. Session-scoped, so the first populated
+    // frame appears settled.
+    const bloom = createSlimeBloom();
 
     const bounds = boundsRef.current;
     const pinned = sceneRef.current.surfaceFractionOverride != null;
@@ -219,20 +313,26 @@ export function SymbioteSlime({
           maxScale: bounds.max,
         });
 
-    const telemetry: SlimeTelemetry | null = sceneRef.current.exposeTelemetry
-      ? {
-          pinned,
-          scale: fractionRef.current,
-          initialScale: fractionRef.current,
-          minScale: bounds.min,
-          maxScale: bounds.max,
-          frames: 0,
-          changes: 0,
-          bufferWidth: 0,
-          bufferHeight: 0,
-        }
-      : null;
-    if (telemetry) {
+    // Counters are kept unconditionally (a handful of number writes per
+    // frame) so the dev HUD can attach *after* the context was created;
+    // only the `globalThis` publication stays gated on the test hook.
+    const telemetry: SlimeTelemetry = {
+      pinned,
+      scale: fractionRef.current,
+      initialScale: fractionRef.current,
+      minScale: bounds.min,
+      maxScale: bounds.max,
+      frames: 0,
+      changes: 0,
+      bufferWidth: 0,
+      bufferHeight: 0,
+      initialBufferWidth: 0,
+      bufferFraction: 0,
+      capacity: { ...renderer.capacity },
+      dropCount: 0,
+      paused: !activeRef.current,
+    };
+    if (sceneRef.current.exposeTelemetry) {
       (globalThis as { __venomSlime?: SlimeTelemetry }).__venomSlime =
         telemetry;
     }
@@ -242,9 +342,20 @@ export function SymbioteSlime({
     let bufferWidth = 0;
     let bufferHeight = 0;
     const startedAt = Date.now();
+    // Sample window for the throttled onTelemetry callback.
+    let sampleStartedAt = 0;
+    let framesAtSampleStart = 0;
 
     const draw = () => {
       if (stopped) return;
+      if (!activeRef.current) {
+        // The tab flipped between scheduling and this callback: park here
+        // instead of shading a frame nobody sees; start() reschedules when
+        // the workspace returns.
+        frame = 0;
+        telemetry.paused = true;
+        return;
+      }
 
       // The drawing buffer is measured every frame on purpose. On web the
       // context is handed over before the canvas has been laid out, so it
@@ -265,17 +376,46 @@ export function SymbioteSlime({
           typeof performance !== "undefined" ? performance.now() : Date.now();
         if (quality?.frame(sampledAt)) {
           fractionRef.current = quality.scale;
-          if (telemetry) telemetry.changes += 1;
+          telemetry.changes += 1;
           // Resizing the laid-out view resizes the drawing buffer; the
           // per-frame measurement above picks the new size up when it lands.
           setFraction(quality.scale);
         }
 
-        if (telemetry) {
-          telemetry.frames += 1;
-          telemetry.scale = fractionRef.current;
-          telemetry.bufferWidth = width;
-          telemetry.bufferHeight = height;
+        telemetry.frames += 1;
+        telemetry.scale = fractionRef.current;
+        telemetry.bufferWidth = width;
+        telemetry.bufferHeight = height;
+        if (telemetry.initialBufferWidth === 0) {
+          telemetry.initialBufferWidth = width;
+        }
+        telemetry.bufferFraction =
+          width /
+          Math.max(
+            sceneRef.current.mapSize * Math.max(PixelRatio.get() || 1, 0.5),
+            1,
+          );
+
+        // Throttled live sample for the dev HUD. Windowed over shaded
+        // frames only, so the fps number means "goo frames", not rAF ticks
+        // against a missing surface.
+        if (sampleStartedAt === 0) {
+          sampleStartedAt = sampledAt;
+          framesAtSampleStart = telemetry.frames;
+        } else if (sampledAt - sampleStartedAt >= TELEMETRY_SAMPLE_MS) {
+          const listener = sceneRef.current.onTelemetry;
+          if (listener) {
+            const elapsed = sampledAt - sampleStartedAt;
+            const fps =
+              ((telemetry.frames - framesAtSampleStart) * 1000) / elapsed;
+            listener({
+              ...telemetry,
+              capacity: { ...telemetry.capacity },
+              fps,
+            });
+          }
+          sampleStartedAt = sampledAt;
+          framesAtSampleStart = telemetry.frames;
         }
 
         const scene = sceneRef.current;
@@ -287,12 +427,23 @@ export function SymbioteSlime({
         // so pan and zoom carry the whole colony. Reduced motion freezes the
         // sim: same population, no movement.
         const now = (Date.now() - startedAt) / 1000;
-        // The mass leans toward the concept the user is touching. Folded in
-        // before the life step so droplets orbit the swollen radius too;
-        // reduced motion applies the state change instantly instead of
-        // easing it.
+      // Camera momentum first: flinging the orbit makes the mass lag, stretch
+      // and settle rather than move rigidly. Reduced motion keeps the motion
+      // rigid — no added animation.
+      const flung = momentum.step(scene.nodes, now, {
+        frozen: scene.reduceMotion,
+      });
+      // Newly absorbed concepts grow out of the mass next, on the trailed
+      // geometry, so everything downstream tracks the growing size; reduced
+      // motion shows newcomers at full size immediately.
+      const grown = bloom.step(flung, now, {
+        frozen: scene.reduceMotion,
+      });
+      // The mass leans toward the concept the user is touching. Folded in
+      // after momentum and bloom so droplets orbit the swollen radius too;
+      // reduced motion applies the state change instantly instead of easing.
         const touched = emphasis.step(
-          scene.nodes,
+        grown,
           scene.edges,
           { selectedId: scene.selectedId, hoveredId: scene.touchedId },
           now,
@@ -303,6 +454,7 @@ export function SymbioteSlime({
           frozen: scene.reduceMotion,
         });
         packSlimeField(living.nodes, scene.edges, scale, field, living.droplets);
+        telemetry.dropCount = field.dropCount;
 
         const time = scene.reduceMotion ? 0 : now;
         // Fusion distance is in drawing-buffer pixels, so it has to track the
@@ -313,18 +465,46 @@ export function SymbioteSlime({
         gl.endFrameEXP?.();
       } else {
         // While the surface is missing (backgrounded, mid-layout) the clock
-        // keeps running; those gaps are pauses, not frames.
+        // keeps running; those gaps are pauses, not frames — for the fps
+        // sample window just as much as for the controller.
         quality?.reset();
+        sampleStartedAt = 0;
       }
 
       frame = requestAnimationFrame(draw);
     };
 
-    draw();
+    const start = () => {
+      if (stopped || frame) return;
+      // The clock kept running while the loop was parked; that gap is a
+      // pause, not a frame, so forget the cadence before measuring again.
+      quality?.reset();
+      telemetry.paused = false;
+      // Enter the first frame synchronously. On Expo GL web, waiting an
+      // extra rAF after context creation can leave the canvas observing its
+      // pre-layout size while React applies the adaptive fraction, so the
+      // controller sheds quality but the drawing buffer never follows.
+      // draw() schedules all later frames and pause() still cancels them.
+      draw();
+    };
+
+    const pause = () => {
+      telemetry.paused = true;
+      if (!frame) return;
+      cancelAnimationFrame(frame);
+      frame = 0;
+    };
+
+    loopRef.current = { start, pause };
+    // A context can be created while the user is on another tab: stay parked
+    // until the map is on screen.
+    if (activeRef.current) start();
 
     teardownRef.current = () => {
       stopped = true;
+      loopRef.current = null;
       if (frame) cancelAnimationFrame(frame);
+      frame = 0;
       renderer.dispose();
       teardownRef.current = null;
     };
@@ -350,6 +530,7 @@ export function SymbioteSlime({
         key={`slime-${mapSize}`}
         style={surface}
         onContextCreate={onContextCreate}
+        nativeRef_EXPERIMENTAL={setWebCanvasRef}
       />
     </View>
   );

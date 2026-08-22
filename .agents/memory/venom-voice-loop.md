@@ -49,6 +49,27 @@ utterance twice. Browser tests only caught this after asserting
 found it first. When a UI has live + settled copies of the same data, always
 assert the handoff, not just each region's content.
 
+## Hands-free barge-in rides a ducked detector, not a muted mic
+
+**Rule:** while the reply plays, capture stays hot (resume right after
+playback `started`) with the shared speech detector "ducked": speech must
+clear `max(room threshold, playbackLevel × multiplier)` and hold slightly
+longer, playback `level` events refresh the gate, and finalize exits ducking.
+Noise-floor learning stays gated on the **un-ducked** threshold so playback
+bleed can never teach (deafen) the floor; ducking must survive
+`detector.reset()` because pause/resume does not mean playback stopped.
+
+**Why:** the naive version (mic hot, plain detector) self-interrupts on the
+bot's own speaker audio; the other naive version (feed bleed to the floor)
+leaves the detector deaf for turns after a long reply.
+
+**How to apply:** any "listen while playing" feature should parameterize the
+existing detector (duck options + setDucking on the capture handle) rather
+than fork it. Barge-in and orb-tap share one cut-reply-short path so filing
+and restraint-outcome semantics cannot drift. On native, also request the
+platform echo canceller (Android `audioSource: 'voice_communication'`;
+expo-audio exposes no iOS knob — the gate carries iOS).
+
 ## Testing the loop
 
 The deterministic audio harness is driven by window events
@@ -57,4 +78,13 @@ with `__venomVoiceHoldPlayback`) and observed via `__venomVoicePlaybackLog` /
 `__venomVoiceCaptureState`. Hold playback to keep the "speaking" state
 observable; remember the assistant text stays in the live region until
 playback finishes, so held playback means asserting `voice-live-assistant`,
-not the transcript entry.
+not the transcript entry (a barge-in *files* the partial, so after cutting a
+held reply the transcript entry does exist).
+
+`venom-voice:level` events (with explicit `atMs`) run through a real
+SpeechDetector in the harness, so specs can prove level-driven behavior:
+sustained loud levels barge in, bleed-band levels under the duck gate do
+nothing, and a quiet tail emits the utterance. Ducking is observable via
+`__venomVoiceCaptureDucking`. Harness pause/resume mirror web exactly —
+resume on an unpaused capture is a no-op (a resume that reset the detector
+would destroy the in-flight barge-in utterance).

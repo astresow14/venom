@@ -32,12 +32,13 @@ export type BlendPadCorner = {
   sublabel?: string;
 };
 
-// Pad geometry: unit triangle mapped into a padded SVG viewport.
+// Pad geometry: unit triangle mapped into a padded SVG viewport. The top and
+// bottom insets leave room for a two-line corner caption (label + sublabel).
 const PAD_W = 236;
-const PAD_H = 190;
+const PAD_H = 210;
 const INSET_X = 34;
-const INSET_TOP = 26;
-const INSET_BOTTOM = 30;
+const INSET_TOP = 36;
+const INSET_BOTTOM = 40;
 
 function toSvg(point: { x: number; y: number }) {
   return {
@@ -145,12 +146,28 @@ export function BlendPad({
     onCommit(next);
   };
 
-  // Corner label anchor positions around the triangle.
+  // Corner caption anchors around the triangle: the label line plus an
+  // optional sublabel line (the model playing that voice) beneath it.
   const labelProps = useMemo(
     () => [
-      { x: CORNER_SVG[0].x, y: CORNER_SVG[0].y - 12, anchor: "middle" as const },
-      { x: CORNER_SVG[1].x, y: CORNER_SVG[1].y + 16, anchor: "start" as const },
-      { x: CORNER_SVG[2].x, y: CORNER_SVG[2].y + 16, anchor: "end" as const },
+      {
+        x: CORNER_SVG[0].x,
+        y: CORNER_SVG[0].y - 22,
+        subY: CORNER_SVG[0].y - 11,
+        anchor: "middle" as const,
+      },
+      {
+        x: CORNER_SVG[1].x,
+        y: CORNER_SVG[1].y + 16,
+        subY: CORNER_SVG[1].y + 27,
+        anchor: "start" as const,
+      },
+      {
+        x: CORNER_SVG[2].x,
+        y: CORNER_SVG[2].y + 16,
+        subY: CORNER_SVG[2].y + 27,
+        anchor: "end" as const,
+      },
     ],
     [],
   );
@@ -211,15 +228,27 @@ export function BlendPad({
         {/* Corner labels double as favor buttons (see the button row below for
             the accessible path; these are visual). */}
         {labelProps.map((label, index) => (
-          <text
-            key={corners[index].id}
-            x={label.x}
-            y={label.y}
-            textAnchor={label.anchor}
-            className="fill-muted-foreground text-[10px]"
-          >
-            {corners[index].label}
-          </text>
+          <g key={corners[index].id}>
+            <text
+              x={label.x}
+              y={label.y}
+              textAnchor={label.anchor}
+              className="fill-muted-foreground text-[10px]"
+            >
+              {corners[index].label}
+            </text>
+            {corners[index].sublabel && (
+              <text
+                x={label.x}
+                y={label.subY}
+                textAnchor={label.anchor}
+                className="fill-muted-foreground opacity-60 text-[9px]"
+                data-testid={`blend-sublabel-${corners[index].id}`}
+              >
+                {corners[index].sublabel}
+              </text>
+            )}
+          </g>
         ))}
 
         {/* The pin. */}

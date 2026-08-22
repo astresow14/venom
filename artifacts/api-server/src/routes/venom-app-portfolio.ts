@@ -74,6 +74,7 @@ import {
   computeProjectDelta,
   EMPTY_WORKSPACE_VIEW,
   latestIterationStats,
+  loadLiveReleaseFacts,
   loadWorkspaceIterationView,
   resolveWorkspaceProject,
   type ImprovementSignalPayload,
@@ -127,15 +128,19 @@ type AppPayloadContext = {
   linkedProjectName: string | null;
   latestIterationNumber: number;
   improvementSignal: ImprovementSignalPayload | null;
+  liveIterationNumber: number | null;
+  livePublishedAt: string | null;
 };
 
-const EMPTY_APP_CONTEXT: AppPayloadContext = {
+export const EMPTY_APP_CONTEXT: AppPayloadContext = {
   linkedProjectName: null,
   latestIterationNumber: 0,
   improvementSignal: null,
+  liveIterationNumber: null,
+  livePublishedAt: null,
 };
 
-function appPayload(
+export function appPayload(
   app: VenomPortfolioApp,
   deploymentUrl: string | null,
   context: AppPayloadContext,
@@ -155,7 +160,18 @@ function appPayload(
     linkedProjectId: app.linkedProjectId,
     linkedProjectName: context.linkedProjectName,
     latestIterationNumber: context.latestIterationNumber,
+    // The live pointer comes straight off the app record (written only by
+    // the provisioning publish/rollback transactions); the derived fields
+    // resolve it to a package number so clients can show "approved vN /
+    // live vM" without assuming the newest package is serving.
+    liveReleaseId: app.liveReleaseId,
+    liveIterationNumber: context.liveIterationNumber,
+    livePublishedAt: context.livePublishedAt,
     improvementSignal: context.improvementSignal,
+    // Template lineage: stamped at creation, immutable, display-safe even
+    // if the catalog row is later retired (the name is a snapshot).
+    templateId: app.templateId,
+    templateName: app.templateName,
     createdAt: app.createdAt.toISOString(),
     updatedAt: app.updatedAt.toISOString(),
   };
@@ -181,19 +197,26 @@ async function appPayloadContexts(
     ? await loadWorkspaceIterationView(userId)
     : EMPTY_WORKSPACE_VIEW;
   const signals = await computeImprovementSignals(userId, apps, view, stats);
+  const liveFacts = await loadLiveReleaseFacts(userId, apps);
   for (const app of apps) {
+    const live = liveFacts.get(app.id) ?? null;
     contexts.set(app.id, {
       linkedProjectName: app.linkedProjectId
         ? (resolveWorkspaceProject(view, app.linkedProjectId)?.name ?? null)
         : null,
       latestIterationNumber: stats.get(app.id)?.latestIterationNumber ?? 0,
       improvementSignal: signals.get(app.id) ?? null,
+      liveIterationNumber: live?.iteration?.iterationNumber ?? null,
+      livePublishedAt: live?.release.publishedAt?.toISOString() ?? null,
     });
   }
   return contexts;
 }
 
-function iterationPayloads(iterations: VenomPortfolioAppIteration[]) {
+function iterationPayloads(
+  iterations: VenomPortfolioAppIteration[],
+  liveReleaseId: string | null,
+) {
   const numberById = new Map(
     iterations.map((iteration) => [iteration.id, iteration.iterationNumber]),
   );
@@ -210,6 +233,11 @@ function iterationPayloads(iterations: VenomPortfolioAppIteration[]) {
     baselineIterationNumber: iteration.baselineIterationId
       ? (numberById.get(iteration.baselineIterationId) ?? null)
       : null,
+    // The release this package last shipped as (stamped by provisioning),
+    // and whether that release is the one the app is serving right now.
+    releaseId: iteration.releaseId,
+    isLive:
+      iteration.releaseId !== null && iteration.releaseId === liveReleaseId,
     createdBy: iteration.createdBy,
     createdAt: iteration.createdAt.toISOString(),
   }));
@@ -934,7 +962,7 @@ router.get("/venom/apps/:appId", async (req, res): Promise<void> => {
       provisioningReleases: releases
         .slice(0, 500)
         .map(provisioningReleasePayload),
-      iterations: iterationPayloads(iterations.slice(0, 200)),
+      iterations: iterationPayloads(iterations.slice(0, 200), app.liveReleaseId),
       timeline: fullTimeline.slice(0, TIMELINE_MAX_ENTRIES),
       timelineTotal: fullTimeline.length,
       timelineTruncated: fullTimeline.length > TIMELINE_MAX_ENTRIES,
@@ -1265,6 +1293,55 @@ router.get(
         since: latestIteration.createdAt.toISOString(),
       };
     }
+    // Live-release anchoring: what the app is actually serving may lag the
+    // newest approved package (published earlier, or restored by rollback).
+    // Resolve the live pointer and say so explicitly instead of letting the
+    // dialog silently assume the newest package is live.
+    const liveFacts =
+      (await loadLiveReleaseFacts(userId, [app])).get(app.id) ?? null;
+    const liveIteration = liveFacts?.iteration ?? null;
+    const liveRevision = liveIteration
+      ? liveIteration.id === latestIteration?.id
+        ? baselineRevision
+        : await baselineRevisionFor(userId, liveIteration.revisionId)
+      : undefined;
+    const divergence = !liveFacts
+      ? null
+      : !liveIteration || !latestIteration
+        ? ("live_unversioned" as const)
+        : liveIteration.iterationNumber === latestIteration.iterationNumber
+          ? ("in_sync" as const)
+          : liveIteration.iterationNumber < latestIteration.iterationNumber
+            ? ("live_behind" as const)
+            : ("live_ahead" as const);
+    let liveChanges: {
+      knowledgeChanges: number;
+      sourceChanges: number;
+      summary: string;
+      since: string;
+    } | null = null;
+    if (
+      liveIteration &&
+      linkedProject &&
+      latestIteration &&
+      liveIteration.id !== latestIteration.id
+    ) {
+      const delta = await computeProjectDelta(
+        userId,
+        linkedProject.id,
+        liveIteration.createdAt.getTime(),
+        view,
+      );
+      liveChanges = {
+        knowledgeChanges: delta.knowledgeChanges,
+        sourceChanges: delta.sourceChanges,
+        summary: buildChangesSummary(delta, {
+          sinceLabel: `version ${liveIteration.iterationNumber}`,
+          projectName: linkedProject.name,
+        }),
+        since: liveIteration.createdAt.toISOString(),
+      };
+    }
     const blockedReason = !latestIteration
       ? ("no_baseline" as const)
       : !baselineRevision
@@ -1288,6 +1365,26 @@ router.get(
               approvedAt: latestIteration.createdAt.toISOString(),
             }
           : null,
+        live: liveFacts
+          ? {
+              releaseId: liveFacts.release.id,
+              iterationId: liveIteration?.id ?? null,
+              iterationNumber: liveIteration?.iterationNumber ?? null,
+              packageTitle: liveIteration?.packageTitle ?? null,
+              publishedAt:
+                liveFacts.release.publishedAt?.toISOString() ?? null,
+              restoredByRollback: liveFacts.release.rolledBackAt !== null,
+              resolvable: Boolean(liveRevision),
+              baselineSelectable: Boolean(
+                liveIteration &&
+                  latestIteration &&
+                  liveIteration.id !== latestIteration.id &&
+                  liveRevision,
+              ),
+              changes: liveChanges,
+            }
+          : null,
+        divergence,
         latestSourceVersion: latestSourceVersion
           ? {
               id: latestSourceVersion.id,
@@ -1335,14 +1432,38 @@ router.post(
       });
       return;
     }
+    // The baseline defaults to the newest approved package. When what is
+    // live lags behind it (approved vN, live vM), the owner may consciously
+    // baseline on the live version instead — and only on that one; arbitrary
+    // historical baselines are not accepted.
+    let baselineIteration = latestIteration;
+    if (
+      parsed.data.baselineIterationId &&
+      parsed.data.baselineIterationId !== latestIteration.id
+    ) {
+      const liveFacts =
+        (await loadLiveReleaseFacts(userId, [app])).get(app.id) ?? null;
+      const liveIteration = liveFacts?.iteration ?? null;
+      if (
+        !liveIteration ||
+        liveIteration.id !== parsed.data.baselineIterationId
+      ) {
+        res.status(409).json({
+          error:
+            "Baseline must be the newest approved package or the version that is live right now.",
+        });
+        return;
+      }
+      baselineIteration = liveIteration;
+    }
     const baselineRevision = await baselineRevisionFor(
       userId,
-      latestIteration.revisionId,
+      baselineIteration.revisionId,
     );
     if (!baselineRevision) {
       res.status(409).json({
         error:
-          "The baseline package for this app can no longer be resolved. Approve a new build for this app to set a fresh baseline.",
+          "The selected baseline package can no longer be resolved. Approve a new build for this app to set a fresh baseline.",
       });
       return;
     }
@@ -1358,11 +1479,11 @@ router.post(
       const delta = await computeProjectDelta(
         userId,
         linkedProject.id,
-        latestIteration.createdAt.getTime(),
+        baselineIteration.createdAt.getTime(),
         view,
       );
       changesSummary = buildChangesSummary(delta, {
-        sinceLabel: `version ${latestIteration.iterationNumber}`,
+        sinceLabel: `version ${baselineIteration.iterationNumber}`,
         projectName: linkedProject.name,
       });
     }
@@ -1390,8 +1511,8 @@ router.post(
       },
       {
         runKind: "app_iteration",
-        baselineIterationId: latestIteration.id,
-        baselineRevisionId: latestIteration.revisionId,
+        baselineIterationId: baselineIteration.id,
+        baselineRevisionId: baselineIteration.revisionId,
         changesSummary,
       },
     );
@@ -1426,7 +1547,8 @@ router.post(
         operation: "venom_app_iteration_create",
         appId: app.id,
         runId: creation.run.id,
-        baselineIterationId: latestIteration.id,
+        baselineIterationId: baselineIteration.id,
+        baselineWasLiveChoice: baselineIteration.id !== latestIteration.id,
         linkedProjectId: linkedProject?.id ?? null,
       },
       "App improvement iteration started",
